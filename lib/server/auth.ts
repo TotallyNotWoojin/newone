@@ -17,6 +17,15 @@ const DEMO_ACTOR: Actor = {
   role: "manager",
 };
 
+const DEFAULT_THREAD_CATALOG = {
+  operations: {
+    title: "운영 · Operaciones",
+    subtitle: "Private Korean–Spanish operations channel",
+    kind: "operations",
+    location: "",
+  },
+} as const;
+
 export async function requireActor(request: Request): Promise<Actor> {
   const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
   const allowDemo = process.env.NODE_ENV !== "production";
@@ -41,13 +50,7 @@ export async function requireActor(request: Request): Promise<Actor> {
   }
 
   if (!existing) {
-    const role = roleForEmail(email);
-    await db
-      .prepare("INSERT INTO profiles (email, display_name, preferred_language, role) VALUES (?, ?, ?, ?)")
-      .bind(email, name, "es", role)
-      .run();
-    await provisionDefaultMemberships(email);
-    return { email, displayName: name, preferredLanguage: "es", role };
+    return provisionNewActor(email, name, roleForEmail(email));
   }
 
   return {
@@ -58,22 +61,91 @@ export async function requireActor(request: Request): Promise<Actor> {
   };
 }
 
-async function provisionDefaultMemberships(email: string): Promise<void> {
-  const threadIds = (runtimeValue("NEWONE_DEFAULT_THREAD_IDS") ?? "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  if (threadIds.length === 0) return;
-  await getD1().batch(
-    threadIds.map((threadId) =>
-      getD1()
+async function provisionNewActor(
+  email: string,
+  displayName: string,
+  role: Actor["role"],
+): Promise<Actor> {
+  const db = getD1();
+  const defaultThreads = configuredDefaultThreads();
+
+  // D1 batch executes transactionally. The profile and its initial memberships
+  // therefore commit together, while conflict-safe inserts handle concurrent
+  // first requests without expanding access after a later revocation.
+  await db.batch([
+    ...defaultThreads.map((thread) =>
+      db
         .prepare(
-          `INSERT OR IGNORE INTO thread_members (thread_id, user_email)
-           SELECT id, ? FROM threads WHERE id = ?`,
+          `INSERT INTO threads (id, title, subtitle, kind, location)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO NOTHING`,
         )
-        .bind(email, threadId),
+        .bind(
+          thread.id,
+          thread.title,
+          thread.subtitle,
+          thread.kind,
+          thread.location,
+        ),
     ),
-  );
+    db
+      .prepare(
+        `INSERT INTO profiles (email, display_name, preferred_language, role)
+         VALUES (?, ?, 'es', ?)
+         ON CONFLICT(email) DO NOTHING`,
+      )
+      .bind(email, displayName, role),
+    ...defaultThreads.map((thread) =>
+      db
+        .prepare(
+          `INSERT INTO thread_members (thread_id, user_email)
+           SELECT id, ? FROM threads WHERE id = ? AND kind = ?
+           ON CONFLICT(thread_id, user_email) DO NOTHING`,
+        )
+        .bind(email, thread.id, thread.kind),
+    ),
+  ]);
+
+  const persisted = await db
+    .prepare(
+      "SELECT display_name, preferred_language, role, active FROM profiles WHERE email = ? LIMIT 1",
+    )
+    .bind(email)
+    .first<{
+      display_name: string;
+      preferred_language: SupportedLanguage;
+      role: Actor["role"];
+      active: number;
+    }>();
+  if (!persisted) throw new Error("Authorized profile could not be created");
+  if (!persisted.active) {
+    throw new AuthorizationError("This account has been deactivated");
+  }
+  return {
+    email,
+    displayName: persisted.display_name,
+    preferredLanguage: persisted.preferred_language,
+    role: persisted.role,
+  };
+}
+
+function configuredDefaultThreads() {
+  const threadIds = [
+    ...new Set(
+      (runtimeValue("NEWONE_DEFAULT_THREAD_IDS") ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  return threadIds.map((id) => {
+    if (!Object.hasOwn(DEFAULT_THREAD_CATALOG, id)) {
+      throw new AuthorizationError("Default conversation configuration is invalid");
+    }
+    const definition = DEFAULT_THREAD_CATALOG[id as keyof typeof DEFAULT_THREAD_CATALOG];
+    return { id, ...definition };
+  });
 }
 
 export function isDemoActor(actor: Actor): boolean {

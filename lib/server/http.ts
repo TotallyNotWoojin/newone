@@ -22,6 +22,10 @@ export function apiError(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
+  console.error(
+    "[newone-relay] unexpected API error",
+    error instanceof Error ? `${error.name}: ${error.message}` : typeof error,
+  );
   return Response.json({ error: "Unexpected server error" }, { status: 500 });
 }
 

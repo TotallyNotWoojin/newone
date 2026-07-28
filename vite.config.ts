@@ -1,5 +1,5 @@
 import vinext from "vinext";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
@@ -10,6 +10,19 @@ const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
+
+const LOCAL_RUNTIME_KEYS = [
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_TRANSLATION_MODEL",
+  "OPENROUTER_SUMMARY_MODEL",
+  "OPENROUTER_PROVIDER",
+  "NEWONE_AI_DATA_EGRESS_APPROVED",
+  "NEWONE_APP_URL",
+  "NEWONE_ALLOWED_EMAILS",
+  "NEWONE_MANAGER_EMAILS",
+  "NEWONE_ADMIN_EMAILS",
+  "NEWONE_DEFAULT_THREAD_IDS",
+] as const;
 
 const localBindingConfig = {
   main: "./worker/index.ts",
@@ -33,7 +46,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command, mode }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -42,6 +55,13 @@ export default defineConfig(async () => {
 
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import("@cloudflare/vite-plugin");
+  const localEnvironment = command === "serve" ? loadEnv(mode, process.cwd(), "") : {};
+  const localRuntimeVars = Object.fromEntries(
+    LOCAL_RUNTIME_KEYS.flatMap((key) => {
+      const value = process.env[key] ?? localEnvironment[key];
+      return value ? [[key, value]] : [];
+    }),
+  );
 
   return {
     server: isCodexSeatbeltSandbox
@@ -52,7 +72,10 @@ export default defineConfig(async () => {
       sites(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        config: localBindingConfig,
+        config: {
+          ...localBindingConfig,
+          ...(command === "serve" ? { vars: localRuntimeVars } : {}),
+        },
       }),
     ],
   };

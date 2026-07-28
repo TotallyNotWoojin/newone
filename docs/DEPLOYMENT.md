@@ -18,7 +18,14 @@ The generated migration is in `drizzle/`. Apply it to the production D1 database
 
 ## 2. Provision conversations
 
-Production never seeds fictional data. Create the Company’s approved threads before assigning users. Example SQL:
+Production never seeds fictional data. `NEWONE_DEFAULT_THREAD_IDS=operations`
+atomically creates the code-owned empty operations channel and the initial
+membership when each new allowlisted profile is first created. `operations` is
+currently the only accepted default ID; unknown or misspelled values fail closed
+before a profile is written.
+
+For a custom or narrower channel, leave it out of the default setting, create the
+Company-approved thread deliberately, and assign explicit memberships. Example SQL:
 
 ```sql
 INSERT INTO threads
@@ -28,7 +35,7 @@ VALUES
    'Plant-wide', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 ```
 
-Set `NEWONE_DEFAULT_THREAD_IDS=operations` if every newly approved user should receive that channel on first sign-in. Use explicit D1 records for narrower access:
+Use explicit D1 records for narrower access:
 
 ```sql
 INSERT OR IGNORE INTO thread_members (thread_id, user_email)
@@ -59,6 +66,10 @@ NEWONE_APP_URL=https://the-real-private-site-host
 ```
 
 `NEWONE_ALLOWED_EMAILS` fails closed when absent in production. Role configuration is used when a profile is first created. Later role changes should be performed through an approved administrator process and audited.
+
+Default thread creation, profile creation, and initial membership use one
+transactional D1 batch. A failure rolls the entire first-use provisioning back;
+later logins never restore a membership that an administrator removed.
 
 Confirm that:
 

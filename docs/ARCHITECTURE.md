@@ -52,7 +52,10 @@ Generated actions are stored as `needs_confirmation`.
 - Manager and admin roles come from controlled configuration at first provisioning.
 - A user sees only rows whose thread has an explicit `thread_members` record.
 - Membership is never silently restored on later requests.
-- New users can receive only the configured `NEWONE_DEFAULT_THREAD_IDS` once.
+- New users can receive only code-catalogued `NEWONE_DEFAULT_THREAD_IDS` once;
+  currently only `operations` is accepted.
+- Default thread, profile, and membership writes commit in one D1 batch, so a
+  partial first-use account cannot be left behind.
 - Summary generation and action mutation require manager or admin.
 
 The deployment must ensure the Sites ingress strips and replaces caller-supplied identity headers and that no direct Worker origin bypass is available.

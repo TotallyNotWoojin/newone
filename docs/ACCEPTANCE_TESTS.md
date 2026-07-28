@@ -54,6 +54,7 @@ npm audit --omit=dev
 
 - Production without `NEWONE_ALLOWED_EMAILS` fails closed.
 - An allowlisted new user receives only configured default threads.
+- An unknown configured default fails closed without creating the profile.
 - Removing a membership persists across later requests.
 - `active=0` blocks the account.
 - No unauthenticated production demo actor exists.

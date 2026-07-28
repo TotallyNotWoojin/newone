@@ -17,6 +17,7 @@ The repository includes a working local demo, production-oriented D1 persistence
 - Human-confirmed action items with manager-only changes and an audit trail
 - Offline outbox for the current browser tab with automatic retry
 - Company allowlist, roles, explicit thread membership, account deactivation, and private no-store APIs
+- Atomic, fail-closed first-owner provisioning into one code-approved empty operations channel
 - Seeded, human-reviewed local demo data only; production never receives demo records
 
 ## Start locally
@@ -33,6 +34,9 @@ Open `http://localhost:3000`. Local development seeds a fictional, human-reviewe
 ```bash
 cp .env.example .env.local
 ```
+
+During `npm run dev`, only the documented server runtime keys are forwarded from
+`.env.local` into the local Worker. Production values remain managed by the host.
 
 ## Verify
 
