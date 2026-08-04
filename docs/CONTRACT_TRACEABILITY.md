@@ -1,36 +1,127 @@
-# Product requirement traceability
+# Product and contract traceability
 
-This file maps the product requirements extracted from the supplied contractor agreement to the implementation. It is an engineering checklist, not a legal interpretation of the agreement.
+Status: release-candidate evidence map, not a claim of acceptance
 
-| Requirement | Implementation | Proof / release note |
+Last updated: August 4, 2026
+
+This map connects the supplied contractor agreement and every requirement in [FULL_PRODUCT_REQUIREMENTS.md](FULL_PRODUCT_REQUIREMENTS.md) to source, automated evidence, and any remaining release gate. It is an engineering aid, not a legal interpretation. A source path means a control is represented in the release candidate. It is not a pass until the exact-release test named here is recorded in the release evidence.
+
+## Evidence states
+
+| State | Meaning |
+|---|---|
+| Candidate | Source and automated coverage exist; final clean-run and deployment evidence are still required. |
+| Partial | Some acceptance criteria or a client/worker path are still being completed or independently verified. |
+| External gate | Completion depends on a Company-controlled account, policy, qualified reviewer, physical device, or production service. |
+| Roadmap | Explicitly marked Next or Later in the approved product requirements; not an employee-pilot acceptance gate. |
+
+## Supplied agreement
+
+| Agreement obligation | Candidate implementation and documentation | Required acceptance evidence |
 |---|---|---|
-| Real-time in-line Korean ↔ Spanish chat | Responsive chat, source/translation pair, 4.5-second visible polling | Near-real-time MVP; original is sent independently before translation |
-| No copy/paste translation workflow | Automatic post-send translation and recipient-language-first rendering | OpenRouter requires approved credentials and release switch |
-| Automatic language detection/routing | Hangul/Latin detection, mixed/short warning, ko/es runtime validation | AI detected-language mismatch is persisted and displayed |
-| Automatic thread/shift summaries | Manager session auto-refresh after eight new messages or a handoff; manual refresh also available | Strict JSON, source fingerprint, source links, deduped actions |
-| Basic company-personnel authentication/access | Private Sites identity, mandatory production allowlist, roles, active state, explicit thread membership | Ingress header stripping/replacement must be verified in deployment |
-| Message history and basic search | D1 history, newest 300-message active window, POST search over source/translation/name | Full retention policy and archival window remain Company decisions |
-| Web/mobile access and current browsers | Responsive desktop/tablet/mobile UI and web manifest | Native apps are not required |
-| Failure handling | Original-first persistence, provider status, retryable claims, current-tab outbox, generic API errors | Tab-close durability is intentionally not claimed without managed-device storage policy |
-| Secrets not hardcoded | Server-only environment credential, example file contains blanks | Company owns production key and rotation |
-| Deployment and documentation | Sites configuration, migration, README, deployment/user/architecture/safety/test docs | Production Company configuration and approvals still required |
-| Training | User guide plus training checklist in deployment guide | Training delivery is a human/company activity |
-| Privacy/safety limitations and human review | Persistent originals, warnings, source links, emergency reminder, high-impact review policy | AI egress blocked until approval/DPA/quality gates pass |
+| Real-time in-line Korean to Spanish and Spanish to Korean translation without copy/paste | Original-first message commands in `newone-api`; detection, translation, and summary processing in `newone-ai-worker`; recipient-language rendering in the Expo conversation UI; exact OpenRouter route policy in `config/ai-route-policy.json` | Two-way live synthetic demonstration, failure/degraded-mode run, adapter smoke, and qualified blind bilingual review. Employee-data egress remains disabled until Company approval. |
+| Automatic language detection and routing | Worker-side detection and protected-token validation; client language is presentation preference only | Forged-language, mixed/short text, number/unit/identifier, negation, urgency, and malformed-provider tests. |
+| Automatic conversation and shift summaries | Configurable summary policy, bounded source snapshots, immutable fingerprint/source IDs, structured draft, correction/review flow | Authorized automatic trigger plus manual request; required primary topic, action items, source links, stale-on-source-change, and unauthorized denial. |
+| Basic Company personnel authentication and access | Supabase Auth, invitation/member OTP gateway, active membership/session resolver, scoped capabilities, RLS/RPC/Storage/Realtime checks, BFF cookie boundary, native secure storage | Local and linked-development enrollment, cross-tenant denial, AAL2/recent-auth, session revocation, suspension, and enumeration-safe error demonstrations. |
+| History and basic search | Bounded revocation-aware read RPCs, cursor pagination, unified search RPC, retention scrub, hidden-message rules | Original, translation, sender, clean filename, date, pagination, removal, retention, and cross-tenant cases. |
+| Deployment and documentation | `README.md`, architecture/security/runbooks, environment contract, CI, dependency inventory, SBOM generator, acceptance and delivery checklists | Immutable revision, actual deployment IDs, migration/function versions, smoke/rollback results, and Company-owned credential/account handoff. |
+| One training session up to two hours | [TRAINING_GUIDE.md](TRAINING_GUIDE.md) and [USER_GUIDE.md](USER_GUIDE.md) | Human-delivered session record with date and attendee roles. |
+| Source, dependencies, setup, and user documentation | Lockfiles, Deno lock, [THIRD_PARTY_COMPONENTS.md](THIRD_PARTY_COMPONENTS.md), generated CycloneDX SBOMs/license inventory, and setup/user docs | Reports regenerated from the immutable release and reviewed for unresolved Critical/High findings and license obligations. |
+| Summary contains primary topic and action items | Structured summary schema and evidence-linked model adapter | Exact-output schema test, unsupported-claim rejection, human correction, and approval of the corrected version. |
 
-## Added beyond the minimum
+The Company later expanded delivery to a first-class universal Expo client for web, iOS, and Android. Native source and deterministic bundle exports are part of this repository. Signed binaries, store listings, push credentials, universal/app links, and store approval remain owner-account and physical-device gates.
 
-- Exact OpenRouter provider-region pinning with ZDR, data denial, cache off, and fallback off
-- Separate data-egress approval switch
-- Idempotent message, translation, and summary workflows
-- Runtime request and model-output validation
-- Latest-window message query that remains correct beyond 300 messages
-- Manager-only brief/action mutation with action audit events
-- Foreign keys and database enum checks
-- Security headers and private no-store APIs
-- Search query moved from URL to POST body
-- Model-cost and bilingual golden-set evaluation plan
-- Production runbook, rollback steps, and release blockers
+## Full product requirement map
 
-## Explicitly outside this MVP
+### Identity, directory, and sessions
 
-Native iOS/Android binaries, voice/video, emergency alarm replacement, automated employment decisions, guaranteed offline durability after closing the tab, and unreviewed high-impact translations remain outside the product boundary.
+| ID | Priority | State | Candidate evidence | Remaining proof or gate |
+|---|---|---|---|---|
+| ID-01 | Must | Candidate | Invitation hashing, expiry, identity binding, one-time redemption, bootstrap idempotency, and enumeration-safe Auth gateway; the responsive enrollment/returning/recovery client supports verified email and E.164 phone identities on web and native, with the Edge-owned SMS enablement switch kept separate from membership authorization; employee-code enrollment remains bound to the independently delivered invitation capability | Configure and prove production SMTP/SMS, invitation delivery, CAPTCHA, and signed-device enrollment with synthetic provider receipts; Company must approve the no-email worker enrollment procedure and invitation operators. |
+| ID-02 | Must | Candidate | `20260804092527_account_recovery.sql` implements signed-out, non-creating, enumeration-safe recovery; independent destination/network/installation request and verification budgets; installation binding before access; other-session/device/push revocation; immutable security evidence; expiring help-desk cases with keyed external-verification references, actor separation, two approvals for privileged targets, exact-factor reset, and fail-closed retry. Database, Edge, routing, and client contracts cover the source path. | Exercise the lifecycle in signed clients; approve and exercise the Company-owned human-verification procedure and recovery-manager roster; deliver and retain trusted out-of-band security-notice receipts; configure production Auth, CAPTCHA, password policy, SMTP/SMS, and alerts. |
+| ID-03 | Must | Candidate | Device registration, session list/revoke commands, revocation table/jobs, native SecureStore, HttpOnly-cookie web BFF | Clean local/remote revocation test and signed-device inspection. |
+| ID-04 | Must | Candidate | Suspension/offboarding commands use immediate session-aware authorization checks, session/push cleanup, per-user control events, future-access removal, deterministic owner transfer, and audit evidence; the safe-departure contract serializes concurrent owner transfer/leave operations. | Prove the 60-second Realtime disconnect target, signed-device cache cleanup, suspended offline-send rejection, and configured historical-retention outcome in integrated device tests. |
+| ID-05 | Next | Roadmap | Organization membership and scoped-role model is lifecycle-ready | Select and implement Company IdP plus SCIM/HRIS integration before multi-site rollout. |
+| DIR-01 | Must | Candidate | Bounded principal/bootstrap directory DTO, unit scope, active-member filters, People UI | Accent/alias, cross-tenant, disabled-user, and three-tap usability evidence. |
+| DIR-02 | Must | Candidate | Saved contacts and favorite preferences RPCs plus People/Chats client state | Multi-device persistence and removal-without-conversation-deletion integration test. |
+| DIR-03 | Must | Candidate | Directory-open/request-first/scoped policy, connections, blocks, rate limits, generic denials | Full three-policy client and concurrent abuse matrix. |
+| DIR-04 | Later | Roadmap | Deliberately absent; no address-book upload permission or path is shipped | Privacy review and explicit opt-in design before any implementation. |
+
+### Conversations and messages
+
+| ID | Priority | State | Candidate evidence | Remaining proof or gate |
+|---|---|---|---|---|
+| CHAT-01 | Must | Candidate | Mixed responsive inbox, filters, unread/favorites/pins, bounded bootstrap, per-user invalidation refetch | Reconnect ordering and large-inbox browser/native journeys. |
+| CHAT-02 | Must | Candidate | Canonical direct-pair table and concurrency-safe direct creation RPC | Concurrent two-user pgTAP/integration replay. |
+| CHAT-03 | Must | Candidate | Group/member roles, last-owner defenses, `all` versus `since_join` history exposure, membership system/audit events, and client create-group flow; `20260804121100_complete_conversation_departure_lifecycle.sql` adds previewed eligible departure, explicit successor selection, serialized ownership transfer, idempotent leave, and preserved-history disclosure. | Final browser/native group creation, join/history disclosure, concurrent transfer/departure, and administrator-recovery journeys. |
+| CHAT-04 | Must | Partial | Dynamic-group policies, preview, sync, locked membership, unit predicates | Complete authoritative scheduled-shift windows and future-only mover/leaver proof. |
+| CHAT-05 | Must | Candidate | Preferences, archive/favorite/mute, search/report/block, membership administration, and safe leave preview/confirmation with history preservation and owner-transfer disclosure; AAL2 administrator posting controls, exact-scope group discovery, bounded join-request approval/rejection with CAS, capacity and offboarding defenses, controlled member reactivation, durable reconciliation revisions, content-free system/audit evidence, and focused database/Edge/client contracts; incident creation captures severity/classification, authorized closure requires a reason, posting becomes read-only, and closure evidence is immutable. | Exercise restrict-posting, join/history disclosure, incident closure, retained history, and reconnect reconciliation in final browser/native acceptance. |
+| MSG-01 | Must | Candidate | Original-first transaction, stable client idempotency, durable encrypted native/web outboxes | Restart, ambiguous-response, content-conflict, account-switch, and suspension integration runs. |
+| MSG-02 | Must | Candidate | Cursor history, reply/mention/reaction data, timeline grouping and source preview UI | Concurrent-page/reconnect ordering and unavailable-source journeys. |
+| MSG-03 | Must | Candidate | Separate submitted/delivered/read receipts and recipient-scoped state | Multi-device aggregation, privacy-setting, and reconnect reconciliation tests. |
+| MSG-04 | Must | Candidate | Edit/delete commands and client actions, hidden-for-me, labeled forward provenance, pins, copy, report, and derived-data invalidation; `20260804162342_message_safety_contract.sql` adds append-only protected plaintext revisions, content-free lifecycle audit events, AAL2 and permission-gated legal/incident preservation holds that block deletion generically, current-history/hidden-source forward authorization, and an explicit server/client attachment-forward deny until destination reauthorization exists. Focused pgTAP, Edge, Node, and capability-gated operator-control contracts cover these boundaries. This is preservation enforcement, not a complete eDiscovery or dual-control workflow. | Final edit-window policy configuration, authorized version-history review UI, keyboard/long-press accessibility, signed-client moderation, and browser/native acceptance journeys. |
+| MSG-05 | Later | Roadmap | No audio-capture or playback runtime is shipped; the attachment model only reserves an audio MIME/category boundary for future review | Voice-note record/send/playback, permissions, waveform, scanning, retention, and accessibility require a separate implementation and are not pilot claims. |
+| MSG-06 | Later | Roadmap | No poll/event delivery claim | Product design and schema/API work after the pilot core. |
+
+### Files, translation, and summaries
+
+| ID | Priority | State | Candidate evidence | Remaining proof or gate |
+|---|---|---|---|---|
+| FILE-01 | Must | Candidate | Server-chosen private object paths, quarantine states, upload/download grants, parent-message authorization, and scan-worker contracts that verify object digests, storage metadata, scanner signatures, detected-versus-declared MIME, and polyglot rejection before promotion | Configure a production scanner/signature source and prove clean-only access, grant expiry, delete, EICAR, scanner timeout/unavailability, object restore, and retained provider receipts. |
+| FILE-02 | Must | Candidate | Camera, photo-library and document selection; image resize/compression; progress/cancel/retry state | Physical iOS/Android permission, low-bandwidth, failed-upload placeholder, retry, and cleanup journeys. |
+| FILE-03 | Next | Roadmap | Current pilot bounds safe image/document/audio MIME classes | Large-file resumability, advanced previews and media processing after capacity/security review. |
+| TR-01 | Must | Candidate | Recipient-language-first presentation with original available, explicit derived status/provenance, and authoritative per-conversation `automatic`/`off` preference; opted-out users receive no derived translation projection while the canonical original remains readable | End-to-end Korean/Spanish rendering, opt-out/re-enable, multi-device persistence, and accessibility proof. |
+| TR-02 | Must | Candidate | Durable detect/translate jobs, worker-time source authorization, terminal/retry states, protected-token checks | Provider timeout/429/5xx/circuit/budget/idempotency suite and one paid synthetic adapter smoke. |
+| TR-03 | Must | Candidate | Versioned glossary proposals/reviews and translation-correction review records | Scoped reviewer UI and Korean/Spanish terminology evaluation. |
+| TR-04 | Must | Candidate | Original is canonical; low-confidence/ambiguity states and human-review rules are documented | Qualified bilingual release review and high-consequence template/policy approval. |
+| SUM-01 | Must | Candidate | Manual/automatic policy, bounded ordered source IDs/fingerprint, worker-time resolver, structured summary worker | Clean worker/DB tests and live authorized automatic trigger with primary topic and action items. |
+| SUM-02 | Must | Candidate | Immutable draft versions, correction/review provenance, source invalidation, no automatic work assignment | Unsupported-claim rejection, exact-source links, stale-on-edit/delete/retention, and unauthorized former-member denial. |
+
+Release gaps are intentionally explicit:
+
+- TR-01 now includes an authoritative per-conversation `automatic`/`off` preference in `20260804120850_add_translation_preferences.sql`, bootstrap DTO propagation, and web/native controls. Target derivation and manual retry fail closed for opted-out recipients while originals remain readable. Final multi-device Korean/Spanish UX and accessibility evidence remains open.
+- TR-02 terminal retry is now supported by the same idempotent translation enqueue RPC, which reauthorizes current policy and requeues the exact failed or blocked row/job. Live provider timeout, throttling, circuit-breaker, and paid synthetic adapter evidence are still release gates.
+- TR-03 supports correction proposal and scoped reviewer decisions. A dedicated translation-error report contract and controlled regression-export workflow are not present, so the ordinary moderation report flow is not represented as translation reporting.
+- Translation reads expose the processing policy version but not enough tenant-policy state to prove current-versus-stale client-side. The client labels that freshness as unknown instead of inferring it. Summary reads do expose server-computed source and policy state.
+- SUM-01 supports bounded manual requests, configured automatic modes, failure-safe chat, and manual-handoff navigation. A live automatic message-count/shift-close trigger remains unproven.
+- SUM-02 supports exact source links, human correction, approval/rejection, and visible derived-draft boundaries. A dedicated summary-error report contract is absent, and rejected-summary reviewer identity is not included in the member DTO; neither is claimed by the client.
+- `FULL_PRODUCT_REQUIREMENTS.md` defines SUM-01 and SUM-02 only. There is no SUM-03 requirement to implement or claim.
+
+### Updates and operational work
+
+| ID | Priority | State | Candidate evidence | Remaining proof or gate |
+|---|---|---|---|---|
+| UPD-01 | Must | Candidate | `20260804163052_complete_targeted_update_audiences.sql` adds fail-closed company, channel, site, department, team, arbitrary unit, operational-role/job-title, access-role, preferred-language, and authoritative-current-shift selectors; recursive descendant resolution; scoped authorization; count/exclusion/language preview; immutable publish-time recipient evidence; and publish-time reevaluation for scheduled notices. Expo web/iOS/Android authoring, Edge DTOs, repository contracts, 29 focused pgTAP assertions, 3 Deno route tests, and 3 Node client/SQL contract tests cover the path. | Run the final browser and physical iOS/Android preview-to-publish journeys, concurrent schedule/member/shift changes, correction flows, and production authorization canary against the immutable release candidate. |
+| UPD-02 | Must | Candidate | Separate delivered/read/acknowledged state; deliberate exact-version acknowledgement with bounded attestation and session/device evidence; correction re-ack policy; deadlines; and authorization-trimmed aggregate/non-acknowledger views | Final concurrent correction/acknowledgement, overdue, unreachable, and restricted non-responder browser/native journeys. |
+| UPD-03 | Must | Candidate | Push outbox/receipt workers, severity routing, authoritative quiet-hours/shift-aware suppression, server-authorized critical override, audited reminders/escalation, and explicit disabled-SMS adapter state | Configure and prove production APNs/FCM and any Company-approved SMS/fallback provider on physical devices; retain minimized payload, override, fallback, and delivery receipts. |
+| UPD-04 | Next | Roadmap | Recipient status model can support aggregate analytics | Add privacy thresholds, exports and decision-reviewed metrics before broad rollout. |
+| OPS-01 | Must | Candidate | Versioned handoff draft, bounded visible source selection, source links/fingerprint, stale-on-source-change handling, source-aware worker/data model, responsive Work UI, and accessible exact-message deep links for loaded or not-yet-loaded evidence IDs | Final AI-disabled manual draft, unsupported-claim review, correction, signed-client reauthorization, and accessibility journeys. |
+| OPS-02 | Must | Candidate | Exact-version sign and incoming acknowledgement commands with immutable versions and actor role/scope/session/time evidence; `20260804115247_add_handoff_correction_cas.sql` requires the expected immutable version identity, locks and compares it, rejects stale corrections, and preserves idempotent replay | Final concurrent correction/sign/ack race run, discrepancy and overdue-escalation journeys, and supervisor acceptance on signed clients. |
+| OPS-03 | Must | Candidate | Proposed action, explicit human confirmation, state-transition events, source links | Complete assignment/transition client journey and authorization/notification evidence. |
+| OPS-04 | Later | Roadmap | No generic operational-form or external CMMS/HRIS claim | Select integrations and implement least-privilege connectors after pilot. |
+
+### Search, notification, administration, and reliability
+
+| ID | Priority | State | Candidate evidence | Remaining proof or gate |
+|---|---|---|---|---|
+| SEARCH-01 | Must | Candidate | `20260804110457_harden_unified_search_contract.sql` and `20260804155917_complete_search_filters.sql` provide stable cursor pagination over authorized people, conversations, originals, approved translations, senders, clean filenames, dates, updates, and handoffs; exact conversation and matched-language filters only narrow visible rows and are bound into the cursor hash. The universal Search UI exposes both filters. Deterministic pgTAP covers Korean/Spanish text, literal company-supplied aliases, quoted phrase order, punctuated equipment IDs, tenant/history/hidden/retention boundaries, and fail-closed filter authorization. | Final result-open reauthorization, pagination-under-concurrent-write, browser/native accessibility, and load evidence. Company alias vocabulary, Korean morphology/transliteration, and fuzzy matching remain explicit acceptance semantics rather than inferred synonym expansion. |
+| SEARCH-02 | Must | Candidate | Cursor history, organization retention, legal-hold-aware scrub job and source invalidation | Owner retention decision plus local/restore deletion reconciliation evidence. |
+| SEARCH-03 | Next | Roadmap | Search API is intentionally bounded rather than an unrestricted admin index | Enterprise archive/export/eDiscovery requires scoped case approval and selected infrastructure. |
+| NOTIF-01 | Must | Candidate | Organization/account and per-conversation all/mentions/mute preferences, quiet hours, preview/sound/vibration/device settings, shift-aware suppression, critical-notice precedence, push registration/receipts, and opaque minimal-payload contracts | Configure production push credentials and complete real-device quiet-hours, mute/mentions, current-shift, critical override, payload-privacy, and multi-device persistence journeys. |
+| NOTIF-02 | Must | Candidate | No continuously precise presence broadcast; coarse privacy-preserving activity data only | Verify UI wording and metadata/log captures. |
+| NOTIF-03 | Later | Roadmap | No call or push-to-talk transport claim | Requires separate realtime-media architecture, consent, abuse and safety review. |
+| ADM-01 | Must | Candidate | Permission capabilities/scopes, custom roles, assignments, AAL2/recent-auth and admin UI gates | Full negative role/scope matrix and delegated-admin client tests. |
+| ADM-02 | Must | Candidate | `20260804162744_complete_audit_export.sql` adds recent-AAL2 and `audit.read` gated audit query/export, required review purpose, active-membership reauthorization, content-free bounded rows, snapshot/filter-bound cursor pagination, immutable forced-RLS query/export receipts, SHA-256 export receipts, CSV formula-injection defenses, denial and self-access audit events, and removal of ambient bootstrap audit loading. The Edge BFF adds signed actor/tenant-bound cursors, bounded response parsing, independent digest verification, database and Edge rate limits, and durable eligible-tenant denial recording. The responsive Admin surface supports intentional EN/KO/ES query, pagination, JSON/CSV export, native sharing/web download, and receipt verification without clipboard fallback. Focused pgTAP, Deno, and Node contracts cover privilege, tenancy, AAL, cursor, content, digest, immutability, and response-size boundaries. | Run the exact candidate through a clean isolated database rebuild/lint and browser/native accessibility journeys; prove production alert routing, configured audit retention/partitioning, backup/restore continuity, sustained-volume performance, reviewer-approved export handling, and independent security review. |
+| ADM-03 | Must | Candidate | `20260804110613_complete_moderation_case_lifecycle.sql` plus `20260804171735_complete_private_target_reporting.sql` implement consent-preserving private message/group/member intake, immutable tenant-bound targets and bounded message-only evidence, active-case deduplication with later-incident support, append-only assign/claim/reassign/review/resolve/dismiss lifecycle, actor separation, recent-AAL2 scoped DTOs, and O(1) intake followed by service-only uncapped current-authorization fanout to content-free per-user invalidations. Blocking or target offboarding cannot erase a previously accepted contact/overlapping-conversation safety route, pending/unrelated inactive identities remain unavailable, and neither reporter nor target is notified. | Company approval of investigation/safety policy and designated-investigator roster, plus clean rebuild/lint, final AAL2, reporter-identity, case-scope, retry/load, accessibility, and manual escalation-path acceptance. |
+| ADM-04 | Next | Roadmap | Retention scrub and immutable audit foundation exists | Legal hold, scoped case export, restore reconciliation and dual-control workflows require owner/legal policy. |
+| ADM-05 | Next | Roadmap | Safe MIME list, scanner quarantine and AI egress kill switch are pilot controls | DLP/classification needs Company policy, detection service and false-positive review. |
+| REL-01 | Must | Candidate | AES-protected native SQLite and web IndexedDB outboxes, secure native key storage, ordered idempotent retry | Signed-device/browser restart, logout/account-switch key destruction and suspended-device replay tests. |
+| REL-02 | Must | Candidate | Recipient-specific content-free inbox/control topics, durable cursor refetch, duplicate/out-of-order convergence contracts, background reconciliation, and suspension/departure invalidations without shared conversation or dynamic-group content topics | Final reconnect/offboarding/background-resume runs under load on browser and physical iOS/Android devices. |
+| REL-03 | Must | Candidate | Original messaging does not depend on AI; explicit derived/file/send failure states; health endpoints | Local fault injection and provider/database/scanner degradation runbook evidence. |
+| SUPPORT-01 | Must | Partial | In-product Help surface, user/training guides and troubleshooting routes | Company supplies named support/security contacts, hours, escalation ownership and localized production copy. |
+
+## Cross-cutting verification
+
+The exact release candidate must pass all commands and manual gates in [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md). The minimum automated chain includes Expo dependency alignment, lint, TypeScript, deterministic web/iOS/Android exports, BFF/API contracts, Deno checks/tests, clean database rebuild, pgTAP, database lint, browser journeys/accessibility, repository secret/environment/document checks, production dependency audit, and generated SBOM/license evidence.
+
+Production readiness additionally requires separate development/staging/production projects, custom Auth delivery, domain/TLS, Turnstile, scanner, push, optional SMS, backup/PITR plus object restore, monitoring/on-call, signed mobile builds, store approval, privacy/labor/legal decisions, bilingual review, a security review, and the recorded training/acceptance process. Source code cannot truthfully manufacture those external results.

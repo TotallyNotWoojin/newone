@@ -1,79 +1,79 @@
-# Newone Relay
+# Newone
 
-Newone Relay is a private Korean ↔ Spanish operations messenger for plant teams. It sends the employee’s original message first, adds an in-line translation as a separate step, preserves both versions, creates source-linked bilingual shift briefs, tracks confirmed action items, and searches original and translated text together.
+Newone is an independent, company-owned workplace messenger for multilingual frontline teams. It combines a WhatsApp-familiar inbox with verified company identity, private DMs, groups, official updates, shift handoffs, acknowledgements, and Korean-Spanish translation.
 
-The repository includes a working local demo, production-oriented D1 persistence, Sign in with ChatGPT identity support for private Sites deployments, an OpenRouter/Qwen adapter, generated migrations, API tests, and operational documentation.
+This repository now contains a new universal Expo application for iOS, Android, and web plus a Supabase backend foundation. It does not use ChatGPT identity, ChatGPT hosting, or ChatGPT Pro for runtime inference.
 
-## What is implemented
+## Current state
 
-- Responsive desktop and mobile web workspace
-- Korean/Spanish language detection and automatic routing
-- Original-first delivery with independent translation status
-- OpenRouter Qwen translation with strict JSON output
-- Exact provider/region pinning, ZDR routing, data-collection denial, cache disabled, and no model fallback
-- Separate company approval switch before any AI data egress
-- Search across source text, translations, names, and equipment IDs
-- Source-linked bilingual shift briefs with automatic refresh after eight new messages or a handoff
-- Human-confirmed action items with manager-only changes and an audit trail
-- Offline outbox for the current browser tab with automatic retry
-- Company allowlist, roles, explicit thread membership, account deactivation, and private no-store APIs
-- Atomic, fail-closed first-owner provisioning into one code-approved empty operations channel
-- Seeded, human-reviewed local demo data only; production never receives demo records
+| Area | Status |
+|---|---|
+| Universal Expo client | Implemented local UI foundation; web export, lint, and typecheck pass |
+| Chats | Local demo UI: mixed DM/group inbox, filters, search, simulated message state, replies, reactions, attachment presentation, translation/original presentation, and responsive conversation views |
+| People | Local demo UI: synthetic company directory, profile fields, connection state, and language/site/team context |
+| Updates | Local in-memory demo interaction: targeted update presentation and acknowledgement distinct from read state |
+| Handoffs | Static local demo surface for source-aware drafts, outgoing sign-off, and incoming acknowledgement; workflow actions are not backend-wired |
+| Admin/security | Static local demo surfaces for identity, devices, groups, retention, audit, and launch gates; controls are not backend-wired |
+| Authentication | The `newone` Supabase project is configured locally for the native client and responds successfully; invite-only Auth hardening and the production web BFF are not deployed |
+| Database | Local Supabase foundation with forced RLS, checked mutation RPCs, and 74 passing pgTAP tests; the migration has not been pushed to the remote `newone` project |
+| Realtime/API/attachments/push | Minimal private-Realtime and attachment authorization primitives exist; BFF, workers, scanning, notification delivery, and end-to-end adversarial verification remain incomplete |
+| OpenRouter translation | Production adapter is not enabled in the new app; legal approval, DPA, provider controls, and quality evaluation remain hard gates |
+| Production deployment | Not performed; the old private Sites build is a legacy prototype, not Newone V2 |
 
-## Start locally
+The Chats, People, Updates, Handoffs, and Admin rows describe UX rendered from in-memory synthetic fixtures. They are not claims that the corresponding production APIs, authorization, persistence, delivery, scanning, notification, or audit workflows are operational. Do not enter real employee information until every launch gate in [SECURITY_ARCHITECTURE_V2.md](docs/SECURITY_ARCHITECTURE_V2.md) passes.
+
+## Run the new app
 
 Requirements: Node.js 22.13 or newer.
 
 ```bash
-npm install
-npm run dev
+npm --prefix apps/newone install
+npm run web
 ```
 
-Open `http://localhost:3000`. Local development seeds a fictional, human-reviewed demo workspace. AI is intentionally off unless both an OpenRouter key and the company approval flag are present.
+For native development:
 
 ```bash
-cp .env.example .env.local
+npm run ios
+npm run android
 ```
 
-During `npm run dev`, only the documented server runtime keys are forwarded from
-`.env.local` into the local Worker. Production values remain managed by the host.
+The application source is in [`apps/newone`](apps/newone). The same Expo Router codebase renders the responsive web client and native iOS/Android clients.
 
 ## Verify
 
 ```bash
-npm run typecheck
 npm run lint
-npm test
-npm audit --omit=dev
+npm run typecheck
+npm run build
+npm run backend:reset
+npm run backend:test
+npm run backend:lint
 ```
 
-## Production release gate
+Or run all three client checks:
 
-Do not send live employee messages to OpenRouter merely because an API key has been added. Production AI remains disabled until `NEWONE_AI_DATA_EGRESS_APPROVED=true` is deliberately set after all of these are complete:
+```bash
+npm test
+```
 
-1. Written Company approval of OpenRouter, the exact model, provider endpoint, and region.
-2. An agreement/DPA amendment explicitly authorizing the employee or employment data involved.
-3. Account-level OpenRouter ZDR and logging controls are verified.
-4. A Korean/Spanish bilingual quality evaluation passes on deidentified workplace examples.
-5. Personnel allowlists, roles, explicit thread assignments, retention, offboarding, and incident procedures are approved.
+## Configure the backend
 
-ChatGPT Pro does not supply OpenRouter or OpenAI API credits. OpenRouter uses its own API key and credits.
+Copy the public client configuration only:
 
-## Documentation
+```bash
+cp apps/newone/.env.example apps/newone/.env.local
+```
 
-- [User guide](docs/USER_GUIDE.md)
-- [Deployment and provisioning](docs/DEPLOYMENT.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Privacy and safety](docs/PRIVACY_AND_SAFETY.md)
-- [Model selection and evaluation](docs/MODEL_EVALUATION.md)
-- [Acceptance tests](docs/ACCEPTANCE_TESTS.md)
-- [Contract traceability](docs/CONTRACT_TRACEABILITY.md)
+Never place a Supabase secret/service-role key, OpenRouter key, APNs key, FCM credential, or database credential in `EXPO_PUBLIC_*`. Production web authentication is designed to terminate at the Newone API/BFF with an HttpOnly cookie; native refresh tokens use OS secure storage.
 
-## Technology
+The ignored local environment now points the native client at the remote `newone` Supabase project. The publishable client key is intentionally public; secret/service-role credentials must remain server-side. The database migration and production Auth configuration have not been pushed, because the project must first be designated as disposable development/pilot or production.
 
-- Vinext/Next.js 16, React 19, TypeScript
-- Cloudflare Workers and D1 through Sites
-- Drizzle schema and generated SQLite migrations
-- OpenRouter Chat Completions with pinned Qwen models
+## Product and security specifications
 
-The original contractor agreement remains local in the workspace as the product source document. It is ignored from hosted source and is not required at runtime.
+- [WhatsApp and workplace research](docs/RESEARCH_WHATSAPP_AND_WORKPLACE.md)
+- [Full product requirements](docs/FULL_PRODUCT_REQUIREMENTS.md)
+- [Platform architecture](docs/PLATFORM_ARCHITECTURE_V2.md)
+- [Security architecture and threat model](docs/SECURITY_ARCHITECTURE_V2.md)
+
+The original contract traceability, model evaluation, and privacy notes remain in `docs/` for source history. The single-channel Vinext/D1 ChatGPT Sites runtime has been removed from the active source tree; Git history preserves it if forensic comparison is ever needed. The legacy Sites preview is owner-only, has no external visitors, and is visibly marked decommissioned. The available Sites integration cannot permanently delete the project, so its owner-only URL still exists; it is not Newone V2 and must not be presented as the current product.

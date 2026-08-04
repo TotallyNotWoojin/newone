@@ -1,0 +1,173 @@
+name: Newone CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_TELEMETRY_DISABLED: "1"
+
+concurrency:
+  group: newone-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Expo client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/newone/package-lock.json
+
+      - name: Install pinned dependencies
+        run: npm ci --prefix apps/newone
+
+      - name: Verify Expo dependency alignment, lint, types, and web export
+        run: npm --prefix apps/newone run check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high --prefix apps/newone
+
+  database:
+    name: Supabase database
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2
+        with:
+          version: 2.109.0
+          github-token: ${{ github.token }}
+
+      - name: Start isolated local services
+        run: supabase start --exclude studio,imgproxy,analytics,vector --yes
+
+      - name: Rebuild from migrations and seed
+        run: supabase db reset --local
+
+      - name: Run database authorization tests
+        run: supabase test db --local supabase/tests
+
+      - name: Lint database functions and schemas
+        run: supabase db lint --local --schema public,private --level warning --fail-on warning
+
+      - name: Stop local services
+        if: always()
+        run: supabase stop --no-backup
+
+  browser-e2e:
+    name: Browser end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/newone/package-lock.json
+
+      - name: Install test and application dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/newone
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run responsive and accessibility journeys
+        run: npm run e2e
+
+  edge-functions:
+    name: Edge Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: v2.9.1
+
+      - name: Typecheck the API and workers
+        run: npm run backend:functions:check
+
+      - name: Run API, security, and model-adapter tests
+        run: npm run backend:functions:test
+
+      - name: Verify Edge Function to database RPC contracts
+        run: npm run edge-db:contract:check
+
+  repository-security:
+    name: Repository and supply-chain invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/newone/package-lock.json
+
+      - name: Install pinned release tooling and client graph
+        run: |
+          npm ci
+          npm ci --prefix apps/newone
+
+      - name: Verify secrets, environment contracts, documentation, and AI routing policy
+        run: |
+          npm run security:scan
+          npm run env:check
+          npm run docs:check
+          npm run ai:policy:check
+
+      - name: Verify BFF, invitation, and routing contracts
+        run: node --test tests/*.test.mjs
+
+      - name: Audit production dependency graphs
+        run: |
+          npm run audit
+          npm run supply-chain:signatures
+
+      - name: Generate release dependency evidence
+        run: npm run supply-chain:evidence
+
+      - name: Upload dependency evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: newone-dependency-evidence
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 30

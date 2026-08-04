@@ -1,61 +1,117 @@
-# Newone Relay user guide
+# Newone user guide
 
-## Purpose
+Newone is a company-owned workplace messenger for web, iOS, and Android. It lets verified coworkers use private direct messages, groups, official updates, shift handoffs, and Korean-Spanish translation without exchanging personal phone numbers.
 
-Relay helps Korean- and Spanish-speaking employees share operational information while keeping the exact original message visible. It is a communication aid, not an emergency alarm and not proof that a recipient understood a message.
+This guide describes the intended employee-pilot product. A control is available only when the organization enables it and the signed-in membership has permission.
 
-For an immediate hazard, use the plant alarm, radio, supervisor, evacuation, lockout/tagout, or other required site procedure first.
+## Safety boundary
 
-## Sign in and access
+Newone is not an emergency alarm. For an immediate hazard, use the site alarm, radio, supervisor, evacuation, lockout/tagout, or other required emergency procedure first.
 
-Sign in with the company-authorized account. A successful sign-in establishes identity, but conversations appear only when an administrator has assigned that account to them. Contact an administrator if the workspace says no conversations are assigned.
+Delivery, read state, translation, and acknowledgement mean different things:
 
-## Read messages
+- **Delivered**: an eligible client or device accepted the item.
+- **Read**: the recipient opened it.
+- **Acknowledged**: the recipient deliberately confirmed it.
+- None of these proves comprehension. Use the approved teach-back or human-review process for critical instructions.
 
-- Incoming messages show your preferred language first when a translation is ready.
-- The original is always preserved directly below or above the translation.
-- Captions identify the original language and the recipient view. Do not infer direction from flags.
-- “Original delivered · translation pending” means the source message arrived even though AI is still working.
-- A yellow “Verify translation” notice means the model found ambiguity or a source-language mismatch.
-- “Human reviewed” applies only to that specific sample. It does not apply to later AI output.
+## Enroll and sign in
 
-## Send a message
+1. Open the invitation issued for your employee record.
+2. Verify the intended email, phone, or separately delivered employee code.
+3. Complete the configured passwordless or password flow.
+4. Enroll a second factor when your role requires it.
+5. Review the organization name and your verified profile before continuing.
 
-1. Choose a structured type when relevant: Safety, Production, Maintenance, Quality, or Shift handoff.
-2. Include exact location, equipment/part ID, quantity, unit, time, condition, and required action.
-3. Confirm the detected language, especially for short or mixed-language text.
-4. Press Enter or select Send. Use Shift+Enter for a new line.
+There is no public workspace registration. Never forward an invitation, OTP, recovery link, or QR code. Newone support will never ask for one.
 
-Relay stores the original first. Translation failure never erases or retracts it.
+## Chats
 
-When offline, messages remain in the current tab’s outbox and retry after connectivity returns. Keep the tab open. Closing or reloading it can discard unsent items; this avoids silently storing sensitive employee messages on a shared device.
+Chats combines direct and group conversations in recency order. Use filters for unread, direct, groups, and official communication; search can find permitted people and message history.
 
-## Safety and high-impact messages
+To start a direct conversation:
 
-Human review is required before relying on machine translation for:
+1. Open **People**.
+2. Find the verified coworker by name, role, site, or team.
+3. Save them as a contact if useful.
+4. Select **Message**. Depending on company policy, a connection request may need acceptance first.
 
-- safety instructions or hazard response;
-- legal, disciplinary, hiring, termination, or performance matters;
-- medical, accommodation, or benefits information;
-- payroll, immigration, or other high-impact decisions;
-- a message where a number, unit, negation, deadline, or equipment ID could change the outcome.
+To create a group, choose **New group**, add the intended members, confirm the name and purpose, then review the membership before creating it. Group owners/admins can manage membership within their delegated scope. A person added later does not automatically receive earlier history unless policy explicitly permits it.
 
-When possible, ask the recipient to restate the critical instruction in their own words. A delivered or translated status is not confirmation of comprehension.
+## Send and receive messages
 
-## Search
+- Newone stores the sender's original text first.
+- A stable local send identifier makes retries safe after poor connectivity.
+- Pending, sent, delivered, read, and failed states are shown separately.
+- Reply, react, edit, delete, copy, forward, pin, and report controls appear only when policy allows them.
+- Offline messages remain in the encrypted native outbox and reconcile after reconnect. Web offline storage is organization-controlled.
 
-Select Search or press Command/Ctrl+K. Search accepts Korean, Spanish, equipment IDs, and names. A result identifies whether the match came from the original or translation. Filters narrow the current results to safety, maintenance, or quality messages.
+For operational messages, include the exact location, equipment/part ID, quantity, unit, time, condition, and requested action. Never assume a translation corrected an ambiguous source.
 
-Search is limited to conversations assigned to your account.
+## Translation
 
-## Shift brief and action items
+Incoming messages can show an approved translation in your preferred language while keeping the labeled original visible. Newone detects the original language on the server; the label may show Korean, Spanish, English, mixed, or unknown plus an ambiguity warning. Your profile language helps choose the translation you receive but is not treated as proof of what the sender wrote. Translation may be queued, ready, need review, or fail; original messaging continues in every state.
 
-The brief panel shows a Korean or Spanish summary, source buttons, and action items. Source buttons jump back to supporting messages.
+Human review is required before relying on machine translation for safety, legal, disciplinary, medical, payroll, immigration, accommodation, or other high-impact communication. Numbers, units, negation, urgency, deadlines, and equipment identifiers deserve explicit verification.
 
-For manager/admin accounts, Relay automatically refreshes a brief when eight messages have arrived since the last brief or a Shift handoff message arrives. The same source set is deduplicated so repeated requests do not create duplicate actions. A manager can also request a fresh brief manually.
+Use **Report translation** to identify an error. A correction creates a traceable derived version; it never overwrites the sender's original record.
 
-AI-created actions begin as “Needs confirmation.” A manager must verify the source, owner, and timing before treating the action as assigned. Status changes are recorded in an audit table.
+## Conversation and shift summaries
 
-## Sign out
+An authorized conversation member or supervisor can request a summary of a permitted source window. An organization may also enable an automatic draft at a configured message threshold or shift boundary. A summary shows its primary topic, concise account, key topics, decisions, proposed action items, ambiguities, cited source messages, and AI/human-review status.
 
-Use the arrow beside your profile in the left rail. On shared equipment, close the browser after signing out.
+1. Confirm that the selected conversation and time/message range are correct.
+2. Wait for **Ready for review**; a queued, failed, or unavailable summary does not stop ordinary messaging.
+3. Open the cited originals for any important claim, decision, number, unit, identifier, owner, or deadline.
+4. Correct or reject unsupported text, then approve only the exact version you reviewed.
+5. Confirm proposed actions separately before assigning an owner or due time.
+
+A summary is a derived convenience layer. It does not edit the conversation, acknowledge an update, assign work, or issue a shift handoff. If a source message changes or is removed under policy, Newone supersedes the affected summary rather than silently presenting it as current.
+
+## Files and photos
+
+Choose the attachment control to take a photo, select an image, or choose an approved document. Upload does not make a file immediately readable: Newone validates type/size, uploads it to a private quarantine path, scans it, and marks it available only when clean.
+
+Blocked or failed files cannot be opened. A copied link does not bypass conversation membership and expires quickly.
+
+## Updates and critical notices
+
+**Updates** contains official communication outside ordinary chat noise. Each update shows its publisher, audience, version/correction state, severity, publication time, and translation status.
+
+Authorized publishers choose exactly one base audience: the company, the current update channel, or one or more sites/departments/teams/units. They can then narrow it by exact job title or configured operational role, account access role, preferred language, and people currently on an authoritative shift. Preview the count, exclusions, and notification languages after every selector change. A scheduled update is evaluated again when it actually publishes, so a person who moved shifts or left the company is not retained from an earlier preview.
+
+If acknowledgement is required, read the original/approved translation and select **Acknowledge** deliberately. Supervisors can see delivery and acknowledgement gaps for the targeted notice without opening unrelated private chats.
+
+## Shift handoffs and actions
+
+**Work** contains source-linked shift handoffs and confirmed operational actions.
+
+1. The outgoing lead selects the time window and source messages.
+2. Newone may draft a summary when approved AI processing is available.
+3. A person edits and signs the outgoing version.
+4. The incoming lead reviews the sources and acknowledges the exact signed version.
+5. Any extracted action begins unconfirmed; a person verifies its owner and timing.
+
+AI output cannot silently assign work or modify a signed handoff.
+
+## Notifications, availability, and privacy
+
+Configure per-conversation mute, mentions, quiet hours, language, and preview preferences in **You**. The organization can restrict previews on locked screens. Presence is approximate and must not be treated as attendance or productivity evidence.
+
+Blocking stops optional direct contact but does not suppress required official notices. Reporting creates a scoped safety record; it does not give an ordinary administrator access to all private messages.
+
+## Devices and account security
+
+In **You → Devices and sessions**, review active devices and revoke anything unfamiliar. Sign out before returning or replacing a device. A suspended account loses new access even if an older token has not reached its nominal expiry.
+
+On shared equipment, use only an organization-approved shared-device mode. Shared devices are not permitted during the initial employee pilot.
+
+## Administrator guide
+
+The role-gated web administration surface manages organization units, members, invitations, dynamic groups, devices, session revocation, update audiences, retention policy, audit metadata, and launch-gate evidence. It does not provide a browse-all private-message inbox.
+
+High-risk actions require MFA/recent authentication, reason, scope, expiry where applicable, and an audit record. Suspension must revoke sessions and push destinations and remove future authorization atomically.
+
+## Support
+
+Use **You → Help and support** for access trouble, lost devices, abuse reports, translation incidents, or accessibility issues. Do not paste message bodies, credentials, OTPs, invite tokens, or signed file links into an ordinary support ticket unless a separately authorized diagnostic workflow requests a minimized sample.

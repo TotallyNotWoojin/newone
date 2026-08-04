@@ -1,130 +1,174 @@
-# Deployment and provisioning
+# Deployment and environment runbook
 
-## Deployment target
+This runbook covers the independent Newone Expo/Supabase product. It intentionally contains no ChatGPT Sites or D1 deployment path.
 
-The repository is configured for OpenAI Sites on Cloudflare Workers with a D1 binding named `DB` in `.openai/hosting.json`. Production builds use Vinext.
+## Environment model
 
-## 1. Verify the artifact
+| Environment | Data | Purpose | Hosted plan |
+|---|---|---|---|
+| Local | Synthetic only | Development, migrations, pgTAP, function tests | Free local Docker |
+| Development/pilot | Synthetic or explicitly approved pilot fixtures | Shared device, Auth, Realtime, Storage, push, and integration testing | Current Free `newone` project |
+| Staging | Synthetic/deidentified | Release candidates, restore drills, load and adversarial tests | Persistent branch or isolated project before employee pilot |
+| Production | Approved employee data | Live service | Separate paid project after launch gates pass |
+
+Never reuse project references, API keys, Auth users, Storage objects, push tokens, model keys, or seed data across environments.
+
+## 1. Local verification
+
+Requirements: Node.js 22.13+, Docker, and Supabase CLI 2.109.0 or the repository-pinned replacement.
 
 ```bash
 npm ci
-npm run typecheck
-npm run lint
-npm test
-npm audit --omit=dev
+npm ci --prefix apps/newone
+supabase start
+npm run verify:full
+# Native source/bundle parity gates:
+npm --prefix apps/newone exec expo install -- --check
+npm --prefix apps/newone exec expo export -- --platform ios --output-dir .expo/verify-ios --clear
+npm --prefix apps/newone exec expo export -- --platform android --output-dir .expo/verify-android --clear
 ```
 
-The generated migration is in `drizzle/`. Apply it to the production D1 database through the Sites deployment workflow. For a separately managed Cloudflare project, configure the real D1 database and apply migrations with the corresponding Wrangler D1 migration command. Do not point production at the local placeholder database ID in `vite.config.ts`; that ID exists only for Miniflare development.
+Do not continue if a Critical/High security issue, failing denial test, schema lint error, client type error, or production dependency vulnerability remains unresolved.
 
-## 2. Provision conversations
+## 2. Public client configuration
 
-Production never seeds fictional data. `NEWONE_DEFAULT_THREAD_IDS=operations`
-atomically creates the code-owned empty operations channel and the initial
-membership when each new allowlisted profile is first created. `operations` is
-currently the only accepted default ID; unknown or misspelled values fail closed
-before a profile is written.
-
-For a custom or narrower channel, leave it out of the default setting, create the
-Company-approved thread deliberately, and assign explicit memberships. Example SQL:
-
-```sql
-INSERT INTO threads
-  (id, title, subtitle, kind, location, shift_key, created_at, updated_at)
-VALUES
-  ('operations', 'General operations', '운영 · Operaciones', 'operations',
-   'Plant-wide', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-```
-
-Use explicit D1 records for narrower access:
-
-```sql
-INSERT OR IGNORE INTO thread_members (thread_id, user_email)
-VALUES ('operations', 'employee@company.example');
-```
-
-The profile must exist first. It is created when an allowlisted user signs in, or an administrator can insert it deliberately:
-
-```sql
-INSERT INTO profiles
-  (email, display_name, preferred_language, role, active)
-VALUES
-  ('employee@company.example', 'Employee Name', 'es', 'member', 1);
-```
-
-Removing a `thread_members` row revokes that conversation and it will not be silently restored. Set `profiles.active=0` to block an account.
-
-## 3. Configure identity and personnel
-
-Required production values:
+The ignored `apps/newone/.env.local` contains only public routing values:
 
 ```dotenv
-NEWONE_ALLOWED_EMAILS=manager@company.example,employee@company.example
-NEWONE_MANAGER_EMAILS=manager@company.example
-NEWONE_ADMIN_EMAILS=admin@company.example
-NEWONE_DEFAULT_THREAD_IDS=operations
-NEWONE_APP_URL=https://the-real-private-site-host
+EXPO_PUBLIC_SUPABASE_URL=https://project-ref.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+EXPO_PUBLIC_API_URL=https://api.dev.newone.example
+EXPO_PUBLIC_TURNSTILE_SITE_KEY=public-site-key
+EXPO_PUBLIC_TURNSTILE_CHALLENGE_ORIGIN=https://app.dev.newone.example/
+EXPO_PUBLIC_SUPPORT_CONTACT_LABEL=Company support desk
+EXPO_PUBLIC_SUPPORT_CONTACT_URL=https://support.example/newone
+EXPO_PUBLIC_DEMO_MODE=false
 ```
 
-`NEWONE_ALLOWED_EMAILS` fails closed when absent in production. Role configuration is used when a profile is first created. Later role changes should be performed through an approved administrator process and audited.
+Production web uses a same-origin path such as `EXPO_PUBLIC_API_URL=/api`; native builds use the direct HTTPS Edge Function origin. Turnstile's site key is public, but its secret remains in the Supabase Auth configuration. The native challenge origin must be a dedicated allowed HTTPS origin and must exactly match the deployed challenge document. Add the exact hostname from `EXPO_PUBLIC_TURNSTILE_CHALLENGE_ORIGIN` to that Turnstile widget's hostname allowlist; adding only the main web-app hostname does not authorize the hosted mobile challenge page.
 
-Default thread creation, profile creation, and initial membership use one
-transactional D1 batch. A failure rolls the entire first-use provisioning back;
-later logins never restore a membership that an administrator removed.
+Never place service-role/secret keys, database passwords, OpenRouter credentials, APNs/FCM credentials, SMTP secrets, scanner keys, or signing secrets in `EXPO_PUBLIC_*`.
 
-Confirm that:
+## 3. Server-only configuration
 
-- the site is private and requires Sign in with ChatGPT;
-- the platform access policy limits the intended people/workspace;
-- the edge strips caller-supplied `oai-authenticated-user-*` headers and injects trusted values;
-- the Worker has no direct public origin that bypasses Sites identity handling.
-
-## 4. Configure OpenRouter only after approval
-
-OpenRouter still requires separate credits and an API key even if the operator has ChatGPT Pro.
+Edge Function secrets are environment-specific. The checked [server environment example](../.env.example) is authoritative. Its contract includes:
 
 ```dotenv
-OPENROUTER_API_KEY=server-secret
-OPENROUTER_TRANSLATION_MODEL=qwen/qwen3-235b-a22b-2507
-OPENROUTER_SUMMARY_MODEL=qwen/qwen3-235b-a22b-2507
-OPENROUTER_PROVIDER=google-vertex/us-south1
+SUPABASE_URL=https://project-ref.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+SUPABASE_SECRET_KEY=server-secret
+NEWONE_ALLOWED_WEB_ORIGINS=https://app.newone.example
+NEWONE_PUBLIC_APP_URL=https://app.newone.example
+NEWONE_SUPABASE_FUNCTIONS_ORIGIN=https://project-ref.supabase.co/functions/v1
+NEWONE_NETWORK_HASH_KEY=independent-32-byte-or-longer-secret
+NEWONE_RECOVERY_EVIDENCE_HASH_KEY=independent-32-byte-or-longer-secret
+NEWONE_WEB_GATEWAY_SHARED_SECRET=independent-32-byte-or-longer-secret
+NEWONE_CURSOR_SIGNING_KEY=independent-32-byte-or-longer-secret
+NEWONE_PUSH_TOKEN_KEY_V1=independent-32-byte-base64url-key
+NEWONE_WORKER_TOKEN=independent-32-byte-or-longer-secret
+NEWONE_BOOTSTRAP_TOKEN=temporary-independent-32-byte-or-longer-secret
+NEWONE_AUTH_CAPTCHA_REQUIRED=true
+NEWONE_AUTH_PHONE_OTP_ENABLED=false
+NEWONE_OUTBOX_TOPICS=moderation,realtime_control,storage_purge,session_revoke,dynamic_group_sync
 NEWONE_AI_DATA_EGRESS_APPROVED=false
+OPENROUTER_API_KEY=server-secret
+NEWONE_OPENROUTER_POLICY_JSON={versioned-reviewed-route-policy}
+NEWONE_EXPO_ACCESS_TOKEN=server-secret-when-push-is-enabled
+NEWONE_EXPO_PROJECT_ID=exact-eas-project-uuid
+NEWONE_PUSH_ENVIRONMENT=production
+NEWONE_ATTACHMENT_SCANNER_URL=https://scanner.example/v1/scan
+NEWONE_ATTACHMENT_SCANNER_TOKEN=server-secret
 ```
 
-Keep the approval value false while testing authentication, database, UI, and deployment with non-sensitive data. After every privacy, contract, endpoint, quality, and Company approval gate in `PRIVACY_AND_SAFETY.md` is complete, a separately authorized release operator may change it to true.
+Generate every secret independently per environment and never print it into release evidence. Do not reuse `NEWONE_RECOVERY_EVIDENCE_HASH_KEY` for network fingerprints, cookies, cursors, or any other purpose. Install the same `NEWONE_WEB_GATEWAY_SHARED_SECRET` value in Vercel and Supabase only; it signs the Vercel-observed network peer so a later Supabase proxy hop cannot collapse all web users into one rate-limit bucket. The bootstrap token is temporary and the bootstrap endpoint is service-only, owner-bound, idempotent, and disabled/404 when the token is absent; remove it immediately after initial owner provisioning. Add `push` to `NEWONE_OUTBOX_TOPICS` only when Expo submission and receipt processing are configured. A model key alone cannot enable AI processing. Production requires the approval flag, exact model/provider allowlist, zero-data-retention/data-denial controls, budget policy, and completed owner review.
 
-In OpenRouter:
+Before promoting a Vercel deployment, verify the ingress contract from two client networks. On a direct Vercel preview, use a temporary one-shot diagnostic that records only whether `X-Forwarded-For` is exactly one syntactically valid IP and whether the two probes produce distinct keyed network buckets; do not record or return either raw IP, and remove the diagnostic before promotion. If another CDN or reverse proxy sits in front of Vercel, stop: Vercel documents that ordinary proxy setups overwrite the original address, which can collapse users into a shared availability bucket. Configure and verify Vercel Trusted Proxy or omit the extra proxy before launch. This network signal is supplemental rate limiting only and is never authentication.
 
-1. Enable account-level ZDR for the relevant model group.
-2. Keep prompt/output logging and discount-data opt-ins off.
-3. Apply model and exact-provider allowlists to the production workspace/key.
-4. Disable plugins, web search, routing helpers, Broadcast, and response-cache presets.
-5. Use a server-only, spend-limited production key and a separate management credential.
-6. Verify the exact endpoint remains in the live ZDR list immediately before enabling the approval switch.
+## 4. Database release
 
-## 5. Release smoke test
+1. Confirm the target project and environment explicitly.
+2. Back up any non-disposable target before schema mutation.
+3. Compare local and remote migration history.
+4. Run the full local reset, pgTAP suite, lint, advisors, and generated-type check.
+5. Link the exact target project non-interactively and review the pending migration plan.
+6. Push migrations only after the review is clean.
+7. Re-run security/performance advisors and safe remote smoke probes.
 
-With a non-sensitive account and test channel:
+The Free `newone` project remains a development target. No production data may be imported merely because its URL/key are configured locally.
 
-1. Sign in and confirm only assigned threads appear.
-2. Send Korean and Spanish messages and confirm originals appear before translations.
-3. Simulate an unavailable provider and confirm the original remains delivered.
-4. Search both source and translated terms.
-5. Generate a manager brief, open every source link, and confirm actions begin unconfirmed.
-6. Confirm a member receives 403 for summary/action mutation.
-7. Remove a membership and verify the thread disappears without re-enrollment.
-8. Verify API responses are `private, no-store` and page/API security headers are present.
-9. Complete desktop, narrow mobile, keyboard-only, screen-reader, and bilingual human review.
+## 5. Auth release
 
-## 6. Training and handoff
+Before inviting any employee:
 
-Train managers and employees with the user guide. Training must explicitly cover the original/translation distinction, emergency-process priority, human review, action confirmation, search/source links, and the limits of the current-tab offline outbox.
+- disable open email/phone signup;
+- apply migrations before Auth configuration, enable the versioned
+  `hook_newone_custom_access_token` hook, and verify initial OTP, MFA upgrade,
+  and refresh succeed only for a canonical current member or the exact subject
+  of a live invitation. The hook is available on Supabase Free and Pro, but it
+  is not active in a hosted project merely because its SQL and local
+  `config.toml` exist;
+- configure verified redirect URLs for `newone://auth/callback` and each web origin;
+- configure trusted SMTP/SMS delivery and generic enumeration-safe responses;
+- enable hosted Supabase Auth CAPTCHA with provider `turnstile`, install the matching secret, and keep `NEWONE_AUTH_CAPTCHA_REQUIRED=true`;
+- add every exact web challenge hostname and the exact hosted mobile challenge-page hostname to the Turnstile widget allowlist, then prove an allowed-host token succeeds and a token from an unlisted host cannot trigger delivery;
+- pass each challenge token once as Supabase Auth's `captchaToken`. GoTrue owns the Siteverify exchange; Newone must not call Cloudflare Siteverify a second time or attempt to reuse the single-use token;
+- record that the widget requests Turnstile action `workplace_sign_in`, but the current Supabase GoTrue CAPTCHA integration does not let Newone configure or prove an expected-action comparison. Treat the action as non-enforced metadata unless the Auth provider adds that control or a separately reviewed single-owner verification design replaces this flow;
+- verify OTP/recovery limits and generic responses;
+- probe the public Auth endpoint directly with a synthetic unrelated principal
+  and prove token issuance fails. Then prove that disabling or expiring a
+  membership blocks refresh without relying on the Newone Edge gateway;
+- prove recovery request and verification consume their separate destination, network, and installation budgets, and prove an unknown destination cannot create an Auth user;
+- exercise self-service recovery end to end: bind the new installation before access, preserve only the new session, revoke all other sessions/devices/push destinations, and inspect immutable security/audit records;
+- approve a named human-verification procedure and trained recovery-manager roster. Newone records only the keyed digest of the external reference; never place identity documents or the raw reference in the app, database, request logs, or release evidence;
+- exercise lost-TOTP recovery with target/verifier/approver separation, two distinct approvals for a privileged target, case expiry, exact-factor matching, stale-version rejection, ambiguous Auth-response retry, and complete session/device/push revocation;
+- configure the approved out-of-band security-notice provider and retain a synthetic delivery receipt. A `pending_external_delivery` database record does not satisfy this gate;
+- require MFA/AAL2 and recent authentication for privileged operations;
+- test invite expiry, one-time redemption, recovery, session listing/revocation, suspension, and offboarding;
+- confirm a suspended membership loses REST/RPC/Storage access immediately and private Realtime access within the release target.
 
-Record the production URL, D1 database, release commit, configured model/provider-region, OpenRouter workspace/key owner, Company approver, DPA/MSA version, retention policy, incident owner, and date of the last golden-set evaluation.
+On hosted Free projects created after the provider's June 3, 2026 change, custom Auth email templates cannot be used with the default SMTP service. Configure a custom SMTP provider or approved Send Email Auth Hook before relying on Newone's code-only invitation/sign-in template. Default SMTP is not a production employee-delivery path.
 
-## Rollback
+Do not infer hosted Auth state from `supabase/config.toml`. Export/review the actual project Auth configuration after every push and attach remote enrollment, redirect, CAPTCHA, rate-limit, template, and generic-response probes.
 
-- Set `NEWONE_AI_DATA_EGRESS_APPROVED=false` to stop new AI egress while preserving originals and history.
-- Deactivate affected profiles or remove thread memberships to stop access.
-- Revoke/rotate the OpenRouter production key if compromise is suspected.
-- Roll the Site back to the prior validated version through Sites while preserving D1.
-- Do not delete original messages during an incident unless the approved retention/deletion procedure authorizes it.
+## 6. Functions, jobs, files, and push
+
+- Deploy every versioned function (`newone-api`, `newone-auth`, `newone-read`, bootstrap, AI, attachment scan, general outbox, push receipt, and maintenance workers) only after its unit/contract tests pass.
+- Verify every function fails closed when a required RPC, secret, approval, or active session is absent.
+- Create only private Storage buckets. Exercise pending, scanning, clean, blocked, expired-grant, nonmember, and deleted-message cases.
+- Configure Expo push credentials, exact EAS project UUID, and environment binding per environment. The pilot permits generic or hidden notifications only; confidential sender, message, notice, handoff, and override-reason text never enters the provider payload.
+- Verify the durable job worker is idempotent and that provider failure never rolls back an original message or private report. For `moderation`, prove one content-free intake job, service-only expansion, current authorization after offboarding/grants, target/reporter exclusion, duplicate replay, and retry after expansion or completion failure.
+
+### Worker scheduling
+
+Handlers do not become automatic merely because they are deployed. Configure [Supabase Cron with `pg_net` and Vault](https://supabase.com/docs/guides/functions/schedule-functions) after functions and secrets exist:
+
+1. Store the exact project URL, secret API key, and independent worker token in Vault. Never put literal credentials in a migration or cron command history.
+2. Enable `pg_cron` and `pg_net` in the target environment.
+3. Schedule short, overlapping-safe POST claims with `Content-Type: application/json`, the server `apikey`, and `X-Newone-Worker-Token`. These self-authenticating handlers reject an `Authorization` header, browser Origin, and cookies; Supabase gateway JWT verification is disabled for them. The body contains only bounded limits, while topic and tenant authority remain server-derived.
+4. Start with AI processing every 10 seconds, attachment scan every 10 seconds, moderation/revocation/control/purge/dynamic-group outbox every 5 seconds, push dispatch every 5 seconds when enabled, push receipts every 30 seconds, and scheduled-update/notice/handoff maintenance every minute. Adjust only from synthetic load/queue-age evidence.
+5. Record `cron.job`, recent `cron.job_run_details`, Edge invocation results, queue age/dead letters, retry behavior, and kill-switch tests. Alert before the applicable delivery/revocation target is missed.
+6. Unschedule a worker before rotating or removing a credential that it requires; verify non-dependent workers continue.
+
+The scheduling SQL is environment state, not a portable schema migration. Archive a redacted export of job names/schedules and the secret names (never values) with release evidence.
+
+## 7. Web and native delivery
+
+- Web is built as a static Expo export and served on a Newone/company-controlled Vercel origin with the same-origin `/api` BFF, TLS, CSP/Turnstile directives, no-store employee-data responses, and no ChatGPT dependency. Another approved host must reproduce and re-test the BFF trust/header contract; uploading only the static files is insufficient for secure web Auth.
+- Native builds use the bundle identifiers in `apps/newone/app.json` and separate development/preview/production EAS profiles.
+- A release operator must complete the first interactive EAS setup and native signing configuration before CI can build non-interactively.
+- OTA updates require environment isolation, channel policy, signing, rollback testing, and a rule that native/security-contract changes require a store build.
+
+## 8. Release evidence
+
+Store the commit, migration history, project reference, function versions, cron configuration/run history, web origin, native build IDs, test reports, advisors, dependency/SBOM/license audit, model policy, backup/restore result, accessibility review, bilingual evaluation, training record, and named approvals for every release candidate. Use the [delivery and acceptance checklist](DELIVERY_AND_ACCEPTANCE_CHECKLIST.md).
+
+The complete gate checklist is in [SECURITY_ARCHITECTURE_V2.md](SECURITY_ARCHITECTURE_V2.md#launch-gates). A successful UI smoke test is not a security or production approval.
+
+## Rollback and kill switches
+
+- Disable `NEWONE_AI_DATA_EGRESS_APPROVED` to stop new model egress without stopping messaging.
+- Disable upload grants or push dispatch independently when those processors fail.
+- Suspend memberships and revoke sessions/push destinations for compromised accounts.
+- Roll functions and clients back to the last verified contract-compatible release.
+- Restore the database only through the reviewed recovery procedure; Storage objects require their separate backup path.
+- Preserve original messages and audit evidence unless an approved deletion/retention procedure authorizes removal.

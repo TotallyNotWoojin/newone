@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://newone.example/schemas/ai-route-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policyVersion",
+    "employeeDataEgressEnabled",
+    "model",
+    "providerTag",
+    "providerMetadataName",
+    "requirements",
+    "priceCeilingsUsdPerMillionTokens"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "policyVersion": { "type": "string", "minLength": 1 },
+    "employeeDataEgressEnabled": { "type": "boolean" },
+    "model": { "type": "string", "pattern": "^[a-z0-9._~-]+/[a-zA-Z0-9._:~-]+$" },
+    "providerTag": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z0-9][a-z0-9._/\\-]{1,159}$"
+    },
+    "providerMetadataName": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 120,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()&+\\-]{1,119}$"
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zeroDataRetention",
+        "structuredOutputs",
+        "responseFormat",
+        "allowFallbacks",
+        "dataCollection",
+        "cache",
+        "implicitCaching",
+        "bringYourOwnKeys",
+        "managementControlPlanePreflight",
+        "syntheticRouteProbe",
+        "plugins",
+        "webSearch",
+        "tools"
+      ],
+      "properties": {
+        "zeroDataRetention": { "const": true },
+        "structuredOutputs": { "const": true },
+        "responseFormat": { "const": true },
+        "allowFallbacks": { "const": false },
+        "dataCollection": { "const": "deny" },
+        "cache": { "const": false },
+        "implicitCaching": { "const": false },
+        "bringYourOwnKeys": { "const": false },
+        "managementControlPlanePreflight": { "const": true },
+        "syntheticRouteProbe": { "const": true },
+        "plugins": { "const": false },
+        "webSearch": { "const": false },
+        "tools": { "const": false }
+      }
+    },
+    "priceCeilingsUsdPerMillionTokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "completion"],
+      "properties": {
+        "prompt": { "type": "number", "exclusiveMinimum": 0 },
+        "completion": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

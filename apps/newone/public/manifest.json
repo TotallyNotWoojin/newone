@@ -1,0 +1,52 @@
+{
+  "id": "/",
+  "name": "Newone Workplace",
+  "short_name": "Newone",
+  "description": "Private, multilingual workplace messaging, updates, and shift coordination.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F3F5F1",
+  "theme_color": "#102E27",
+  "categories": ["business", "productivity", "social"],
+  "icons": [
+    {
+      "src": "/newone-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/newone-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/newone-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chats",
+      "short_name": "Chats",
+      "url": "/"
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "url": "/search"
+    },
+    {
+      "name": "Company updates",
+      "short_name": "Updates",
+      "url": "/updates"
+    }
+  ]
+}

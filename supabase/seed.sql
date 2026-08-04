@@ -1,0 +1,5 @@
+-- Intentionally empty.
+--
+-- Production identities are provisioned through Supabase Auth and organization
+-- invitations. Automated database tests create transactional fixtures instead
+-- of committing employee-like personal data or reusable credentials here.

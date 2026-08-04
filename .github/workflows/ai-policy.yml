@@ -1,0 +1,28 @@
+name: AI route policy
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 13 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - config/ai-route-policy.json
+      - scripts/verify-openrouter-route.mjs
+      - .github/workflows/ai-policy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-approved-route:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.13.0
+      - name: Verify exact ZDR route and policy ceilings
+        run: node scripts/verify-openrouter-route.mjs

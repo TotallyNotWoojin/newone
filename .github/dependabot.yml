@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /apps/newone
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      expo-client:
+        patterns:
+          - "expo*"
+          - "@expo/*"
+          - "react*"
+      supabase-client:
+        patterns:
+          - "@supabase/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -1,0 +1,199 @@
+import { ApiError } from './errors.ts';
+import { asObject } from './validation.ts';
+
+const OPENROUTER_API = 'https://openrouter.ai/api/v1';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const MAX_MANAGEMENT_RESPONSE_BYTES = 4 * 1024 * 1024;
+
+export const DISABLED_OPENROUTER_PLUGINS = Object.freeze([
+  Object.freeze({ id: 'web', enabled: false }),
+  Object.freeze({ id: 'file-parser', enabled: false }),
+  Object.freeze({ id: 'response-healing', enabled: false }),
+  Object.freeze({ id: 'pareto-router', enabled: false }),
+  Object.freeze({ id: 'context-compression', enabled: false }),
+]);
+
+export interface OpenRouterEmployeeControlPlane {
+  managementApiKey: string;
+  apiKeyHash: string;
+  workspaceId: string;
+}
+
+export interface OpenRouterControlPlanePolicy {
+  model: string;
+  providerTag: string;
+  providerMetadataName: string;
+  priceCeilingsUsdPerMillionTokens: {
+    prompt: number;
+    completion: number;
+  };
+}
+
+export type ControlPlaneFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+function unavailable(): never {
+  throw new ApiError(503, 'provider_unavailable', undefined, 5);
+}
+
+function page(value: unknown): { data: unknown[]; totalCount: number } {
+  const envelope = asObject(value);
+  if (
+    !Array.isArray(envelope.data) || envelope.data.length > 100 ||
+    !Number.isSafeInteger(envelope.total_count) || (envelope.total_count as number) < 0 ||
+    envelope.total_count !== envelope.data.length
+  ) unavailable();
+  return { data: envelope.data, totalCount: envelope.total_count as number };
+}
+
+async function boundedJson(response: Response): Promise<unknown> {
+  if (!response.ok) unavailable();
+  try {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength < 2 || bytes.byteLength > MAX_MANAGEMENT_RESPONSE_BYTES) unavailable();
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    unavailable();
+  }
+}
+
+function stringArrayOrNull(value: unknown): string[] | null {
+  if (value === null) return null;
+  if (
+    !Array.isArray(value) || value.length > 200 ||
+    value.some((entry) => typeof entry !== 'string' || entry.length < 1 || entry.length > 200)
+  ) unavailable();
+  return value as string[];
+}
+
+function noContentFilters(value: unknown): boolean {
+  return value === null || (Array.isArray(value) && value.length === 0);
+}
+
+export function parseOpenRouterEmployeeControlPlane(
+  managementApiKey: string | undefined,
+  apiKeyHash: string | undefined,
+  workspaceId: string | undefined,
+): OpenRouterEmployeeControlPlane {
+  const key = managementApiKey?.trim() ?? '';
+  const hash = apiKeyHash?.trim().toLowerCase() ?? '';
+  const workspace = workspaceId?.trim().toLowerCase() ?? '';
+  if (key.length < 20 || !SHA256_PATTERN.test(hash) || !UUID_PATTERN.test(workspace)) {
+    throw new ApiError(503, 'ai_processing_disabled');
+  }
+  return { managementApiKey: key, apiKeyHash: hash, workspaceId: workspace };
+}
+
+export async function verifyOpenRouterEmployeeControlPlane(
+  controls: OpenRouterEmployeeControlPlane,
+  policy: OpenRouterControlPlanePolicy,
+  fetcher: ControlPlaneFetch,
+  signal?: AbortSignal,
+): Promise<void> {
+  const baseProvider = policy.providerTag.split('/')[0];
+  if (!baseProvider) unavailable();
+  const managementHeaders = {
+    'Authorization': `Bearer ${controls.managementApiKey}`,
+    'Accept': 'application/json',
+  };
+  const workspace = encodeURIComponent(controls.workspaceId);
+  const provider = encodeURIComponent(baseProvider);
+  const [keyResponse, byokResponse, guardrailResponse, zdrResponse] = await Promise.all([
+    fetcher(`${OPENROUTER_API}/keys/${controls.apiKeyHash}`, {
+      headers: managementHeaders,
+      signal,
+    }),
+    fetcher(
+      `${OPENROUTER_API}/byok?workspace_id=${workspace}&provider=${provider}&limit=100&offset=0`,
+      { headers: managementHeaders, signal },
+    ),
+    fetcher(
+      `${OPENROUTER_API}/guardrails?workspace_id=${workspace}&limit=100&offset=0`,
+      { headers: managementHeaders, signal },
+    ),
+    fetcher(`${OPENROUTER_API}/endpoints/zdr`, {
+      headers: { 'Accept': 'application/json' },
+      signal,
+    }),
+  ]).catch(() => unavailable());
+
+  const [keyPayload, byokPayload, guardrailPayload, zdrPayload] = await Promise.all([
+    boundedJson(keyResponse),
+    boundedJson(byokResponse),
+    boundedJson(guardrailResponse),
+    boundedJson(zdrResponse),
+  ]);
+
+  const key = asObject(asObject(keyPayload).data);
+  if (
+    key.hash !== controls.apiKeyHash || key.workspace_id !== controls.workspaceId ||
+    key.disabled !== false ||
+    (key.expires_at !== null &&
+      (typeof key.expires_at !== 'string' || Date.parse(key.expires_at) <= Date.now() + 60_000)) ||
+    (key.limit_remaining !== null &&
+      (typeof key.limit_remaining !== 'number' || !Number.isFinite(key.limit_remaining) ||
+        key.limit_remaining <= 0))
+  ) unavailable();
+
+  const byok = page(byokPayload);
+  if (byok.totalCount > 100) unavailable();
+  for (const entry of byok.data) {
+    const credential = asObject(entry);
+    if (
+      credential.workspace_id !== controls.workspaceId || credential.provider !== baseProvider ||
+      credential.disabled !== true
+    ) unavailable();
+  }
+
+  const guardrails = page(guardrailPayload);
+  if (guardrails.totalCount < 1 || guardrails.totalCount > 100) unavailable();
+  let workspaceDefaultCount = 0;
+  for (const entry of guardrails.data) {
+    const guardrail = asObject(entry);
+    if (guardrail.workspace_id !== controls.workspaceId) unavailable();
+    if (guardrail.name === `Workspace ${controls.workspaceId} Default`) {
+      workspaceDefaultCount += 1;
+      if (guardrail.enforce_zdr_google !== true) unavailable();
+    }
+    if (
+      !noContentFilters(guardrail.content_filter_builtins ?? null) ||
+      !noContentFilters(guardrail.content_filters ?? null)
+    ) unavailable();
+    const allowedModels = stringArrayOrNull(guardrail.allowed_models ?? null);
+    const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null);
+    const ignoredModels = stringArrayOrNull(guardrail.ignored_models ?? null);
+    const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null);
+    if (
+      (allowedModels !== null && !allowedModels.includes(policy.model)) ||
+      (allowedProviders !== null &&
+        !allowedProviders.includes(baseProvider) &&
+        !allowedProviders.includes(policy.providerTag)) ||
+      ignoredModels?.includes(policy.model) ||
+      ignoredProviders?.includes(baseProvider) || ignoredProviders?.includes(policy.providerTag)
+    ) unavailable();
+  }
+  if (workspaceDefaultCount !== 1) unavailable();
+
+  const zdrEnvelope = asObject(zdrPayload);
+  if (!Array.isArray(zdrEnvelope.data) || zdrEnvelope.data.length > 20_000) unavailable();
+  const eligible = zdrEnvelope.data.filter((entry) => {
+    const endpoint = asObject(entry);
+    const supported = Array.isArray(endpoint.supported_parameters)
+      ? endpoint.supported_parameters
+      : [];
+    const prompt = Number(asObject(endpoint.pricing).prompt) * 1_000_000;
+    const completion = Number(asObject(endpoint.pricing).completion) * 1_000_000;
+    return endpoint.model_id === policy.model && endpoint.tag === policy.providerTag &&
+      endpoint.provider_name === policy.providerMetadataName && endpoint.status === 0 &&
+      endpoint.supports_implicit_caching === false &&
+      supported.includes('structured_outputs') && supported.includes('response_format') &&
+      Number.isFinite(prompt) && Number.isFinite(completion) && prompt >= 0 && completion >= 0 &&
+      prompt <= policy.priceCeilingsUsdPerMillionTokens.prompt &&
+      completion <= policy.priceCeilingsUsdPerMillionTokens.completion;
+  });
+  if (eligible.length < 1) unavailable();
+}
