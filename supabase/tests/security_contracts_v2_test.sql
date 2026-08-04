@@ -1,6 +1,6 @@
 begin;
 create extension if not exists dblink with schema extensions;
-select plan(63);
+select plan(64);
 
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
@@ -1220,6 +1220,24 @@ select is(
   )),
   0::bigint,
   'every public/private foreign key has a valid ready non-partial left-prefix index'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_indexes index_row
+    where index_row.schemaname = 'public'
+      and index_row.tablename = 'shift_assignments'
+      and index_row.indexname = 'shift_assignments_active_user_time_idx'
+  )
+  and not exists (
+    select 1
+    from pg_indexes index_row
+    where index_row.schemaname = 'public'
+      and index_row.tablename = 'shift_assignments'
+      and index_row.indexname = 'shift_assignments_org_user_current_idx'
+  ),
+  'shift assignments retain one canonical active user-time index'
 );
 
 select is(
