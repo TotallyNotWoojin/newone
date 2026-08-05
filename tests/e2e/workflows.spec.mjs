@@ -160,18 +160,19 @@ test('creates, corrects, and signs an exact source-linked handoff version', asyn
   await expect(page.getByRole('button', { name: 'Sign handoff' })).toHaveCount(0);
 });
 
-test('acknowledges a handoff through the exact-version discrepancy modal when demo role permits it', async ({ page }) => {
+test('acknowledges an incoming handoff through the exact-version discrepancy modal', async ({ page }) => {
   await openDemo(page);
   await navigateTo(page, 'Handoffs', /\/handoffs$/);
-  const acknowledge = page.getByRole('button', { name: 'Acknowledge', exact: true }).first();
-  test.skip(
-    !(await acknowledge.isVisible().catch(() => false)),
-    'The fictional demo identity is an outgoing supervisor and has no incoming handoff acknowledgement permission.',
-  );
+  const handoffCard = page.getByText('Packaging · Night to morning', { exact: true }).locator('..');
+  const acknowledge = handoffCard.getByRole('button', { name: 'Acknowledge', exact: true });
+  await expect(acknowledge).toBeVisible();
   await acknowledge.click();
   await expect(page.getByRole('heading', { name: 'Confirm handoff acknowledgement' })).toBeVisible();
   await page.getByLabel('Discrepancy note (optional)').fill('Fictional discrepancy for E2E validation.');
   await page.getByRole('button', { name: 'Acknowledge exact version' }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm handoff acknowledgement' })).not.toBeVisible();
+  await expect(handoffCard.getByText('Acknowledged', { exact: true })).toBeVisible();
+  await expect(handoffCard.getByRole('button', { name: 'Acknowledge', exact: true })).toHaveCount(0);
 });
 
 test('exposes settings language, outbox, privacy, security, and session navigation', async ({ page }) => {
@@ -204,18 +205,22 @@ test('keeps attachment sending disabled until an allowed file is explicitly sele
 test('shows scoped moderation consent and context controls when the demo fixture has reportable incoming content', async ({ page }) => {
   await openDemo(page);
   await openConversation(page, 'Packaging · Night shift');
-  const incoming = page.getByText('La línea 3 se detuvo por una lectura irregular del sensor.', { exact: true });
+  const incoming = page.getByText(
+    'Este es un mensaje sintético para validar el reporte privado con consentimiento.',
+    { exact: true },
+  );
   await longPress(incoming, page);
   const report = page.getByText('Report privately', { exact: true });
-  test.skip(
-    !(await report.isVisible().catch(() => false)),
-    'The current fictional incoming demo messages intentionally omit authoritative server IDs and cannot be reported.',
-  );
+  await expect(report).toBeVisible();
   await expect(page.getByText('Assigned evidence access', { exact: true })).toBeVisible();
-  await expect(page.getByText('Context before reported message', { exact: true })).toBeVisible();
-  await expect(page.getByText('Context after reported message', { exact: true })).toBeVisible();
+  await expect(page.getByText('Share context before', { exact: true })).toBeVisible();
+  await expect(page.getByText('Share context after', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '1 message' }).first().click();
-  const consent = page.getByRole('checkbox', { name: /I consent to share only this scoped evidence/i });
+  const consent = page.getByRole('checkbox', {
+    name: 'I understand and consent to this limited disclosure.',
+  });
+  const submit = page.getByRole('button', { name: 'Submit report' });
+  await expect(submit).toBeDisabled();
   await consent.click();
-  await expect(page.getByRole('button', { name: 'Submit report' })).toBeEnabled();
+  await expect(submit).toBeEnabled();
 });

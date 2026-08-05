@@ -26,6 +26,7 @@ const files = {
   contracts: readFileSync('apps/newone/src/data/repositories/contracts.ts', 'utf8'),
   transport: readFileSync('apps/newone/src/data/repositories/bff-command-repository.ts', 'utf8'),
   demo: readFileSync('apps/newone/src/data/repositories/demo-repository.ts', 'utf8'),
+  demoFixtures: readFileSync('apps/newone/src/data/demo.ts', 'utf8'),
   workspace: readFileSync('apps/newone/src/state/workspace.tsx', 'utf8'),
   pane: readFileSync('apps/newone/src/features/chat/conversation-pane.tsx', 'utf8'),
   people: readFileSync('apps/newone/src/app/people.tsx', 'utf8'),
@@ -109,6 +110,23 @@ test('repositories and workspace expose all targets and parse authoritative rece
   assert.match(files.workspace, /executeImmediate\('group-report'/);
   assert.match(files.workspace, /executeImmediate\('member-report'/);
   assert.doesNotMatch(files.workspace, /putOutbox[\s\S]{0,240}group-report/);
+});
+
+test('reportable demo content is incoming and carries a production-shaped server message ID', () => {
+  const fixtureStart = files.demoFixtures.indexOf("id: 'msg-p-reportable'");
+  assert.notEqual(fixtureStart, -1);
+  const fixtureEnd = files.demoFixtures.indexOf('\n    },', fixtureStart);
+  assert.notEqual(fixtureEnd, -1);
+  const fixture = files.demoFixtures.slice(fixtureStart, fixtureEnd);
+  const serverId = fixture.match(/serverId: '([^']+)'/)?.[1];
+  assert.match(serverId ?? '', /^[1-9][0-9]{0,18}$/);
+  assert.match(fixture, /isOwn: false/);
+  assert.match(fixture, /mensaje sintético para validar el reporte privado con consentimiento/);
+
+  const handoffFixtures = files.demoFixtures.slice(
+    files.demoFixtures.indexOf('export const demoHandoffs'),
+  );
+  assert.doesNotMatch(handoffFixtures, /msg-p-reportable/);
 });
 
 test('group and person UI require explicit consent and explain the exact disclosure in every locale', () => {

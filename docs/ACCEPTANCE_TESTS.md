@@ -2,7 +2,7 @@
 
 This is the executable verification contract for the independent Expo/Supabase product. Passing a smaller unit suite never implies that an unrun device, provider, security, or owner-controlled gate passed.
 
-Current status is an implementation checkpoint, not a release. The latest committed implementation checkpoint is `799c611`, following `d85cdac` and `0ebbf3f`; no immutable release revision has been assigned. The linked Supabase project is Free development only. See [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for the evidence ledger and its historical, explicitly superseded rows.
+Current status is an implementation checkpoint, not a release. The implementation line includes `d85cdac`, `0ebbf3f`, `799c611`, and the development-evidence reconciliation at `b67cfbe`; the commit containing this record closes the remaining conditional browser-fixture gaps. No production release revision has been assigned. The linked Supabase project is Free development only. See [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for the evidence ledger and its historical, explicitly superseded rows.
 
 ## 1. Fast local checks
 
@@ -27,12 +27,12 @@ The August 4 implementation checkpoint observed the following results. They are 
 
 | Area | Preliminary observation | Release meaning |
 |---|---|---|
-| Node | 244/244 contract tests passed | Candidate rerun open |
+| Node | 245/245 contract tests passed | Candidate rerun open |
 | Deno | Edge type-check passed and 194/194 tests passed | Candidate rerun open |
 | Database | 34 migrations; clean reset; 976/976 pgTAP; zero strict-lint findings | Candidate rerun open |
 | Edge/RPC contract | 156 called RPC names checked against 551 SQL function definitions | Drift coverage only; candidate rerun open |
 | Expo exports | Web, iOS, and Android export checks passed | Source/bundle proof only, not signed binaries |
-| Playwright | 42 passed and 4 explicitly conditionally skipped across desktop Chromium and Pixel 7 mobile Chromium | The skipped workflows remain unproven |
+| Playwright | 46/46 passed with zero skips across desktop Chromium and Pixel 7 mobile Chromium | Skip-free demo/browser proof; approved browser/native matrix and live-backend integration remain open |
 | AI | Paid synthetic evaluation passed 20/20 and production-adapter smoke passed; employee-data egress remained false | Human Korean-Spanish approval and candidate rerun open |
 | Linked development | 34-migration parity; zero security and zero performance advisor warnings; four active base functions; canary status contract observed; hosted Auth hardening and Postgres SSL enabled | Development evidence only, not staging or production acceptance |
 
@@ -182,12 +182,9 @@ A qualified Korean-Spanish review remains mandatory. Blind reviewers score seman
 
 ## 9. Product, web, native, and accessibility
 
-The current Playwright configuration runs desktop Chromium at 1440x1000 and mobile Chromium using the Pixel 7 profile. It exercises the independent Auth surface, invitations, dynamic groups, primary navigation, messaging, multilingual display, contacts, search, updates, handoffs, settings, attachment gating, offline entitlement, source navigation, and automated axe checks. The observed run passed 42 tests and conditionally skipped 4. The four skips are the same two unresolved workflows on both projects:
+The current Playwright configuration runs desktop Chromium at 1440x1000 and mobile Chromium using the Pixel 7 profile. It exercises the independent Auth surface, invitations, dynamic groups, primary navigation, messaging, multilingual display, contacts, search, updates, handoffs, settings, attachment gating, offline entitlement, source navigation, and automated axe checks. The observed run passed 46/46 tests with zero skips. Incoming handoff acknowledgement now uses an explicitly eligible synthetic incoming handoff, and private moderation reporting uses a dedicated incoming synthetic message with a production-shaped authoritative server ID. The tests retain the real permission, authoritative-ID, exact-version, context-scope, and explicit-consent gates; they do not add a demo-mode authorization bypass or a local-ID fallback.
 
-- incoming handoff acknowledgement is skipped when the fictional demo identity lacks acknowledgement permission;
-- private moderation reporting is skipped when the demo fixture omits authoritative server message IDs.
-
-Those workflows are unproven, not passes. Release acceptance requires authoritative fixtures and permissions that make both execute successfully without a conditional skip. It also requires the approved browser matrix; current evidence does not cover a tablet project, Firefox, WebKit/Safari, or a native renderer. Desktop and Pixel 7 browser screenshots have been reviewed, while those additional visual targets remain open.
+This is skip-free browser/demo proof, not live-backend or native-device integration proof. Release acceptance also requires the approved browser matrix; current evidence does not cover a tablet project, Firefox, WebKit/Safari, or a native renderer. Desktop and Pixel 7 browser screenshots have been reviewed, while those additional visual targets remain open.
 
 Deterministic Expo web, iOS, and Android exports passed at the implementation checkpoint. The iOS and Android results are source/Hermes bundle evidence only. They do not replace EAS-signed binaries, install/launch checks, deep/app-link verification, notification-open behavior, store review, or tests on physical iOS and Android devices.
 
