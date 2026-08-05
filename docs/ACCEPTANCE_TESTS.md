@@ -2,16 +2,39 @@
 
 This is the executable verification contract for the independent Expo/Supabase product. Passing a smaller unit suite never implies that an unrun device, provider, security, or owner-controlled gate passed.
 
+Current status is an implementation checkpoint, not a release. The latest committed implementation checkpoint is `799c611`, following `d85cdac` and `0ebbf3f`; no immutable release revision has been assigned. The linked Supabase project is Free development only. See [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for the evidence ledger and its historical, explicitly superseded rows.
+
 ## 1. Fast local checks
 
 ```bash
+npm ci
 npm ci --prefix apps/newone
 npm test
+npm run backend:functions:check
+npm run backend:functions:test
+npm run edge-db:contract:check
+npm audit --omit=dev
 npm audit --omit=dev --prefix apps/newone
 npm run ai:policy:check
+npm run security:scan
+npm run env:check
+npm run docs:check
 ```
 
-These must cover Expo lint, TypeScript, static web export, production dependency vulnerabilities, tracked-secret invariants, and the exact OpenRouter ZDR route policy.
+Run every Node/npm command with the pinned Node 22.13.0 toolchain. These checks must cover Expo dependency alignment, lint, TypeScript, static web export, iOS and Android source/bundle exports, production dependency vulnerabilities, tracked-secret invariants, Edge/SQL RPC drift, and the exact OpenRouter ZDR route policy.
+
+The August 4 implementation checkpoint observed the following results. They are useful regression baselines, but each must be reproduced from one clean checkout of the immutable candidate before release:
+
+| Area | Preliminary observation | Release meaning |
+|---|---|---|
+| Node | 244/244 contract tests passed | Candidate rerun open |
+| Deno | Edge type-check passed and 194/194 tests passed | Candidate rerun open |
+| Database | 34 migrations; clean reset; 976/976 pgTAP; zero strict-lint findings | Candidate rerun open |
+| Edge/RPC contract | 156 called RPC names checked against 551 SQL function definitions | Drift coverage only; candidate rerun open |
+| Expo exports | Web, iOS, and Android export checks passed | Source/bundle proof only, not signed binaries |
+| Playwright | 42 passed and 4 explicitly conditionally skipped across desktop Chromium and Pixel 7 mobile Chromium | The skipped workflows remain unproven |
+| AI | Paid synthetic evaluation passed 20/20 and production-adapter smoke passed; employee-data egress remained false | Human Korean-Spanish approval and candidate rerun open |
+| Linked development | 34-migration parity; zero security and zero performance advisor warnings; four active base functions; canary status contract observed; hosted Auth hardening and Postgres SSL enabled | Development evidence only, not staging or production acceptance |
 
 ## 2. Database and authorization
 
@@ -20,7 +43,11 @@ supabase start
 supabase db reset --local
 supabase test db --local supabase/tests
 supabase db lint --local --schema public,private --level warning --fail-on warning
+npm run backend:types:check
+npm run edge-db:contract:check
 ```
+
+At the current preliminary checkpoint, local and linked development migration histories were in parity at 34, the local suite passed 976/976 pgTAP assertions, strict lint returned zero findings, and the remote development advisors returned zero security warnings and zero performance warnings. PostgreSQL SSL enforcement is enabled and post-reboot database readiness returned `200`. Database network restrictions remain open until stable developer and CI egress addresses are selected. Repeat all local and remote checks after the candidate migration plan is frozen; none of these development observations is production acceptance.
 
 Required denial/concurrency cases include:
 
@@ -68,9 +95,29 @@ Automated unit/contract/integration coverage must exercise every `/v2` route for
 
 Core commands include enrollment/invites, sessions, direct/groups/membership, messages/reactions/reports/forward/delete-for-me/pins, contacts/connections/blocks, updates/acknowledgements, summaries/review, handoffs/signoff, actions, upload/download grants, member suspension, role assignment, retention/export, and AI enqueue.
 
+### Hosted Edge transport and development canaries
+
+Gateway JWT verification is intentionally disabled for the versioned functions because Newone performs route-specific bearer, cookie, worker-token, session, membership, MFA, and recent-auth checks inside the handlers. Acceptance must therefore prove each route fails closed on its own; a deployed function or gateway response is not authentication evidence by itself.
+
+The transport contract must reject ordinary insecure HTTP and spoofed forwarding headers. An internal Supabase `http:` hop may be treated as secure only when `x-forwarded-proto` is exactly `https` and the request host exactly matches the canonical host injected through `SUPABASE_URL`. CORS must allow only an exact configured web origin and the required `GET, POST, PUT, PATCH, DELETE, OPTIONS` methods. Worker functions must reject browser origins and cookie authentication.
+
+The linked Free development project currently has only these four active base functions: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. The observed live canary contract was:
+
+| Probe class | Required status |
+|---|---|
+| API health and correctly service-authenticated readiness | `200` |
+| Missing or invalid required authentication | `401` |
+| Denied browser origin | `403` |
+| Readiness route when the required readiness secret is absent | `404` |
+| Preflight from the exact allowed origin | `204` |
+
+Post-SSL-reboot health and database readiness also returned `200`. For a release candidate, repeat the matrix against the exact deployed function versions and retain redacted request/response metadata. Then exercise authenticated route-to-RPC behavior, outbox claims, maintenance claims, idempotency, and dependency failure. A status-only canary does not prove those integrations or any of the five withheld source functions.
+
 ## 4. Auth lifecycle
 
 Run against isolated local and remote development users:
+
+The current hosted development observation is limited but positive: the custom access-token hook and session hardening are enabled, and public plus anonymous signup are closed. `newone-auth` remains intentionally withheld. A real domain and redirect set, production Turnstile site/secret and hostname proof, custom SMTP or approved Auth email delivery, synthetic enrollment/recovery delivery, and final rate-limit review remain external release gates.
 
 1. Unknown users cannot create or join a workspace.
 2. An issued invitation is bound, verified, expiring, revocable, and one-time.
@@ -122,9 +169,12 @@ Without a key or approval, messaging succeeds and every AI command fails/queues 
 ```bash
 source .env.openrouter.local
 npm run ai:eval
+npm run ai:adapter:smoke
 ```
 
 Coverage includes exact model/provider/ZDR routing, structured schema, server-side source-language detection, source/target language, IDs, numbers, units, negation, urgency, ambiguity, code-switching, prompt injection, malformed output, timeout, 429/5xx, circuit breaker, budget exhaustion, retry idempotency, source authorization, provenance, and kill switch.
+
+At the August 4 implementation checkpoint, the paid synthetic evaluation passed 20/20 and the production-adapter smoke passed. The route policy was `2026-08-04.2`, and employee-data egress remained disabled. This proves only the synthetic adapter path. It does not authorize employee content, establish production account controls, or replace the candidate rerun. Before employee use, a company owner must provision separate server-only completion and management credentials and verify least-privilege rotation/revocation, the exact completion-key hash and dedicated workspace identity, the global egress approval, an enabled exact organization policy, organization authorization, the pinned model/provider route, uncached ZDR/data-denial and no-BYOK/content-mutating-guardrail controls, billing caps and monitoring, the management-control-plane and synthetic-route preflights, and a tested kill switch.
 
 Conversation/shift summary coverage includes manual and configured automatic enqueue, requester and worker-time authorization, immutable ordered source IDs/fingerprint, exact source window, primary topic/key topics/decisions/action items/ambiguities, per-claim source links, unsupported-claim rejection, strict JSON/schema validation, deduplication, correction/approval provenance, source edit/delete invalidation, retention, and the rule that approval cannot assign work or issue a handoff.
 
@@ -132,7 +182,16 @@ A qualified Korean-Spanish review remains mandatory. Blind reviewers score seman
 
 ## 9. Product, web, native, and accessibility
 
-Automated browser tests cover enrollment/sign-in, Chats, People, Updates, Work, You, admin role gates, direct/group creation, sending/retry, search, connection/block/report, acknowledgement, handoff, settings, and session revocation at phone/tablet/desktop widths.
+The current Playwright configuration runs desktop Chromium at 1440x1000 and mobile Chromium using the Pixel 7 profile. It exercises the independent Auth surface, invitations, dynamic groups, primary navigation, messaging, multilingual display, contacts, search, updates, handoffs, settings, attachment gating, offline entitlement, source navigation, and automated axe checks. The observed run passed 42 tests and conditionally skipped 4. The four skips are the same two unresolved workflows on both projects:
+
+- incoming handoff acknowledgement is skipped when the fictional demo identity lacks acknowledgement permission;
+- private moderation reporting is skipped when the demo fixture omits authoritative server message IDs.
+
+Those workflows are unproven, not passes. Release acceptance requires authoritative fixtures and permissions that make both execute successfully without a conditional skip. It also requires the approved browser matrix; current evidence does not cover a tablet project, Firefox, WebKit/Safari, or a native renderer. Desktop and Pixel 7 browser screenshots have been reviewed, while those additional visual targets remain open.
+
+Deterministic Expo web, iOS, and Android exports passed at the implementation checkpoint. The iOS and Android results are source/Hermes bundle evidence only. They do not replace EAS-signed binaries, install/launch checks, deep/app-link verification, notification-open behavior, store review, or tests on physical iOS and Android devices.
+
+One additional simulator/demo observation was recorded on August 4, 2026: Expo Go 57.0.6 bundled the app successfully on a booted iPhone 17 Pro simulator running iOS 26.5, rendered Newone's branded secure-access screen, emitted only the expected `expo-notifications` Expo Go limitation warnings, and showed no runtime error during that launch. This is not a signed development build, physical-device result, TestFlight build, or App Store acceptance, and it does not satisfy the native workflow matrix below.
 
 Manual and automated accessibility checks cover:
 
@@ -144,6 +203,18 @@ Manual and automated accessibility checks cover:
 
 ## 10. Security, reliability, and operations
 
+The following owner-controlled dependencies remain release gates and cannot be satisfied by the local or linked Free-development test results:
+
+- a real company domain, Vercel project, TLS, same-origin web BFF, redirect proof, and production deployment evidence;
+- production Turnstile configuration and hostname tests plus custom SMTP or an approved Auth email hook with delivery receipts;
+- a separate production Supabase topology with target RPO/RTO, PITR/equivalent, independent Storage backup/restore, and stable database network restrictions;
+- a production malware/content scanner, Expo/APNs/FCM push credentials and receipts, and any approved SMS fallback;
+- EAS signing, signed iOS/Android builds, app/deep links, store accounts/review, and physical-device evidence;
+- OpenRouter production account/key management, billing/budget limits, provider/ZDR controls, monitoring, revocation, and kill-switch proof;
+- qualified Korean-Spanish human evaluation plus company security, privacy/labor/legal, retention, critical-notice, AI, incident, and operating approvals.
+
+Zero development database advisor warnings does not replace the independent security, abuse/load, recovery, monitoring, or provider-control work below.
+
 - SAST, dependency, secret, artifact/source-map, and client-bundle credential scans pass.
 - Independent web/API/mobile security review has no unresolved Critical/High issue.
 - Load/abuse tests cover shared NAT, login/OTP floods, DM/group spam, reconnect storms, large groups, shift changes, search, upload, notification fan-out, job backlog, and AI cost ceilings.
@@ -154,3 +225,5 @@ Manual and automated accessibility checks cover:
 ## 11. Release evidence rule
 
 Every result records date, environment, commit, runner/device/browser, relevant policy version, artifact/report link, owner, and reviewer. `Not run`, `blocked`, `requires credentials`, and `requires owner approval` are valid truthful states. They are never converted into `pass` because adjacent tests succeeded.
+
+Development observations must also record the project/environment classification, migration parity, function names plus versions/digests, Auth configuration state, database transport/network settings, advisor results, and redacted canary metadata. The present 34-migration/four-function Free-project snapshot may be cited only as development evidence tied to the August 4 implementation checkpoints. A final release requires a single clean immutable-candidate rerun, retained artifacts, skip-free required workflows, exact web/native deployment identifiers, rollback/restore proof, and named human approvals. Nothing in this plan currently claims a production release.

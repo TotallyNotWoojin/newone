@@ -7,15 +7,27 @@ This runbook covers the independent Newone Expo/Supabase product. It intentional
 | Environment | Data | Purpose | Hosted plan |
 |---|---|---|---|
 | Local | Synthetic only | Development, migrations, pgTAP, function tests | Free local Docker |
-| Development/pilot | Synthetic or explicitly approved pilot fixtures | Shared device, Auth, Realtime, Storage, push, and integration testing | Current Free `newone` project |
+| Development | Synthetic only | Shared-device, Auth, Realtime, Storage, and bounded integration testing | Current Free `newone` project; reserved origin `https://dev.newone.invalid` |
 | Staging | Synthetic/deidentified | Release candidates, restore drills, load and adversarial tests | Persistent branch or isolated project before employee pilot |
 | Production | Approved employee data | Live service | Separate paid project after launch gates pass |
 
 Never reuse project references, API keys, Auth users, Storage objects, push tokens, model keys, or seed data across environments.
 
+Current development snapshot, not a production release:
+
+- all 34 repository migrations are in remote parity;
+- PostgreSQL SSL enforcement is enabled and remained healthy after reboot;
+- database IP restrictions remain open pending a stable developer/CI egress range;
+- nine versioned Edge Functions exist in source, while only `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker` are deployed to development and fail closed; recorded post-reboot Edge health/readiness probes remain HTTP 200;
+- the custom access-token hook and hosted session hardening are enabled, but `newone-auth` is withheld until a real web domain, Turnstile, and custom SMTP are configured;
+- bootstrap, AI, attachment-scan, and push-receipt functions are withheld, push dispatch is disabled, and employee AI data egress remains false; and
+- `https://dev.newone.invalid` is a reserved non-routable Auth origin, not a deployed website or an acceptable employee redirect.
+
 ## 1. Local verification
 
 Requirements: Node.js 22.13+, Docker, and Supabase CLI 2.109.0 or the repository-pinned replacement.
+
+The latest preliminary Edge source check passed type checking and 194/194 Deno tests. It remains preliminary until rerun from an immutable release candidate with retained artifacts.
 
 ```bash
 npm ci
@@ -32,16 +44,19 @@ Do not continue if a Critical/High security issue, failing denial test, schema l
 
 ## 2. Public client configuration
 
-The ignored `apps/newone/.env.local` contains only public routing values:
+The checked [public environment example](../apps/newone/.env.example) is authoritative. An ignored `apps/newone/.env.local` may contain only public routing values:
 
 ```dotenv
 EXPO_PUBLIC_SUPABASE_URL=https://project-ref.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
-EXPO_PUBLIC_API_URL=https://api.dev.newone.example
+EXPO_PUBLIC_API_URL=/api
 EXPO_PUBLIC_TURNSTILE_SITE_KEY=public-site-key
-EXPO_PUBLIC_TURNSTILE_CHALLENGE_ORIGIN=https://app.dev.newone.example/
+EXPO_PUBLIC_TURNSTILE_CHALLENGE_ORIGIN=https://app.example.com/
 EXPO_PUBLIC_SUPPORT_CONTACT_LABEL=Company support desk
 EXPO_PUBLIC_SUPPORT_CONTACT_URL=https://support.example/newone
+EXPO_PUBLIC_EAS_PROJECT_ID=exact-eas-project-uuid
+EXPO_PUBLIC_PUSH_ENVIRONMENT=development
+EXPO_PUBLIC_OFFLINE_CACHE_ENABLED=false
 EXPO_PUBLIC_DEMO_MODE=false
 ```
 
@@ -60,6 +75,11 @@ SUPABASE_SECRET_KEY=server-secret
 NEWONE_ALLOWED_WEB_ORIGINS=https://app.newone.example
 NEWONE_PUBLIC_APP_URL=https://app.newone.example
 NEWONE_SUPABASE_FUNCTIONS_ORIGIN=https://project-ref.supabase.co/functions/v1
+NEWONE_ALLOW_HTTP_LOCAL=false
+NEWONE_MAX_JSON_BYTES=65536
+NEWONE_ACCESS_COOKIE_NAME=__Host-newone_access
+NEWONE_REFRESH_COOKIE_NAME=__Host-newone_refresh
+NEWONE_CSRF_COOKIE_NAME=__Host-newone_csrf
 NEWONE_NETWORK_HASH_KEY=independent-32-byte-or-longer-secret
 NEWONE_RECOVERY_EVIDENCE_HASH_KEY=independent-32-byte-or-longer-secret
 NEWONE_WEB_GATEWAY_SHARED_SECRET=independent-32-byte-or-longer-secret
@@ -71,8 +91,13 @@ NEWONE_AUTH_CAPTCHA_REQUIRED=true
 NEWONE_AUTH_PHONE_OTP_ENABLED=false
 NEWONE_OUTBOX_TOPICS=moderation,realtime_control,storage_purge,session_revoke,dynamic_group_sync
 NEWONE_AI_DATA_EGRESS_APPROVED=false
+NEWONE_AI_WORKLOADS=language_detection,translation,summary
 OPENROUTER_API_KEY=server-secret
+OPENROUTER_MANAGEMENT_API_KEY=server-management-secret
+NEWONE_OPENROUTER_API_KEY_HASH=reviewed-completion-key-hash
+NEWONE_OPENROUTER_WORKSPACE_ID=dedicated-workspace-id
 NEWONE_OPENROUTER_POLICY_JSON={versioned-reviewed-route-policy}
+NEWONE_OPENROUTER_APP_NAME=Newone
 NEWONE_EXPO_ACCESS_TOKEN=server-secret-when-push-is-enabled
 NEWONE_EXPO_PROJECT_ID=exact-eas-project-uuid
 NEWONE_PUSH_ENVIRONMENT=production
@@ -80,7 +105,7 @@ NEWONE_ATTACHMENT_SCANNER_URL=https://scanner.example/v1/scan
 NEWONE_ATTACHMENT_SCANNER_TOKEN=server-secret
 ```
 
-Generate every secret independently per environment and never print it into release evidence. Do not reuse `NEWONE_RECOVERY_EVIDENCE_HASH_KEY` for network fingerprints, cookies, cursors, or any other purpose. Install the same `NEWONE_WEB_GATEWAY_SHARED_SECRET` value in Vercel and Supabase only; it signs the Vercel-observed network peer so a later Supabase proxy hop cannot collapse all web users into one rate-limit bucket. The bootstrap token is temporary and the bootstrap endpoint is service-only, owner-bound, idempotent, and disabled/404 when the token is absent; remove it immediately after initial owner provisioning. Add `push` to `NEWONE_OUTBOX_TOPICS` only when Expo submission and receipt processing are configured. A model key alone cannot enable AI processing. Production requires the approval flag, exact model/provider allowlist, zero-data-retention/data-denial controls, budget policy, and completed owner review.
+Generate every secret independently per environment and never print it into release evidence. Do not reuse `NEWONE_RECOVERY_EVIDENCE_HASH_KEY` for network fingerprints, cookies, cursors, or any other purpose. Install the same `NEWONE_WEB_GATEWAY_SHARED_SECRET` value in Vercel and Supabase only; it signs the Vercel-observed network peer so a later Supabase proxy hop cannot collapse all web users into one rate-limit bucket. The bootstrap token is temporary and the bootstrap endpoint is service-only, owner-bound, idempotent, and disabled/404 when the token is absent; remove it immediately after initial owner provisioning. Add `push` to `NEWONE_OUTBOX_TOPICS` only when Expo submission and receipt processing are configured. A model key alone cannot enable AI processing. Employee content additionally requires the global approval flag, an approved organization policy, the exact model/provider allowlist, zero-data-retention/data-denial and budget controls, exact completion-key/workspace identity, no BYOK or content-mutating guardrails, a successful management-control-plane preflight, an uncached ZDR endpoint, a synthetic route probe, and completed owner review.
 
 Before promoting a Vercel deployment, verify the ingress contract from two client networks. On a direct Vercel preview, use a temporary one-shot diagnostic that records only whether `X-Forwarded-For` is exactly one syntactically valid IP and whether the two probes produce distinct keyed network buckets; do not record or return either raw IP, and remove the diagnostic before promotion. If another CDN or reverse proxy sits in front of Vercel, stop: Vercel documents that ordinary proxy setups overwrite the original address, which can collapse users into a shared availability bucket. Configure and verify Vercel Trusted Proxy or omit the extra proxy before launch. This network signal is supplemental rate limiting only and is never authentication.
 
@@ -94,11 +119,13 @@ Before promoting a Vercel deployment, verify the ingress contract from two clien
 6. Push migrations only after the review is clean.
 7. Re-run security/performance advisors and safe remote smoke probes.
 
-The Free `newone` project remains a development target. No production data may be imported merely because its URL/key are configured locally.
+The Free `newone` project remains a development target. All 34 migrations are currently in parity and PostgreSQL SSL enforcement is enabled. Database IP restrictions are not yet closed because a stable developer/CI egress range has not been selected. No production data may be imported merely because migrations, SSL, or public routing values are configured.
 
 ## 5. Auth release
 
 Before inviting any employee:
+
+The development project currently has the custom access-token hook and session hardening enabled. That does not make employee sign-in ready: `newone-auth` is intentionally not deployed, the Auth origin is the reserved `https://dev.newone.invalid`, and the real web domain, Turnstile secret/hostname policy, custom SMTP, redirect proof, and end-to-end synthetic enrollment evidence remain required.
 
 - disable open email/phone signup;
 - apply migrations before Auth configuration, enable the versioned
@@ -132,6 +159,7 @@ Do not infer hosted Auth state from `supabase/config.toml`. Export/review the ac
 
 ## 6. Functions, jobs, files, and push
 
+- The development deployment currently contains only the four fail-closed base functions: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. Do not infer availability of the other five source packages.
 - Deploy every versioned function (`newone-api`, `newone-auth`, `newone-read`, bootstrap, AI, attachment scan, general outbox, push receipt, and maintenance workers) only after its unit/contract tests pass.
 - Verify every function fails closed when a required RPC, secret, approval, or active session is absent.
 - Create only private Storage buckets. Exercise pending, scanning, clean, blocked, expired-grant, nonmember, and deleted-message cases.
@@ -153,10 +181,10 @@ The scheduling SQL is environment state, not a portable schema migration. Archiv
 
 ## 7. Web and native delivery
 
-- Web is built as a static Expo export and served on a Newone/company-controlled Vercel origin with the same-origin `/api` BFF, TLS, CSP/Turnstile directives, no-store employee-data responses, and no ChatGPT dependency. Another approved host must reproduce and re-test the BFF trust/header contract; uploading only the static files is insufficient for secure web Auth.
+- Production web must be built as a static Expo export and served on a Newone/company-controlled origin with the same-origin `/api` BFF, TLS, CSP/Turnstile directives, no-store employee-data responses, and no ChatGPT dependency. The reserved `https://dev.newone.invalid` origin is intentionally non-routable and does not satisfy this requirement. Another approved host must reproduce and re-test the BFF trust/header contract; uploading only the static files is insufficient for secure web Auth.
 - Native builds use the bundle identifiers in `apps/newone/app.json` and separate development/preview/production EAS profiles.
 - A release operator must complete the first interactive EAS setup and native signing configuration before CI can build non-interactively.
-- OTA updates require environment isolation, channel policy, signing, rollback testing, and a rule that native/security-contract changes require a store build.
+- OTA updates are currently disabled in `apps/newone/app.json`. Any future enablement requires environment isolation, channel policy, signing, rollback testing, and a rule that native/security-contract changes require a store build.
 
 ## 8. Release evidence
 

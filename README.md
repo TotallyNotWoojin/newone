@@ -2,25 +2,22 @@
 
 Newone is an independent, company-owned workplace messenger for multilingual frontline teams. It combines a WhatsApp-familiar inbox with verified company identity, private DMs, groups, official updates, shift handoffs, acknowledgements, and Korean-Spanish translation.
 
-This repository now contains a new universal Expo application for iOS, Android, and web plus a Supabase backend foundation. It does not use ChatGPT identity, ChatGPT hosting, or ChatGPT Pro for runtime inference.
+This repository contains an integrated universal Expo application for iOS, Android, and web, 34 ordered Supabase migrations, and nine versioned Edge Function source packages. It does not use ChatGPT identity, ChatGPT hosting, or ChatGPT Pro for runtime inference.
 
 ## Current state
 
 | Area | Status |
 |---|---|
-| Universal Expo client | Implemented local UI foundation; web export, lint, and typecheck pass |
-| Chats | Local demo UI: mixed DM/group inbox, filters, search, simulated message state, replies, reactions, attachment presentation, translation/original presentation, and responsive conversation views |
-| People | Local demo UI: synthetic company directory, profile fields, connection state, and language/site/team context |
-| Updates | Local in-memory demo interaction: targeted update presentation and acknowledgement distinct from read state |
-| Handoffs | Static local demo surface for source-aware drafts, outgoing sign-off, and incoming acknowledgement; workflow actions are not backend-wired |
-| Admin/security | Static local demo surfaces for identity, devices, groups, retention, audit, and launch gates; controls are not backend-wired |
-| Authentication | The `newone` Supabase project is configured locally for the native client and responds successfully; invite-only Auth hardening and the production web BFF are not deployed |
-| Database | Local Supabase foundation with forced RLS, checked mutation RPCs, and 74 passing pgTAP tests; the migration has not been pushed to the remote `newone` project |
-| Realtime/API/attachments/push | Minimal private-Realtime and attachment authorization primitives exist; BFF, workers, scanning, notification delivery, and end-to-end adversarial verification remain incomplete |
-| OpenRouter translation | Production adapter is not enabled in the new app; legal approval, DPA, provider controls, and quality evaluation remain hard gates |
-| Production deployment | Not performed; the old private Sites build is a legacy prototype, not Newone V2 |
+| Universal Expo client | Integrated responsive web/iOS/Android source with bounded BFF read and command repositories; fictional fixtures load only when `EXPO_PUBLIC_DEMO_MODE` is exactly `true`, and every checked EAS profile keeps it off |
+| Employee workflows | Chats, People, Updates, Handoffs, Search, settings, offline reconciliation, and scoped administration are backend-wired in source; signed-device and integrated hosted acceptance remain release gates |
+| Database | 34 ordered migrations implement forced RLS, checked RPCs, lifecycle authorization, retention, audit, moderation, dynamic groups, and supporting integrity controls; the linked development project is in migration parity |
+| Edge Functions | Nine versioned function packages exist in source. Four fail-closed base functions are deployed to development: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker` |
+| Authentication | The hosted custom access-token hook and session hardening are enabled in development. `newone-auth` remains withheld until a real web domain, Turnstile, and custom SMTP are configured and verified |
+| Optional processors | AI, attachment-scanner, push-receipt, and bootstrap functions remain withheld from development; push dispatch is disabled. Employee AI egress is explicitly disabled |
+| Network and delivery | PostgreSQL SSL enforcement is enabled. Database IP restrictions remain open until stable developer/CI egress ranges exist. `https://dev.newone.invalid` is a reserved non-routable Auth origin, not a web deployment |
+| Production release | Not performed or claimed; production accounts, domain/TLS, provider credentials, signed binaries, independent review, restore evidence, and owner approvals remain open |
 
-The Chats, People, Updates, Handoffs, and Admin rows describe UX rendered from in-memory synthetic fixtures. They are not claims that the corresponding production APIs, authorization, persistence, delivery, scanning, notification, or audit workflows are operational. Do not enter real employee information until every launch gate in [SECURITY_ARCHITECTURE_V2.md](docs/SECURITY_ARCHITECTURE_V2.md) passes.
+Implemented source and a fail-closed development deployment are not production acceptance. Development remains synthetic-only, withheld functions are not operational services, and the reserved `.invalid` origin is intentionally unusable by employees. Do not enter real employee information until every launch gate in [SECURITY_ARCHITECTURE_V2.md](docs/SECURITY_ARCHITECTURE_V2.md) passes.
 
 ## Run the new app
 
@@ -43,19 +40,20 @@ The application source is in [`apps/newone`](apps/newone). The same Expo Router 
 ## Verify
 
 ```bash
-npm run lint
-npm run typecheck
-npm run build
-npm run backend:reset
-npm run backend:test
-npm run backend:lint
-```
-
-Or run all three client checks:
-
-```bash
+npm ci
+npm ci --prefix apps/newone
 npm test
 ```
+
+`npm test` checks Expo dependency alignment, lint, TypeScript, deterministic web/iOS/Android exports, the web artifact contract, and the root Node contract suite. A complete local chain additionally requires Docker and the pinned Supabase CLI:
+
+```bash
+npm run backend:start
+npm run verify:full
+npm run backend:stop
+```
+
+`npm run build` is a hosted-release check and intentionally fails without the complete release environment. It is not the ordinary unconfigured local-build command.
 
 ## Configure the backend
 
@@ -67,7 +65,7 @@ cp apps/newone/.env.example apps/newone/.env.local
 
 Never place a Supabase secret/service-role key, OpenRouter key, APNs key, FCM credential, or database credential in `EXPO_PUBLIC_*`. Production web authentication is designed to terminate at the Newone API/BFF with an HttpOnly cookie; native refresh tokens use OS secure storage.
 
-The ignored local environment now points the native client at the remote `newone` Supabase project. The publishable client key is intentionally public; secret/service-role credentials must remain server-side. The database migration and production Auth configuration have not been pushed, because the project must first be designated as disposable development/pilot or production.
+The linked Supabase project is development-only. Its 34 migrations are in parity, PostgreSQL SSL enforcement is enabled, and four base Edge Functions are deployed fail-closed for synthetic integration work. Database IP restrictions still require stable developer/CI egress ranges. Hosted browser Auth remains intentionally incomplete: `https://dev.newone.invalid` reserves the Auth origin while `newone-auth`, Turnstile, custom SMTP, and a real company web domain are withheld. The publishable client key is intentionally public; secret/service-role credentials must remain server-side.
 
 ## Product and security specifications
 
@@ -76,4 +74,4 @@ The ignored local environment now points the native client at the remote `newone
 - [Platform architecture](docs/PLATFORM_ARCHITECTURE_V2.md)
 - [Security architecture and threat model](docs/SECURITY_ARCHITECTURE_V2.md)
 
-The original contract traceability, model evaluation, and privacy notes remain in `docs/` for source history. The single-channel Vinext/D1 ChatGPT Sites runtime has been removed from the active source tree; Git history preserves it if forensic comparison is ever needed. The legacy Sites preview is owner-only, has no external visitors, and is visibly marked decommissioned. The available Sites integration cannot permanently delete the project, so its owner-only URL still exists; it is not Newone V2 and must not be presented as the current product.
+The original contract traceability, model evaluation, and privacy notes remain in `docs/` for source history. The single-channel Vinext/D1 ChatGPT Sites runtime and deployment path have been removed from the active source tree; Git history preserves them if forensic comparison is ever needed. Any separately hosted legacy preview is external deployment state, not Newone V2 or evidence of this repository's current release status.

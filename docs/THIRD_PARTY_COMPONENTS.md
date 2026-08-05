@@ -1,22 +1,22 @@
 # Third-party components and services
 
-Status: source and release inventory
-Last updated: August 3, 2026
+Status: candidate-source inventory, not immutable release evidence
+Last updated: August 4, 2026
 
 This document identifies material third-party software and hosted services used or anticipated by Newone. It is an engineering inventory, not legal advice. The Company must approve contracts, data-processing terms, subprocessors, regions, licenses, retention, and recurring charges before live employee data is enabled.
 
-The exhaustive JavaScript dependency graph and integrity hashes are pinned in [`package-lock.json`](../package-lock.json) and [`apps/newone/package-lock.json`](../apps/newone/package-lock.json). The server-side Deno graph is pinned in [`supabase/functions/deno.lock`](../supabase/functions/deno.lock). `npm run supply-chain:evidence` generates separate CycloneDX documents for release tooling, the universal client, and Edge Functions plus a combined license/integrity inventory and a machine-readable license-policy report. The policy blocks prohibited production licenses and separately identifies attribution, weak-copyleft, or unclassified expressions for owner/legal review. Those lockfiles, the release commit, and generated reports are the authoritative transitive inventory for a release; this summary lists direct and operationally material components.
+The exhaustive JavaScript dependency graph and integrity hashes are pinned in [`package-lock.json`](../package-lock.json) and [`apps/newone/package-lock.json`](../apps/newone/package-lock.json). The server-side Deno graph is pinned in [`supabase/functions/deno.lock`](../supabase/functions/deno.lock). `npm run supply-chain:evidence` generates separate CycloneDX documents for release tooling, the universal client, and Edge Functions plus a combined license/integrity inventory and a machine-readable license-policy report. The policy blocks prohibited production licenses and separately identifies attribution, weak-copyleft, or unclassified expressions for owner/legal review. For an immutable release candidate, those lockfiles, the exact release commit, and freshly generated reports form the authoritative transitive inventory. This candidate-source summary lists direct and operationally material components but is not itself immutable release evidence.
 
 ## Included runtime libraries
 
 | Component | Resolved/declaration | License | Purpose |
 |---|---:|---|---|
-| Expo | 57.0.9 package / 57.0.11 CLI | MIT | Universal iOS, Android, and web runtime/build framework |
+| Expo | 57.0.10 package / 57.0.12 bundled CLI | MIT | Universal iOS, Android, and web runtime/build framework |
 | React | 19.2.3 | MIT | Component runtime |
 | React DOM | 19.2.3 | MIT | Web renderer |
 | React Native | 0.86.2 | MIT | Native UI/runtime |
 | React Native Web | 0.21.2 | MIT | Web implementation of React Native primitives |
-| Expo Router | 57.0.9 | MIT | File-based universal navigation and deep links |
+| Expo Router | 57.0.10 | MIT | File-based universal navigation and deep links |
 | Supabase JavaScript | 2.110.9 | MIT | Auth, Realtime, Storage, and API client; also the sole direct Deno runtime import |
 | Zod | 4.4.3 | MIT | Runtime command and model-output validation |
 | React Native Gesture Handler | 2.32.0 | MIT | Native gestures |
@@ -34,20 +34,21 @@ All modules below are resolved at Expo SDK 57-compatible versions and are MIT li
 
 | Module | Version | Purpose |
 |---|---:|---|
-| `@expo/ui` | 57.0.8 | Platform-adaptive UI primitives |
+| `@expo/ui` | 57.0.9 | Platform-adaptive UI primitives |
 | `expo-asset` | 57.0.8 | Bundled/static assets |
 | `expo-clipboard` | 57.0.1 | User-invoked copy action |
-| `expo-constants` | 57.0.8 | Build/runtime configuration |
+| `expo-constants` | 57.0.9 | Build/runtime configuration |
 | `expo-crypto` | 57.0.1 | Client cryptographic primitives and random IDs |
 | `expo-dev-client` | 57.0.10 | Development builds only |
 | `expo-device` | 57.0.1 | Device/session metadata |
 | `expo-document-picker` | 57.0.1 | User-selected document attachments |
+| `expo-file-system` | 57.0.1 | Native attachment upload and temporary-file cleanup |
 | `expo-font` | 57.0.1 | Font loading |
 | `expo-glass-effect` | 57.0.1 | Optional native visual treatment |
-| `expo-image` | 57.0.1 | Image rendering/cache control |
+| `expo-image` | 57.0.2 | Image rendering/cache control |
 | `expo-image-manipulator` | 57.0.7 | Bandwidth-aware image processing |
 | `expo-image-picker` | 57.0.7 | Camera/gallery attachments |
-| `expo-linking` | 57.0.4 | Auth and notification deep links |
+| `expo-linking` | 57.0.5 | Auth and notification deep links |
 | `expo-notifications` | 57.0.8 | Push token and notification client |
 | `expo-secure-store` | 57.0.1 | Native refresh credential/device-secret storage |
 | `expo-splash-screen` | 57.0.5 | Native launch screen |
@@ -75,8 +76,8 @@ All modules below are resolved at Expo SDK 57-compatible versions and are MIT li
 |---|---|---|---|
 | Supabase | Postgres, Auth, Realtime, private Storage, Edge Functions | Local implementation linked to a healthy Free development project; remote schema/functions are not evidence of production readiness until deployment and smoke proof are recorded | Company selects paid production/staging topology, backup/PITR/object restore path, regions, SMTP/Auth policy, quotas, DPA, and billing |
 | Vercel | Same-origin web hosting and `/v2` BFF proxy | Gateway and security headers are source-controlled; no production deployment/account/domain is claimed | Company controls account, domain, region/options, logs, firewall/bot controls, and billing |
-| OpenRouter | Optional server-only language detection, Korean–Spanish translation, and authorized summary generation | Exact model/provider route is policy-pinned; employee-data egress defaults off; a synthetic test key does not constitute live-data approval | Company approves DPA/subprocessors/region/use cases/budget and the per-organization kill switch; usage is token-billed separately from ChatGPT Pro |
-| Qwen model through Google Vertex via OpenRouter | Structured translation/detection/summary inference | Policy currently pins `qwen/qwen3-235b-a22b-2507` to `google-vertex/us-south1`, ZDR/data-denial/fallback-off | Same AI approval plus bilingual quality gate; route drift fails closed |
+| OpenRouter | Optional server-only language detection, Korean–Spanish translation, and authorized summary generation | Policy `2026-08-04.2` keeps employee-data egress off. Egress requires the global `NEWONE_AI_DATA_EGRESS_APPROVED` gate, organization authorization, the pinned route, and management-control-plane verification of the exact key hash/workspace, no BYOK or content-mutating guardrails, uncached ZDR/data-denial settings, and a synthetic route probe. A content API key or organization toggle alone cannot enable egress. | Company approves DPA/subprocessors/region/use cases/budget and the per-organization kill switch; operators must provision `OPENROUTER_MANAGEMENT_API_KEY`, the exact `NEWONE_OPENROUTER_API_KEY_HASH`, and `NEWONE_OPENROUTER_WORKSPACE_ID`; usage is token-billed separately from ChatGPT Pro |
+| Qwen model through Google Vertex via OpenRouter | Structured translation/detection/summary inference | Policy `2026-08-04.2` pins `qwen/qwen3-235b-a22b-2507` to `google-vertex/us-south1`, with ZDR/data-denial, caching, BYOK, plugins, tools, web search, and fallback controls fail-closed; `employeeDataEgressEnabled` is `false` | Same AI approval plus exact management preflight and bilingual quality gate; provider/model or control-plane drift fails closed |
 | Cloudflare Turnstile | Bot/CAPTCHA challenge token and limited security/network signals | Web and native challenge adapters/CSP are implemented; production site/secret keys are not committed | Company provisions site/secret keys, allowed origins/hostnames, privacy notice, and account |
 | Expo Application Services / Apple / Google | Native signing, builds, store distribution, app links, push credentials | Universal project source exists; no store account, signing identity, production binary, or review approval is claimed | Company owns Apple/Google/Expo accounts, legal/store listings, signing, entitlements, fees, and review timing |
 | Expo Push Service and APNs/FCM | Opaque device push tokens and minimal notification routing metadata | Client/worker contracts are implemented or tested locally as release work; production credentials and delivery evidence remain environment gates | Company selects/configures push path, retention/privacy policy, credentials, quotas, and incident owner |
@@ -87,14 +88,14 @@ All modules below are resolved at Expo SDK 57-compatible versions and are MIT li
 ## Data-flow boundaries
 
 - Public clients receive only intentionally public configuration such as a Supabase publishable key, service origin, and Turnstile site key. Service-role/secret keys, model keys, push credentials, scanner credentials, SMTP/SMS credentials, database passwords, and signing keys remain server-side.
-- OpenRouter receives message/source content only when the organization-level AI-egress approval is enabled and the exact route policy passes. The original messaging path does not depend on AI.
+- Explicit evaluation and route-probe commands may send synthetic fixtures to OpenRouter while employee-data egress is false. OpenRouter receives employee message/source content only when the global egress gate, organization authorization, policy `2026-08-04.2`, exact model/provider route, exact completion-key hash and workspace management preflight, uncached ZDR/data-denial controls, and synthetic route probe all pass. Employee-data egress is currently false, and the original messaging path does not depend on AI.
 - Turnstile challenge tokens are exchanged for bot verification; they are not identity credentials and do not replace Auth, membership checks, MFA, rate limits, or authorization.
 - Push notifications use opaque resource identifiers and minimal preview data. Opening a notification performs ordinary authentication and authorization.
 - Attachments remain quarantined and unavailable until the configured scanner records an acceptable result. A missing or failed scanner never promotes an object to clean.
 
 ## Release inventory procedure
 
-For every release candidate:
+For every immutable release candidate:
 
 1. Run clean installs from both lockfiles and reject unexplained lock drift.
 2. Generate SBOMs, the resolved license inventory, and the license-policy report; archive them with the release commit and build IDs. A zero-denied result is automated evidence, while every `reviewRequired` entry still needs the named release approver before production distribution.
