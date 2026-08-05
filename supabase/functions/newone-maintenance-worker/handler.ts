@@ -22,7 +22,10 @@ import { asObject, integer, normalizedString, onlyKeys, uuid } from '../_shared/
 interface PromotionResult {
   processed: number;
   promoted: number;
+  blocked: number;
   announcementIds: string[];
+  blockedAnnouncementIds: string[];
+  snapshotBasis: 'reevaluated_at_scheduled_publish';
 }
 
 interface ObligationResult {
@@ -158,14 +161,37 @@ function handoffKeys(value: unknown, maximum: number): string[] {
 
 export function parsePromotionResult(value: unknown, limit: number): PromotionResult {
   const row = asObject(value);
-  onlyKeys(row, ['processed', 'promoted', 'announcement_ids']);
+  onlyKeys(row, [
+    'processed',
+    'promoted',
+    'blocked',
+    'announcement_ids',
+    'blocked_announcement_ids',
+    'snapshot_basis',
+  ]);
   const processed = integer(row.processed, 0, limit);
   const promoted = integer(row.promoted, 0, processed);
+  const blocked = integer(row.blocked, 0, processed);
   const announcementIds = uuidList(row.announcement_ids, promoted);
-  if (announcementIds.length !== promoted) {
+  const blockedAnnouncementIds = uuidList(row.blocked_announcement_ids, blocked);
+  const snapshotBasis = normalizedString(row.snapshot_basis, { min: 1, max: 80 });
+  if (
+    promoted + blocked !== processed ||
+    announcementIds.length !== promoted ||
+    blockedAnnouncementIds.length !== blocked ||
+    announcementIds.some((id) => blockedAnnouncementIds.includes(id)) ||
+    snapshotBasis !== 'reevaluated_at_scheduled_publish'
+  ) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
   }
-  return { processed, promoted, announcementIds };
+  return {
+    processed,
+    promoted,
+    blocked,
+    announcementIds,
+    blockedAnnouncementIds,
+    snapshotBasis,
+  };
 }
 
 export function parseObligationResult(value: unknown, limit: number): ObligationResult {

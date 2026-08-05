@@ -4,6 +4,7 @@ import {
   type MaintenanceWorkerDependencies,
   parseHandoffResult,
   parseObligationResult,
+  parsePromotionResult,
 } from '../newone-maintenance-worker/handler.ts';
 import { assertEquals, assertRejects } from './assert.ts';
 
@@ -39,7 +40,10 @@ function dependencies(
     promote: async () => ({
       processed: 1,
       promoted: 1,
+      blocked: 0,
       announcement_ids: [announcementId],
+      blocked_announcement_ids: [],
+      snapshot_basis: 'reevaluated_at_scheduled_publish',
     }),
     processAnnouncementObligations: async () => ({
       processed: 2,
@@ -83,7 +87,14 @@ Deno.test('maintenance worker promotes schedules then enqueues notice and handof
     dependencies({
       promote: async () => {
         calls.push('promote');
-        return { processed: 1, promoted: 1, announcement_ids: [announcementId] };
+        return {
+          processed: 1,
+          promoted: 1,
+          blocked: 0,
+          announcement_ids: [announcementId],
+          blocked_announcement_ids: [],
+          snapshot_basis: 'reevaluated_at_scheduled_publish',
+        };
       },
       processAnnouncementObligations: async () => {
         calls.push('announcement-obligations');
@@ -114,7 +125,14 @@ Deno.test('maintenance worker promotes schedules then enqueues notice and handof
   assertEquals(response.status, 200);
   assertEquals(calls, ['promote', 'announcement-obligations', 'handoff-escalations']);
   assertEquals(await response.json(), {
-    promotions: { processed: 1, promoted: 1, announcementIds: [announcementId] },
+    promotions: {
+      processed: 1,
+      promoted: 1,
+      blocked: 0,
+      announcementIds: [announcementId],
+      blockedAnnouncementIds: [],
+      snapshotBasis: 'reevaluated_at_scheduled_publish',
+    },
     announcementObligations: {
       processed: 2,
       remindersEnqueued: 1,
@@ -195,6 +213,37 @@ Deno.test('maintenance results bind enqueue counts to canonical recipient keys',
       escalations_enqueued: 1,
       sms_fallback_available: false,
       handoff_keys: [],
+    }, 100)
+  );
+});
+
+Deno.test('promotion results bind promoted and blocked schedules to reevaluation evidence', async () => {
+  assertEquals(
+    parsePromotionResult({
+      processed: 1,
+      promoted: 0,
+      blocked: 1,
+      announcement_ids: [],
+      blocked_announcement_ids: [announcementId],
+      snapshot_basis: 'reevaluated_at_scheduled_publish',
+    }, 100),
+    {
+      processed: 1,
+      promoted: 0,
+      blocked: 1,
+      announcementIds: [],
+      blockedAnnouncementIds: [announcementId],
+      snapshotBasis: 'reevaluated_at_scheduled_publish',
+    },
+  );
+  await assertRejects(() =>
+    parsePromotionResult({
+      processed: 1,
+      promoted: 1,
+      blocked: 1,
+      announcement_ids: [announcementId],
+      blocked_announcement_ids: [announcementId],
+      snapshot_basis: 'scheduled_without_audience_reevaluation',
     }, 100)
   );
 });

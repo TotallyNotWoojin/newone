@@ -149,13 +149,9 @@ function healthResponse(request: Request): Response {
 }
 
 function ensureHealthTransport(request: Request): void {
-  const url = new URL(request.url);
-  if (url.protocol === 'https:') return;
-  if (
-    Deno.env.get('NEWONE_ALLOW_HTTP_LOCAL') === 'true' && url.protocol === 'http:' &&
-    ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
-  ) return;
-  throw new ApiError(400, 'bad_request');
+  ensureSecureTransport(request, {
+    allowHttpLocal: Deno.env.get('NEWONE_ALLOW_HTTP_LOCAL') === 'true',
+  });
 }
 
 export function createApiHandler(

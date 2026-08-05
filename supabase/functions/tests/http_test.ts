@@ -2,6 +2,7 @@ import { ApiError } from '../_shared/errors.ts';
 import {
   accessCredential,
   buildRequestMeta,
+  ensureSecureTransport,
   loadRuntimeConfig,
   parseJson,
   type RuntimeConfig,
@@ -26,6 +27,10 @@ Deno.test('CORS uses an exact credentialed allowlist and never a wildcard', () =
   const meta = buildRequestMeta(request, config);
   assertEquals(meta.corsHeaders.get('access-control-allow-origin'), 'https://app.newone.example');
   assertEquals(meta.corsHeaders.get('access-control-allow-credentials'), 'true');
+  assertEquals(
+    meta.corsHeaders.get('access-control-allow-methods'),
+    'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  );
   assert(meta.corsHeaders.get('access-control-allow-origin') !== '*');
 });
 
@@ -164,6 +169,64 @@ Deno.test('runtime config validates and canonicalizes its security boundaries', 
           ...values,
         })),
       (error) => error instanceof Error,
+    );
+  }
+});
+
+Deno.test('transport accepts native HTTPS and an exact hosted Supabase TLS boundary', async () => {
+  ensureSecureTransport(
+    new Request('https://api.newone.example/v2/test'),
+    config,
+    testEnvironment({}),
+  );
+  ensureSecureTransport(
+    new Request('http://project-ref.supabase.co/functions/v1/newone-api/v2/test', {
+      headers: { 'X-Forwarded-Proto': 'https' },
+    }),
+    config,
+    testEnvironment({ SUPABASE_URL: 'https://project-ref.supabase.co' }),
+  );
+
+  const rejected: Array<{
+    url: string;
+    headers: Record<string, string>;
+    environment: Record<string, string>;
+  }> = [
+    {
+      url: 'http://project-ref.supabase.co/functions/v1/newone-api/v2/test',
+      headers: { 'X-Forwarded-Proto': 'https' },
+      environment: {},
+    },
+    {
+      url: 'http://attacker.example/functions/v1/newone-api/v2/test',
+      headers: { 'X-Forwarded-Proto': 'https' },
+      environment: { SUPABASE_URL: 'https://project-ref.supabase.co' },
+    },
+    {
+      url: 'http://project-ref.supabase.co/functions/v1/newone-api/v2/test',
+      headers: { 'X-Forwarded-Proto': 'http' },
+      environment: { SUPABASE_URL: 'https://project-ref.supabase.co' },
+    },
+    {
+      url: 'http://project-ref.supabase.co/functions/v1/newone-api/v2/test',
+      headers: { 'X-Forwarded-Proto': 'https, http' },
+      environment: { SUPABASE_URL: 'https://project-ref.supabase.co' },
+    },
+    {
+      url: 'http://project-ref.supabase.co/functions/v1/newone-api/v2/test',
+      headers: { 'X-Forwarded-Proto': 'https' },
+      environment: { SUPABASE_URL: 'https://project-ref.supabase.co/untrusted-path' },
+    },
+  ];
+  for (const candidate of rejected) {
+    await assertRejects(
+      () =>
+        ensureSecureTransport(
+          new Request(candidate.url, { headers: candidate.headers }),
+          config,
+          testEnvironment(candidate.environment),
+        ),
+      (error) => error instanceof ApiError && error.code === 'bad_request',
     );
   }
 });

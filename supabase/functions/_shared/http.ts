@@ -165,13 +165,45 @@ export function requestId(request: Request): string {
   return crypto.randomUUID();
 }
 
-export function ensureSecureTransport(request: Request, config: RuntimeConfig): void {
+function isTrustedSupabaseHttpsProxyRequest(
+  requestUrl: URL,
+  request: Request,
+  env: Pick<typeof Deno.env, 'get'>,
+): boolean {
+  if (
+    requestUrl.protocol !== 'http:' ||
+    request.headers.get('x-forwarded-proto') !== 'https'
+  ) return false;
+
+  const rawSupabaseUrl = env.get('SUPABASE_URL')?.trim() ?? '';
+  if (!rawSupabaseUrl) return false;
+  try {
+    const publicUrl = new URL(rawSupabaseUrl);
+    return publicUrl.protocol === 'https:' &&
+      !publicUrl.username && !publicUrl.password && !publicUrl.search && !publicUrl.hash &&
+      (publicUrl.pathname === '' || publicUrl.pathname === '/') &&
+      publicUrl.host === requestUrl.host;
+  } catch {
+    return false;
+  }
+}
+
+export function ensureSecureTransport(
+  request: Request,
+  config: Pick<RuntimeConfig, 'allowHttpLocal'>,
+  env: Pick<typeof Deno.env, 'get'> = Deno.env,
+): void {
   const url = new URL(request.url);
   if (url.protocol === 'https:') return;
   if (
     config.allowHttpLocal && url.protocol === 'http:' &&
     ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
   ) return;
+  // Hosted Edge Functions terminate TLS at Supabase's gateway. The user
+  // runtime receives an internal http URL for the canonical project host and
+  // an exact gateway-supplied x-forwarded-proto=https marker. Trust that
+  // marker only when it agrees with the injected canonical HTTPS project URL.
+  if (isTrustedSupabaseHttpsProxyRequest(url, request, env)) return;
   throw new ApiError(400, 'bad_request');
 }
 
@@ -192,7 +224,7 @@ export function buildRequestMeta(request: Request, config: RuntimeConfig): Reque
   const headers = new Headers({
     'Access-Control-Allow-Headers':
       'apikey, authorization, content-type, idempotency-key, x-correlation-id, x-csrf-token',
-    'Access-Control-Allow-Methods': 'POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Vary': 'Origin',
   });
