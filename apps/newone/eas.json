@@ -10,7 +10,6 @@
       "environment": "development",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_DEMO_MODE": "false",
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
         "EXPO_PUBLIC_PUSH_ENVIRONMENT": "development"
       }
@@ -20,7 +19,6 @@
       "environment": "preview",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_DEMO_MODE": "false",
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
         "EXPO_PUBLIC_PUSH_ENVIRONMENT": "preview"
       }
@@ -30,7 +28,6 @@
       "environment": "production",
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_DEMO_MODE": "false",
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
         "EXPO_PUBLIC_PUSH_ENVIRONMENT": "production"
       }

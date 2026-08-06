@@ -12,7 +12,6 @@ export interface ModerationCopy {
   refreshing: string;
   loading: string;
   empty: string;
-  demoNotice: string;
   activeFilter: string;
   openFilter: string;
   closedFilter: string;
@@ -119,7 +118,6 @@ const en: ModerationCopy = {
   refreshing: 'Refreshing…',
   loading: 'Loading scoped cases…',
   empty: 'No cases match this filter.',
-  demoNotice: 'Demo cases are local examples. No authoritative report, assignment, audit event, or notification is created.',
   activeFilter: 'Active',
   openFilter: 'Unassigned',
   closedFilter: 'Closed',
@@ -227,7 +225,6 @@ const ko: ModerationCopy = {
   refreshing: '새로고침 중…',
   loading: '범위 제한 사례 불러오는 중…',
   empty: '이 필터에 맞는 사례가 없습니다.',
-  demoNotice: '데모 사례는 로컬 예시입니다. 실제 신고, 배정, 감사 이벤트 또는 알림이 생성되지 않습니다.',
   activeFilter: '활성', openFilter: '미배정', closedFilter: '종료', allFilter: '전체',
   protectedReporter: '신고자 신원 보호됨', scopedEvidence: '배정된 증거 접근',
   noContentList: '대기열 보기에는 메시지 내용이 없습니다.',
@@ -287,7 +284,6 @@ const es: ModerationCopy = {
   aal2Required: 'Verifica con MFA para consultar o cambiar casos.',
   verifyNow: 'Verificar con MFA', refresh: 'Actualizar casos', refreshing: 'Actualizando…',
   loading: 'Cargando casos limitados…', empty: 'Ningún caso coincide con este filtro.',
-  demoNotice: 'Los casos de demostración son ejemplos locales. No se crea un informe, asignación, evento de auditoría ni aviso real.',
   activeFilter: 'Activos', openFilter: 'Sin asignar', closedFilter: 'Cerrados', allFilter: 'Todos',
   protectedReporter: 'Identidad del informante protegida', scopedEvidence: 'Acceso asignado a evidencia',
   noContentList: 'La cola no contiene texto de mensajes.',

@@ -33,7 +33,6 @@ interface Props {
   accessToken: string | null;
   assuranceLevel: 'aal1' | 'aal2' | null;
   currentUserId: string;
-  demoMode: boolean;
   onVerifyNow: () => void;
   onOpenSettings: () => void;
   organizationId: string;
@@ -53,7 +52,6 @@ export function AccountRecoverySection({
   accessToken,
   assuranceLevel,
   currentUserId,
-  demoMode,
   onVerifyNow,
   onOpenSettings,
   organizationId,
@@ -81,7 +79,7 @@ export function AccountRecoverySection({
   const [evidenceReference, setEvidenceReference] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [clock, setClock] = useState(() => Date.now());
-  const managerReady = assuranceLevel === 'aal2' && !demoMode;
+  const managerReady = assuranceLevel === 'aal2';
 
   const dateTime = useCallback((value: string) => {
     try {
@@ -102,8 +100,8 @@ export function AccountRecoverySection({
       ['authentication_required', 'csrf_required', 'unauthorized', 'forbidden'].includes(error.code)
     ) return copy.errorAuth;
     if (error.status === 409 || error.code === 'conflict') return copy.errorConflict;
-    if (error.code.startsWith('invalid_')) return copy.errorInput;
     if (['invalid_response', 'response_too_large'].includes(error.code)) return copy.errorResponse;
+    if (error.code.startsWith('invalid_')) return copy.errorInput;
     return copy.errorGeneric;
   }, [copy]);
 
@@ -153,7 +151,7 @@ export function AccountRecoverySection({
   };
 
   const submitAction = async () => {
-    if (!action || actionBusy || demoMode) return;
+    if (!action || actionBusy) return;
     setActionBusy(true);
     setActionError('');
     try {
@@ -247,7 +245,6 @@ export function AccountRecoverySection({
         <View style={styles.headingActions}>
           <SelfRecoveryRequest
             accessToken={accessToken}
-            demoMode={demoMode}
             onCreated={async (createdNotice) => {
               setNotice(createdNotice);
               if (managerReady) await loadCases();
@@ -281,14 +278,12 @@ export function AccountRecoverySection({
               {managerReady ? copy.freshnessReady : copy.freshnessLocked}
             </Text>
           </View>
-          {!demoMode ? (
-            <PrimaryButton
-              icon="shield-outline"
-              label={copy.verifyNow}
-              onPress={onVerifyNow}
-              tone="light"
-            />
-          ) : null}
+          <PrimaryButton
+            icon="shield-outline"
+            label={copy.verifyNow}
+            onPress={onVerifyNow}
+            tone="light"
+          />
         </View>
         <View style={styles.policyRow}>
           <Ionicons name="people-outline" color={colors.blue} size={17} />
@@ -308,11 +303,7 @@ export function AccountRecoverySection({
       ) : null}
       <ActionError message={sectionError} />
 
-      {demoMode ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>{copy.unavailableDemo}</Text>
-        </View>
-      ) : !managerReady ? (
+      {!managerReady ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>{copy.queryLocked}</Text>
         </View>

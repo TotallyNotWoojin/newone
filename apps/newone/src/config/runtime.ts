@@ -59,8 +59,6 @@ const pushEnvironmentResult = z.enum(['development', 'preview', 'production']).s
 );
 const offlineCacheEnabled = process.env.EXPO_PUBLIC_OFFLINE_CACHE_ENABLED === 'true';
 
-/** Demo data is never inferred from missing credentials. It requires an exact opt-in. */
-export const isDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 export const isSupabaseConfigured = supabaseResult.success;
 const normalizedApiUrl = apiResult.success
   ? apiResult.data.replace(/\/$/, '') || '/'
@@ -75,17 +73,15 @@ export const isNativeSupabaseConfigured = isSupabaseConfigured
   && isApiConfigured
   && Platform.OS !== 'web';
 
-export type RuntimeMode = 'demo' | 'native' | 'web' | 'web_locked' | 'unconfigured';
+export type RuntimeMode = 'native' | 'web' | 'web_locked' | 'unconfigured';
 
-export const runtimeMode: RuntimeMode = isDemoMode
-  ? 'demo'
-  : Platform.OS === 'web'
-    ? isApiConfigured
-      ? 'web'
-      : 'web_locked'
-    : isSupabaseConfigured && isApiConfigured
-      ? 'native'
-      : 'unconfigured';
+export const runtimeMode: RuntimeMode = Platform.OS === 'web'
+  ? isApiConfigured
+    ? 'web'
+    : 'web_locked'
+  : isSupabaseConfigured && isApiConfigured
+    ? 'native'
+    : 'unconfigured';
 
 export const publicRuntimeConfig = {
   apiUrl: normalizedApiUrl,

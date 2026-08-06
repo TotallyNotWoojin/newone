@@ -12,6 +12,13 @@
     "semiColons": true,
     "singleQuote": true
   },
+  "coverage": {
+    "thresholds": {
+      "lines": 91,
+      "branches": 91,
+      "functions": 91
+    }
+  },
   "tasks": {
     "check": "deno check _shared/*.ts newone-api/*.ts newone-auth/*.ts newone-bootstrap/*.ts newone-read/*.ts newone-ai-worker/*.ts newone-attachment-scan-worker/*.ts newone-outbox-worker/*.ts newone-push-receipt-worker/*.ts newone-maintenance-worker/*.ts tests/*.ts",
     "test": "deno test --allow-env tests"

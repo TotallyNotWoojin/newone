@@ -9,6 +9,8 @@ This guide supports the one training session of up to two hours required by the 
 
 Training is not proof that the product is deployed, accepted, or safe for live employee information. The trainer records the environment, release/commit, attendees, devices, languages, exercises completed, unresolved questions, and follow-up owner.
 
+This guide assumes an isolated, genuinely hosted training or development backend populated with approved synthetic accounts through the normal server contracts. There is no in-client fictional-data bypass. Until that hosted environment and the required accounts/providers are provisioned and exercised, the training journeys remain pending rather than simulated locally in the client.
+
 ## Required preparation
 
 The trainer must complete these checks before the session:
@@ -56,7 +58,7 @@ At the end of the session, participants should be able to:
 
 If a role-specific topic does not apply to the attendees, spend the time on hands-on messaging, accessibility, low-bandwidth, or language practice. Do not extend beyond two hours without a separately agreed session.
 
-## Demonstration script
+## Hosted training exercise script
 
 ### 1. Identity and security
 

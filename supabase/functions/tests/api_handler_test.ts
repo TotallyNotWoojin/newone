@@ -132,7 +132,7 @@ Deno.test('API handler authenticates, authorizes, rate limits, validates, and re
   assertEquals(calls, [
     'auth:access-token',
     'authorize:conversation.direct',
-    'rate:conversation.direct',
+    'rate:conversation.direct.create',
     'execute:conversation.direct:request-0001:00000000-0000-4000-8000-000000000002',
   ]);
 });

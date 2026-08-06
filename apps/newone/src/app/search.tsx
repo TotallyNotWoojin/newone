@@ -17,7 +17,6 @@ import {
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
 import { Chip, EmptyState, PrimaryButton, SearchField } from '@/components/ui/primitives';
-import { isDemoMode } from '@/config/runtime';
 import { BffSearchRepository } from '@/data/repositories/bff-search-repository';
 import { RepositoryError } from '@/data/repositories/contracts';
 import {
@@ -27,7 +26,6 @@ import {
   searchMessageMatchSources,
 } from '@/data/search-contract.mjs';
 import type {
-  Message,
   SearchLanguageFilter,
   SearchMessageMatchSource,
   SearchResultType,
@@ -48,21 +46,6 @@ const allTypes: SearchResultType[] = [
   'announcements',
   'handoffs',
 ];
-const DEMO_DATE = '2026-08-04';
-
-function normalizedText(value: string): string {
-  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
-}
-
-function demoMessageTime(message: Message): string {
-  if (message.createdAt && Number.isFinite(Date.parse(message.createdAt))) return message.createdAt;
-  return `${DEMO_DATE}T${/^\d{2}:\d{2}$/.test(message.sentAt) ? message.sentAt : '12:00'}:00Z`;
-}
-
-function withinDates(occurredAt: string, dateFrom: string | null, dateTo: string | null) {
-  return (dateFrom === null || occurredAt >= dateFrom) &&
-    (dateTo === null || occurredAt <= dateTo);
-}
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -180,166 +163,6 @@ export default function SearchScreen() {
     return { dateFrom, dateTo };
   };
 
-  const demoSearch = (
-    term: string,
-    typeFilter: SearchResultType | 'all',
-    sourceFilter: SearchMessageMatchSource | 'all',
-    senderId: string | null,
-    conversationId: string | null,
-    languageFilter: SearchLanguageFilter | 'all',
-    dateFrom: string | null,
-    dateTo: string | null,
-  ) => {
-    const normalized = normalizedText(term);
-    const accepts = (typeName: SearchResultType) =>
-      typeFilter === 'all' || typeFilter === typeName;
-    const items: WorkspaceSearchResult[] = [];
-    const ordinaryTypesAllowed = sourceFilter === 'all' && senderId === null;
-    if (ordinaryTypesAllowed && conversationId === null && accepts('people')) {
-      for (const person of workspace.people) {
-        const occurredAt = `${DEMO_DATE}T12:00:00Z`;
-        const haystack = normalizedText(
-          `${person.displayName} ${person.roleLabel} ${person.department} ${person.site}`,
-        );
-        if (
-          !person.suspended && person.connectionState !== 'self' &&
-          (languageFilter === 'all' || person.preferredLanguage === languageFilter) &&
-          haystack.includes(normalized) &&
-          withinDates(occurredAt, dateFrom, dateTo)
-        ) {
-          items.push({
-            type: 'people',
-            id: person.id,
-            title: person.displayName,
-            snippet: `${person.roleLabel} · ${person.site}`,
-            conversationId: null,
-            occurredAt,
-            matchedSource: 'profile',
-            matchedLanguage: person.preferredLanguage,
-          });
-        }
-      }
-    }
-    if (ordinaryTypesAllowed && languageFilter === 'all' && accepts('conversations')) {
-      for (const conversation of workspace.conversations) {
-        if (conversation.managementOnly) continue;
-        const occurredAt = `${DEMO_DATE}T11:00:00Z`;
-        const haystack = normalizedText(
-          `${conversation.title} ${conversation.subtitle} ${conversation.description ?? ''}`,
-        );
-        if (
-          (conversationId === null || conversation.id === conversationId) &&
-          haystack.includes(normalized) && withinDates(occurredAt, dateFrom, dateTo)
-        ) {
-          items.push({
-            type: 'conversations',
-            id: conversation.id,
-            title: conversation.title,
-            snippet: conversation.subtitle,
-            conversationId: conversation.id,
-            occurredAt,
-            matchedSource: 'conversation',
-            matchedLanguage: null,
-          });
-        }
-      }
-    }
-    if (accepts('messages')) {
-      for (const messages of Object.values(workspace.messages)) {
-        for (const message of messages) {
-          if (senderId && message.senderId !== senderId) continue;
-          if (conversationId && message.conversationId !== conversationId) continue;
-          const occurredAt = demoMessageTime(message);
-          if (!withinDates(occurredAt, dateFrom, dateTo)) continue;
-          const approvedTranslation = message.translation?.correction?.status === 'approved'
-            ? message.translation.correction.correctedText
-            : message.translatedText ?? '';
-          const candidates: {
-            source: SearchMessageMatchSource;
-            text: string;
-            language: string | null;
-          }[] = [
-            { source: 'original', text: message.originalText, language: message.sourceLanguage },
-            { source: 'translation', text: approvedTranslation, language: message.targetLanguage ?? null },
-            { source: 'sender', text: message.senderName, language: null },
-            {
-              source: 'attachment_filename',
-              text: message.attachment?.status === 'clean' ? message.attachment.name : '',
-              language: null,
-            },
-          ];
-          const match = candidates.find((candidate) => (
-            (sourceFilter === 'all' || candidate.source === sourceFilter) &&
-            (languageFilter === 'all' || candidate.language === languageFilter) &&
-            normalizedText(candidate.text).includes(normalized)
-          ));
-          if (!match) continue;
-          items.push({
-            type: 'messages',
-            id: message.serverId ?? message.id,
-            title: message.senderName,
-            snippet: match.text,
-            conversationId: message.conversationId,
-            occurredAt,
-            matchedSource: match.source,
-            matchedLanguage: match.language,
-          });
-        }
-      }
-    }
-    if (ordinaryTypesAllowed && languageFilter === 'all' && accepts('announcements')) {
-      for (const [index, update] of workspace.updates.entries()) {
-        const occurredAt = `${DEMO_DATE}T${String(Math.max(0, 10 - index)).padStart(2, '0')}:00:00Z`;
-        const updateConversationId = workspace.conversations.find(
-          (item) => item.kind === 'announcement',
-        )?.id ?? workspace.conversations.find(
-          (item) => !item.managementOnly,
-        )?.id ?? 'demo-announcements';
-        if (
-          (conversationId === null || updateConversationId === conversationId) &&
-          normalizedText(`${update.title} ${update.body} ${update.translatedBody ?? ''}`).includes(normalized) &&
-          withinDates(occurredAt, dateFrom, dateTo)
-        ) {
-          items.push({
-            type: 'announcements',
-            id: update.id,
-            title: update.title,
-            snippet: update.body,
-            conversationId: updateConversationId,
-            occurredAt,
-            matchedSource: 'announcement',
-            matchedLanguage: null,
-          });
-        }
-      }
-    }
-    if (ordinaryTypesAllowed && languageFilter === 'all' && accepts('handoffs')) {
-      for (const [index, handoff] of workspace.handoffs.entries()) {
-        const occurredAt = `${DEMO_DATE}T${String(Math.max(0, 8 - index)).padStart(2, '0')}:00:00Z`;
-        if (
-          (conversationId === null || handoff.conversationId === conversationId) &&
-          normalizedText(`${handoff.title} ${handoff.summary} ${handoff.site}`).includes(normalized) &&
-          withinDates(occurredAt, dateFrom, dateTo)
-        ) {
-          items.push({
-            type: 'handoffs',
-            id: handoff.id,
-            title: handoff.title,
-            snippet: handoff.summary,
-            conversationId: handoff.conversationId,
-            occurredAt,
-            matchedSource: 'handoff',
-            matchedLanguage: null,
-          });
-        }
-      }
-    }
-    return items
-      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt) ||
-        right.type.localeCompare(left.type) || right.id.localeCompare(left.id))
-      .slice(0, 50);
-  };
-
   const fingerprint = [
     query.trim(),
     selectedType,
@@ -379,47 +202,28 @@ export default function SearchScreen() {
     setLoading(true);
     setError('');
     try {
-      if (isDemoMode) {
-        if (
-          generation !== requestGeneration.current
-          || authorizationAtRequest !== conversationAuthorizationSignatureRef.current
-        ) return;
-        setResults(demoSearch(
-          normalized,
-          selectedType,
-          selectedSource,
-          selectedSenderId,
-          selectedConversationId,
-          selectedLanguage,
-          dateFrom,
-          dateTo,
-        ));
-        setNextCursor(null);
-        setHasMore(false);
-      } else {
-        const page = await repository.search({
-          organizationId: workspace.organizationId,
-          query: normalized,
-          types: selectedType === 'all' ? undefined : [selectedType],
-          cursor: append ? nextCursor : null,
-          limit: 20,
-          senderMembershipId: selectedSenderId,
-          dateFrom,
-          dateTo,
-          matchSources: selectedSource === 'all' ? null : [selectedSource],
-          conversationId: selectedConversationId,
-          language: selectedLanguage === 'all' ? null : selectedLanguage,
-        });
-        if (
-          generation !== requestGeneration.current
-          || authorizationAtRequest !== conversationAuthorizationSignatureRef.current
-        ) return;
-        setResults((current) => append
-          ? mergeSearchResults(current, page.results)
-          : page.results);
-        setNextCursor(page.nextCursor);
-        setHasMore(page.hasMore);
-      }
+      const page = await repository.search({
+        organizationId: workspace.organizationId,
+        query: normalized,
+        types: selectedType === 'all' ? undefined : [selectedType],
+        cursor: append ? nextCursor : null,
+        limit: 20,
+        senderMembershipId: selectedSenderId,
+        dateFrom,
+        dateTo,
+        matchSources: selectedSource === 'all' ? null : [selectedSource],
+        conversationId: selectedConversationId,
+        language: selectedLanguage === 'all' ? null : selectedLanguage,
+      });
+      if (
+        generation !== requestGeneration.current
+        || authorizationAtRequest !== conversationAuthorizationSignatureRef.current
+      ) return;
+      setResults((current) => append
+        ? mergeSearchResults(current, page.results)
+        : page.results);
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
       setLastFingerprint(fingerprint);
       setResultsAuthorizationSignature(authorizationAtRequest);
       setSearched(true);

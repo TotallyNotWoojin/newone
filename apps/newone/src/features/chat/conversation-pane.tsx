@@ -107,6 +107,7 @@ export function ConversationPane({
     : null;
   const tail = messages.at(-1);
   const tailKey = tail?.serverId ?? tail?.clientMessageId ?? tail?.id ?? null;
+  const currentUserId = workspace.currentUser?.id ?? null;
 
   useEffect(() => {
     if (!conversationId || conversation?.managementOnly) return;
@@ -265,6 +266,18 @@ export function ConversationPane({
     }
   };
 
+  if (!currentUserId) {
+    return (
+      <View style={styles.emptyPane}>
+        <EmptyState
+          body={t('auth.securityNote')}
+          icon="shield-checkmark-outline"
+          title={t('status.loading')}
+        />
+      </View>
+    );
+  }
+
   if (!conversation) {
     return (
       <View style={styles.emptyPane}>
@@ -332,7 +345,7 @@ export function ConversationPane({
             key={`${conversation.id}:${showControls ? 'open' : 'closed'}`}
             busy={workspace.actionBusy}
             conversation={conversation}
-            currentUserId={workspace.currentUser.id}
+            currentUserId={currentUserId}
             description={conversationDescription}
             error={workspace.actionError}
             name={conversationName}
@@ -530,7 +543,7 @@ export function ConversationPane({
       ) : null}
 
       <Composer
-        currentUserId={workspace.currentUser.id}
+        currentUserId={currentUserId}
         disabled={conversation.isReadOnly === true || conversation.canPost === false}
         disabledLabel={conversation.canPost === false && !conversation.isReadOnly
           ? t('chat.adminsOnlyPosting')
@@ -621,7 +634,7 @@ export function ConversationPane({
         key={`${conversation.id}:${showControls ? 'open' : 'closed'}`}
         busy={workspace.actionBusy}
         conversation={conversation}
-        currentUserId={workspace.currentUser.id}
+        currentUserId={currentUserId}
         description={conversationDescription}
         error={workspace.actionError}
         name={conversationName}
@@ -731,6 +744,7 @@ function ConversationBriefing({
   const workspace = useWorkspace();
   const router = useRouter();
   const { t } = useI18n();
+  const currentUserId = workspace.currentUser?.id ?? null;
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState<OperationalAction | null>(null);
   const [assigneeId, setAssigneeId] = useState('');
@@ -1005,9 +1019,9 @@ function ConversationBriefing({
                       }}
                       tone="light"
                     />
-                  ) : action.status === 'confirmed' && (action.assigneeUserId === workspace.currentUser.id || workspace.hasCapability('actions.confirm')) ? (
+                  ) : action.status === 'confirmed' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
                     <PrimaryButton label={t('chat.startAction')} onPress={() => void workspace.transitionAction(action.id, 'in_progress')} tone="light" />
-                  ) : action.status === 'in_progress' && (action.assigneeUserId === workspace.currentUser.id || workspace.hasCapability('actions.confirm')) ? (
+                  ) : action.status === 'in_progress' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
                     <View style={styles.modalRow}>
                       <PrimaryButton label={t('chat.completeAction')} onPress={() => void workspace.transitionAction(action.id, 'completed')} tone="dark" />
                       <PrimaryButton label={t('chat.cancelAction')} onPress={() => void workspace.transitionAction(action.id, 'cancelled')} tone="danger" />
@@ -1307,6 +1321,7 @@ function MessageBubble({
     translationEnabled
       && message.serverId
       && message.languageDetection?.state === 'completed'
+      && workspace.messageDisplayLanguage !== null
       && message.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage
       && (!translation || translation.status === 'failed' || translation.status === 'blocked'),
   );
@@ -1348,9 +1363,10 @@ function MessageBubble({
         : ` · ${t('chat.receiptReadPrivate')}`)
     : receiptStateLabel;
   const mention = mentionCopy(locale);
-  const mentionedMe = message.mentionUserIds?.includes(workspace.currentUser.id) === true;
+  const currentUserId = workspace.currentUser?.id ?? null;
+  const mentionedMe = currentUserId !== null && message.mentionUserIds?.includes(currentUserId) === true;
   const mentionedNames = (message.mentionUserIds ?? []).map((userId) => {
-    if (userId === workspace.currentUser.id) return mention.you;
+    if (currentUserId !== null && userId === currentUserId) return mention.you;
     return workspace.people.find((person) => person.id === userId)?.displayName ?? mention.member;
   });
 

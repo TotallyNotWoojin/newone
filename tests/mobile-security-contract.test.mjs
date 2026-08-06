@@ -22,7 +22,6 @@ test('native release disables Android application backup', () => {
 test('native build profiles bind push environments and default encrypted offline caching off', () => {
   for (const profile of ['development', 'preview', 'production']) {
     const environment = easConfig.build?.[profile]?.env;
-    assert.equal(environment?.EXPO_PUBLIC_DEMO_MODE, 'false');
     assert.equal(environment?.EXPO_PUBLIC_OFFLINE_CACHE_ENABLED, 'false');
     assert.equal(environment?.EXPO_PUBLIC_PUSH_ENVIRONMENT, profile);
   }

@@ -25,8 +25,6 @@ const files = {
   routes: readFileSync('supabase/functions/newone-api/routes.ts', 'utf8'),
   contracts: readFileSync('apps/newone/src/data/repositories/contracts.ts', 'utf8'),
   transport: readFileSync('apps/newone/src/data/repositories/bff-command-repository.ts', 'utf8'),
-  demo: readFileSync('apps/newone/src/data/repositories/demo-repository.ts', 'utf8'),
-  demoFixtures: readFileSync('apps/newone/src/data/demo.ts', 'utf8'),
   workspace: readFileSync('apps/newone/src/state/workspace.tsx', 'utf8'),
   pane: readFileSync('apps/newone/src/features/chat/conversation-pane.tsx', 'utf8'),
   people: readFileSync('apps/newone/src/app/people.tsx', 'utf8'),
@@ -97,36 +95,27 @@ test('edge routes use the unified RPC with target-bound request digests and zero
   assert.doesNotMatch(files.routes, /p_target_label/);
 });
 
-test('repositories and workspace expose all targets and parse authoritative receipts', () => {
+test('repositories and workspace expose all targets and fail closed on malformed authoritative receipts', () => {
   for (const method of ['reportMessage', 'reportGroup', 'reportMember']) {
     assert.match(files.contracts, new RegExp(`${method}\\(input:`));
     assert.match(files.transport, new RegExp(`async ${method}\\(`));
-    assert.match(files.demo, new RegExp(`async ${method}\\(`));
     assert.match(files.workspace, new RegExp(`const ${method} = useCallback`));
   }
-  assert.match(files.transport, /parsePrivateReportReceipt\(payload, 'message'\)/);
-  assert.match(files.transport, /parsePrivateReportReceipt\(payload, 'group'\)/);
-  assert.match(files.transport, /parsePrivateReportReceipt\(payload, 'member'\)/);
+  const helperStart = files.transport.indexOf('function parsePrivateReportResponse(');
+  const helperEnd = files.transport.indexOf('\n}\n\nfunction requiredString', helperStart);
+  assert.ok(helperStart >= 0 && helperEnd > helperStart, 'missing private-report response boundary');
+  const privateReportResponse = files.transport.slice(helperStart, helperEnd + 2);
+  assert.match(privateReportResponse, /parsePrivateReportReceipt\(value, targetType\)/);
+  assert.match(
+    privateReportResponse,
+    /new RepositoryError\([\s\S]*invalid private report receipt[\s\S]*'invalid_response'[\s\S]*true/,
+  );
+  assert.match(files.transport, /parsePrivateReportResponse\(payload, 'message'\)/);
+  assert.match(files.transport, /parsePrivateReportResponse\(payload, 'group'\)/);
+  assert.match(files.transport, /parsePrivateReportResponse\(payload, 'member'\)/);
   assert.match(files.workspace, /executeImmediate\('group-report'/);
   assert.match(files.workspace, /executeImmediate\('member-report'/);
   assert.doesNotMatch(files.workspace, /putOutbox[\s\S]{0,240}group-report/);
-});
-
-test('reportable demo content is incoming and carries a production-shaped server message ID', () => {
-  const fixtureStart = files.demoFixtures.indexOf("id: 'msg-p-reportable'");
-  assert.notEqual(fixtureStart, -1);
-  const fixtureEnd = files.demoFixtures.indexOf('\n    },', fixtureStart);
-  assert.notEqual(fixtureEnd, -1);
-  const fixture = files.demoFixtures.slice(fixtureStart, fixtureEnd);
-  const serverId = fixture.match(/serverId: '([^']+)'/)?.[1];
-  assert.match(serverId ?? '', /^[1-9][0-9]{0,18}$/);
-  assert.match(fixture, /isOwn: false/);
-  assert.match(fixture, /mensaje sintético para validar el reporte privado con consentimiento/);
-
-  const handoffFixtures = files.demoFixtures.slice(
-    files.demoFixtures.indexOf('export const demoHandoffs'),
-  );
-  assert.doesNotMatch(handoffFixtures, /msg-p-reportable/);
 });
 
 test('group and person UI require explicit consent and explain the exact disclosure in every locale', () => {

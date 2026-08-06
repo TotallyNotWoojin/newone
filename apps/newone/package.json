@@ -44,8 +44,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint-config-expo": "~57.0.1",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -55,6 +59,10 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "node tests/run-coverage.mjs",
+    "test:unit": "jest --runInBand --coverage=false",
+    "test:coverage": "node tests/run-coverage.mjs",
+    "test:coverage:report": "node tests/verify-coverage-report.mjs",
     "expo:deps:check": "expo install --check",
     "build:web": "expo export --platform web",
     "build:ios:verify": "expo export --platform ios --output-dir .expo/verify-ios --clear",
@@ -65,7 +73,10 @@
   "overrides": {
     "uuid": "11.1.1",
     "brace-expansion": "5.0.9",
-    "minimatch": "10.2.6"
+    "minimatch": "10.2.6",
+    "test-exclude": {
+      "minimatch": "3.1.5"
+    }
   },
   "private": true
 }

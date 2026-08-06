@@ -258,16 +258,20 @@ export class RecoveryCaseRepository {
     if (result.error) {
       throw new RecoveryCaseRepositoryError('factor_list_failed', true);
     }
-    return parseVerifiedTotpFactors({
-      factors: result.data.all.map((factor) => ({
-        id: factor.id,
-        type: factor.factor_type,
-        status: factor.status,
-        friendlyName: factor.friendly_name ?? null,
-        createdAt: factor.created_at,
-        updatedAt: factor.updated_at,
-      })),
-    }) as VerifiedTotpFactor[];
+    try {
+      return parseVerifiedTotpFactors({
+        factors: result.data.all.map((factor) => ({
+          id: factor.id,
+          type: factor.factor_type,
+          status: factor.status,
+          friendlyName: factor.friendly_name ?? null,
+          createdAt: factor.created_at,
+          updatedAt: factor.updated_at,
+        })),
+      }) as VerifiedTotpFactor[];
+    } catch {
+      throw new RecoveryCaseRepositoryError('invalid_response', true);
+    }
   }
 
   createCase(input: {

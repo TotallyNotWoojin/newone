@@ -32,11 +32,11 @@ Reviewed by:
 - [ ] [User guide](USER_GUIDE.md) in the agreed delivery languages/formats.
 - [ ] [Training guide](TRAINING_GUIDE.md) and completed training record for one session of up to two hours.
 - [ ] [Privacy and safety policy](PRIVACY_AND_SAFETY.md), named support/security contacts, processor approval, retention decision, and employee notice/consent decision.
-- [ ] Database schema/types, API contracts, test fixtures, migration/rollback notes, and backup plus Storage-object restore evidence.
+- [ ] Database schema/types, API contracts, approved test-data specifications, migration/rollback notes, and backup plus Storage-object restore evidence.
 - [ ] Web deployment and, because the Company later requested expanded scope, iOS/Android build/signing/store handoff artifacts or an explicit owner-account blocker.
 - [ ] External account/credential ownership transferred without putting secrets in the repository, chat transcript, certificate, screenshots, or ordinary logs.
 
-## Contract acceptance demonstrations
+## Hosted contract acceptance exercises
 
 ### Access and history
 
@@ -65,13 +65,13 @@ Reviewed by:
 - [ ] An authorized user selects or triggers an exact conversation/shift source window.
 - [ ] The generated structured draft contains a required primary topic, concise summary, key topics, decisions, proposed action items, and ambiguities.
 - [ ] Factual decisions/actions link to authorized source messages; the ordered source IDs and fingerprint are stored.
-- [ ] The reviewer opens cited originals, corrects a seeded mistake, and approves the exact corrected version.
+- [ ] The reviewer opens cited originals, corrects a deliberately introduced synthetic mistake, and approves the exact corrected version.
 - [ ] Approval does not modify originals, issue a handoff, acknowledge a notice, or assign work.
 - [ ] An unauthorized/former member cannot request, generate, search, or read the summary.
 - [ ] An edited/deleted/expired source supersedes or invalidates the affected draft.
 - [ ] AI-disabled/provider-failed mode leaves original conversation/history and manual operational work available.
 
-## Expanded product demonstrations
+## Hosted expanded product exercises
 
 - [ ] Chats shows independent DMs and groups, reply/thread/mention/reaction, delivery/read states, copy/forward provenance, pin, delete-for-me, edit/delete-for-everyone policy, report, and block.
 - [ ] People distinguishes verified directory, saved contact, favorite, connection policy, scoped unit access, and block.
@@ -87,6 +87,8 @@ Reviewed by:
 
 - [ ] Commands and results in [acceptance test plan](ACCEPTANCE_TESTS.md) are attached with date, environment, commit, runner, owner, and reviewer.
 - [ ] The working [release evidence ledger](RELEASE_EVIDENCE.md) has been reconciled to the immutable candidate; every preliminary, not-run, blocked, and external result remains truthfully labeled.
+- [ ] Real hosted simulations use approved synthetic accounts through the normal Auth, BFF, database, Realtime, Storage, and worker paths; no in-client alternate data repository or authorization bypass is present.
+- [ ] A retained coverage-instrumented report for the agreed application/backend scope shows greater than 90% measured coverage; test counts or source-pattern contracts are not substituted for the percentage.
 - [ ] No unresolved Critical/High code, dependency, infrastructure, mobile, API, Auth, RLS, Realtime, Storage, or privacy issue remains.
 - [ ] Production project, domain/TLS, custom SMTP/Auth delivery, Turnstile, scanner, push, backup/PITR, object restore, observability, support, and incident ownership are configured and tested, or the release is explicitly marked blocked.
 - [ ] OpenRouter/AI egress has Company approval, processor/region/DPA/subprocessor review, budget/kill switch, and qualified Korean–Spanish evaluation; otherwise it remains disabled.

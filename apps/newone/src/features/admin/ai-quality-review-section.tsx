@@ -178,13 +178,13 @@ export function AiQualityReviewSection({
                           {detail.regressionExample.status === 'pending' ? (
                             <>
                               <Text style={styles.subsectionTitle}>{t('quality.secondReview')}</Text>
-                              {detail.regressionExample.proposedByUserId === workspace.currentUser.id ? (
+                              {detail.regressionExample.proposedByUserId === workspace.currentUser?.id ? (
                                 <Text style={styles.warning}>{t('quality.secondReviewerRequired')}</Text>
                               ) : null}
                               <FormField label={t('quality.decisionNote')} multiline onChangeText={setDecisionNote} value={decisionNote} />
                               <View style={styles.chips}>
                                 <PrimaryButton
-                                  disabled={decisionNote.trim().length < 3 || detail.regressionExample.proposedByUserId === workspace.currentUser.id}
+                                  disabled={decisionNote.trim().length < 3 || detail.regressionExample.proposedByUserId === workspace.currentUser?.id}
                                   label={t('quality.approveExample')}
                                   onPress={() => void workspace.decideAiRegressionExample(
                                     detail.regressionExample!.exampleId,
@@ -195,7 +195,7 @@ export function AiQualityReviewSection({
                                   tone="dark"
                                 />
                                 <PrimaryButton
-                                  disabled={decisionNote.trim().length < 3 || detail.regressionExample.proposedByUserId === workspace.currentUser.id}
+                                  disabled={decisionNote.trim().length < 3 || detail.regressionExample.proposedByUserId === workspace.currentUser?.id}
                                   label={t('quality.rejectExample')}
                                   onPress={() => void workspace.decideAiRegressionExample(
                                     detail.regressionExample!.exampleId,

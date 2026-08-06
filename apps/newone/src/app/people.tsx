@@ -67,6 +67,7 @@ export default function PeopleScreen() {
     misinformation: t('chat.reportMisinformation'),
     other: t('chat.reportOther'),
   };
+  const currentSite = workspace.currentUser?.site ?? null;
 
   const people = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -81,11 +82,11 @@ export default function PeopleScreen() {
       if (!matchesQuery) return false;
       if (filter === 'connected') return person.connectionState === 'connected';
       if (filter === 'online') return person.presence === 'online';
-      if (filter === 'my_site') return person.site === workspace.currentUser.site;
+      if (filter === 'my_site') return currentSite !== null && person.site === currentSite;
       if (filter === 'pending') return person.connectionState === 'pending';
       return true;
     });
-  }, [filter, search, workspace.currentUser.site, workspace.people]);
+  }, [currentSite, filter, search, workspace.people]);
 
   const openMessage = async (person: Person) => {
     const conversationId = await workspace.openOrCreateDirectConversation(person.id);

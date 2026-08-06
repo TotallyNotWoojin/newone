@@ -21,7 +21,6 @@ import {
   WorkspaceStatusBanner,
 } from '@/components/workspace/workspace-state';
 import type { ShiftHandoff } from '@/domain/types';
-import { isDemoMode } from '@/config/runtime';
 import { handoffCorrectionCopy } from '@/features/handoffs/handoff-correction-copy';
 import { handoffAcknowledgementCopy } from '@/features/handoffs/handoff-acknowledgement-copy';
 import { useWorkspace } from '@/state/workspace';
@@ -190,12 +189,9 @@ export default function HandoffsScreen() {
             {handoffs.map((handoff) => (
               <HandoffCard
                 busy={workspace.actionBusy}
-                canCorrect={canCreate && (
-                  isDemoMode
-                  || workspace.conversations.find(
-                    (conversation) => conversation.id === handoff.conversationId,
-                  )?.canManage === true
-                )}
+                canCorrect={canCreate && workspace.conversations.find(
+                  (conversation) => conversation.id === handoff.conversationId,
+                )?.canManage === true}
                 handoff={handoff}
                 key={handoff.id}
                 sourceMessages={(workspace.messages[handoff.conversationId] ?? []).filter((message) =>

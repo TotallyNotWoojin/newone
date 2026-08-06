@@ -15,19 +15,28 @@ Never reuse project references, API keys, Auth users, Storage objects, push toke
 
 Current development snapshot, not a production release:
 
-- all 34 repository migrations are in remote parity;
+- all 37 repository migrations are in remote parity;
 - PostgreSQL SSL enforcement is enabled and remained healthy after reboot;
 - database IP restrictions remain open pending a stable developer/CI egress range;
-- nine versioned Edge Functions exist in source, while only `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker` are deployed to development and fail closed; recorded post-reboot Edge health/readiness probes remain HTTP 200;
-- the custom access-token hook and hosted session hardening are enabled, but `newone-auth` is withheld until a real web domain, Turnstile, and custom SMTP are configured;
-- bootstrap, AI, attachment-scan, and push-receipt functions are withheld, push dispatch is disabled, and employee AI data egress remains false; and
+- nine versioned Edge Functions exist in source; six are active in development: `newone-api`, `newone-auth`, `newone-bootstrap`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`;
+- the custom access-token hook and hosted session hardening are enabled, and the deployed Auth/core gateways passed the bounded real hosted development simulation recorded below;
+- AI, attachment-scan, and push-receipt functions remain withheld, the ephemeral Bootstrap secret has been removed so Bootstrap fails closed, push dispatch is disabled, and employee AI data egress remains false; and
 - `https://dev.newone.invalid` is a reserved non-routable Auth origin, not a deployed website or an acceptable employee redirect.
 
 ## 1. Local verification
 
 Requirements: Node.js 22.13+, Docker, and Supabase CLI 2.109.0 or the repository-pinned replacement.
 
-The latest preliminary Edge source check passed type checking and 194/194 Deno tests. It remains preliminary until rerun from an immutable release candidate with retained artifacts.
+The August 5 working-tree checkpoint passed the following preliminary gates:
+
+- shared runtime/API: 272/272 tests across 25 production `.mjs` modules, with 99.58% lines, 97.51% branches, and 100% functions;
+- universal client: 49/49 suites and 617/617 tests across all 83 eligible production files, with 96.05% statements, 91.31% branches, 96.90% functions, and 97.27% lines;
+- Edge: type-check plus 257/257 tests across all 32 production TypeScript files and nine real entrypoints, with 92.84% lines, 91.36% branches, and 98.61% functions;
+- database: a clean 37-migration reset, 29 pgTAP files and 1,000/1,000 assertions, and zero strict-lint findings;
+- deterministic web, iOS, and Android exports; and
+- a production-fixture scan over 211 client, API, Edge, configuration, migration, and seed inputs plus 29 inspectable bundled text artifacts with no forbidden runtime-fixture markers.
+
+These are global working-tree coverage and source/bundle results. Their reports are not retained against an immutable release revision, and they do not prove per-file coverage, signed binaries, physical devices, or production acceptance.
 
 ```bash
 npm ci
@@ -57,8 +66,9 @@ EXPO_PUBLIC_SUPPORT_CONTACT_URL=https://support.example/newone
 EXPO_PUBLIC_EAS_PROJECT_ID=exact-eas-project-uuid
 EXPO_PUBLIC_PUSH_ENVIRONMENT=development
 EXPO_PUBLIC_OFFLINE_CACHE_ENABLED=false
-EXPO_PUBLIC_DEMO_MODE=false
 ```
+
+There is no public client switch for a fictional-data path. Every build uses its designated backend or fails closed when required routing is absent.
 
 Production web uses a same-origin path such as `EXPO_PUBLIC_API_URL=/api`; native builds use the direct HTTPS Edge Function origin. Turnstile's site key is public, but its secret remains in the Supabase Auth configuration. The native challenge origin must be a dedicated allowed HTTPS origin and must exactly match the deployed challenge document. Add the exact hostname from `EXPO_PUBLIC_TURNSTILE_CHALLENGE_ORIGIN` to that Turnstile widget's hostname allowlist; adding only the main web-app hostname does not authorize the hosted mobile challenge page.
 
@@ -119,13 +129,13 @@ Before promoting a Vercel deployment, verify the ingress contract from two clien
 6. Push migrations only after the review is clean.
 7. Re-run security/performance advisors and safe remote smoke probes.
 
-The Free `newone` project remains a development target. All 34 migrations are currently in parity and PostgreSQL SSL enforcement is enabled. Database IP restrictions are not yet closed because a stable developer/CI egress range has not been selected. No production data may be imported merely because migrations, SSL, or public routing values are configured.
+The Free `newone` project remains a development target. All 37 migrations are currently in parity and PostgreSQL SSL enforcement is enabled. The current local reset ran 29 pgTAP files and passed 1,000/1,000 assertions with zero strict-lint findings. Database IP restrictions are not yet closed because a stable developer/CI egress range has not been selected. No production data may be imported merely because migrations, SSL, or public routing values are configured.
 
 ## 5. Auth release
 
 Before inviting any employee:
 
-The development project currently has the custom access-token hook and session hardening enabled. That does not make employee sign-in ready: `newone-auth` is intentionally not deployed, the Auth origin is the reserved `https://dev.newone.invalid`, and the real web domain, Turnstile secret/hostname policy, custom SMTP, redirect proof, and end-to-end synthetic enrollment evidence remain required.
+The development project currently has the custom access-token hook and session hardening enabled, and `newone-auth` is deployed. Hosted core artifact `newone-e2e-20260805t073237z-bbb833d0` passed real password sessions, installation binding, AAL1 privileged denial, TOTP/AAL2, one-time invitation redemption, replay denial, and rate-limit exhaustion. That does not make employee sign-in ready: the Auth origin is the reserved `https://dev.newone.invalid`, and a real web domain, Turnstile secret/hostname policy, custom SMTP, redirect proof, provider delivery, and signed-device/browser evidence remain required.
 
 - disable open email/phone signup;
 - apply migrations before Auth configuration, enable the versioned
@@ -159,12 +169,18 @@ Do not infer hosted Auth state from `supabase/config.toml`. Export/review the ac
 
 ## 6. Functions, jobs, files, and push
 
-- The development deployment currently contains only the four fail-closed base functions: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. Do not infer availability of the other five source packages.
+- The development deployment currently contains six active functions: `newone-api`, `newone-auth`, `newone-bootstrap`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. The AI, attachment-scan, and push-receipt workers are not deployed. The Bootstrap gateway remains active but fails closed without its temporary secret; the hosted-run secret was removed after cleanup.
 - Deploy every versioned function (`newone-api`, `newone-auth`, `newone-read`, bootstrap, AI, attachment scan, general outbox, push receipt, and maintenance workers) only after its unit/contract tests pass.
 - Verify every function fails closed when a required RPC, secret, approval, or active session is absent.
 - Create only private Storage buckets. Exercise pending, scanning, clean, blocked, expired-grant, nonmember, and deleted-message cases.
 - Configure Expo push credentials, exact EAS project UUID, and environment binding per environment. The pilot permits generic or hidden notifications only; confidential sender, message, notice, handoff, and override-reason text never enters the provider payload.
 - Verify the durable job worker is idempotent and that provider failure never rolls back an original message or private report. For `moderation`, prove one content-free intake job, service-only expansion, current authorization after offboarding/grants, target/reporter exclusion, duplicate replay, and retry after expansion or completion failure.
+
+### Real hosted development simulation
+
+The secret-free, gitignored artifact `tests/hosted/.artifacts/newone-e2e-20260805t073237z-bbb833d0.json` records 18 passing real steps against hosted Supabase Auth, Postgres/RLS, the four core gateway functions, and private Realtime. It covers two organization bootstraps, bound sessions, TOTP/AAL2, invitation redemption/replay denial, contacts, direct/group conversations, multilingual persistence, private-channel delivery and tenant denial, idempotent replay/conflict, raw-table non-disclosure, and real `201`/`429` rate-limit exhaustion. Guarded database and Auth cleanup completed. A later dry-run reported six active functions and zero existing organizations/users, and the ephemeral Bootstrap secret was absent.
+
+This is bounded core-backend development evidence, not full application or production evidence. No deployed public same-origin web gateway, SMTP/CAPTCHA delivery, provider malware scan, AI worker with approved egress, push delivery receipt, signed native build, physical-device journey, or authenticated Expo browser workflow was exercised. Preserve the artifact outside ignored paths, attach the immutable source revision and full six-function inventory, and rerun after candidate freeze before using it as release evidence.
 
 ### Worker scheduling
 

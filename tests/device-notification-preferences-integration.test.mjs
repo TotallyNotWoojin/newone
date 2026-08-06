@@ -29,7 +29,6 @@ const files = {
   routes: readFileSync('supabase/functions/newone-api/routes.ts', 'utf8'),
   contracts: readFileSync('apps/newone/src/data/repositories/contracts.ts', 'utf8'),
   transport: readFileSync('apps/newone/src/data/repositories/bff-command-repository.ts', 'utf8'),
-  demo: readFileSync('apps/newone/src/data/repositories/demo-repository.ts', 'utf8'),
   workspace: readFileSync('apps/newone/src/state/workspace.tsx', 'utf8'),
   settings: readFileSync('apps/newone/src/app/settings.tsx', 'utf8'),
   catalog: readFileSync('apps/newone/src/i18n/catalog.ts', 'utf8'),
@@ -54,8 +53,6 @@ test('client repository has bounded query and CAS update paths using the strict 
   assert.match(files.transport, /expectedVersion: input\.expectedVersion/);
   assert.match(files.transport, /normalizeDeviceNotificationPreferencePatch\(input\.patch\)/);
   assert.equal((files.transport.match(/parseDeviceNotificationPreferences\(dataValue\(payload\)\)/g) ?? []).length, 2);
-  assert.match(files.demo, /async getDeviceNotificationPreferences/);
-  assert.match(files.demo, /async updateDeviceNotificationPreferences/);
 });
 
 test('workspace binds preferences to the physical current installation and never arbitrary session devices', () => {

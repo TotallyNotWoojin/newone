@@ -23,8 +23,36 @@ function dependencyName(packagePath, entry) {
   return markerIndex >= 0 ? packagePath.slice(markerIndex + marker.length) : packagePath;
 }
 
+function dependencyLicense(lockRoot, packagePath, entry) {
+  if (typeof entry.license === 'string' && entry.license.trim()) return entry.license.trim();
+
+  // Some legacy packages publish valid license metadata under the older
+  // `licenses` array, which npm does not copy into package-lock v3. Read the
+  // installed, lockfile-integrity-pinned manifest so those packages are still
+  // inventoried without an unreviewed hard-coded exception.
+  try {
+    const manifest = JSON.parse(
+      readFileSync(resolve(lockRoot, packagePath, 'package.json'), 'utf8'),
+    );
+    if (typeof manifest.license === 'string' && manifest.license.trim()) {
+      return manifest.license.trim();
+    }
+    if (Array.isArray(manifest.licenses)) {
+      const expressions = manifest.licenses
+        .map((candidate) => typeof candidate === 'string' ? candidate : candidate?.type)
+        .filter((candidate) => typeof candidate === 'string' && candidate.trim())
+        .map((candidate) => candidate.trim());
+      if (expressions.length > 0) return [...new Set(expressions)].join(' OR ');
+    }
+  } catch {
+    // Missing or invalid installed metadata remains a hard failure below.
+  }
+  return null;
+}
+
 function inspectLock(relativePath, application) {
   const absolutePath = resolve(root, relativePath);
+  const lockRoot = dirname(absolutePath);
   const bytes = readFileSync(absolutePath);
   const lock = JSON.parse(bytes.toString('utf8'));
   const dependencies = [];
@@ -34,7 +62,7 @@ function inspectLock(relativePath, application) {
     if (!packagePath || !entry || typeof entry !== 'object') continue;
     const name = dependencyName(packagePath, entry);
     const production = entry.dev !== true;
-    const license = typeof entry.license === 'string' ? entry.license : null;
+    const license = dependencyLicense(lockRoot, packagePath, entry);
     const item = {
       name,
       version: entry.version ?? null,

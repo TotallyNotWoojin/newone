@@ -13,7 +13,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { Avatar } from '@/components/ui/primitives';
 import { useWorkspace } from '@/state/workspace';
-import { useAuth } from '@/state/auth';
 import { useI18n } from '@/i18n/provider';
 import type { MessageKey } from '@/i18n/catalog';
 import { canAccessAdminSurface } from '@/features/admin/admin-access';
@@ -86,7 +85,6 @@ export function AppScaffold({
 }) {
   const { width } = useHydrationSafeWindowDimensions();
   const insets = useSafeAreaInsets();
-  const auth = useAuth();
   const desktop = width >= 920;
   const bottomBarHeight = hideMobileTabs ? 0 : 68 + insets.bottom;
 
@@ -95,10 +93,7 @@ export function AppScaffold({
       <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.root}>
         <View style={styles.desktopFrame}>
           <DesktopRail current={current} />
-          <View style={styles.desktopContent}>
-            {auth.demoMode ? <DemoBanner /> : null}
-            {children}
-          </View>
+          <View style={styles.desktopContent}>{children}</View>
         </View>
       </SafeAreaView>
     );
@@ -108,22 +103,9 @@ export function AppScaffold({
     <View style={styles.root}>
       <SafeAreaView edges={['top', 'left', 'right']} style={styles.mobileContent}>
         {mobileHeader}
-        {auth.demoMode ? <DemoBanner compact /> : null}
         <View style={[styles.mobileBody, { paddingBottom: bottomBarHeight }]}>{children}</View>
       </SafeAreaView>
       {!hideMobileTabs ? <MobileTabs current={current} /> : null}
-    </View>
-  );
-}
-
-function DemoBanner({ compact = false }: { compact?: boolean }) {
-  const { t } = useI18n();
-  return (
-    <View style={[styles.demoBanner, compact && styles.demoBannerCompact]}>
-      <Ionicons name="flask-outline" size={13} color={colors.amber} />
-      <Text numberOfLines={compact ? 1 : undefined} style={styles.demoBannerText}>
-        {t('demo.banner')}
-      </Text>
     </View>
   );
 }
@@ -209,12 +191,16 @@ function DesktopRail({ current }: { current: NavigationKey }) {
           accessibilityRole="button"
           onPress={() => router.push('/settings')}
           style={({ pressed }) => [styles.railAvatarButton, pressed && styles.pressed]}>
-          <Avatar
-            color={currentUser.avatarColor}
-            initials={currentUser.initials}
-            presence={currentUser.presence}
-            size={38}
-          />
+          {currentUser ? (
+            <Avatar
+              color={currentUser.avatarColor}
+              initials={currentUser.initials}
+              presence={currentUser.presence}
+              size={38}
+            />
+          ) : (
+            <Ionicons name="person-circle-outline" color="rgba(255,255,255,0.72)" size={38} />
+          )}
         </Pressable>
         <View style={styles.secureDotRow}>
           <Ionicons name="lock-closed" color="rgba(255,255,255,0.46)" size={11} />
@@ -338,25 +324,6 @@ const styles = StyleSheet.create({
   desktopContent: {
     flex: 1,
     minWidth: 0,
-  },
-  demoBanner: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.amberSoft,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E6C58E',
-  },
-  demoBannerCompact: {
-    minHeight: 28,
-  },
-  demoBannerText: {
-    color: colors.amber,
-    fontSize: 10,
-    fontWeight: '800',
   },
   rail: {
     width: 92,

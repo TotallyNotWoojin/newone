@@ -79,14 +79,14 @@ function ProtectedNavigator() {
   const onHelpRoute = pathname === '/help';
   const onPublicRoute = onSignInRoute || onHelpRoute;
   const onAuthOnlyRoute = onSignInRoute;
-  const redirectingToSignIn = !auth.demoMode && !auth.authenticated && !onPublicRoute;
-  const redirectingToWorkspace = !auth.demoMode && auth.authenticated && onAuthOnlyRoute;
+  const redirectingToSignIn = !auth.authenticated && !onPublicRoute;
+  const redirectingToWorkspace = auth.authenticated && onAuthOnlyRoute;
 
   useEffect(() => {
-    if (auth.loading || auth.demoMode) return;
+    if (auth.loading) return;
     if (!auth.authenticated && !onPublicRoute) router.replace('/sign-in');
     if (auth.authenticated && onAuthOnlyRoute) router.replace('/');
-  }, [auth.authenticated, auth.demoMode, auth.loading, onAuthOnlyRoute, onPublicRoute, router]);
+  }, [auth.authenticated, auth.loading, onAuthOnlyRoute, onPublicRoute, router]);
 
   useEffect(() => {
     let active = true;
@@ -123,7 +123,7 @@ function ProtectedNavigator() {
     </Stack>
   );
 
-  if (!auth.demoMode && !auth.authenticated) return navigator;
+  if (!auth.authenticated) return navigator;
   return (
     <WorkspaceProvider>
       <NotificationAwareWorkspace>{navigator}</NotificationAwareWorkspace>
@@ -132,7 +132,6 @@ function ProtectedNavigator() {
 }
 
 function NotificationAwareWorkspace({ children }: PropsWithChildren) {
-  const auth = useAuth();
   const workspace = useWorkspace();
   const badgeCount = useMemo(
     () => workspace.conversations.reduce(
@@ -148,7 +147,7 @@ function NotificationAwareWorkspace({ children }: PropsWithChildren) {
     [workspace.conversations, workspace.handoffs, workspace.updates],
   );
   useNotificationNavigation({
-    enabled: !auth.demoMode && workspace.status === 'ready',
+    enabled: workspace.status === 'ready',
     organizationId: workspace.organizationId || null,
     badgeCount,
   });

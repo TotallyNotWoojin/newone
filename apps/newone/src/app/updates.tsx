@@ -22,7 +22,6 @@ import {
   WorkspaceStatusBanner,
 } from '@/components/workspace/workspace-state';
 import type { CompanyUpdate } from '@/domain/types';
-import { isDemoMode } from '@/config/runtime';
 import { BffCommandRepository } from '@/data/repositories/bff-command-repository';
 import type {
   CommandRepository,
@@ -32,7 +31,6 @@ import type {
   UpdateNonAcknowledger,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
-import { DemoCommandRepository } from '@/data/repositories/demo-repository';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 import { updateCopy } from '@/features/updates/update-copy';
 import { createClientId } from '@/lib/client-id';
@@ -80,17 +78,16 @@ export default function UpdatesScreen() {
   const auth = useAuth();
   const { locale, t } = useI18n();
   const copy = updateCopy(locale);
-  const commands = useMemo<CommandRepository>(() => {
-    if (isDemoMode) return new DemoCommandRepository();
-    return new BffCommandRepository({
+  const commands = useMemo<CommandRepository>(() => (
+    new BffCommandRepository({
       getSession: async () => {
         const client = getSupabaseClient();
         if (!client) return null;
         const { data } = await client.auth.getSession();
         return data.session;
       },
-    });
-  }, []);
+    })
+  ), []);
   const canPublish = workspace.hasCapability('communications.publish');
   const channels = useMemo(() => workspace.conversations.filter((conversation) => (
     conversation.kind === 'announcement'
@@ -131,9 +128,9 @@ export default function UpdatesScreen() {
   const [attestationPrompt, setAttestationPrompt] = useState('');
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [acknowledgementDeadline, setAcknowledgementDeadline] = useState('');
-  const [reminderIntervalMinutes, setReminderIntervalMinutes] = useState('30');
-  const [maximumReminders, setMaximumReminders] = useState('3');
-  const [escalateAfterMinutes, setEscalateAfterMinutes] = useState('60');
+  const [reminderIntervalMinutes, setReminderIntervalMinutes] = useState('');
+  const [maximumReminders, setMaximumReminders] = useState('');
+  const [escalateAfterMinutes, setEscalateAfterMinutes] = useState('');
   const [audiencePreview, setAudiencePreview] = useState<UpdateAudiencePreview | null>(null);
   const [previewChannelId, setPreviewChannelId] = useState<string | null>(null);
   const [previewAudienceFingerprint, setPreviewAudienceFingerprint] = useState<string | null>(null);
@@ -169,7 +166,7 @@ export default function UpdatesScreen() {
 
   const refreshManaged = useCallback(async () => {
     if (!canPublish || !workspace.organizationId) return;
-    if (!isDemoMode && auth.assuranceLevel !== 'aal2') {
+    if (auth.assuranceLevel !== 'aal2') {
       setManagedError(copy.recentMfaRequired);
       return;
     }
@@ -271,7 +268,7 @@ export default function UpdatesScreen() {
   const channelAuthorized = channels.some((conversation) => conversation.id === channelId);
   const audienceReady = channelAuthorized && previewChannelId === channelId && audiencePreview !== null
     && previewAudienceFingerprint === audienceFingerprint;
-  const canUsePublisherActions = isDemoMode || auth.assuranceLevel === 'aal2';
+  const canUsePublisherActions = auth.assuranceLevel === 'aal2';
   const operationalRoleOptions = useMemo(() => [...new Set(workspace.people
     .map((person) => person.roleLabel.trim())
     .filter(Boolean))].sort((left, right) => left.localeCompare(right)), [workspace.people]);
@@ -293,9 +290,9 @@ export default function UpdatesScreen() {
     setAttestationPrompt('');
     setRemindersEnabled(false);
     setAcknowledgementDeadline('');
-    setReminderIntervalMinutes('30');
-    setMaximumReminders('3');
-    setEscalateAfterMinutes('60');
+    setReminderIntervalMinutes('');
+    setMaximumReminders('');
+    setEscalateAfterMinutes('');
     setAudiencePreview(null);
     setPreviewChannelId(null);
     setPreviewAudienceFingerprint(null);
@@ -337,8 +334,9 @@ export default function UpdatesScreen() {
   };
 
   const publishUpdate = async () => {
+    const currentUser = workspace.currentUser;
     if (
-      !audienceReady || !canUsePublisherActions || !channelId || !title.trim() || !body.trim()
+      !currentUser || !audienceReady || !canUsePublisherActions || !channelId || !title.trim() || !body.trim()
       || !expirationValid || !scheduleValid || !reminderPolicyValid || !overrideValid
       || !attestationValid || !audienceSelectorValid
     ) return;
@@ -353,7 +351,7 @@ export default function UpdatesScreen() {
         clientMessageId,
         title: title.trim(),
         body: body.trim(),
-        languageCode: workspace.currentUser.preferredLanguage,
+        languageCode: currentUser.preferredLanguage,
         priority,
         requiresAcknowledgement,
         expiresAt: expiresAt.trim() || null,
@@ -394,7 +392,7 @@ export default function UpdatesScreen() {
         versionNumber: 1,
         title: title.trim(),
         body: body.trim(),
-        author: workspace.currentUser.displayName,
+        author: currentUser.displayName,
         audience: scheduled
           ? copy.snapshotPending
           : `${result.audienceCount ?? audiencePreview.audienceCount} ${copy.recipients}`,
@@ -551,6 +549,12 @@ export default function UpdatesScreen() {
   };
 
   const loadNonResponders = async (update: ManagedUpdate, append = false) => {
+    setNonResponderTarget(update);
+    if (!append) {
+      setNonResponders([]);
+      setNonResponderCursor(null);
+      setNonResponderHasMore(false);
+    }
     setSecureBusy('update-non-responders');
     setSecureError(null);
     try {
@@ -560,7 +564,6 @@ export default function UpdatesScreen() {
         afterUserId: append ? nonResponderCursor : null,
         limit: 50,
       });
-      setNonResponderTarget(update);
       setNonResponders((current) => append ? [...current, ...page.people] : page.people);
       setNonResponderCursor(page.nextAfterUserId);
       setNonResponderHasMore(page.hasMore);

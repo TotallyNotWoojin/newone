@@ -366,3 +366,81 @@ test('gateway rejects cross-origin reads and strips every upstream CORS capabili
   assert.equal(sameOriginRead.headers.get('access-control-allow-credentials'), null);
   assert.equal(sameOriginRead.headers.get('access-control-expose-headers'), null);
 });
+
+test('gateway covers preflight, declared-size, and unreadable-body failure contracts', async () => {
+  let calls = 0;
+  const fetch = async () => {
+    calls += 1;
+    return new Response(null, { status: 204 });
+  };
+  const originlessPreflight = await proxyNewoneRequest(
+    new Request('https://app.newone.example/api/v2/health', { method: 'OPTIONS' }),
+    { functionsOrigin: FUNCTIONS_ORIGIN, publishableKey: PUBLISHABLE_KEY, fetch },
+  );
+  assert.equal(originlessPreflight.status, 204);
+
+  const sameOriginPreflight = await proxyNewoneRequest(
+    new Request('https://app.newone.example/api/v2/health', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://app.newone.example' },
+    }),
+    { functionsOrigin: FUNCTIONS_ORIGIN, publishableKey: PUBLISHABLE_KEY, fetch },
+  );
+  assert.equal(sameOriginPreflight.status, 204);
+
+  const declaredOversize = await proxyNewoneRequest(
+    new Request('https://app.newone.example/api/v2/conversations', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://app.newone.example',
+        'Content-Length': String(128 * 1024 + 1),
+      },
+      body: '{}',
+    }),
+    { functionsOrigin: FUNCTIONS_ORIGIN, publishableKey: PUBLISHABLE_KEY, fetch },
+  );
+  assert.equal(declaredOversize.status, 413);
+
+  const unreadable = await proxyNewoneRequest(
+    {
+      method: 'POST',
+      url: 'https://app.newone.example/api/v2/conversations',
+      headers: new Headers({ Origin: 'https://app.newone.example' }),
+      arrayBuffer: async () => {
+        throw new Error('controlled test stream failure');
+      },
+    },
+    { functionsOrigin: FUNCTIONS_ORIGIN, publishableKey: PUBLISHABLE_KEY, fetch },
+  );
+  assert.equal(unreadable.status, 400);
+  assert.equal((await unreadable.json()).error.code, 'bad_request');
+  assert.equal(calls, 2);
+});
+
+test('gateway rejects malformed origins, keys, secrets, cookies, and duplicate attributes', () => {
+  for (const invalidOrigin of [
+    undefined,
+    'https://example.supabase.co/functions/v1?query=1',
+    'https://example.supabase.co/functions/v1#fragment',
+  ]) {
+    assert.throws(() => functionsOrigin(invalidOrigin));
+  }
+  assert.throws(() => publishableKey(`sb_publishable_${'x'.repeat(2050)}`));
+  assert.throws(() => publishableKey(
+    ['sb', 'secret', 'server', 'credentials', 'are', 'not', 'public'].join('_'),
+  ));
+
+  assert.equal(sessionCookieHeader(`bad=${'x'.repeat(13 * 1024)}`), null);
+  assert.equal(sessionCookieHeader('__Host-newone_access=first; __Host-newone_access=second'),
+    '__Host-newone_access=first');
+  assert.equal(sessionCookieHeader('__Host-newone_access=bad,value'), null);
+
+  for (const unsafeCookie of [
+    '__Host-newone_access=value; Path=/; Path=/; Secure; HttpOnly; SameSite=Strict',
+    '__Host-newone_access=value; Path=/; Secure; HttpOnly; SameSite=Strict; Unknown=yes',
+    '__Host-newone_access=value; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=forever',
+  ]) {
+    const headers = new Headers({ 'Set-Cookie': unsafeCookie });
+    assert.throws(() => sessionSetCookies(headers));
+  }
+});

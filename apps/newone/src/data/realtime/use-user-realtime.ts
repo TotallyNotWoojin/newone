@@ -37,7 +37,27 @@ function optionalText(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function parseInboxInvalidation(
+function aliasedValue(
+  value: Record<string, unknown>,
+  camelCaseKey: string,
+  snakeCaseKey: string,
+): { valid: true; value: unknown } | { valid: false; value: undefined } {
+  const hasCamelCase = Object.prototype.hasOwnProperty.call(value, camelCaseKey);
+  const hasSnakeCase = Object.prototype.hasOwnProperty.call(value, snakeCaseKey);
+  if (
+    hasCamelCase
+    && hasSnakeCase
+    && value[camelCaseKey] !== value[snakeCaseKey]
+  ) {
+    return { valid: false, value: undefined };
+  }
+  return {
+    valid: true,
+    value: hasCamelCase ? value[camelCaseKey] : value[snakeCaseKey],
+  };
+}
+
+export function parseInboxInvalidation(
   raw: unknown,
   expectedEvent: InboxEventName,
   organizationId: string,
@@ -48,27 +68,45 @@ function parseInboxInvalidation(
   const outer = record(raw);
   const first = record(outer.payload ?? outer);
   const value = record(first.payload ?? first);
+  const schemaVersion = aliasedValue(value, 'schemaVersion', 'schema_version');
+  const eventId = aliasedValue(value, 'eventId', 'event_id');
+  const envelopeOrganizationId = aliasedValue(value, 'organizationId', 'organization_id');
+  const occurredAt = aliasedValue(value, 'occurredAt', 'occurred_at');
+  const conversationId = aliasedValue(value, 'conversationId', 'conversation_id');
+  const entityType = aliasedValue(value, 'entityType', 'entity_type');
+  const entityId = aliasedValue(value, 'entityId', 'entity_id');
+  const versionId = aliasedValue(value, 'versionId', 'version_id');
   if (
-    value.schemaVersion !== 1
+    !schemaVersion.valid
+    || !eventId.valid
+    || !envelopeOrganizationId.valid
+    || !occurredAt.valid
+    || !conversationId.valid
+    || !entityType.valid
+    || !entityId.valid
+    || !versionId.valid
+  ) return null;
+  if (
+    schemaVersion.value !== 1
     || value.event !== expectedEvent
-    || value.organizationId !== organizationId
-    || typeof value.eventId !== 'string'
-    || value.eventId.length < 8
-    || typeof value.occurredAt !== 'string'
-    || Number.isNaN(Date.parse(value.occurredAt))
+    || envelopeOrganizationId.value !== organizationId
+    || typeof eventId.value !== 'string'
+    || eventId.value.length < 8
+    || typeof occurredAt.value !== 'string'
+    || Number.isNaN(Date.parse(occurredAt.value))
   ) {
     return null;
   }
   return {
     schemaVersion: 1,
-    eventId: value.eventId,
+    eventId: eventId.value,
     event: expectedEvent,
     organizationId,
-    occurredAt: value.occurredAt,
-    conversationId: optionalText(value.conversationId),
-    entityType: optionalText(value.entityType),
-    entityId: optionalText(value.entityId),
-    versionId: optionalText(value.versionId),
+    occurredAt: occurredAt.value,
+    conversationId: optionalText(conversationId.value),
+    entityType: optionalText(entityType.value),
+    entityId: optionalText(entityId.value),
+    versionId: optionalText(versionId.value),
     reason: optionalText(value.reason),
   };
 }

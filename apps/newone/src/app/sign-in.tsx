@@ -18,7 +18,6 @@ import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 // eslint-disable-next-line import/no-unresolved
 import { CaptchaChallenge } from '@/components/security/captcha-challenge';
 import { isWebAuthBlocked } from '@/lib/supabase';
-import { isDemoMode } from '@/config/runtime';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useAuth } from '@/state/auth';
 import { useI18n } from '@/i18n/provider';
@@ -400,26 +399,16 @@ export default function SignInScreen() {
                 setCode('');
                 setMessage('');
               }}
-              style={({ pressed }) => [styles.demoLink, pressed && styles.pressed]}>
-              <Text style={styles.demoLinkText}>{t('auth.differentIdentity')}</Text>
-            </Pressable>
-          ) : null}
-
-          {isDemoMode ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.replace('/')}
-              style={({ pressed }) => [styles.demoLink, pressed && styles.pressed]}>
-              <Text style={styles.demoLinkText}>{t('auth.demoOpen')}</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.mintDark} />
+              style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
+              <Text style={styles.secondaryLinkText}>{t('auth.differentIdentity')}</Text>
             </Pressable>
           ) : null}
 
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push('./help')}
-            style={({ pressed }) => [styles.demoLink, pressed && styles.pressed]}>
-            <Text style={styles.demoLinkText}>{t('auth.help')}</Text>
+            style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
+            <Text style={styles.secondaryLinkText}>{t('auth.help')}</Text>
           </Pressable>
 
           <View style={styles.securityNote}>
@@ -675,7 +664,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
   },
-  demoLink: {
+  secondaryLink: {
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
@@ -683,7 +672,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginTop: spacing.md,
   },
-  demoLinkText: {
+  secondaryLinkText: {
     color: colors.mintDark,
     fontSize: 11,
     fontWeight: '900',

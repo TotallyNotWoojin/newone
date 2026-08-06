@@ -91,7 +91,8 @@ async function webRequest(
       },
       ...(input.body ? { body: JSON.stringify(input.body) } : {}),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof WebAuthError) throw error;
     throw new WebAuthError('The secure web gateway is unreachable.', 'network_unavailable');
   }
   let payload: unknown = null;

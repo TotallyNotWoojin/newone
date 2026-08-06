@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AppScaffold, DesktopPageHeader, MobileBrandHeader } from '@/components/navigation/app-scaffold';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { Avatar, Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
-import { WorkspaceStatusBanner } from '@/components/workspace/workspace-state';
+import { WorkspaceStatePanel, WorkspaceStatusBanner } from '@/components/workspace/workspace-state';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
@@ -59,12 +59,24 @@ export default function AdminScreen() {
   const [inviteSponsorCandidates, setInviteSponsorCandidates] = useState<GroupCreationCandidate[]>([]);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
+
+  if (!currentUser) {
+    return (
+      <AppScaffold
+        current="admin"
+        mobileHeader={<MobileBrandHeader subtitle={t('admin.controls')} title={t('admin.shortTitle')} />}>
+        <WorkspaceStatusBanner />
+        <WorkspaceStatePanel resource="people" />
+      </AppScaffold>
+    );
+  }
+
   const suspendPerson = workspace.people.find((person) => person.id === suspendPersonId);
   const rolePerson = workspace.people.find((person) => person.id === rolePersonId);
   const roleExpirationTimestamp = roleExpiresAt.trim() ? Date.parse(roleExpiresAt.trim()) : null;
   const roleExpirationValid = roleExpirationTimestamp === null
     || (Number.isFinite(roleExpirationTimestamp) && roleExpirationTimestamp > roleExpirationFloor);
-  const privilegedReady = auth.demoMode || auth.assuranceLevel === 'aal2';
+  const privilegedReady = auth.assuranceLevel === 'aal2';
   const normalizedInviteDestination = inviteDestinationType === 'email'
     ? inviteDestination.trim().toLocaleLowerCase()
     : inviteDestination.replace(/[\s().-]/g, '');
@@ -234,11 +246,10 @@ export default function AdminScreen() {
 
           {workspace.hasCapability('recovery.manage') ? (
             <AccountRecoverySection
-              key={`${workspace.organizationId}:${currentUser.id}`}
+              key={`recovery:${workspace.organizationId}:${currentUser.id}`}
               accessToken={auth.session?.access_token ?? null}
               assuranceLevel={auth.assuranceLevel}
               currentUserId={currentUser.id}
-              demoMode={auth.demoMode}
               onOpenSettings={() => router.push('/settings')}
               onVerifyNow={() => router.push('/settings')}
               organizationId={workspace.organizationId}
@@ -248,11 +259,10 @@ export default function AdminScreen() {
 
           {workspace.hasCapability('reports.investigate') || workspace.hasCapability('reports.assign') ? (
             <ModerationCaseSection
-              key={`${workspace.organizationId}:${currentUser.id}`}
+              key={`moderation:${workspace.organizationId}:${currentUser.id}`}
               accessToken={auth.session?.access_token ?? null}
               assuranceLevel={auth.assuranceLevel}
               currentUserId={currentUser.id}
-              demoMode={auth.demoMode}
               onVerifyNow={() => router.push('/settings')}
               organizationId={workspace.organizationId}
               people={workspace.people}
@@ -571,7 +581,6 @@ export default function AdminScreen() {
         <FormField
           label={t(inviteDestinationType === 'email' ? 'admin.inviteEmail' : 'admin.invitePhone')}
           onChangeText={setInviteDestination}
-          placeholder={inviteDestinationType === 'email' ? 'employee@company.com' : '+52 81 5555 0192'}
           value={inviteDestination}
         />
         <View style={styles.roleFormSection}>
@@ -588,7 +597,7 @@ export default function AdminScreen() {
           <FormField
             label={t('admin.inviteEmployeeCode')}
             onChangeText={setInviteEmployeeCode}
-            placeholder="MX-1042"
+            placeholder={t('auth.employeeCodePlaceholder')}
             value={inviteEmployeeCode}
           />
         ) : null}

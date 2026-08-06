@@ -61,10 +61,9 @@ test('acknowledgement and publisher DTOs fail closed around attributable evidenc
 });
 
 test('web and native update UI exposes the complete deliberate critical-update workflow in all locales', async () => {
-  const [screen, copy, demo] = await Promise.all([
+  const [screen, copy] = await Promise.all([
     source('../apps/newone/src/app/updates.tsx'),
     source('../apps/newone/src/features/updates/update-copy.ts'),
-    source('../apps/newone/src/data/repositories/demo-repository.ts'),
   ]);
 
   for (const marker of [
@@ -95,15 +94,4 @@ test('web and native update UI exposes the complete deliberate critical-update w
   assert.match(copy, /opening or scrolling as acknowledgement/);
   assert.match(copy, /열기나 스크롤을 확인으로 간주하지 않습니다/);
   assert.match(copy, /Abrir o desplazarse nunca confirma/);
-
-  for (const parityMethod of [
-    'previewUpdateAudience',
-    'publishUpdate',
-    'cancelScheduledUpdate',
-    'acknowledgeUpdate',
-    'markUpdateRead',
-    'correctUpdate',
-    'listManagedUpdates',
-    'listUpdateNonAcknowledgers',
-  ]) assert.ok(demo.includes(parityMethod), `demo mode lacks ${parityMethod}`);
 });

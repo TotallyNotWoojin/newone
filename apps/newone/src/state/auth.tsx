@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { isDemoMode, publicRuntimeConfig, runtimeMode, type RuntimeMode } from '@/config/runtime';
+import { publicRuntimeConfig, runtimeMode, type RuntimeMode } from '@/config/runtime';
 // Metro selects the native or safe web client store.
 // eslint-disable-next-line import/no-unresolved
 import { clientStore } from '@/data/persistence/client-store';
@@ -46,7 +46,6 @@ interface AuthState {
   sessionId: string | null;
   assuranceLevel: 'aal1' | 'aal2' | null;
   loading: boolean;
-  demoMode: boolean;
   mode: RuntimeMode;
   error: string | null;
   requestOtp: (input: {
@@ -221,6 +220,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             if (refreshError instanceof WebAuthError && refreshError.code === 'http_401') {
               void forgetOfflineWebIdentity().catch(() => {});
               setWebUser(null);
+              setWebRealtimeToken(null);
               setWebSessionId(null);
               setWebAal(null);
             }
@@ -335,12 +335,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return ({
       session,
       user: Platform.OS === 'web' ? webUser : session?.user ?? null,
-      authenticated: isDemoMode || Boolean(Platform.OS === 'web' ? webUser : session),
+      authenticated: Boolean(Platform.OS === 'web' ? webUser : session),
       realtimeToken: Platform.OS === 'web' ? webRealtimeToken : session?.access_token ?? null,
       sessionId: Platform.OS === 'web' ? webSessionId : claims.sessionId,
       assuranceLevel: Platform.OS === 'web' ? webAal : claims.assuranceLevel,
       loading,
-      demoMode: isDemoMode,
       mode: runtimeMode,
       error,
       requestOtp: async (input) => {

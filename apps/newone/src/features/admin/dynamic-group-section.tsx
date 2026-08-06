@@ -294,7 +294,7 @@ export function DynamicGroupSection({ privilegedReady }: { privilegedReady: bool
 
   const personLabel = (id: string) => {
     const person = workspace.people.find((candidate) => candidate.id === id) ??
-      (workspace.currentUser.id === id ? workspace.currentUser : null);
+      (workspace.currentUser?.id === id ? workspace.currentUser : null);
     return person?.displayName ?? `${id.slice(0, 8)}…${id.slice(-4)}`;
   };
 

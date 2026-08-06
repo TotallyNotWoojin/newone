@@ -3,6 +3,7 @@ import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { ActionError, FormField } from '@/components/ui/action-modal';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
+import type { OrganizationPolicy } from '@/data/repositories/organization-policy-dto.mjs';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
@@ -11,6 +12,25 @@ export function OrganizationPolicySection({ privilegedReady }: { privilegedReady
   const workspace = useWorkspace();
   const { t } = useI18n();
   const policy = workspace.organizationPolicy;
+  if (!policy) {
+    return (
+      <View style={[styles.section, shadow]}>
+        <Text style={styles.description}>{t('status.loading')}</Text>
+      </View>
+    );
+  }
+  return <OrganizationPolicyEditor policy={policy} privilegedReady={privilegedReady} />;
+}
+
+function OrganizationPolicyEditor({
+  policy,
+  privilegedReady,
+}: {
+  policy: OrganizationPolicy;
+  privilegedReady: boolean;
+}) {
+  const workspace = useWorkspace();
+  const { t } = useI18n();
   const [messageRetentionDays, setMessageRetentionDays] = useState(String(policy.messageRetentionDays));
   const [allowMemberDirectMessages, setAllowMemberDirectMessages] = useState(policy.allowMemberDirectMessages);
   const [dmPolicy, setDmPolicy] = useState(policy.dmPolicy);

@@ -1,0 +1,315 @@
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import ConversationScreen from '@/app/conversation/[id]';
+import ChatsScreen from '@/app/index';
+
+const mockRouter = {
+  back: jest.fn(),
+  push: jest.fn(),
+  replace: jest.fn(),
+};
+let mockParams: { id?: string; messageId?: string } = {};
+let mockWidth = 1280;
+let mockWorkspace: Record<string, any>;
+let mockConversationListProps: Record<string, any> | null = null;
+let mockConversationPaneProps: Record<string, any> | null = null;
+let mockConversationDetailsProps: Record<string, any> | null = null;
+
+jest.mock('expo-router', () => ({
+  useRouter: () => mockRouter,
+  useLocalSearchParams: () => mockParams,
+}));
+
+jest.mock('@/hooks/use-hydration-safe-window-dimensions', () => ({
+  useHydrationSafeWindowDimensions: () => ({ width: mockWidth, height: 900 }),
+}));
+
+jest.mock('@/i18n/provider', () => ({
+  useI18n: () => ({ locale: 'en', t: (key: string) => key }),
+}));
+
+jest.mock('@/state/workspace', () => ({
+  useWorkspace: () => mockWorkspace,
+}));
+
+jest.mock('@/components/navigation/app-scaffold', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    AppScaffold: ({ children, current, hideMobileTabs, mobileHeader }: Record<string, any>) => (
+      <ReactNative.View
+        accessibilityLabel={`scaffold:${current}`}
+        testID="controlled-app-scaffold"
+        data-hide-mobile-tabs={hideMobileTabs}>
+        {mobileHeader}
+        {children}
+      </ReactNative.View>
+    ),
+    MobileBrandHeader: ({ right, subtitle, title }: Record<string, any>) => (
+      <ReactNative.View testID="controlled-mobile-header">
+        <ReactNative.Text>{title}</ReactNative.Text>
+        <ReactNative.Text>{subtitle}</ReactNative.Text>
+        {right}
+      </ReactNative.View>
+    ),
+  };
+});
+
+jest.mock('@/components/workspace/workspace-state', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    WorkspaceStatusBanner: () => <ReactNative.Text>controlled-status-banner</ReactNative.Text>,
+    WorkspaceStatePanel: ({ resource }: { resource: string }) => (
+      <ReactNative.Text>{`controlled-state:${resource}`}</ReactNative.Text>
+    ),
+  };
+});
+
+jest.mock('@/features/chat/conversation-list', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    ConversationList: (props: Record<string, any>) => {
+      mockConversationListProps = props;
+      return (
+        <ReactNative.View testID="controlled-conversation-list">
+          <ReactNative.Text>{props.desktop ? 'desktop-list' : 'mobile-list'}</ReactNative.Text>
+          <ReactNative.Pressable
+            accessibilityLabel="controlled select conversation"
+            accessibilityRole="button"
+            onPress={() => props.onSelect('conversation-secondary')}
+          />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled compose"
+            accessibilityRole="button"
+            onPress={props.onCompose}
+          />
+        </ReactNative.View>
+      );
+    },
+  };
+});
+
+jest.mock('@/features/chat/conversation-pane', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    ConversationPane: (props: Record<string, any>) => {
+      mockConversationPaneProps = props;
+      return (
+        <ReactNative.View testID="controlled-conversation-pane">
+          <ReactNative.Text>{props.conversation?.title ?? 'no-conversation'}</ReactNative.Text>
+          <ReactNative.Text>{props.mobile ? 'mobile-pane' : 'desktop-pane'}</ReactNative.Text>
+          {props.onBack ? (
+            <ReactNative.Pressable
+              accessibilityLabel="controlled conversation back"
+              accessibilityRole="button"
+              onPress={props.onBack}
+            />
+          ) : null}
+          <ReactNative.Pressable
+            accessibilityLabel="controlled send"
+            accessibilityRole="button"
+            onPress={() => props.onSend('Controlled route message', 'reply-message', ['user-mentioned'])}
+          />
+        </ReactNative.View>
+      );
+    },
+  };
+});
+
+jest.mock('@/features/chat/conversation-details', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    ConversationDetails: (props: Record<string, any>) => {
+      mockConversationDetailsProps = props;
+      return <ReactNative.Text>{`controlled-details:${props.conversation.title}`}</ReactNative.Text>;
+    },
+  };
+});
+
+function conversation(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    title: id === 'conversation-primary' ? 'Primary operations' : 'Secondary operations',
+    managementOnly: false,
+    ...overrides,
+  };
+}
+
+function baseWorkspace(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'ready',
+    organizationName: 'Controlled Company',
+    conversations: [
+      conversation('conversation-primary'),
+      conversation('conversation-secondary'),
+      conversation('conversation-management', { title: 'Management review', managementOnly: true }),
+    ],
+    selectedConversationId: 'conversation-primary',
+    messages: {
+      'conversation-primary': [{ id: 'message-primary', body: 'Primary message' }],
+      'conversation-secondary': [{ id: 'message-secondary', body: 'Secondary message' }],
+    },
+    inboxFilter: 'all',
+    inboxSearch: '',
+    discoverableConversations: [{ id: 'conversation-discoverable' }],
+    selectConversation: jest.fn(),
+    setInboxFilter: jest.fn(),
+    setInboxSearch: jest.fn(),
+    requestConversationJoin: jest.fn(async () => true),
+    cancelConversationJoinRequest: jest.fn(async () => true),
+    sendMessage: jest.fn(async () => true),
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  mockWidth = 1280;
+  mockParams = {};
+  mockWorkspace = baseWorkspace();
+  mockConversationListProps = null;
+  mockConversationPaneProps = null;
+  mockConversationDetailsProps = null;
+});
+
+describe('chats index route', () => {
+  test.each([
+    ['loading', [conversation('conversation-primary')]],
+    ['error', [conversation('conversation-primary')]],
+    ['ready', [conversation('conversation-management', { managementOnly: true })]],
+  ])('renders the authoritative workspace state for %s data', async (status, conversations) => {
+    mockWorkspace = baseWorkspace({ status, conversations });
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.getByText('controlled-state:chats')).toBeTruthy();
+    expect(screen.queryByTestId('controlled-conversation-list')).toBeNull();
+
+    await view.unmount();
+  });
+
+  test('wires the desktop three-panel experience to workspace commands', async () => {
+    mockWidth = 1500;
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.getByText('desktop-list')).toBeTruthy();
+    expect(screen.getByText('Primary operations')).toBeTruthy();
+    expect(screen.getByText('controlled-details:Primary operations')).toBeTruthy();
+    expect(mockConversationDetailsProps?.conversation.id).toBe('conversation-primary');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled select conversation' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({
+      pathname: '/conversation/[id]',
+    }));
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
+
+    await act(async () => {
+      mockConversationListProps?.onFilterChange('unread');
+      mockConversationListProps?.onSearchChange('north line');
+      await mockConversationListProps?.onRequestJoin('conversation-discoverable');
+      await mockConversationListProps?.onCancelJoin('request-controlled');
+    });
+    expect(mockWorkspace.setInboxFilter).toHaveBeenCalledWith('unread');
+    expect(mockWorkspace.setInboxSearch).toHaveBeenCalledWith('north line');
+    expect(mockWorkspace.requestConversationJoin).toHaveBeenCalledWith('conversation-discoverable');
+    expect(mockWorkspace.cancelConversationJoinRequest).toHaveBeenCalledWith('request-controlled');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled send' }));
+    expect(mockWorkspace.sendMessage).toHaveBeenCalledWith(
+      'conversation-primary',
+      'Controlled route message',
+      'reply-message',
+      ['user-mentioned'],
+    );
+
+    await view.unmount();
+  });
+
+  test('removes management-only selection from the ordinary inbox and omits narrow desktop details', async () => {
+    mockWidth = 1000;
+    mockWorkspace = baseWorkspace({ selectedConversationId: 'conversation-management' });
+    const view = await render(<ChatsScreen />);
+
+    await waitFor(() => expect(mockWorkspace.selectConversation).toHaveBeenCalledWith(
+      'conversation-primary',
+    ));
+    expect(screen.getByText('Management review')).toBeTruthy();
+    expect(screen.queryByText('controlled-details:Management review')).toBeNull();
+
+    await view.unmount();
+  });
+
+  test('routes mobile selection to the focused conversation route and handles missing selection', async () => {
+    mockWidth = 390;
+    mockWorkspace = baseWorkspace({ selectedConversationId: 'conversation-not-present' });
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.getByText('mobile-list')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled select conversation' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary' },
+    });
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.compose' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
+
+    await view.unmount();
+  });
+});
+
+describe('focused conversation route', () => {
+  test('selects the URL conversation and wires focus, back, messages, and send behavior', async () => {
+    mockParams = { id: 'conversation-secondary', messageId: 'message-secondary' };
+    const view = await render(<ConversationScreen />);
+
+    await waitFor(() => expect(mockWorkspace.selectConversation).toHaveBeenCalledWith(
+      'conversation-secondary',
+    ));
+    expect(screen.getByText('Secondary operations')).toBeTruthy();
+    expect(screen.getByText('mobile-pane')).toBeTruthy();
+    expect(mockConversationPaneProps?.focusMessageId).toBe('message-secondary');
+    expect(mockConversationPaneProps?.messages).toEqual([
+      { id: 'message-secondary', body: 'Secondary message' },
+    ]);
+    expect(screen.getByTestId('controlled-app-scaffold').props['data-hide-mobile-tabs']).toBe(true);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled conversation back' }));
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled send' }));
+    expect(mockWorkspace.sendMessage).toHaveBeenCalledWith(
+      'conversation-secondary',
+      'Controlled route message',
+      'reply-message',
+      ['user-mentioned'],
+    );
+
+    await view.unmount();
+  });
+
+  test.each(['loading', 'error'])('renders workspace status instead of a pane while %s', async (status) => {
+    mockParams = { id: 'conversation-primary' };
+    mockWorkspace = baseWorkspace({ status });
+    const view = await render(<ConversationScreen />);
+
+    expect(screen.getByText('controlled-state:chats')).toBeTruthy();
+    expect(screen.queryByTestId('controlled-conversation-pane')).toBeNull();
+
+    await view.unmount();
+  });
+
+  test('renders a safe empty pane when route identity and authoritative data are absent', async () => {
+    mockParams = {};
+    mockWorkspace = baseWorkspace({ conversations: [], messages: {} });
+    const view = await render(<ConversationScreen />);
+
+    expect(screen.getByText('no-conversation')).toBeTruthy();
+    expect(mockConversationPaneProps?.messages).toEqual([]);
+    expect(mockWorkspace.selectConversation).not.toHaveBeenCalled();
+
+    await view.unmount();
+  });
+});

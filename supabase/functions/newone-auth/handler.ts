@@ -208,8 +208,15 @@ export interface AuthDependencies {
 }
 
 function authIdentity(user: Record<string, unknown>): AuthIdentity {
-  const email = user.email === null || user.email === undefined ? null : parseEmail(user.email);
-  const phone = user.phone === null || user.phone === undefined ? null : parsePhone(user.phone);
+  // GoTrue serializes the unused identity field as an empty string for some
+  // hosted email/phone users. Treat only that exact wire value as absent;
+  // malformed non-empty identities must still fail validation.
+  const email = user.email === null || user.email === undefined || user.email === ''
+    ? null
+    : parseEmail(user.email);
+  const phone = user.phone === null || user.phone === undefined || user.phone === ''
+    ? null
+    : parsePhone(user.phone);
   if (email === null && phone === null) throw new ApiError(401, 'unauthorized');
   return {
     destinationType: email === null ? 'phone' : 'email',

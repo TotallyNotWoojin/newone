@@ -76,7 +76,6 @@ export default function SettingsScreen() {
   const devicePreferences = workspace.deviceNotificationPreferences;
 
   const loadMfa = useCallback(async () => {
-    if (auth.demoMode) return;
     if (Platform.OS === 'web') {
       setMfaLoading(true);
       try {
@@ -118,7 +117,7 @@ export default function SettingsScreen() {
     );
     setMfaLevel(levelResult.data.currentLevel === 'aal2' ? 'aal2' : 'aal1');
     setMfaError('');
-  }, [auth.demoMode, t]);
+  }, [t]);
 
   useEffect(() => {
     const timeout = setTimeout(() => void loadMfa(), 0);
@@ -270,6 +269,14 @@ export default function SettingsScreen() {
     'communications.publish', 'reports.investigate', 'reports.assign', 'audit.read',
   ].includes(capability));
 
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <ActivityIndicator color={colors.mintDark} style={styles.loadingScreen} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
@@ -282,13 +289,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-        {auth.demoMode ? (
-          <View style={styles.demoNotice}>
-            <Ionicons name="flask-outline" size={17} color={colors.amber} />
-            <Text style={styles.demoNoticeText}>{t('settings.demoNotice')}</Text>
-          </View>
-        ) : null}
-
         <View style={[styles.profileCard, compact && styles.profileCardCompact, shadow]}>
           <Avatar
             color={currentUser.avatarColor}
@@ -405,7 +405,6 @@ export default function SettingsScreen() {
                   <FormField
                     label={t('settings.quietStart')}
                     onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursStart: value || null } : current)}
-                    placeholder="22:00"
                     value={preferenceDraft.quietHoursStart?.slice(0, 5) ?? ''}
                   />
                 </View>
@@ -413,7 +412,6 @@ export default function SettingsScreen() {
                   <FormField
                     label={t('settings.quietEnd')}
                     onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursEnd: value || null } : current)}
-                    placeholder="06:00"
                     value={preferenceDraft.quietHoursEnd?.slice(0, 5) ?? ''}
                   />
                 </View>
@@ -472,8 +470,8 @@ export default function SettingsScreen() {
                 <Text style={styles.rowLabel}>{t('settings.deviceNotifications')}</Text>
                 <Text style={styles.rowNote}>{t('settings.deviceNotificationsNote')}</Text>
               </View>
-              {Platform.OS === 'web' || auth.demoMode ? (
-                <StatusBadge label={auth.demoMode ? t('settings.demoOnly') : t('settings.nativeOnly')} />
+              {Platform.OS === 'web' ? (
+                <StatusBadge label={t('settings.nativeOnly')} />
               ) : devicePreferences ? (
                 <StatusBadge
                   icon="phone-portrait-outline"
@@ -594,7 +592,7 @@ export default function SettingsScreen() {
                   />
                 </View>
               </>
-            ) : Platform.OS !== 'web' && !auth.demoMode ? (
+            ) : Platform.OS !== 'web' ? (
               <Text style={styles.rowNote}>{t('settings.devicePreferencesUnavailable')}</Text>
             ) : null}
           </View>
@@ -623,15 +621,13 @@ export default function SettingsScreen() {
                     : t('settings.mfaNotEnrolled')}
               </Text>
             </View>
-            {!auth.demoMode ? (
-              <PrimaryButton
-                icon={verifiedFactor ? 'key-outline' : 'add-circle-outline'}
-                label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
-                loading={mfaLoading}
-                onPress={() => void openMfa()}
-                tone={verifiedFactor ? 'dark' : privileged ? 'danger' : 'light'}
-              />
-            ) : <StatusBadge label={t('settings.demoOnly')} tone="neutral" />}
+            <PrimaryButton
+              icon={verifiedFactor ? 'key-outline' : 'add-circle-outline'}
+              label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
+              loading={mfaLoading}
+              onPress={() => void openMfa()}
+              tone={verifiedFactor ? 'dark' : privileged ? 'danger' : 'light'}
+            />
           </View>
           {privileged && !verifiedFactor ? (
             <View style={styles.warningRow}>
@@ -644,7 +640,6 @@ export default function SettingsScreen() {
 
         <SelfRecoveryRequest
           accessToken={auth.session?.access_token ?? null}
-          demoMode={auth.demoMode}
           organizationId={workspace.organizationId}
         />
 
@@ -722,7 +717,7 @@ export default function SettingsScreen() {
         />
         <PrimaryButton
           icon="log-out-outline"
-          label={auth.demoMode ? t('settings.demoSignOut') : t('settings.signOut')}
+          label={t('settings.signOut')}
           onPress={async () => {
             await auth.signOut();
             router.replace('/sign-in');
@@ -752,7 +747,6 @@ export default function SettingsScreen() {
           keyboardType="number-pad"
           label={t('settings.mfaCodeLabel')}
           onChangeText={setMfaCode}
-          placeholder="000000"
           value={mfaCode}
         />
         <ActionError message={mfaError} />
@@ -850,14 +844,13 @@ function PreferenceSwitch({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
+  loadingScreen: { flex: 1 },
   header: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, backgroundColor: colors.paper },
   headerCopy: { flex: 1, minWidth: 0 },
   headerTitle: { color: colors.ink, fontFamily: type.display, fontSize: 18, fontWeight: '900', textAlign: 'center' },
   headerSubtitle: { color: colors.inkSubtle, fontSize: 10, textAlign: 'center', marginTop: 2 },
   headerSpacer: { width: 40 },
   page: { width: '100%', maxWidth: 800, alignSelf: 'center', gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xxxl },
-  demoNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.amberSoft },
-  demoNoticeText: { flex: 1, color: colors.amber, fontSize: 11, lineHeight: 17, fontWeight: '700' },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
   profileCardCompact: { alignItems: 'flex-start', flexDirection: 'column' },
   profileCopy: { flex: 1, minWidth: 0, maxWidth: '100%' },

@@ -68,6 +68,7 @@ export class ApiError extends Error {
 
 interface DatabaseErrorLike {
   code?: string;
+  message?: string;
   status?: number;
 }
 
@@ -91,6 +92,10 @@ export function fromDatabaseError(error: unknown): ApiError {
     case 'PGRST202':
     case '42883':
       return new ApiError(503, 'dependency_unavailable', undefined, 5);
+    case '55000':
+      return value.message === 'idempotency key is unavailable'
+        ? new ApiError(409, 'idempotency_conflict')
+        : new ApiError(503, 'dependency_unavailable', undefined, 5);
     default:
       if (value.status === 401) return new ApiError(401, 'unauthorized');
       if (value.status === 403) return new ApiError(403, 'forbidden');

@@ -29,7 +29,6 @@ interface Props {
   accessToken: string | null;
   assuranceLevel: 'aal1' | 'aal2' | null;
   currentUserId: string;
-  demoMode: boolean;
   onVerifyNow: () => void;
   organizationId: string;
   people: Pick<Person, 'id' | 'displayName' | 'suspended'>[];
@@ -51,156 +50,10 @@ const ALL_STATUSES: ModerationCaseStatus[] = [
   'dismissed',
 ];
 
-const DEMO_INVESTIGATOR_ID = '55555555-5555-4555-8555-555555555555';
-
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function demoCases(currentUserId: string, investigatorIds: string[]): ModerationCaseListItem[] {
-  const now = Date.now();
-  const otherInvestigator = investigatorIds.find((id) => id !== currentUserId)
-    ?? DEMO_INVESTIGATOR_ID;
-  return [
-    {
-      caseId: '11111111-1111-4111-8111-111111111111',
-      status: 'open',
-      category: 'harassment',
-      target: { type: 'message', label: 'Reported participant' },
-      unitId: null,
-      reportedAt: new Date(now - 38 * 60_000).toISOString(),
-      updatedAt: new Date(now - 38 * 60_000).toISOString(),
-      recordVersion: 1,
-      assignedAt: null,
-      assignedToMe: false,
-      assignedInvestigatorUserId: null,
-      canClaim: true,
-      canAssign: true,
-      canViewEvidence: false,
-      readOnly: false,
-      eligibleInvestigatorUserIds: [currentUserId, otherInvestigator],
-    },
-    {
-      caseId: '22222222-2222-4222-8222-222222222222',
-      status: 'in_review',
-      category: 'threat',
-      target: { type: 'group', label: 'Night shift safety' },
-      unitId: null,
-      reportedAt: new Date(now - 4 * 60 * 60_000).toISOString(),
-      updatedAt: new Date(now - 55 * 60_000).toISOString(),
-      recordVersion: 3,
-      assignedAt: new Date(now - 2 * 60 * 60_000).toISOString(),
-      assignedToMe: true,
-      assignedInvestigatorUserId: currentUserId,
-      canClaim: false,
-      canAssign: false,
-      canViewEvidence: true,
-      readOnly: false,
-      eligibleInvestigatorUserIds: [],
-    },
-    {
-      caseId: '33333333-3333-4333-8333-333333333333',
-      status: 'resolved',
-      category: 'privacy',
-      target: { type: 'member', label: 'Known workplace member' },
-      unitId: null,
-      reportedAt: new Date(now - 30 * 60 * 60_000).toISOString(),
-      updatedAt: new Date(now - 22 * 60 * 60_000).toISOString(),
-      recordVersion: 4,
-      assignedAt: new Date(now - 28 * 60 * 60_000).toISOString(),
-      assignedToMe: true,
-      assignedInvestigatorUserId: currentUserId,
-      canClaim: false,
-      canAssign: false,
-      canViewEvidence: true,
-      readOnly: true,
-      eligibleInvestigatorUserIds: [],
-    },
-  ];
-}
-
-function demoDetail(item: ModerationCaseListItem): ModerationCaseDetail | null {
-  if (item.status === 'open' || !item.assignedAt) return null;
-  const reportedAt = item.reportedAt;
-  return {
-    caseId: item.caseId,
-    status: item.status,
-    category: item.category,
-    target: item.target,
-    details: 'Reporter-provided operational detail is visible only after assignment.',
-    reporterLabel: 'protected',
-    reportedAt,
-    updatedAt: item.updatedAt,
-    assignedAt: item.assignedAt,
-    recordVersion: item.recordVersion,
-    readOnly: item.readOnly,
-    evidence: item.target.type === 'message' ? [
-      {
-        evidenceId: 1,
-        relationship: 'context_before',
-        relativePosition: -1,
-        messageKind: 'text',
-        messageBody: 'This local example represents one explicitly shared context message.',
-        senderLabel: 'Conversation participant',
-        sentAt: new Date(Date.parse(reportedAt) - 60_000).toISOString(),
-        bodySha256: '1'.repeat(64),
-      },
-      {
-        evidenceId: 2,
-        relationship: 'reported',
-        relativePosition: 0,
-        messageKind: 'text',
-        messageBody: 'This is synthetic demo evidence, not a real workplace message.',
-        senderLabel: 'Reported participant',
-        sentAt: reportedAt,
-        bodySha256: '2'.repeat(64),
-      },
-    ] : [],
-    history: [
-      {
-        eventId: 1,
-        eventType: 'reported',
-        fromStatus: null,
-        toStatus: 'open',
-        reason: null,
-        evidenceMetadata: {},
-        actorLabel: 'protected_reporter',
-        occurredAt: reportedAt,
-      },
-      {
-        eventId: 2,
-        eventType: 'claimed',
-        fromStatus: 'open',
-        toStatus: 'assigned',
-        reason: 'Synthetic scoped claim for UI demonstration.',
-        evidenceMetadata: {},
-        actorLabel: 'assigned_investigator',
-        occurredAt: item.assignedAt,
-      },
-      ...(item.status === 'in_review' || item.readOnly ? [{
-        eventId: 3,
-        eventType: 'review_started' as const,
-        fromStatus: 'assigned' as const,
-        toStatus: 'in_review' as const,
-        reason: 'Synthetic review start.',
-        evidenceMetadata: {},
-        actorLabel: 'assigned_investigator' as const,
-        occurredAt: item.updatedAt,
-      }] : []),
-      ...(item.readOnly ? [{
-        eventId: 4,
-        eventType: item.status === 'dismissed' ? 'dismissed' as const : 'resolved' as const,
-        fromStatus: 'in_review' as const,
-        toStatus: item.status === 'dismissed' ? 'dismissed' as const : 'resolved' as const,
-        reason: 'Synthetic closure reason.',
-        evidenceMetadata: { policyCode: 'DEMO.1', severity: 'medium' as const },
-        actorLabel: 'assigned_investigator' as const,
-        occurredAt: item.updatedAt,
-      }] : []),
-    ],
-  };
 }
 
 function caseReference(caseId: string): string {
@@ -219,7 +72,6 @@ export function ModerationCaseSection({
   accessToken,
   assuranceLevel,
   currentUserId,
-  demoMode,
   onVerifyNow,
   organizationId,
   people,
@@ -233,9 +85,7 @@ export function ModerationCaseSection({
     [accessToken],
   );
   const activePeople = useMemo(() => people.filter((person) => !person.suspended), [people]);
-  const [cases, setCases] = useState<ModerationCaseListItem[]>(() =>
-    demoMode ? demoCases(currentUserId, activePeople.map((person) => person.id)) : []
-  );
+  const [cases, setCases] = useState<ModerationCaseListItem[]>([]);
   const [filter, setFilter] = useState<CaseFilter>('active');
   const [loading, setLoading] = useState(false);
   const [sectionError, setSectionError] = useState('');
@@ -250,7 +100,7 @@ export function ModerationCaseSection({
   const [referenceText, setReferenceText] = useState('');
   const [policyCode, setPolicyCode] = useState('');
   const [severity, setSeverity] = useState<ModerationEvidenceMetadata['severity']>();
-  const managerReady = demoMode || assuranceLevel === 'aal2';
+  const managerReady = assuranceLevel === 'aal2';
 
   const dateTime = useCallback((value: string) => {
     try {
@@ -273,13 +123,13 @@ export function ModerationCaseSection({
     if (error.status === 409 || ['conflict', 'version_conflict'].includes(error.code)) {
       return copy.errorConflict;
     }
-    if (error.code.startsWith('invalid_')) return copy.errorInput;
     if (['invalid_response', 'response_too_large'].includes(error.code)) return copy.errorResponse;
+    if (error.code.startsWith('invalid_')) return copy.errorInput;
     return copy.errorGeneric;
   }, [copy]);
 
   const loadCases = useCallback(async () => {
-    if (!managerReady || demoMode) return;
+    if (!managerReady) return;
     setLoading(true);
     setSectionError('');
     try {
@@ -294,22 +144,22 @@ export function ModerationCaseSection({
     } finally {
       setLoading(false);
     }
-  }, [demoMode, errorMessage, managerReady, organizationId, repository]);
+  }, [errorMessage, managerReady, organizationId, repository]);
 
   useEffect(() => {
-    if (!managerReady || demoMode) return;
+    if (!managerReady) return;
     const timeout = setTimeout(() => void loadCases(), 0);
     const interval = setInterval(() => void loadCases(), 60_000);
     return () => {
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [demoMode, loadCases, managerReady]);
+  }, [loadCases, managerReady]);
 
   useEffect(() => {
     const client = getRealtimeClient();
     if (
-      demoMode || assuranceLevel !== 'aal2' || !accessToken || !client ||
+      assuranceLevel !== 'aal2' || !accessToken || !client ||
       !organizationId || !currentUserId
     ) return;
     let active = true;
@@ -339,7 +189,7 @@ export function ModerationCaseSection({
       active = false;
       if (channel) void client.removeChannel(channel);
     };
-  }, [accessToken, assuranceLevel, currentUserId, demoMode, loadCases, organizationId]);
+  }, [accessToken, assuranceLevel, currentUserId, loadCases, organizationId]);
 
   const visibleCases = useMemo(() => cases.filter((item) => {
     if (filter === 'active') return ['open', 'assigned', 'in_review'].includes(item.status);
@@ -394,7 +244,7 @@ export function ModerationCaseSection({
     setDetailLoading(true);
     setSectionError('');
     try {
-      const next = demoMode ? demoDetail(item) : await repository.readCase({
+      const next = await repository.readCase({
         organizationId,
         caseId: item.caseId,
       });
@@ -404,28 +254,6 @@ export function ModerationCaseSection({
     } finally {
       setDetailLoading(false);
     }
-  };
-
-  const mutateDemo = (nextStatus: ModerationCaseStatus, assignedUserId?: string) => {
-    if (!action) return;
-    const now = new Date().toISOString();
-    setCases((current) => current.map((item) => {
-      if (item.caseId !== action.item.caseId) return item;
-      const assignee = assignedUserId ?? item.assignedInvestigatorUserId;
-      return {
-        ...item,
-        status: nextStatus,
-        updatedAt: now,
-        assignedAt: item.assignedAt ?? (nextStatus === 'assigned' ? now : null),
-        assignedInvestigatorUserId: assignee,
-        assignedToMe: assignee === currentUserId,
-        canClaim: false,
-        canAssign: nextStatus === 'assigned' && assignee !== currentUserId,
-        canViewEvidence: assignee === currentUserId,
-        readOnly: nextStatus === 'resolved' || nextStatus === 'dismissed',
-        recordVersion: item.recordVersion + 1,
-      };
-    }));
   };
 
   const submitAction = async () => {
@@ -444,12 +272,7 @@ export function ModerationCaseSection({
     setActionBusy(true);
     setActionError('');
     try {
-      if (demoMode) {
-        if (action.kind === 'assign') mutateDemo('assigned', investigatorId);
-        else if (action.kind === 'claim') mutateDemo('assigned', currentUserId);
-        else if (action.kind === 'review') mutateDemo('in_review');
-        else mutateDemo(action.kind === 'resolve' ? 'resolved' : 'dismissed');
-      } else if (action.kind === 'assign') {
+      if (action.kind === 'assign') {
         await repository.assignCase({
           organizationId,
           caseId: action.item.caseId,
@@ -485,7 +308,7 @@ export function ModerationCaseSection({
           : action.kind === 'resolve' ? copy.noticeResolved : copy.noticeDismissed);
       setAction(null);
       setDetail(null);
-      if (!demoMode) await loadCases();
+      await loadCases();
     } catch (error) {
       setActionError(errorMessage(error));
     } finally {
@@ -515,7 +338,7 @@ export function ModerationCaseSection({
           <Text style={styles.description}>{copy.description}</Text>
         </View>
         <PrimaryButton
-          disabled={!managerReady || demoMode || loading}
+          disabled={!managerReady || loading}
           icon="refresh-outline"
           label={loading ? copy.refreshing : copy.refresh}
           onPress={() => void loadCases()}
@@ -536,7 +359,7 @@ export function ModerationCaseSection({
             </Text>
             <Text style={styles.boundaryText}>{copy.privacyBoundary}</Text>
           </View>
-          {!managerReady && !demoMode ? (
+          {!managerReady ? (
             <PrimaryButton
               icon="shield-outline"
               label={copy.verifyNow}
@@ -549,12 +372,6 @@ export function ModerationCaseSection({
           <Ionicons name="eye-off-outline" color={colors.blue} size={17} />
           <Text style={styles.noContentText}>{copy.noContentList}</Text>
         </View>
-        {demoMode ? (
-          <View style={styles.demoRow}>
-            <Ionicons name="flask-outline" color={colors.amber} size={17} />
-            <Text style={styles.demoText}>{copy.demoNotice}</Text>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.filters}>
@@ -820,8 +637,6 @@ const styles = StyleSheet.create({
   boundaryText: { color: colors.inkMuted, fontSize: 10, lineHeight: 16, marginTop: 3 },
   noContentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.blueSoft },
   noContentText: { flex: 1, color: colors.blue, fontSize: 10, lineHeight: 16, fontWeight: '700' },
-  demoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, backgroundColor: colors.amberSoft },
-  demoText: { flex: 1, color: colors.amber, fontSize: 10, lineHeight: 16, fontWeight: '700' },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, marginTop: spacing.sm, borderRadius: radii.md, backgroundColor: colors.mintSoft },
   noticeText: { flex: 1, color: colors.mintDark, fontSize: 10, lineHeight: 16, fontWeight: '700' },

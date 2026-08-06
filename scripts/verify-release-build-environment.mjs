@@ -45,8 +45,8 @@ export function verifyReleaseBuildEnvironment(environment = process.env, deploym
   const releaseBuild = environment.NEWONE_RELEASE_BUILD === 'true' || environment.VERCEL === '1';
   if (!releaseBuild) return { releaseBuild: false };
 
-  if (environment.EXPO_PUBLIC_DEMO_MODE !== 'false') {
-    throw new Error('EXPO_PUBLIC_DEMO_MODE must be explicitly false for a hosted release build.');
+  if ('EXPO_PUBLIC_DEMO_MODE' in environment) {
+    throw new Error('EXPO_PUBLIC_DEMO_MODE is forbidden; production has no demo runtime.');
   }
   if (required(environment, 'EXPO_PUBLIC_API_URL') !== '/api') {
     throw new Error('Hosted web releases must use the same-origin /api gateway.');

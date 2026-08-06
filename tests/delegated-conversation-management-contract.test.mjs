@@ -22,7 +22,6 @@ const paths = {
   catalog: 'apps/newone/src/i18n/catalog.ts',
   dynamicSection: 'apps/newone/src/features/admin/dynamic-group-section.tsx',
   dynamicCopy: 'apps/newone/src/features/admin/dynamic-group-copy.ts',
-  e2e: 'tests/e2e/auth.spec.mjs',
 };
 
 const files = Object.fromEntries(await Promise.all(
@@ -199,7 +198,6 @@ test('management-only shells never render as ordinary chat, search, forward, or 
   assert.match(files.chatIndex, /ordinaryConversations\.length === 0/);
   assert.match(files.workspaceState,
     /!workspace\.conversations\.some\([\s\S]{0,100}!conversation\.managementOnly/);
-  assert.match(files.search, /if \(conversation\.managementOnly\) continue/);
   assert.match(files.search, /filter\(\(conversation\) => !conversation\.managementOnly\)/);
   assert.match(files.search, /conversationAuthorizationSignature/);
   assert.match(files.search, /resultsAuthorizationSignature/);
@@ -259,8 +257,6 @@ test('dynamic-group raw enum labels are localized in all three supported locales
   ]) {
     assert.equal((files.dynamicCopy.match(new RegExp(`\\b${key}:`, 'g')) ?? []).length, 3);
   }
-  assert.doesNotMatch(files.e2e, /test\('unit manager can save/);
-  assert.match(files.e2e, /test\('owner demo can save/);
 });
 
 test('new helpers are private and the V9 bootstrap remains service-only', () => {

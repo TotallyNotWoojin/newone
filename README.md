@@ -8,8 +8,8 @@ This repository contains an integrated universal Expo application for iOS, Andro
 
 | Area | Status |
 |---|---|
-| Universal Expo client | Integrated responsive web/iOS/Android source with bounded BFF read and command repositories; fictional fixtures load only when `EXPO_PUBLIC_DEMO_MODE` is exactly `true`, and every checked EAS profile keeps it off |
-| Employee workflows | Chats, People, Updates, Handoffs, Search, settings, offline reconciliation, and scoped administration are backend-wired in source; signed-device and integrated hosted acceptance remain release gates |
+| Universal Expo client | Integrated responsive web/iOS/Android source with bounded BFF read and command repositories; no bundled alternate data repository or runtime switch can substitute fictional client data for the configured backend |
+| Employee workflows | Chats, People, Updates, Handoffs, Search, settings, offline reconciliation, and scoped administration are backend-wired in source; real hosted simulations, signed-device acceptance, and a retained report showing greater than 90% measured coverage remain open release gates |
 | Database | 34 ordered migrations implement forced RLS, checked RPCs, lifecycle authorization, retention, audit, moderation, dynamic groups, and supporting integrity controls; the linked development project is in migration parity |
 | Edge Functions | Nine versioned function packages exist in source. Four fail-closed base functions are deployed to development: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker` |
 | Authentication | The hosted custom access-token hook and session hardening are enabled in development. `newone-auth` remains withheld until a real web domain, Turnstile, and custom SMTP are configured and verified |

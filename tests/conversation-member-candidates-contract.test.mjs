@@ -9,7 +9,6 @@ const paths = {
   edgeTest: 'supabase/functions/tests/conversation_member_candidates_routes_test.ts',
   contracts: 'apps/newone/src/data/repositories/contracts.ts',
   repository: 'apps/newone/src/data/repositories/bff-command-repository.ts',
-  demo: 'apps/newone/src/data/repositories/demo-repository.ts',
 };
 
 const files = Object.fromEntries(await Promise.all(
@@ -127,7 +126,6 @@ test('Edge and repositories expose the exact cursor page without a twelve-result
   assert.match(files.contracts, /Promise<ConversationMemberCandidatePage>/);
   assert.match(files.repository, /parseConversationMemberCandidatePage\(dataValue\(payload\), limit\)/);
   assert.doesNotMatch(files.repository, /listConversationMemberCandidates[\s\S]{0,1200}slice\(0,\s*12\)/);
-  assert.match(files.demo, /listConversationMemberCandidates/);
   assert.match(files.edgeTest, /Array\.from\(\{ length: 13 \}/);
   assert.match(files.edgeTest, /body\.candidates\.length, 13/);
   assert.match(files.edgeTest, /rejects tamper and every bound-field mismatch before RPC/);

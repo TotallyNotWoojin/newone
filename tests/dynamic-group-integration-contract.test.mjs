@@ -9,7 +9,6 @@ const files = Object.fromEntries(await Promise.all(Object.entries({
   routes: 'supabase/functions/newone-api/routes.ts',
   contracts: 'apps/newone/src/data/repositories/contracts.ts',
   repository: 'apps/newone/src/data/repositories/bff-command-repository.ts',
-  demo: 'apps/newone/src/data/repositories/demo-repository.ts',
   workspace: 'apps/newone/src/state/workspace.tsx',
   admin: 'apps/newone/src/app/admin.tsx',
   section: 'apps/newone/src/features/admin/dynamic-group-section.tsx',
@@ -69,15 +68,6 @@ test('repository and workspace preserve strict receipts, versions, and fresh pre
   assert.doesNotMatch(files.offline, /dynamicGroupPolicies|dynamicGroupNextAfterPolicyId/);
 });
 
-test('demo mirrors version conflict, preview expiry, exact publish, and audited pause behavior', () => {
-  assert.match(files.demo, /Demo dynamic-group policy version conflict/);
-  assert.match(files.demo, /existing\.version \+ 1 : 1/);
-  assert.match(files.demo, /validUntil: new Date\(evaluatedAt\.getTime\(\) \+ 5 \* 60_000\)/);
-  assert.match(files.demo, /preview\.previewFingerprint !== input\.previewFingerprint/);
-  assert.match(files.demo, /Date\.parse\(preview\.validUntil\) <= Date\.now\(\)/);
-  assert.match(files.demo, /status: 'paused'/);
-});
-
 test('responsive admin UI covers units, lines, roles, descendants, shifts, preview samples, publish, and pause', () => {
   assert.match(files.admin, /<DynamicGroupSection privilegedReady=\{privilegedReady\}/);
   assert.match(files.section, /testID="dynamic-group-section"/);
@@ -117,5 +107,4 @@ test('dynamic-group reachability is projected separately from conversation admin
   assert.match(files.delegatedMigration, /'management_only', true/);
   assert.match(files.domain, /canManageDynamicGroup\?: boolean/);
   assert.match(files.reader, /canManageDynamicGroup: row\.canManageDynamicGroup === true/);
-  assert.match(files.demo, /canManageDynamicGroup: \['group', 'team', 'shift'\]\.includes\(item\.kind\)/);
 });

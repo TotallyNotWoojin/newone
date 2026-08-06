@@ -96,6 +96,21 @@ function dataValue(value: unknown) {
   return objectValue(root.data ?? root);
 }
 
+function parsePrivateReportResponse(
+  value: unknown,
+  targetType: 'message' | 'group' | 'member',
+) {
+  try {
+    return parsePrivateReportReceipt(value, targetType);
+  } catch {
+    throw new RepositoryError(
+      'The service returned an invalid private report receipt.',
+      'invalid_response',
+      true,
+    );
+  }
+}
+
 function requiredString(value: unknown, label: string) {
   if (typeof value === 'string' && value.length > 0) return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -2279,7 +2294,7 @@ export class BffCommandRepository implements CommandRepository {
         noticeVersion: input.noticeVersion,
       },
     });
-    return parsePrivateReportReceipt(payload, 'message');
+    return parsePrivateReportResponse(payload, 'message');
   }
 
   async reportGroup(input: Parameters<CommandRepository['reportGroup']>[0]) {
@@ -2296,7 +2311,7 @@ export class BffCommandRepository implements CommandRepository {
         },
       },
     );
-    return parsePrivateReportReceipt(payload, 'group');
+    return parsePrivateReportResponse(payload, 'group');
   }
 
   async reportMember(input: Parameters<CommandRepository['reportMember']>[0]) {
@@ -2310,7 +2325,7 @@ export class BffCommandRepository implements CommandRepository {
         noticeVersion: input.noticeVersion,
       },
     });
-    return parsePrivateReportReceipt(payload, 'member');
+    return parsePrivateReportResponse(payload, 'member');
   }
 
   async createAttachmentUploadGrant(

@@ -2,7 +2,7 @@
 
 This is the executable verification contract for the independent Expo/Supabase product. Passing a smaller unit suite never implies that an unrun device, provider, security, or owner-controlled gate passed.
 
-Current status is an implementation checkpoint, not a release. The implementation line includes `d85cdac`, `0ebbf3f`, `799c611`, and the development-evidence reconciliation at `b67cfbe`; the commit containing this record closes the remaining conditional browser-fixture gaps. No production release revision has been assigned. The linked Supabase project is Free development only. See [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for the evidence ledger and its historical, explicitly superseded rows.
+Current status is an implementation checkpoint, not a release. The implementation line includes `d85cdac`, `0ebbf3f`, `799c611`, and the development-evidence reconciliation at `b67cfbe`. The former fictional-data browser workflow suite has been retired, and its historical pass count is withdrawn as acceptance evidence. No production release revision has been assigned. The linked Supabase project is Free development only. See [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) for the evidence ledger and its historical, explicitly superseded rows.
 
 ## 1. Fast local checks
 
@@ -23,18 +23,21 @@ npm run docs:check
 
 Run every Node/npm command with the pinned Node 22.13.0 toolchain. These checks must cover Expo dependency alignment, lint, TypeScript, static web export, iOS and Android source/bundle exports, production dependency vulnerabilities, tracked-secret invariants, Edge/SQL RPC drift, and the exact OpenRouter ZDR route policy.
 
-The August 4 implementation checkpoint observed the following results. They are useful regression baselines, but each must be reproduced from one clean checkout of the immutable candidate before release:
+The August 5 working-tree checkpoint observed the following results. They are useful regression baselines, but each must be reproduced from one clean checkout of the immutable candidate and retained with that revision before release:
 
 | Area | Preliminary observation | Release meaning |
 |---|---|---|
-| Node | 245/245 contract tests passed | Candidate rerun open |
-| Deno | Edge type-check passed and 194/194 tests passed | Candidate rerun open |
-| Database | 34 migrations; clean reset; 976/976 pgTAP; zero strict-lint findings | Candidate rerun open |
-| Edge/RPC contract | 156 called RPC names checked against 551 SQL function definitions | Drift coverage only; candidate rerun open |
-| Expo exports | Web, iOS, and Android export checks passed | Source/bundle proof only, not signed binaries |
-| Playwright | 46/46 passed with zero skips across desktop Chromium and Pixel 7 mobile Chromium | Skip-free demo/browser proof; approved browser/native matrix and live-backend integration remain open |
+| Shared runtime/API | 272/272 tests passed; all 25 production `.mjs` modules measured 99.58% lines, 97.51% branches, and 100% functions | Global working-tree gate passed; machine-readable retention and candidate rerun open |
+| Universal client | 49/49 suites and 617/617 tests passed; all 83 eligible production files measured 96.05% statements, 91.31% branches, 96.90% functions, and 97.27% lines | Global working-tree gate passed; per-file threshold and release acceptance are not claimed |
+| Edge | Type-check and 257/257 tests passed; all 32 production TypeScript files and nine real entrypoints measured 92.84% lines, 91.36% branches, and 98.61% functions | Global working-tree gate passed; candidate rerun open |
+| Database | 37 migrations; clean reset; 29 pgTAP files and 1,000/1,000 assertions; zero strict-lint findings | Candidate rerun open |
+| Edge/RPC contract | Current name-and-shape drift check passed | Drift coverage only; candidate rerun open |
+| Expo exports and fixture scan | Web, iOS, and Android export checks passed; 211 client, API, Edge, configuration, migration, and seed inputs plus 29 bundled text artifacts contained none of the forbidden runtime-fixture markers | Source/bundle proof only, not signed binaries or a repository-wide semantic proof |
+| Playwright static surface | 6/6 unauthenticated sign-in rendering and client-side validation checks passed across desktop Chromium and Pixel 7 mobile Chromium on the current working tree | Static UI regression only; not hosted Auth, employee workflow, or acceptance proof |
+| Hosted core-backend simulation | Artifact `newone-e2e-20260805t073237z-bbb833d0` passed 18 real hosted Auth/API/database/private-Realtime steps and completed guarded cleanup | Core development evidence only; deployed-web, provider, authenticated browser, and signed-device matrices remain open |
+| Measured coverage | Shared runtime/API, universal-client, and Edge global reports exceeded 90% for every metric their tools measure; complete production-file inventory checks passed for the 83 client and 32 Edge files | Reports are gitignored working-tree evidence; retain them and rerun on the immutable candidate |
 | AI | Paid synthetic evaluation passed 20/20 and production-adapter smoke passed; employee-data egress remained false | Human Korean-Spanish approval and candidate rerun open |
-| Linked development | 34-migration parity; zero security and zero performance advisor warnings; four active base functions; canary status contract observed; hosted Auth hardening and Postgres SSL enabled | Development evidence only, not staging or production acceptance |
+| Linked development | 37-migration parity; six active functions; hosted core artifact passed; fresh dry-run reported six active functions and zero existing organizations/users; hosted Auth hardening and Postgres SSL enabled | Development evidence only, not staging or production acceptance |
 
 ## 2. Database and authorization
 
@@ -47,7 +50,7 @@ npm run backend:types:check
 npm run edge-db:contract:check
 ```
 
-At the current preliminary checkpoint, local and linked development migration histories were in parity at 34, the local suite passed 976/976 pgTAP assertions, strict lint returned zero findings, and the remote development advisors returned zero security warnings and zero performance warnings. PostgreSQL SSL enforcement is enabled and post-reboot database readiness returned `200`. Database network restrictions remain open until stable developer and CI egress addresses are selected. Repeat all local and remote checks after the candidate migration plan is frozen; none of these development observations is production acceptance.
+At the current preliminary checkpoint, local and linked development migration histories were in parity at 37. The clean local reset ran 29 pgTAP files and passed 1,000/1,000 assertions; strict lint returned zero findings. The earlier remote-development advisor observation reported zero security warnings and zero performance warnings. PostgreSQL SSL enforcement is enabled. Database network restrictions remain open until stable developer and CI egress addresses are selected. Repeat all local and remote checks after the candidate migration plan is frozen; none of these development observations is production acceptance.
 
 Required denial/concurrency cases include:
 
@@ -101,7 +104,7 @@ Gateway JWT verification is intentionally disabled for the versioned functions b
 
 The transport contract must reject ordinary insecure HTTP and spoofed forwarding headers. An internal Supabase `http:` hop may be treated as secure only when `x-forwarded-proto` is exactly `https` and the request host exactly matches the canonical host injected through `SUPABASE_URL`. CORS must allow only an exact configured web origin and the required `GET, POST, PUT, PATCH, DELETE, OPTIONS` methods. Worker functions must reject browser origins and cookie authentication.
 
-The linked Free development project currently has only these four active base functions: `newone-api`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. The observed live canary contract was:
+The linked Free development project currently has six active functions: `newone-api`, `newone-auth`, `newone-bootstrap`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. The observed live canary contract was:
 
 | Probe class | Required status |
 |---|---|
@@ -111,13 +114,13 @@ The linked Free development project currently has only these four active base fu
 | Readiness route when the required readiness secret is absent | `404` |
 | Preflight from the exact allowed origin | `204` |
 
-Post-SSL-reboot health and database readiness also returned `200`. For a release candidate, repeat the matrix against the exact deployed function versions and retain redacted request/response metadata. Then exercise authenticated route-to-RPC behavior, outbox claims, maintenance claims, idempotency, and dependency failure. A status-only canary does not prove those integrations or any of the five withheld source functions.
+Post-SSL-reboot health and database readiness also returned `200`. The August 5 hosted core artifact additionally exercised exact deployed `newone-api`, `newone-auth`, `newone-bootstrap`, and `newone-read` versions through 18 real Auth/API/database/private-Realtime steps and guarded cleanup. A fresh dry-run then reported six active functions and zero existing organizations/users. For a release candidate, repeat the matrix against the exact deployed versions and retain redacted request/response metadata. The hosted core run does not prove provider-backed AI, attachment scanning, or push receipts; those three source workers remain withheld.
 
 ## 4. Auth lifecycle
 
 Run against isolated local and remote development users:
 
-The current hosted development observation is limited but positive: the custom access-token hook and session hardening are enabled, and public plus anonymous signup are closed. `newone-auth` remains intentionally withheld. A real domain and redirect set, production Turnstile site/secret and hostname proof, custom SMTP or approved Auth email delivery, synthetic enrollment/recovery delivery, and final rate-limit review remain external release gates.
+The current hosted development observation is limited but positive: the custom access-token hook and session hardening are enabled, and public plus anonymous signup are closed. `newone-auth` is deployed and the hosted core artifact passed real password sessions, installation binding, AAL1 privileged denial, TOTP/AAL2, one-time invitation redemption, replay denial, and rate-limit exhaustion. A real domain and redirect set, production Turnstile site/secret and hostname proof, custom SMTP or approved Auth email delivery, synthetic recovery delivery, and final production rate-limit review remain external release gates.
 
 1. Unknown users cannot create or join a workspace.
 2. An issued invitation is bound, verified, expiring, revocable, and one-time.
@@ -164,7 +167,7 @@ No client directly chooses an organization/conversation object path. No pending/
 
 ## 8. AI and bilingual evaluation
 
-Without a key or approval, messaging succeeds and every AI command fails/queues safely without egress. With the dedicated test key and synthetic fixture only:
+Without a key or approval, messaging succeeds and every AI command fails/queues safely without egress. With the dedicated test key and approved synthetic evaluation dataset only:
 
 ```bash
 source .env.openrouter.local
@@ -182,13 +185,15 @@ A qualified Korean-Spanish review remains mandatory. Blind reviewers score seman
 
 ## 9. Product, web, native, and accessibility
 
-The current Playwright configuration runs desktop Chromium at 1440x1000 and mobile Chromium using the Pixel 7 profile. It exercises the independent Auth surface, invitations, dynamic groups, primary navigation, messaging, multilingual display, contacts, search, updates, handoffs, settings, attachment gating, offline entitlement, source navigation, and automated axe checks. The observed run passed 46/46 tests with zero skips. Incoming handoff acknowledgement now uses an explicitly eligible synthetic incoming handoff, and private moderation reporting uses a dedicated incoming synthetic message with a production-shaped authoritative server ID. The tests retain the real permission, authoritative-ID, exact-version, context-scope, and explicit-consent gates; they do not add a demo-mode authorization bypass or a local-ID fallback.
+The retained Playwright checks cover only the exported, unauthenticated sign-in surface in desktop Chromium and the Pixel 7 Chromium profile. They verify visible modes and fail-closed client validation without signing in or exercising a hosted API. They are useful static UI regressions, but they do not prove Auth delivery, authorization, employee workflows, accessibility of authenticated screens, persistence, Realtime, or backend integration.
 
-This is skip-free browser/demo proof, not live-backend or native-device integration proof. Release acceptance also requires the approved browser matrix; current evidence does not cover a tablet project, Firefox, WebKit/Safari, or a native renderer. Desktop and Pixel 7 browser screenshots have been reviewed, while those additional visual targets remain open.
+The formerly recorded 46-pass browser result depended on an in-client fictional data repository and is withdrawn as acceptance evidence. No current authenticated browser workflow pass is claimed. The real hosted core-backend artifact exercised invitation, contact, direct/group messaging, multilingual persistence, private Realtime, idempotency, rate limiting, and denial cases through actual hosted services, but it did not drive the Expo UI. Authenticated real-hosted simulations must still exercise dynamic groups, primary navigation, search, updates, handoffs, settings, attachment gating, offline entitlement, source navigation, denial cases, and accessibility across the approved browser/device matrix.
 
-Deterministic Expo web, iOS, and Android exports passed at the implementation checkpoint. The iOS and Android results are source/Hermes bundle evidence only. They do not replace EAS-signed binaries, install/launch checks, deep/app-link verification, notification-open behavior, store review, or tests on physical iOS and Android devices.
+Post-cleanup coverage reports now exist for the agreed working-tree scope. Shared runtime/API measured 99.58% lines, 97.51% branches, and 100% functions; all 83 eligible client files measured 96.05% statements, 91.31% branches, 96.90% functions, and 97.27% lines; all 32 Edge TypeScript files plus nine real entrypoints measured 92.84% lines, 91.36% branches, and 98.61% functions. These are global thresholds, not a claim that every individual file exceeds 90%. The reports are gitignored and must be retained with the immutable revision and environment after the candidate rerun.
 
-One additional simulator/demo observation was recorded on August 4, 2026: Expo Go 57.0.6 bundled the app successfully on a booted iPhone 17 Pro simulator running iOS 26.5, rendered Newone's branded secure-access screen, emitted only the expected `expo-notifications` Expo Go limitation warnings, and showed no runtime error during that launch. This is not a signed development build, physical-device result, TestFlight build, or App Store acceptance, and it does not satisfy the native workflow matrix below.
+Deterministic Expo web, iOS, and Android exports passed at the August 5 working-tree checkpoint, and the production-fixture scanner found no forbidden runtime-fixture markers in 211 client, API, Edge, configuration, migration, and seed inputs plus 29 inspectable bundled text artifacts. The iOS and Android results are source/Hermes bundle evidence only. They do not replace EAS-signed binaries, install/launch checks, deep/app-link verification, notification-open behavior, store review, or tests on physical iOS and Android devices.
+
+One additional simulator launch observation was recorded on August 4, 2026: Expo Go 57.0.6 bundled the app successfully on a booted iPhone 17 Pro simulator running iOS 26.5, rendered Newone's branded secure-access screen, emitted only the expected `expo-notifications` Expo Go limitation warnings, and showed no runtime error during that launch. This is not a signed development build, physical-device result, TestFlight build, App Store acceptance, or workflow evidence, and it does not satisfy the native workflow matrix below.
 
 Manual and automated accessibility checks cover:
 
@@ -223,4 +228,4 @@ Zero development database advisor warnings does not replace the independent secu
 
 Every result records date, environment, commit, runner/device/browser, relevant policy version, artifact/report link, owner, and reviewer. `Not run`, `blocked`, `requires credentials`, and `requires owner approval` are valid truthful states. They are never converted into `pass` because adjacent tests succeeded.
 
-Development observations must also record the project/environment classification, migration parity, function names plus versions/digests, Auth configuration state, database transport/network settings, advisor results, and redacted canary metadata. The present 34-migration/four-function Free-project snapshot may be cited only as development evidence tied to the August 4 implementation checkpoints. A final release requires a single clean immutable-candidate rerun, retained artifacts, skip-free required workflows, exact web/native deployment identifiers, rollback/restore proof, and named human approvals. Nothing in this plan currently claims a production release.
+Development observations must also record the project/environment classification, migration parity, function names plus versions/digests, Auth configuration state, database transport/network settings, advisor results, and redacted canary metadata. The present 37-migration/six-function Free-project snapshot and hosted core artifact may be cited only as August 5 development evidence. Global working-tree coverage greater than 90% and a real hosted core-backend simulation are established, but neither is retained against an immutable release revision. A final release still requires a single clean immutable-candidate rerun, retained artifacts, deployed same-origin web and authenticated browser journeys, provider and signed-device simulations, exact web/native deployment identifiers, rollback/restore proof, and named human approvals. No production release or acceptance is claimed.

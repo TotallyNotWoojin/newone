@@ -19,7 +19,6 @@ import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 
 export interface SelfRecoveryRequestProps {
   accessToken: string | null;
-  demoMode: boolean;
   onCreated?: (notice: string) => Promise<void> | void;
   onOpenSettings?: () => void;
   organizationId: string;
@@ -28,7 +27,6 @@ export interface SelfRecoveryRequestProps {
 
 export function SelfRecoveryRequest({
   accessToken,
-  demoMode,
   onCreated,
   onOpenSettings,
   organizationId,
@@ -64,10 +62,10 @@ export function SelfRecoveryRequest({
       ['authentication_required', 'csrf_required', 'unauthorized', 'forbidden'].includes(failure.code)
     ) return copy.errorAuth;
     if (failure.status === 409 || failure.code === 'conflict') return copy.errorConflict;
-    if (failure.code.startsWith('invalid_')) return copy.errorInput;
     if (['invalid_response', 'response_too_large'].includes(failure.code)) {
       return copy.errorResponse;
     }
+    if (failure.code.startsWith('invalid_')) return copy.errorInput;
     return copy.errorGeneric;
   };
 
@@ -84,7 +82,6 @@ export function SelfRecoveryRequest({
   };
 
   const open = async () => {
-    if (demoMode) return;
     const requestSequence = factorRequestSequence.current + 1;
     factorRequestSequence.current = requestSequence;
     setVisible(true);
@@ -131,7 +128,7 @@ export function SelfRecoveryRequest({
   };
 
   const submit = async () => {
-    if (busy || demoMode || !idempotencyKey) return;
+    if (busy || !idempotencyKey) return;
     const payload = retryPayload ?? {
       factorId,
       idempotencyKey,
@@ -191,7 +188,6 @@ export function SelfRecoveryRequest({
               <Text style={styles.aal1Note}>{copy.selfServiceAal1}</Text>
             </View>
             <PrimaryButton
-              disabled={demoMode}
               icon="add-circle-outline"
               label={copy.createSelf}
               onPress={() => void open()}
@@ -202,7 +198,6 @@ export function SelfRecoveryRequest({
             <Ionicons name="warning-outline" color={colors.amber} size={17} />
             <Text style={styles.warningText}>{copy.sensitiveWarning}</Text>
           </View>
-          {demoMode ? <Text style={styles.demoText}>{copy.unavailableDemo}</Text> : null}
           {notice ? (
             <View accessibilityLiveRegion="polite" style={styles.notice}>
               <Ionicons name="checkmark-circle-outline" color={colors.mintDark} size={18} />
@@ -212,7 +207,6 @@ export function SelfRecoveryRequest({
         </View>
       ) : (
         <PrimaryButton
-          disabled={demoMode}
           icon="add-circle-outline"
           label={copy.createSelf}
           onPress={() => void open()}
@@ -245,7 +239,7 @@ export function SelfRecoveryRequest({
           </View>
         ) : (
           <>
-            <Text style={styles.demoText}>{copy.noAuthenticator}</Text>
+            <Text style={styles.statusText}>{copy.noAuthenticator}</Text>
             {onOpenSettings ? (
               <PrimaryButton label={copy.openSettings} onPress={onOpenSettings} tone="light" />
             ) : null}
@@ -285,7 +279,7 @@ const styles = StyleSheet.create({
   aal1Note: { color: colors.mintDark, fontSize: 9, lineHeight: 14, fontWeight: '800', marginTop: 4 },
   warning: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, backgroundColor: colors.amberSoft },
   warningText: { flex: 1, color: colors.inkMuted, fontSize: 10, lineHeight: 16 },
-  demoText: { color: colors.inkSubtle, fontSize: 10, lineHeight: 16, padding: spacing.sm, textAlign: 'center' },
+  statusText: { color: colors.inkSubtle, fontSize: 10, lineHeight: 16, padding: spacing.sm, textAlign: 'center' },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, backgroundColor: colors.mintSoft },
   noticeText: { flex: 1, color: colors.mintDark, fontSize: 10, lineHeight: 16, fontWeight: '700' },
   fieldLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },

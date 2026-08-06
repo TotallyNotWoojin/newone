@@ -40,7 +40,7 @@ function keyFromSet(env: Pick<typeof Deno.env, 'get'>, name: string): string | u
   try {
     const values = JSON.parse(raw) as Record<string, unknown>;
     const value = values.default;
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   } catch {
     throw new Error(`${name} must be a JSON object with a default key`);
   }
@@ -50,14 +50,12 @@ export function loadClientEnvironment(
   env: Pick<typeof Deno.env, 'get'> = Deno.env,
 ): ClientEnvironment {
   const url = env.get('SUPABASE_URL')?.trim();
-  const publishableKey = firstConfiguredKey(env, [
-    'SUPABASE_PUBLISHABLE_KEY',
-    'SUPABASE_ANON_KEY',
-  ]) ?? keyFromSet(env, 'SUPABASE_PUBLISHABLE_KEYS');
-  const secretKey = firstConfiguredKey(env, [
-    'SUPABASE_SECRET_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
-  ]) ?? keyFromSet(env, 'SUPABASE_SECRET_KEYS');
+  const publishableKey = firstConfiguredKey(env, ['SUPABASE_PUBLISHABLE_KEY']) ??
+    keyFromSet(env, 'SUPABASE_PUBLISHABLE_KEYS') ??
+    firstConfiguredKey(env, ['SUPABASE_ANON_KEY']);
+  const secretKey = firstConfiguredKey(env, ['SUPABASE_SECRET_KEY']) ??
+    keyFromSet(env, 'SUPABASE_SECRET_KEYS') ??
+    firstConfiguredKey(env, ['SUPABASE_SERVICE_ROLE_KEY']);
 
   if (!url || !publishableKey || !secretKey) {
     throw new Error('Supabase URL, publishable key, and server secret key are required');

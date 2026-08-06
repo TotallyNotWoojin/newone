@@ -37,7 +37,18 @@ import {
   matchRoute,
   parseCommand,
   type ParsedCommand,
+  type RouteKind,
 } from './routes.ts';
+
+const RATE_LIMIT_OPERATION_ALIASES = {
+  'conversation.direct': 'conversation.direct.create',
+  'conversation.group': 'conversation.group.create',
+  'attachment.grant': 'attachment.upload.create',
+} satisfies Partial<Record<RouteKind, string>>;
+
+export function rateLimitOperation(kind: RouteKind): string {
+  return RATE_LIMIT_OPERATION_ALIASES[kind as keyof typeof RATE_LIMIT_OPERATION_ALIASES] ?? kind;
+}
 
 export interface ApiDependencies {
   runtimeConfig: RuntimeConfig;
@@ -221,7 +232,7 @@ export function createApiHandler(
           config,
           actor,
           command.organizationId,
-          route.kind,
+          rateLimitOperation(route.kind),
         );
       }
 
@@ -247,7 +258,7 @@ export function createApiHandler(
           config,
           actor,
           command.organizationId,
-          route.kind,
+          rateLimitOperation(route.kind),
         );
       }
 

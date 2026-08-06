@@ -5,7 +5,6 @@ import { verifyReleaseBuildEnvironment } from '../scripts/verify-release-build-e
 
 const valid = {
   NEWONE_RELEASE_BUILD: 'true',
-  EXPO_PUBLIC_DEMO_MODE: 'false',
   EXPO_PUBLIC_API_URL: '/api',
   EXPO_PUBLIC_OFFLINE_CACHE_ENABLED: 'false',
   EXPO_PUBLIC_SUPABASE_URL: 'https://example-project.supabase.co',
@@ -44,6 +43,7 @@ test('ordinary local builds can remain intentionally unconfigured', () => {
 test('hosted release environment rejects demo mode, direct APIs, secret classes, and project drift', () => {
   for (const patch of [
     { EXPO_PUBLIC_DEMO_MODE: 'true' },
+    { EXPO_PUBLIC_DEMO_MODE: 'false' },
     { EXPO_PUBLIC_API_URL: 'https://example-project.supabase.co/functions/v1' },
     { EXPO_PUBLIC_OFFLINE_CACHE_ENABLED: '' },
     { EXPO_PUBLIC_OFFLINE_CACHE_ENABLED: 'sometimes' },

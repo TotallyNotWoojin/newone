@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react';
 
-import { isDemoMode, publicRuntimeConfig } from '@/config/runtime';
+import { publicRuntimeConfig } from '@/config/runtime';
 import {
   cleanupPreparedAttachment,
   prepareAttachment,
@@ -56,7 +56,6 @@ import type {
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
 import { isOfflineError, RepositoryError } from '@/data/repositories/contracts';
-import { DemoCommandRepository, DemoReadRepository } from '@/data/repositories/demo-repository';
 import type {
   DeviceNotificationPreferencePatch,
   DeviceNotificationPreferences,
@@ -140,10 +139,10 @@ import { useAuth } from '@/state/auth';
 interface WorkspaceState {
   organizationId: string;
   organizationName: string;
-  currentMembershipRole: WorkspaceSnapshot['currentMembershipRole'];
-  organizationPolicy: OrganizationPolicy;
+  currentMembershipRole: WorkspaceSnapshot['currentMembershipRole'] | null;
+  organizationPolicy: OrganizationPolicy | null;
   organizationAiPolicy: OrganizationAiPolicy | null;
-  currentUser: Person;
+  currentUser: Person | null;
   conversations: Conversation[];
   conversationAvatarUrls: Record<string, string>;
   discoverableConversations: DiscoverableConversation[];
@@ -158,7 +157,7 @@ interface WorkspaceState {
   auditEvents: AuditEvent[];
   capabilities: WorkspaceCapability[];
   authorizationScopes: AuthorizationScope[];
-  messageDisplayLanguage: Person['preferredLanguage'];
+  messageDisplayLanguage: Person['preferredLanguage'] | null;
   selectedConversationId: string;
   inboxFilter: InboxFilter;
   inboxSearch: string;
@@ -505,32 +504,6 @@ interface WorkspaceState {
 
 const WorkspaceContext = createContext<WorkspaceState | null>(null);
 
-const emptyUser: Person = {
-  id: 'loading',
-  displayName: 'Newone member',
-  initials: 'N',
-  roleLabel: 'Loading company membership',
-  role: 'employee',
-  site: 'Company workspace',
-  department: 'Company directory',
-  preferredLanguage: 'en',
-  presence: 'offline',
-  connectionState: 'self',
-  avatarColor: '#53635D',
-};
-
-const defaultOrganizationPolicy: OrganizationPolicy = {
-  messageRetentionDays: 365,
-  allowMemberDirectMessages: true,
-  dmPolicy: 'directory_open',
-  requireMfaForAdmins: true,
-  shiftScheduleAuthoritative: false,
-  groupCreationPolicy: 'members',
-  allowExternalGuests: false,
-  externalGuestMaxAccessDays: 90,
-  version: 1,
-};
-
 function nowLabel() {
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -716,8 +689,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (
-      isDemoMode
-      || !publicRuntimeConfig.offlineCacheEnabled
+      !publicRuntimeConfig.offlineCacheEnabled
       || connectivity !== 'online'
       || !snapshot
       || snapshot.currentUser.id !== auth.user?.id
@@ -738,9 +710,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [auth.user?.id, connectivity, snapshot]);
 
   const repositories = useMemo<{ reads: ReadRepository | null; commands: CommandRepository }>(() => {
-    if (isDemoMode) {
-      return { reads: new DemoReadRepository(), commands: new DemoCommandRepository() };
-    }
     const repositoryContext = {
       getSession: async () => {
         const currentClient = getSupabaseClient();
@@ -782,7 +751,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     avatarPath: string,
     force = false,
   ) => {
-    if (isDemoMode) return;
     const attachmentId = conversationAvatarAttachmentId(
       organizationId,
       conversationId,
@@ -844,7 +812,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [loadConversationAvatarUrl]);
 
   const hydrateOutbox = useCallback(async (nextSnapshot: WorkspaceSnapshot) => {
-    if (isDemoMode) return;
     if (!offlineWorkspaceEntitlement(nextSnapshot.currentUser).eligible) {
       await clientStore.purgeUser(nextSnapshot.currentUser.id);
       setMessageOutbox([]);
@@ -885,10 +852,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const refreshIdentity = `${auth.mode}:${auth.user?.id ?? (isDemoMode ? 'demo-user' : '')}`;
+  const refreshIdentity = `${auth.mode}:${auth.user?.id ?? ''}`;
   const loadWorkspaceOnce = useCallback(async () => {
     const reads = repositories.reads;
-    const userId = auth.user?.id ?? (isDemoMode ? 'demo-user' : null);
+    const userId = auth.user?.id ?? null;
     const requestedIdentity = refreshIdentityRef.current;
     if (!reads || !userId) {
       snapshotRef.current = null;
@@ -1093,7 +1060,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const deadline = workspaceAccessDeadline ? Date.parse(workspaceAccessDeadline) : Number.NaN;
-    if (isDemoMode || !Number.isFinite(deadline)) return;
+    if (!Number.isFinite(deadline)) return;
     let cancelled = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
     const enforceDeadline = async () => {
@@ -1187,8 +1154,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, []);
 
   useUserRealtime({
-    enabled: !isDemoMode
-      && Boolean(snapshot)
+    enabled: Boolean(snapshot)
       && snapshot?.currentUser.id === auth.user?.id,
     organizationId: snapshot?.organizationId ?? '',
     userId: snapshot?.currentUser.id ?? '',
@@ -1303,7 +1269,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, []);
 
   const flushOutbox = useCallback(async () => {
-    if (isDemoMode) return;
     if (flushingRef.current) {
       flushAgainRef.current = true;
       return;
@@ -1446,7 +1411,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     const idempotencyKey = createClientId();
     const payload: MessageReceiptInput = { ...input, idempotencyKey };
     const currentUser = snapshotRef.current?.currentUser;
-    if (isDemoMode || currentUser?.membershipType === 'guest') {
+    if (currentUser?.membershipType === 'guest') {
       try {
         const result = await repositories.commands.markMessageReceipt(payload);
         patchServerMessage(input.messageId, {
@@ -2021,7 +1986,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [executeImmediate, repositories.commands]);
 
   useEffect(() => {
-    if (!snapshot?.organizationId || isDemoMode) return;
+    if (!snapshot?.organizationId) return;
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void reconcileConversation();
@@ -2033,7 +1998,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [flushOutbox, reconcileConversation, snapshot?.organizationId]);
 
   useEffect(() => {
-    if (!snapshot?.organizationId || isDemoMode) return;
+    if (!snapshot?.organizationId) return;
     let active = true;
     void getExistingDeviceRegistration(snapshot.organizationId)
       .then(async (registration) => {
@@ -2056,7 +2021,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [repositories.commands, snapshot?.organizationId]);
 
   useEffect(() => {
-    if (connectivity !== 'offline' || isDemoMode) return;
+    if (connectivity !== 'offline') return;
     const interval = setInterval(() => {
       void reconcileConversation();
       void flushOutbox();
@@ -2067,10 +2032,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const selectConversation = useCallback((conversationId: string) => {
     selectedConversationIdRef.current = conversationId;
     setSelectedConversationId(conversationId);
-    // The local demo repository is an immutable fixture. Refreshing it here
-    // would overwrite a group that was just created in the in-memory product
-    // walkthrough before the routed conversation screen can render it.
-    if (!isDemoMode) void refresh();
+    void refresh();
   }, [refresh]);
 
   const openOrCreateDirectConversation = useCallback(
@@ -2322,16 +2284,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       !['group', 'team', 'shift', 'incident'].includes(conversation.kind)
     ) return false;
     const result = await executeImmediate('conversation-avatar-upload', async () => {
-      if (isDemoMode) {
-        setConversationAvatarUrls((current) => ({ ...current, [conversationId]: selected.uri }));
-        setSnapshot((current) => current ? {
-          ...current,
-          conversations: current.conversations.map((item) => item.id === conversationId
-            ? { ...item, avatarPath: `demo-avatar:${conversationId}` }
-            : item),
-        } : current);
-        return true;
-      }
       const optimized = await optimizeImageAttachment({ ...selected, imageMode: 'optimized' });
       const prepared = await prepareAttachment(optimized);
       try {
@@ -2427,14 +2379,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
     if (!snapshot || !conversation?.canManage || !conversation.avatarPath) return false;
     const result = await executeImmediate('conversation-avatar-remove', async () => {
-      if (!isDemoMode) {
-        await repositories.commands.removeConversationAvatar({
-          organizationId: snapshot.organizationId,
-          conversationId,
-          expectedAvatarPath: conversation.avatarPath as string,
-          idempotencyKey: createClientId(),
-        });
-      }
+      await repositories.commands.removeConversationAvatar({
+        organizationId: snapshot.organizationId,
+        conversationId,
+        expectedAvatarPath: conversation.avatarPath as string,
+        idempotencyKey: createClientId(),
+      });
       const timer = conversationAvatarTimersRef.current.get(conversationId);
       if (timer) clearTimeout(timer);
       conversationAvatarTimersRef.current.delete(conversationId);
@@ -2535,7 +2485,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       setActionError(null);
 
-      if (isDemoMode || snapshot.currentUser.membershipType === 'guest') {
+      if (snapshot.currentUser.membershipType === 'guest') {
         setActionBusy('message-send-online');
         try {
           const receipt = await repositories.commands.sendMessage(input);
@@ -2569,7 +2519,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const synchronizeMessageOutbox = useCallback(async () => {
     const current = snapshotRef.current;
-    if (isDemoMode || !current) {
+    if (!current) {
       setMessageOutbox([]);
       setOutboxCount(0);
       setFailedOutboxCount(0);
@@ -2912,10 +2862,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           sizeLabel: prepared.byteSize < 1024 * 1024
             ? `${Math.ceil(prepared.byteSize / 1024)} KB`
             : `${(prepared.byteSize / (1024 * 1024)).toFixed(1)} MB`,
-          status: isDemoMode ? 'clean' : 'quarantined',
+          status: 'quarantined',
           transfer: {
-            state: isDemoMode ? 'uploaded' : 'preparing',
-            progress: isDemoMode ? 1 : 0,
+            state: 'preparing',
+            progress: 0,
           },
         };
         const optimistic: Message = {
@@ -2962,10 +2912,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             : current,
         );
 
-        if (isDemoMode) {
-          await cleanupPreparedAttachment(prepared);
-          return true;
-        }
         const operation: AttachmentUploadOperation = {
           organizationId: snapshot.organizationId,
           conversationId,
@@ -3435,10 +3381,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const downloadAttachment = useCallback(
     async (message: Message) => {
       if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return false;
-      if (isDemoMode) {
-        setActionError(t('errors.demoAttachment'));
-        return false;
-      }
       const result = await executeImmediate('attachment-download', () =>
         repositories.commands.createAttachmentDownloadGrant({
           organizationId: snapshot.organizationId,
@@ -3864,15 +3806,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         receiptProgressRef.current.delete(key);
       }
     }
-    if (!isDemoMode) {
-      const commands = await clientStore.listOutbox(snapshot.currentUser.id, snapshot.organizationId);
-      await Promise.all(conversationOutboxCommandIds(commands, conversationId).map((id) =>
-        clientStore.removeOutbox(id)
-      ));
-      const cacheKey = offlineWorkspaceCacheKey(snapshot.currentUser.id);
-      if (cacheKey) await clientStore.removeCache(cacheKey).catch(() => undefined);
-      await synchronizeMessageOutbox();
-    }
+    const commands = await clientStore.listOutbox(snapshot.currentUser.id, snapshot.organizationId);
+    await Promise.all(conversationOutboxCommandIds(commands, conversationId).map((id) =>
+      clientStore.removeOutbox(id)
+    ));
+    const cacheKey = offlineWorkspaceCacheKey(snapshot.currentUser.id);
+    if (cacheKey) await clientStore.removeCache(cacheKey).catch(() => undefined);
+    await synchronizeMessageOutbox();
 
     const remaining = snapshot.conversations.filter((item) => (
       item.id !== conversationId && !item.managementOnly
@@ -4087,7 +4027,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             }
           : update),
       } : current);
-      if (isDemoMode || snapshot.currentUser.membershipType === 'guest') {
+      if (snapshot.currentUser.membershipType === 'guest') {
         try {
           await repositories.commands.acknowledgeUpdate(payload);
           setConnectivity('online');
@@ -4147,6 +4087,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         !title
         || !details
         || Number.isNaN(started.getTime())
+        || Number.isNaN(ended.getTime())
         || ended <= started
         || sourceMessageIds.length < 1
         || (acknowledgementDue && (Number.isNaN(acknowledgementDue.getTime()) || acknowledgementDue <= ended))
@@ -4224,7 +4165,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         !snapshot
         || !handoff
         || !snapshot.capabilities.includes('handoff.manage')
-        || (!isDemoMode && !conversation?.canManage)
+        || !conversation?.canManage
       ) return false;
       if (
         handoff.versionId !== input.expectedVersionId
@@ -4414,21 +4355,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     async (personId: string) => {
       const person = snapshot?.people.find((item) => item.id === personId);
       if (!snapshot || !person || person.connectionState !== 'available') return;
-      if (isDemoMode) {
-        setSnapshot((current) =>
-          current
-            ? {
-                ...current,
-                people: current.people.map((person) =>
-                  person.id === personId && person.connectionState === 'available'
-                    ? { ...person, connectionState: 'pending' }
-                    : person,
-                ),
-              }
-            : current,
-        );
-        return;
-      }
       setActionError(null);
       try {
         await repositories.commands.requestConnection({
@@ -4585,16 +4511,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         }),
       );
       if (result === null) return false;
-      if (isDemoMode) {
-        setSnapshot((current) => current ? {
-          ...current,
-          people: current.people.map((item) => item.id === personId ? {
-            ...item,
-            blockedByMe: blocked,
-          } : item),
-        } : current);
-        return true;
-      }
       await refresh();
       return true;
     },
@@ -4833,7 +4749,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   const queryCurrentDeviceNotificationPreferences = useCallback(async () => {
-    if (!snapshot || isDemoMode) return null;
+    if (!snapshot) return null;
     const installationId = await getCurrentInstallationId();
     if (!installationId) return null;
     return repositories.commands.getDeviceNotificationPreferences({
@@ -5033,7 +4949,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [executeImmediate, repositories.commands, snapshot]);
 
   const loadDeviceNotificationPreferences = useCallback(async () => {
-    if (!snapshot || isDemoMode) return false;
+    if (!snapshot) return false;
     const result = await executeImmediate(
       'device-preferences-load',
       queryCurrentDeviceNotificationPreferences,
@@ -5065,7 +4981,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [deviceNotificationPreferences, executeImmediate, repositories.commands, snapshot]);
 
   const enableNotifications = useCallback(async () => {
-    if (!snapshot || isDemoMode) return false;
+    if (!snapshot) return false;
     const result = await executeImmediate('device-register', async () => {
       const registration = await requestDeviceRegistration(snapshot.organizationId);
       if (!registration) {
@@ -5099,13 +5015,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const value = useMemo<WorkspaceState>(
     () => ({
       organizationId: snapshot?.organizationId ?? '',
-      organizationName: snapshot?.organizationName ?? 'Newone workspace',
-      currentMembershipRole: snapshot?.currentMembershipRole ?? 'member',
-      organizationPolicy: snapshot?.organizationPolicy ?? defaultOrganizationPolicy,
+      organizationName: snapshot?.organizationName ?? '',
+      currentMembershipRole: snapshot?.currentMembershipRole ?? null,
+      organizationPolicy: snapshot?.organizationPolicy ?? null,
       organizationAiPolicy: organizationAiPolicy?.organizationId === snapshot?.organizationId
         ? organizationAiPolicy
         : null,
-      currentUser: snapshot?.currentUser ?? { ...emptyUser, id: auth.user?.id ?? emptyUser.id },
+      currentUser: snapshot?.currentUser ?? null,
       conversations: snapshot?.conversations ?? [],
       conversationAvatarUrls,
       discoverableConversations: snapshot?.discoverableConversations ?? [],
@@ -5120,7 +5036,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       auditEvents: snapshot?.auditEvents ?? [],
       capabilities: snapshot?.capabilities ?? [],
       authorizationScopes: snapshot?.scopes ?? [],
-      messageDisplayLanguage: snapshot?.messageDisplayLanguage ?? emptyUser.preferredLanguage,
+      messageDisplayLanguage: snapshot?.messageDisplayLanguage ?? null,
       selectedConversationId,
       inboxFilter,
       inboxSearch,
@@ -5257,7 +5173,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       addConversationMember,
       decideConversationJoinRequest,
       acknowledgeHandoff,
-      auth.user?.id,
       connectivity,
       conversationAvatarUrls,
       createGroupConversation,
