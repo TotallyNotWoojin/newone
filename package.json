@@ -59,7 +59,7 @@
     "verify:full": "npm run check && npm run coverage && npm run backend:reset && npm run backend:types:check && npm run backend:test && npm run backend:lint && npm run hosted:test:self && npm run hosted:test:dry-run && npm run e2e && npm run audit && npm run supply-chain:signatures && npm run supply-chain:evidence"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.12.1",
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1"
   }
 }
