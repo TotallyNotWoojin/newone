@@ -210,6 +210,7 @@ function dependencies(overrides: Partial<ReadDependencies> = {}): ReadDependenci
     loadPreferences: async () => ({ uiLanguage: 'en' }),
     loadMessages: async () => ({ messages: [] }),
     loadSearch: async () => ({ results: [], nextCursor: null, hasMore: false }),
+    loadUserSearch: async () => ({ users: [] }),
     loadAudit: async () => auditResponse({ items: [] }),
     recordAuditDenial: async () => {},
     ...overrides,

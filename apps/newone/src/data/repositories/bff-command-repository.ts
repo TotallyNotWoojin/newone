@@ -43,6 +43,7 @@ import {
   parseConversationAvatarRemovalReceipt,
   parseConversationAvatarUploadGrant,
 } from '@/data/repositories/conversation-avatar-dto.mjs';
+import { parseMessageRequestReceipt } from '@/data/repositories/message-request-dto.mjs';
 import {
   normalizeOrganizationPolicyUpdate,
   parseOrganizationPolicy,
@@ -2879,6 +2880,26 @@ export class BffCommandRepository implements CommandRepository {
       idempotencyKey: input.idempotencyKey,
       body: { targetMembershipId: input.targetMembershipId },
     });
+  }
+
+  async sendMessageRequest(input: Parameters<CommandRepository['sendMessageRequest']>[0]) {
+    const payload = await this.request('/v2/contacts/message-requests', {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        targetUserId: input.targetUserId,
+        body: input.body,
+      },
+    });
+    try {
+      return parseMessageRequestReceipt(dataValue(payload));
+    } catch {
+      throw new RepositoryError(
+        'The service returned an invalid message request receipt.',
+        'invalid_response',
+        true,
+      );
+    }
   }
 
   async respondConnection(input: Parameters<CommandRepository['respondConnection']>[0]) {

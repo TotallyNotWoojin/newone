@@ -8,6 +8,7 @@ import {
 import { ApiError } from '../_shared/errors.ts';
 import { expoPushToken } from '../_shared/expo-push.ts';
 import { asRpcClient, invokeRpc } from '../_shared/rpc.ts';
+import { beginIdempotency, completeIdempotency } from '../_shared/security.ts';
 import {
   asObject,
   bool,
@@ -112,6 +113,7 @@ export type RouteKind =
   | 'ai_output.regression.propose'
   | 'ai_output.regression.decide'
   | 'contact.request'
+  | 'contact.message_request'
   | 'contact.respond'
   | 'contact.cancel'
   | 'saved_contact.update'
@@ -578,6 +580,12 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     recentAuthSeconds: 300,
   },
   { method: 'POST', kind: 'contact.request', template: '/v2/contacts/connections', status: 201 },
+  {
+    method: 'POST',
+    kind: 'contact.message_request',
+    template: '/v2/contacts/message-requests',
+    status: 201,
+  },
   {
     method: 'POST',
     kind: 'contact.respond',
@@ -2422,6 +2430,20 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       return {
         organizationId: organization(body),
         values: { targetUserId: requiredUuid(body, 'targetMembershipId') },
+      };
+    }
+    case 'contact.message_request': {
+      onlyKeys(body, ['organizationId', 'targetUserId', 'body']);
+      // Same body envelope as message.send: the first hello travels the same
+      // trusted message path once the database opens the pending window.
+      const text = requiredString(body, 'body', { min: 1, max: 20000, trim: false });
+      if (text.trim().length === 0) throw new ApiError(400, 'bad_request');
+      return {
+        organizationId: organization(body),
+        values: {
+          targetUserId: requiredUuid(body, 'targetUserId'),
+          body: text,
+        },
       };
     }
     case 'contact.respond': {
@@ -5685,6 +5707,52 @@ export async function executeCommand(
           p_target_user_id: values.targetUserId,
         }),
       };
+    case 'contact.message_request': {
+      // bff_send_message_request carries no idempotency parameters: the pending
+      // contact upsert is its own once-per-pair guard, and a repeat attempt
+      // raises P0001 (cooldown). Replay protection for the network retry window
+      // therefore wraps the atomic RPC with the shared idempotency ledger the
+      // command RPCs use internally, keyed by the same header contract.
+      const started = await beginIdempotency(
+        actor,
+        org,
+        route.template,
+        idempotencyKey,
+        requestDigest,
+      );
+      if (started.state === 'replay') return { status: started.status, body: started.body };
+      if (started.state === 'conflict') throw new ApiError(409, 'idempotency_conflict');
+      if (started.state === 'in_progress') {
+        throw new ApiError(409, 'idempotency_conflict', undefined, started.retryAfterSeconds);
+      }
+      const result = asObject(
+        await invokeRpc(asRpcClient(actor.adminClient), 'bff_send_message_request', {
+          p_actor_user_id: actor.user.id,
+          p_organization_id: org,
+          p_session_id: actor.claims.sessionId,
+          p_target_user_id: values.targetUserId,
+          p_body: values.body,
+        }),
+      );
+      if (result.connection_status !== 'pending') {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      const body = {
+        connectionStatus: 'pending',
+        conversationId: uuid(result.conversation_id),
+        messageId: messageId(result.message_id),
+      };
+      await completeIdempotency(
+        actor,
+        org,
+        route.template,
+        idempotencyKey,
+        requestDigest,
+        201,
+        body,
+      );
+      return { status: 201, body };
+    }
     case 'contact.respond':
       return {
         status: 200,

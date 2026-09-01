@@ -61,6 +61,7 @@ import type {
   ConversationAvatarRemovalReceipt,
   ConversationAvatarUploadGrant,
 } from '@/data/repositories/conversation-avatar-dto.mjs';
+import type { MessageRequestReceipt } from '@/data/repositories/message-request-dto.mjs';
 import type {
   OrganizationPolicy,
   OrganizationPolicyUpdate,
@@ -196,6 +197,14 @@ export interface SearchRepository {
   }): Promise<SearchPage>;
 }
 
+export interface UserSearchResult {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarPath: string | null;
+  connectionState: 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted';
+}
+
 export interface ReadRepository {
   loadWorkspace(userId: string, selectedConversationId?: string | null): Promise<WorkspaceSnapshot>;
   loadMessages(input: {
@@ -204,6 +213,11 @@ export interface ReadRepository {
     userId: string;
     after?: string | null;
   }): Promise<MessagePage>;
+  searchUsers(input: {
+    organizationId: string;
+    query: string;
+    limit?: number;
+  }): Promise<UserSearchResult[]>;
   queryAudit(input: AuditQueryInput): Promise<AuditPage>;
 }
 
@@ -985,6 +999,12 @@ export interface CommandRepository {
     targetMembershipId: string;
     idempotencyKey: string;
   }): Promise<void>;
+  sendMessageRequest(input: {
+    organizationId: string;
+    targetUserId: string;
+    body: string;
+    idempotencyKey: string;
+  }): Promise<MessageRequestReceipt>;
   respondConnection(input: {
     organizationId: string;
     membershipId: string;

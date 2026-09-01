@@ -53,6 +53,7 @@ import type {
   SendMessageInput,
   UpdateAudiencePreview,
   UpdateAudienceSpec,
+  UserSearchResult,
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
 import { isOfflineError, RepositoryError } from '@/data/repositories/contracts';
@@ -116,6 +117,7 @@ import type {
   AiOutputErrorReportDetail,
   AiOutputErrorCategory,
 } from '@/domain/types';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { createClientId } from '@/lib/client-id';
 import { activeMutedUntil, isConversationMuted } from '@/data/notification-preferences.mjs';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -431,8 +433,14 @@ interface WorkspaceState {
     expectedVersionNumber: number;
     note?: string;
   }) => Promise<boolean>;
-  updateConnection: (personId: string) => Promise<void>;
+  updateConnection: (personId: string) => Promise<boolean>;
   respondConnection: (personId: string, decision: 'accepted' | 'declined') => Promise<boolean>;
+  searchUsers: (query: string) => Promise<UserSearchResult[] | null>;
+  sendMessageRequest: (
+    targetUserId: string,
+    body: string,
+    displayName?: string,
+  ) => Promise<string | null>;
   removeConnection: (personId: string) => Promise<boolean>;
   saveContact: (personId: string, alias: string, isFavorite: boolean) => Promise<boolean>;
   removeSavedContact: (personId: string) => Promise<boolean>;
@@ -4353,13 +4361,19 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const updateConnection = useCallback(
     async (personId: string) => {
-      const person = snapshot?.people.find((item) => item.id === personId);
-      if (!snapshot || !person || person.connectionState !== 'available') return;
+      if (!snapshot) return false;
+      const person = snapshot.people.find((item) => item.id === personId);
+      // Username-search results outside the loaded directory are valid targets
+      // only in the personal realm, where the connection commands address the
+      // target user's UUID directly.
+      if (person ? person.connectionState !== 'available' : !isPersonalRealm(snapshot.organizationId)) {
+        return false;
+      }
       setActionError(null);
       try {
         await repositories.commands.requestConnection({
           organizationId: snapshot.organizationId,
-          targetMembershipId: person.membershipId ?? person.id,
+          targetMembershipId: person?.membershipId ?? personId,
           idempotencyKey: createClientId(),
         });
         setSnapshot((current) =>
@@ -4373,12 +4387,126 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             : current,
         );
         setConnectivity('online');
+        return true;
       } catch (connectionError) {
         setActionError(t(errorMessageKey(connectionError)));
         if (isOfflineError(connectionError)) setConnectivity('offline');
+        return false;
       }
     },
     [repositories.commands, snapshot, t],
+  );
+
+  const searchUsers = useCallback(
+    async (query: string) => {
+      if (!snapshot || !repositories.reads) return null;
+      const normalized = query.trim().toLocaleLowerCase();
+      if (normalized.length < 2) return [];
+      setActionError(null);
+      try {
+        const users = await repositories.reads.searchUsers({
+          organizationId: snapshot.organizationId,
+          query: normalized.slice(0, 64),
+          limit: 20,
+        });
+        setConnectivity('online');
+        return users;
+      } catch (searchError) {
+        setActionError(t(errorMessageKey(searchError)));
+        if (isOfflineError(searchError)) setConnectivity('offline');
+        return null;
+      }
+    },
+    [repositories.reads, snapshot, t],
+  );
+
+  const sendMessageRequest = useCallback(
+    async (targetUserId: string, body: string, displayName?: string) => {
+      const text = body.trim();
+      // The route reuses the send-message bound of 20,000 characters.
+      if (
+        !snapshot
+        || !text
+        || text.length > 20_000
+        || targetUserId === snapshot.currentUser.id
+      ) {
+        return null;
+      }
+      const receipt = await executeImmediate('message-request', () =>
+        repositories.commands.sendMessageRequest({
+          organizationId: snapshot.organizationId,
+          targetUserId,
+          body: text,
+          idempotencyKey: createClientId(),
+        }),
+      );
+      if (!receipt) return null;
+      const accepted = receipt.connectionStatus === 'accepted';
+      const known = snapshot.people.find((item) => item.id === targetUserId);
+      const counterpartName = known?.displayName ?? displayName?.trim() ?? '';
+      const counterpart: Person = known ?? {
+        id: targetUserId,
+        membershipId: targetUserId,
+        organizationId: snapshot.organizationId,
+        displayName: counterpartName || 'Direct message',
+        initials: nameInitials(counterpartName || 'Direct message'),
+        roleLabel: '',
+        role: 'employee',
+        site: '',
+        department: '',
+        preferredLanguage: snapshot.currentUser.preferredLanguage,
+        presence: 'offline',
+        connectionState: accepted ? 'connected' : 'pending',
+        connectionRequestDirection: accepted ? undefined : 'outgoing',
+        avatarColor: '#496D62',
+      };
+      const conversation: Conversation = {
+        id: receipt.conversationId,
+        organizationId: snapshot.organizationId,
+        directParticipantId: targetUserId,
+        title: counterpart.displayName,
+        initials: counterpart.initials,
+        avatarColor: counterpart.avatarColor,
+        kind: 'direct',
+        subtitle: counterpart.roleLabel,
+        lastMessage: text,
+        lastActivity: 'New',
+        unreadCount: 0,
+        pinned: false,
+        favorite: false,
+        muted: false,
+        presence: counterpart.presence,
+      };
+      setSnapshot((current) =>
+        current
+          ? {
+              ...current,
+              conversations: current.conversations.some((item) => item.id === conversation.id)
+                ? current.conversations
+                : [conversation, ...current.conversations],
+              messages: {
+                ...current.messages,
+                [conversation.id]: current.messages[conversation.id] ?? [],
+              },
+              cursors: { ...current.cursors, [conversation.id]: null },
+              people: current.people.some((item) => item.id === targetUserId)
+                ? current.people.map((item) =>
+                    item.id === targetUserId
+                      ? {
+                          ...item,
+                          connectionState: accepted ? 'connected' : 'pending',
+                          connectionRequestDirection: accepted ? undefined : 'outgoing',
+                        }
+                      : item,
+                  )
+                : [...current.people, counterpart],
+            }
+          : current,
+      );
+      selectConversation(conversation.id);
+      return receipt.conversationId;
+    },
+    [executeImmediate, repositories.commands, selectConversation, snapshot],
   );
 
   const respondConnection = useCallback(
@@ -5138,6 +5266,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       acknowledgeHandoff,
       updateConnection,
       respondConnection,
+      searchUsers,
+      sendMessageRequest,
       removeConnection,
       saveContact,
       removeSavedContact,
@@ -5253,6 +5383,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       confirmAction,
       transitionAction,
       respondConnection,
+      searchUsers,
+      sendMessageRequest,
       revokeSession,
       reviewConversationSummary,
       reportAiOutputError,

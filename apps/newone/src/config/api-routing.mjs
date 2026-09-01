@@ -25,6 +25,7 @@ const READ_PATHS = new Set([
   '/v2/bootstrap',
   '/v2/preferences/organization/query',
   '/v2/search',
+  '/v2/users/search',
   '/v2/admin/audit/query',
 ]);
 

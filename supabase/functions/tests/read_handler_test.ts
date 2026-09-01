@@ -52,6 +52,7 @@ function dependencies(overrides: Partial<ReadDependencies> = {}): ReadDependenci
     loadPreferences: async () => ({ organizationId }),
     loadMessages: async () => ({ messages: [], page: {} }),
     loadSearch: async () => ({ results: [], nextCursor: null, hasMore: false }),
+    loadUserSearch: async () => ({ users: [] }),
     loadAudit: async () => ({
       schema_version: 1,
       items: [],

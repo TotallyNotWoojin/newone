@@ -461,6 +461,69 @@ describe('BFF command transport security and parsing', () => {
     });
   });
 
+  test('sends a person-level message request and parses its receipt defensively', async () => {
+    mockFetch.mockImplementationOnce(async () => response({
+      data: { conversationId, messageId: '412', connectionStatus: 'pending' },
+    }, 201));
+    await expect(repository().sendMessageRequest({
+      organizationId,
+      targetUserId: membershipId,
+      body: 'Hello — introducing myself.',
+      idempotencyKey,
+    })).resolves.toEqual({
+      conversationId,
+      messageId: '412',
+      connectionStatus: 'pending',
+    });
+    const [url, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.newone.test/v2/contacts/message-requests');
+    expect(init).toMatchObject({ method: 'POST', cache: 'no-store' });
+    expect(init.headers).toMatchObject({ 'Idempotency-Key': idempotencyKey });
+    expect(JSON.parse(String(init.body))).toEqual({
+      organizationId,
+      targetUserId: membershipId,
+      body: 'Hello — introducing myself.',
+    });
+
+    mockFetch.mockImplementationOnce(async () => response({
+      data: {
+        conversation_id: conversationId.toUpperCase(),
+        message_id: 413,
+        connection: { status: 'accepted' },
+      },
+    }, 201));
+    await expect(repository().sendMessageRequest({
+      organizationId,
+      targetUserId: membershipId,
+      body: 'Second body',
+      idempotencyKey,
+    })).resolves.toEqual({
+      conversationId,
+      messageId: '413',
+      connectionStatus: 'accepted',
+    });
+  });
+
+  test('fails closed on malformed message request receipts', async () => {
+    const malformed: unknown[] = [
+      { messageId: '412', connectionStatus: 'pending' },
+      { conversationId: 'not-a-uuid', messageId: '412', connectionStatus: 'pending' },
+      { conversationId, messageId: '', connectionStatus: 'pending' },
+      { conversationId, messageId: 'bad message id', connectionStatus: 'pending' },
+      { conversationId, messageId: '412', connectionStatus: 'declined' },
+      { conversationId, messageId: '412' },
+      { conversationId, messageId: '412', connection: [] },
+    ];
+    for (const payload of malformed) {
+      await expectInvalidResponse(payload, () => repository().sendMessageRequest({
+        organizationId,
+        targetUserId: membershipId,
+        body: 'Hello',
+        idempotencyKey,
+      }));
+    }
+  });
+
   test('classifies missing configuration, missing auth, network, size, and HTTP failures', async () => {
     mockApiBase = null;
     await expect(repository().createDirectConversation({ organizationId, targetMembershipId: membershipId, idempotencyKey }))

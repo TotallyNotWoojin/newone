@@ -1989,3 +1989,115 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockPush).toHaveBeenCalledWith('/updates');
   });
 });
+
+const PERSONAL_REALM_ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
+
+function directRequestConversation(overrides: Record<string, unknown> = {}) {
+  return conversation({
+    id: 'conversation-request',
+    kind: 'direct',
+    directParticipantId: colleague.id,
+    priority: 'normal',
+    translationPair: undefined,
+    translationMode: 'off',
+    memberIds: [self.id, colleague.id],
+    ...overrides,
+  });
+}
+
+function counterpart(overrides: Record<string, unknown> = {}) {
+  return { ...colleague, ...overrides };
+}
+
+describe('personal realm message-request thread states', () => {
+  test('shows the incoming request banner, hides the composer, and wires accept and decline', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
+      candidate,
+    ];
+    mockWorkspace.respondConnection = successfulAction();
+    await render(
+      <ConversationPane
+        conversation={directRequestConversation()}
+        messages={[]}
+        onSend={noopSend}
+        mobile
+      />,
+    );
+
+    expect(screen.getByText('chat.messageRequestIncoming')).toBeTruthy();
+    expect(screen.getByText('chat.messageRequestIncomingBody')).toBeTruthy();
+    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
+    // The composer stays hidden while the counterpart's request is pending.
+    expect(screen.queryByLabelText('chat.message')).toBeNull();
+    expect(screen.queryByLabelText('chat.send')).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(1, colleague.id, 'accepted');
+    await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(2, colleague.id, 'declined');
+  });
+
+  test('shows the passive pending banner with an enabled composer for the requester on desktop', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
+      candidate,
+    ];
+    const onSend = jest.fn(async () => undefined);
+    await render(
+      <ConversationPane
+        conversation={directRequestConversation()}
+        messages={[]}
+        onSend={onSend}
+      />,
+    );
+
+    expect(screen.getByText('chat.messageRequestPending')).toBeTruthy();
+    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
+    // The requester can still post; the server enforces the 3-message cap.
+    await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Second request message');
+    await fireEvent.press(screen.getByLabelText('chat.send'));
+    expect(onSend).toHaveBeenCalledWith('Second request message', undefined, []);
+  });
+
+  test('keeps workspace organizations and settled personal-realm threads free of request banners', async () => {
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
+      candidate,
+    ];
+    // A workspace org keeps ordinary composer behavior with identical people state.
+    const first = await render(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
+    expect(screen.getByLabelText('chat.message')).toBeTruthy();
+    await first.unmount();
+
+    // A personal-realm group is not a request thread.
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const second = await render(
+      <ConversationPane
+        conversation={directRequestConversation({ kind: 'group', directParticipantId: undefined })}
+        messages={[]}
+        onSend={noopSend}
+      />,
+    );
+    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
+    expect(screen.getByLabelText('chat.message')).toBeTruthy();
+    await second.unmount();
+
+    // A settled (connected) direct thread shows no banner either.
+    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
+    await render(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
+    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
+    expect(screen.getByLabelText('chat.message')).toBeTruthy();
+  });
+});

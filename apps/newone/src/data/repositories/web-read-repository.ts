@@ -32,6 +32,7 @@ import type {
   OrganizationUnitOption,
   ReadRepository,
   RepositoryContext,
+  UserSearchResult,
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
@@ -317,6 +318,43 @@ async function readRequest(
     );
   }
   return objectValue(objectValue(payload).data ?? payload);
+}
+
+const USER_SEARCH_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
+const USER_SEARCH_CONNECTION_STATES = new Set<UserSearchResult['connectionState']>([
+  'none',
+  'pending_outgoing',
+  'pending_incoming',
+  'accepted',
+]);
+
+function userSearchResultFromDto(row: JsonRecord): UserSearchResult {
+  const userId = requiredString(row.userId, 'user search identity');
+  const username = requiredString(row.username, 'user search username');
+  const displayName = row.displayName == null
+    ? null
+    : requiredString(row.displayName, 'user search display name');
+  const avatarPath = row.avatarPath == null
+    ? null
+    : requiredString(row.avatarPath, 'user search avatar');
+  const connectionState = row.connectionState;
+  if (
+    !USER_SEARCH_UUID_PATTERN.test(userId)
+    || !USERNAME_PATTERN.test(username)
+    || (displayName !== null && displayName.length > 160)
+    || (avatarPath !== null && avatarPath.length > 1024)
+    || !USER_SEARCH_CONNECTION_STATES.has(connectionState as UserSearchResult['connectionState'])
+  ) {
+    throw new RepositoryError('The service returned an invalid user search result.', 'invalid_response', true);
+  }
+  return {
+    userId: userId.toLowerCase(),
+    username,
+    displayName,
+    avatarPath,
+    connectionState: connectionState as UserSearchResult['connectionState'],
+  };
 }
 
 function personFromDirectory(
@@ -1392,6 +1430,25 @@ export class WebReadRepository implements ReadRepository {
       }
     }
     return { items, cursor };
+  }
+
+  async searchUsers(
+    input: Parameters<ReadRepository['searchUsers']>[0],
+  ): Promise<UserSearchResult[]> {
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    const payload = await readRequest(this.context, '/v2/users/search', {
+      organizationId: input.organizationId,
+      query: input.query,
+      limit,
+    });
+    if (!Array.isArray(payload.users) || payload.users.length > limit) {
+      throw new RepositoryError('The service returned invalid user search results.', 'invalid_response', true);
+    }
+    const users = values(payload.users).map(userSearchResultFromDto);
+    if (new Set(users.map((user) => user.userId)).size !== users.length) {
+      throw new RepositoryError('The service returned duplicate user search results.', 'invalid_response', true);
+    }
+    return users;
   }
 
   async queryAudit(input: Parameters<ReadRepository['queryAudit']>[0]): Promise<AuditPage> {

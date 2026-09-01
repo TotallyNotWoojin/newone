@@ -91,6 +91,12 @@ interface AuditQueryInput {
   limit: number;
 }
 
+interface UserSearchInput {
+  organizationId: string;
+  query: string;
+  limit: number;
+}
+
 const SEARCH_TYPES = [
   'people',
   'conversations',
@@ -118,6 +124,15 @@ const SEARCH_MESSAGE_MATCH_SOURCES = [
 ] as const;
 
 const SEARCH_LANGUAGES = ['ko', 'es', 'en', 'mixed', 'und'] as const;
+const USER_SEARCH_CONNECTION_STATES = [
+  'none',
+  'pending_outgoing',
+  'pending_incoming',
+  'accepted',
+] as const;
+// Stored usernames satisfy the profiles_username_format database constraint;
+// anything else in a search response is a dependency fault, not user input.
+const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 const AUDIT_REASON_CODES = [
   'security_review',
   'compliance_review',
@@ -155,6 +170,7 @@ export interface ReadDependencies {
   loadPreferences(actor: AuthenticatedActor, organizationId: string): Promise<unknown>;
   loadMessages(actor: AuthenticatedActor, input: MessageQueryInput): Promise<unknown>;
   loadSearch(actor: AuthenticatedActor, input: SearchInput): Promise<unknown>;
+  loadUserSearch(actor: AuthenticatedActor, input: UserSearchInput): Promise<unknown>;
   loadAudit(actor: AuthenticatedActor, input: AuditQueryInput): Promise<unknown>;
   recordAuditDenial(
     actor: AuthenticatedActor,
@@ -258,6 +274,64 @@ async function loadSearchDefault(
     }),
     input.limit,
   );
+}
+
+async function loadUserSearchDefault(
+  actor: AuthenticatedActor,
+  input: UserSearchInput,
+): Promise<unknown> {
+  return parseUserSearchResponse(
+    await invokeRpc(asRpcClient(actor.adminClient), 'bff_search_users_by_username', {
+      p_actor_user_id: actor.user.id,
+      p_organization_id: input.organizationId,
+      p_session_id: actor.claims.sessionId,
+      p_query: input.query,
+      p_limit: input.limit,
+    }),
+    input.limit,
+  );
+}
+
+export function parseUserSearchResponse(value: unknown, limit: number): {
+  users: Array<{
+    userId: string;
+    username: string;
+    displayName: string | null;
+    avatarPath: string | null;
+    connectionState: typeof USER_SEARCH_CONNECTION_STATES[number];
+  }>;
+} {
+  try {
+    const root = asObject(value);
+    onlyKeys(root, ['users']);
+    if (!Array.isArray(root.users) || root.users.length > limit) throw new Error('invalid');
+    const seenUserIds = new Set<string>();
+    const users = root.users.map((entry) => {
+      const row = asObject(entry);
+      // The database strips null display/avatar fields, so absence means null.
+      onlyKeys(row, ['user_id', 'username', 'display_name', 'avatar_path', 'connection_state']);
+      const userId = uuid(row.user_id);
+      if (seenUserIds.has(userId)) throw new Error('invalid');
+      seenUserIds.add(userId);
+      const username = normalizedString(row.username, { min: 4, max: 30 }) as string;
+      if (!USERNAME_PATTERN.test(username)) throw new Error('invalid');
+      return {
+        userId,
+        username,
+        displayName: row.display_name === undefined || row.display_name === null
+          ? null
+          : normalizedString(row.display_name, { min: 1, max: 120 }) as string,
+        avatarPath: row.avatar_path === undefined || row.avatar_path === null
+          ? null
+          : normalizedString(row.avatar_path, { min: 1, max: 1024 }) as string,
+        connectionState: oneOf(row.connection_state, USER_SEARCH_CONNECTION_STATES),
+      };
+    });
+    return { users };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 503) throw error;
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
 }
 
 async function loadAuditDefault(
@@ -503,6 +577,7 @@ export function defaultReadDependencies(): ReadDependencies {
     loadPreferences: loadPreferencesDefault,
     loadMessages: loadMessagesDefault,
     loadSearch: loadSearchDefault,
+    loadUserSearch: loadUserSearchDefault,
     loadAudit: loadAuditDefault,
     recordAuditDenial: recordAuditDenialDefault,
   };
@@ -729,6 +804,29 @@ export function createReadHandler(
             }, config.cursorSigningKey),
             hasMore,
           },
+        );
+      }
+
+      if (path === '/v2/users/search') {
+        onlyKeys(parsed, ['organizationId', 'query', 'limit']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        // The database treats anything that is not a plausible username prefix
+        // as an empty result, so the gateway only bounds the query envelope.
+        const query = normalizedString(parsed.query, { min: 1, max: 64 }) as string;
+        const limit = optionalInteger(parsed, 'limit', 1, 25) ?? 10;
+        await dependencies.authorize(actor, organizationId, {
+          operation: 'user.search.read',
+        });
+        await dependencies.rateLimit(
+          request,
+          config,
+          actor,
+          organizationId,
+          'user.search.read',
+        );
+        return boundedResponse(
+          meta,
+          await dependencies.loadUserSearch(actor, { organizationId, query, limit }),
         );
       }
 

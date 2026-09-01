@@ -1058,6 +1058,99 @@ describe('authoritative web read repository', () => {
     })).resolves.toMatchObject({ items: [{ serverId: '90' }], cursor: null });
   });
 
+  test('searches consumer usernames through the bounded read surface', async () => {
+    mockFetch.mockImplementationOnce(async () => response({ data: { users: [
+      {
+        userId: 'AB000000-0000-4000-8000-00000000000A',
+        username: 'ana_torres',
+        displayName: 'Ana Torres',
+        avatarPath: 'avatars/ana.jpg',
+        connectionState: 'none',
+      },
+      {
+        userId: currentUserId,
+        username: 'jordan',
+        displayName: null,
+        avatarPath: null,
+        connectionState: 'accepted',
+      },
+    ] } }));
+    await expect(repository().searchUsers({
+      organizationId,
+      query: 'ana',
+      limit: 20,
+    })).resolves.toEqual([
+      {
+        userId: 'ab000000-0000-4000-8000-00000000000a',
+        username: 'ana_torres',
+        displayName: 'Ana Torres',
+        avatarPath: 'avatars/ana.jpg',
+        connectionState: 'none',
+      },
+      {
+        userId: currentUserId,
+        username: 'jordan',
+        displayName: null,
+        avatarPath: null,
+        connectionState: 'accepted',
+      },
+    ]);
+    expect(String(mockFetch.mock.calls[0]![0])).toBe('https://api.newone.test/v2/users/search');
+    expect(JSON.parse(String((mockFetch.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      organizationId,
+      query: 'ana',
+      limit: 20,
+    });
+
+    mockFetch.mockImplementationOnce(async () => response({ data: { users: [] } }));
+    await expect(repository().searchUsers({ organizationId, query: 'zz', limit: 500 }))
+      .resolves.toEqual([]);
+    expect(JSON.parse(String((mockFetch.mock.calls[1]![1] as RequestInit).body))).toEqual({
+      organizationId,
+      query: 'zz',
+      limit: 50,
+    });
+  });
+
+  test('rejects malformed, duplicated, oversized, and rate-limited user search responses', async () => {
+    const validRow = {
+      userId: colleagueId,
+      username: 'ana_torres',
+      displayName: 'Ana Torres',
+      avatarPath: null,
+      connectionState: 'none',
+    };
+    const malformed: unknown[] = [
+      { users: null },
+      { users: [{ ...validRow, userId: 'not-a-uuid' }] },
+      { users: [{ ...validRow, username: 'Ana Torres' }] },
+      { users: [{ ...validRow, username: 'ab' }] },
+      { users: [{ ...validRow, displayName: 'x'.repeat(161) }] },
+      { users: [{ ...validRow, avatarPath: 'x'.repeat(1025) }] },
+      { users: [{ ...validRow, connectionState: 'blocked' }] },
+      { users: [validRow, { ...validRow, username: 'ana_dupe' }] },
+    ];
+    for (const payload of malformed) {
+      mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+      await expect(repository().searchUsers({ organizationId, query: 'ana' }))
+        .rejects.toMatchObject({ code: 'invalid_response', retryable: true });
+    }
+
+    mockFetch.mockImplementationOnce(async () => response({
+      data: { users: [validRow, { ...validRow, userId: currentUserId, username: 'ana_other' }] },
+    }));
+    await expect(repository().searchUsers({ organizationId, query: 'ana', limit: 1 }))
+      .rejects.toMatchObject({ code: 'invalid_response', retryable: true });
+
+    mockFetch.mockImplementationOnce(async () => response({
+      error: { code: 'rate_limited', correlationId: 'correlation-search' },
+    }, 429));
+    await expect(repository().searchUsers({ organizationId, query: 'ana' }))
+      .rejects.toMatchObject({
+        code: 'rate_limited', status: 429, retryable: true, correlationId: 'correlation-search',
+      });
+  });
+
   test('parses audit pages while preserving the signed filter receipt', async () => {
     mockFetch.mockImplementationOnce(async () => response({ data: {
       items: [{

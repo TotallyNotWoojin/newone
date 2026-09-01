@@ -35,6 +35,9 @@ export function errorMessageKey(error: unknown): MessageKey {
   if (code === 'forbidden' || code === 'http_403' || code === 'permission_denied') {
     return 'errors.permission';
   }
+  if (code.includes('message_request') && (code.includes('cap') || code.includes('limit'))) {
+    return 'errors.messageRequestCap';
+  }
   if (code === 'http_429' || code.includes('rate_limit')) return 'errors.rateLimit';
   if (code === 'invalid_response') return 'errors.invalidResponse';
   if (

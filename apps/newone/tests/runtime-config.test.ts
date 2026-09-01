@@ -97,6 +97,12 @@ describe('validated public runtime configuration', () => {
     expect(runtime.apiUrlFor('/v2/bootstrap')).toBe(
       'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap',
     );
+    expect(runtime.apiUrlFor('/v2/users/search')).toBe(
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/users/search',
+    );
+    expect(runtime.apiUrlFor('/v2/contacts/message-requests')).toBe(
+      'https://coverage-project.supabase.co/functions/v1/newone-api/v2/contacts/message-requests',
+    );
     expect(runtime.nativeEdgeRequestHeaders('controlled-access-token')).toEqual({
       apikey: 'sb_publishable_controlled_key_123456789',
       Authorization: 'Bearer controlled-access-token',

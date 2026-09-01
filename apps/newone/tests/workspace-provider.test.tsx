@@ -21,6 +21,7 @@ import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 
 const mockLoadWorkspace = jest.fn();
 const mockLoadMessages = jest.fn();
+const mockSearchUsers = jest.fn();
 const mockCommand = jest.fn<(method: string, input: unknown) => Promise<unknown>>();
 const mockEndAccess = jest.fn();
 const mockListOutbox = jest.fn();
@@ -96,6 +97,10 @@ jest.mock('@/data/repositories/web-read-repository', () => ({
 
     loadMessages(...mockArgs: unknown[]) {
       return mockLoadMessages(...mockArgs);
+    }
+
+    searchUsers(...mockArgs: unknown[]) {
+      return mockSearchUsers(...mockArgs);
     }
 
     queryAudit(...mockArgs: unknown[]) {
@@ -1052,6 +1057,7 @@ beforeEach(() => {
   mockGetCurrentInstallationId.mockImplementation(async () => null);
   mockRequestDeviceRegistration.mockImplementation(async () => null);
   mockQueryAudit.mockImplementation(async () => ({ events: [], nextCursor: null }));
+  mockSearchUsers.mockImplementation(async () => []);
   mockCommand.mockImplementation(async () => undefined);
 });
 
@@ -3706,6 +3712,177 @@ describe('authoritative workspace provider', () => {
     await expect(currentWorkspace().closeIncident(incidentConversationId, 'x')).resolves.toBe(false);
     await act(async () => currentWorkspace().clearActionError());
     expect(currentWorkspace().actionError).toBeNull();
+    await view.unmount();
+  });
+
+  test('searches usernames and sends message requests inside the personal realm', async () => {
+    const strangerId = '60000000-0000-4000-8000-000000000010';
+    const requestConversationId = '80000000-0000-4000-8000-000000000011';
+    const personalSnapshot = workspaceSnapshot();
+    personalSnapshot.organizationId = '11111111-1111-4111-8111-111111111111';
+    mockLoadWorkspace.mockImplementation(async () => personalSnapshot);
+    mockSearchUsers.mockImplementation(async () => [{
+      userId: strangerId,
+      username: 'sam_stranger',
+      displayName: 'Sam Stranger',
+      avatarPath: null,
+      connectionState: 'none',
+    }]);
+    mockCommand.mockImplementation(async (method: string) => method === 'sendMessageRequest'
+      ? { conversationId: requestConversationId, messageId: '77', connectionStatus: 'pending' }
+      : undefined);
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    // Freeze subsequent refreshes so the optimistic patches stay observable.
+    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+
+    let shortQuery: unknown = null;
+    let results: unknown = null;
+    let conversationId: unknown = null;
+    await act(async () => {
+      shortQuery = await currentWorkspace().searchUsers(' S ');
+      results = await currentWorkspace().searchUsers('  SAM ');
+      conversationId = await currentWorkspace().sendMessageRequest(
+        strangerId,
+        '  Hello Sam!  ',
+        'Sam Stranger',
+      );
+    });
+    expect(shortQuery).toEqual([]);
+    expect(mockSearchUsers).toHaveBeenCalledTimes(1);
+    expect(mockSearchUsers).toHaveBeenCalledWith({
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      query: 'sam',
+      limit: 20,
+    });
+    expect(results).toEqual([expect.objectContaining({ username: 'sam_stranger' })]);
+    expect(conversationId).toBe(requestConversationId);
+    expect(mockCommand).toHaveBeenCalledWith('sendMessageRequest', {
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      targetUserId: strangerId,
+      body: 'Hello Sam!',
+      idempotencyKey: '50000000-0000-4000-8000-000000000005',
+    });
+    expect(currentWorkspace().selectedConversationId).toBe(requestConversationId);
+    expect(currentWorkspace().conversations[0]).toMatchObject({
+      id: requestConversationId,
+      kind: 'direct',
+      directParticipantId: strangerId,
+      lastMessage: 'Hello Sam!',
+    });
+    expect(currentWorkspace().people.find((person) => person.id === strangerId)).toMatchObject({
+      displayName: 'Sam Stranger',
+      connectionState: 'pending',
+      connectionRequestDirection: 'outgoing',
+    });
+
+    // Local bounds fail closed without reaching the command surface.
+    const callsBefore = mockCommand.mock.calls.length;
+    await act(async () => {
+      await expect(currentWorkspace().sendMessageRequest(strangerId, '   ')).resolves.toBeNull();
+      await expect(currentWorkspace().sendMessageRequest(strangerId, 'x'.repeat(20_001)))
+        .resolves.toBeNull();
+      await expect(currentWorkspace().sendMessageRequest(userId, 'to myself')).resolves.toBeNull();
+    });
+    expect(mockCommand.mock.calls.length).toBe(callsBefore);
+
+    // An unknown search-discovered target connects by raw user UUID in the
+    // realm, while a known non-available person stays gated locally.
+    const secondStrangerId = '60000000-0000-4000-8000-000000000012';
+    let connected: unknown = null;
+    let gated: unknown = null;
+    await act(async () => {
+      connected = await currentWorkspace().updateConnection(secondStrangerId);
+      gated = await currentWorkspace().updateConnection(strangerId);
+    });
+    expect(connected).toBe(true);
+    expect(gated).toBe(false);
+    expect(mockCommand).toHaveBeenCalledWith('requestConnection', expect.objectContaining({
+      targetMembershipId: secondStrangerId,
+    }));
+    expect(mockCommand).not.toHaveBeenCalledWith('requestConnection', expect.objectContaining({
+      targetMembershipId: strangerId,
+    }));
+    await view.unmount();
+  });
+
+  test('maps username search failures and keeps workspace-org connection gating closed', async () => {
+    mockSearchUsers.mockImplementation(async () => {
+      throw new RepositoryError('raw upstream', 'rate_limited', true, undefined, 429);
+    });
+    mockCommand.mockImplementation(async (method: string) => method === 'sendMessageRequest'
+      ? { conversationId: conversationBId, messageId: '78', connectionStatus: 'accepted' }
+      : undefined);
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+
+    let failed: unknown = 'unset';
+    await act(async () => {
+      failed = await currentWorkspace().searchUsers('sam');
+    });
+    expect(failed).toBeNull();
+    expect(currentWorkspace().actionError).toBe('errors.rateLimit');
+
+    // Outside the personal realm an unknown target must not reach the server.
+    let connected: unknown = 'unset';
+    await act(async () => {
+      connected = await currentWorkspace().updateConnection('60000000-0000-4000-8000-000000000010');
+    });
+    expect(connected).toBe(false);
+    expect(mockCommand).not.toHaveBeenCalledWith('requestConnection', expect.anything());
+
+    // An accepted receipt (auto-accept pair) records the counterpart as connected.
+    let conversationId: unknown = null;
+    await act(async () => {
+      conversationId = await currentWorkspace().sendMessageRequest(otherUserId, 'Hola', 'Ignored');
+    });
+    expect(conversationId).toBe(conversationBId);
+    expect(currentWorkspace().people.find((person) => person.id === otherUserId)).toMatchObject({
+      connectionState: 'connected',
+    });
+
+    // A rejected command surfaces the mapped error and returns null.
+    mockCommand.mockImplementation(async () => {
+      throw new RepositoryError('raw upstream', 'message_request_cap', false);
+    });
+    let capped: unknown = 'unset';
+    await act(async () => {
+      capped = await currentWorkspace().sendMessageRequest(otherUserId, 'One more');
+    });
+    expect(capped).toBeNull();
+    expect(currentWorkspace().actionError).toBe('errors.messageRequestCap');
+    await view.unmount();
+  });
+
+  test('rejects username search and message requests without workspace identity', async () => {
+    mockAuth.user = null;
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('error::0')).toBeTruthy());
+    await act(async () => {
+      await expect(currentWorkspace().searchUsers('sam')).resolves.toBeNull();
+      await expect(currentWorkspace().sendMessageRequest(
+        '60000000-0000-4000-8000-000000000010',
+        'Hello',
+      )).resolves.toBeNull();
+      await expect(currentWorkspace().updateConnection(
+        '60000000-0000-4000-8000-000000000010',
+      )).resolves.toBe(false);
+    });
+    expect(mockSearchUsers).not.toHaveBeenCalled();
+    expect(mockCommand).not.toHaveBeenCalled();
     await view.unmount();
   });
 });

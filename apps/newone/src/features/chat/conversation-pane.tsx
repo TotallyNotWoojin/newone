@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
 import { firstUnreadMessageId } from '@/data/reconciliation/message-timeline.mjs';
@@ -108,6 +109,23 @@ export function ConversationPane({
   const tail = messages.at(-1);
   const tailKey = tail?.serverId ?? tail?.clientMessageId ?? tail?.id ?? null;
   const currentUserId = workspace.currentUser?.id ?? null;
+  // Personal-realm direct threads surface person-level message-request state
+  // derived from the counterpart's connection data.
+  const requestCounterpart = conversation
+    && conversation.kind === 'direct'
+    && conversation.directParticipantId
+    && isPersonalRealm(workspace.organizationId)
+    ? workspace.people.find((person) => person.id === conversation.directParticipantId) ?? null
+    : null;
+  const pendingRequestCounterpart = requestCounterpart?.connectionState === 'pending'
+    ? requestCounterpart
+    : null;
+  const incomingRequest = pendingRequestCounterpart?.connectionRequestDirection === 'incoming'
+    ? pendingRequestCounterpart
+    : null;
+  const outgoingRequest = pendingRequestCounterpart?.connectionRequestDirection === 'outgoing'
+    ? pendingRequestCounterpart
+    : null;
 
   useEffect(() => {
     if (!conversationId || conversation?.managementOnly) return;
@@ -542,6 +560,42 @@ export function ConversationPane({
         </Pressable>
       ) : null}
 
+      {incomingRequest ? (
+        <View accessibilityRole="alert" style={styles.requestBanner}>
+          <View style={styles.requestBannerCopy}>
+            <Text style={styles.requestBannerTitle}>
+              {t('chat.messageRequestIncoming').replace('{name}', incomingRequest.displayName)}
+            </Text>
+            <Text style={styles.requestBannerText}>{t('chat.messageRequestIncomingBody')}</Text>
+          </View>
+          <ActionError message={workspace.actionError} />
+          <View style={styles.requestBannerActions}>
+            <PrimaryButton
+              icon="checkmark"
+              label={t('people.accept')}
+              loading={workspace.actionBusy === 'connection-respond'}
+              onPress={() => void workspace.respondConnection(incomingRequest.id, 'accepted')}
+              tone="dark"
+            />
+            <PrimaryButton
+              icon="close"
+              label={t('people.decline')}
+              loading={workspace.actionBusy === 'connection-respond'}
+              onPress={() => void workspace.respondConnection(incomingRequest.id, 'declined')}
+              tone="light"
+            />
+          </View>
+        </View>
+      ) : null}
+      {outgoingRequest ? (
+        <View accessibilityRole="alert" style={styles.requestPendingBanner}>
+          <Ionicons name="time-outline" color={colors.amber} size={16} />
+          <Text style={styles.requestPendingText}>
+            {t('chat.messageRequestPending').replace('{name}', outgoingRequest.displayName)}
+          </Text>
+        </View>
+      ) : null}
+      {incomingRequest ? null : (
       <Composer
         currentUserId={currentUserId}
         disabled={conversation.isReadOnly === true || conversation.canPost === false}
@@ -569,6 +623,7 @@ export function ConversationPane({
         }}
         translationPair={conversation.translationPair}
       />
+      )}
 
       <MessageActionsModal
         key={selectedMessage?.id ?? 'closed'}
@@ -4104,6 +4159,26 @@ const styles = StyleSheet.create({
   attachmentControlText: { color: colors.mintDark, fontSize: 9, fontWeight: '900' },
   attachmentControlTextOwn: { color: colors.white },
   attachmentControlDanger: { color: colors.red },
+  requestBanner: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.paper,
+  },
+  requestBannerCopy: { gap: 3 },
+  requestBannerTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' },
+  requestBannerText: { color: colors.inkMuted, fontSize: 11, lineHeight: 16 },
+  requestBannerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  requestPendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.amberSoft,
+  },
+  requestPendingText: { flex: 1, color: colors.amber, fontSize: 11, lineHeight: 16, fontWeight: '700' },
   composerWrap: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
