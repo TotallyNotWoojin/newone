@@ -186,6 +186,30 @@ interface OtpIdentity {
   employeeCode?: string | null;
 }
 
+export type SignupLanguage = 'en' | 'es' | 'ko';
+
+interface SignupIdentity {
+  destination: string;
+  username: string;
+  displayName: string;
+  language: SignupLanguage;
+}
+
+function parseSignupRequest(payload: Record<string, unknown>) {
+  if (payload.status !== 'code_sent') {
+    throw new WebAuthError('The signup gateway returned an invalid response.', 'invalid_response');
+  }
+  return { status: 'code_sent' as const };
+}
+
+/** The signup receipt is absent when the server silently signed in an existing account. */
+function parseSignupReceipt(payload: Record<string, unknown>) {
+  const signup = objectValue(payload.signup);
+  return typeof signup.username === 'string' && typeof signup.organizationId === 'string'
+    ? { signup: { username: signup.username, organizationId: signup.organizationId } }
+    : {};
+}
+
 export async function requestWebOtp(input: OtpIdentity & { captchaToken: string }) {
   const client = await webClientBinding();
   return parseOtpRequest(
@@ -258,6 +282,43 @@ export async function verifyWebRecoveryOtp(input: OtpIdentity & { code: string }
   );
 }
 
+export async function requestWebSignup(input: SignupIdentity & { captchaToken: string }) {
+  const client = await webClientBinding();
+  return parseSignupRequest(
+    await webRequest('/v2/auth/signup/request', {
+      method: 'POST',
+      body: {
+        destination: input.destination,
+        username: input.username,
+        displayName: input.displayName,
+        language: input.language,
+        captchaToken: input.captchaToken,
+        installationId: client.installationId,
+        locale: client.locale,
+        appVersion: client.appVersion,
+      },
+    }),
+  );
+}
+
+export async function verifyWebSignup(input: { destination: string; code: string }) {
+  const client = await webClientBinding();
+  const payload = await webRequest('/v2/auth/signup/verify', {
+    method: 'POST',
+    body: {
+      destination: input.destination,
+      code: input.code,
+      installationId: client.installationId,
+      locale: client.locale,
+      appVersion: client.appVersion,
+    },
+  });
+  return {
+    ...parseSession(payload),
+    ...parseSignupReceipt(payload),
+  };
+}
+
 async function webClientBinding() {
   return {
     installationId: await getInstallationId(),
@@ -272,7 +333,9 @@ type NativeAuthPath =
   | '/v2/auth/native/otp/request'
   | '/v2/auth/native/otp/verify'
   | '/v2/auth/native/recovery/otp/request'
-  | '/v2/auth/native/recovery/otp/verify';
+  | '/v2/auth/native/recovery/otp/verify'
+  | '/v2/auth/native/signup/request'
+  | '/v2/auth/native/signup/verify';
 
 async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unknown>) {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
@@ -385,6 +448,44 @@ export async function verifyNativeRecoveryOtp(input: NativeOtpIdentity & { code:
   }
   return {
     ...parsed,
+    memberships: payload.memberships,
+    session: {
+      accessToken: nativeSession.accessToken,
+      refreshToken: nativeSession.refreshToken,
+      expiresIn: Number(nativeSession.expiresIn),
+    },
+  };
+}
+
+export async function requestNativeSignup(input: SignupIdentity & { captchaToken: string }) {
+  const payload = await nativeAuthRequest('/v2/auth/native/signup/request', {
+    destination: input.destination,
+    username: input.username,
+    displayName: input.displayName,
+    language: input.language,
+    captchaToken: input.captchaToken,
+  });
+  return parseSignupRequest(payload);
+}
+
+export async function verifyNativeSignup(input: { destination: string; code: string }) {
+  const payload = await nativeAuthRequest('/v2/auth/native/signup/verify', {
+    destination: input.destination,
+    code: input.code,
+  });
+  const parsed = parseSession(payload);
+  const nativeSession = objectValue(payload.session);
+  if (
+    typeof nativeSession.accessToken !== 'string'
+    || typeof nativeSession.refreshToken !== 'string'
+    || !Number.isInteger(nativeSession.expiresIn)
+    || !Array.isArray(payload.memberships)
+  ) {
+    throw new WebAuthError('The native signup gateway returned an invalid session.', 'invalid_response');
+  }
+  return {
+    ...parsed,
+    ...parseSignupReceipt(payload),
     memberships: payload.memberships,
     session: {
       accessToken: nativeSession.accessToken,

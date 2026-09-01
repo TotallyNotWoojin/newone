@@ -18,6 +18,8 @@ const mockRequestNativeOtp = jest.fn();
 const mockVerifyNativeOtp = jest.fn();
 const mockRequestNativeRecoveryOtp = jest.fn();
 const mockVerifyNativeRecoveryOtp = jest.fn();
+const mockRequestNativeSignup = jest.fn();
+const mockVerifyNativeSignup = jest.fn();
 const mockPurgeUser = jest.fn();
 const mockTranslate = (key: string) => key;
 
@@ -74,14 +76,18 @@ jest.mock('@/lib/web-auth', () => {
     refreshWebSession: jest.fn(),
     requestNativeOtp: (mockInput: unknown) => mockRequestNativeOtp(mockInput),
     requestNativeRecoveryOtp: (mockInput: unknown) => mockRequestNativeRecoveryOtp(mockInput),
+    requestNativeSignup: (mockInput: unknown) => mockRequestNativeSignup(mockInput),
     requestWebOtp: jest.fn(),
     requestWebRecoveryOtp: jest.fn(),
+    requestWebSignup: jest.fn(),
     signOutWebSession: jest.fn(),
     validateNativeMembership: (mockInput: unknown) => mockValidateNativeMembership(mockInput),
     verifyNativeOtp: (mockInput: unknown) => mockVerifyNativeOtp(mockInput),
     verifyNativeRecoveryOtp: (mockInput: unknown) => mockVerifyNativeRecoveryOtp(mockInput),
+    verifyNativeSignup: (mockInput: unknown) => mockVerifyNativeSignup(mockInput),
     verifyWebOtp: jest.fn(),
     verifyWebRecoveryOtp: jest.fn(),
+    verifyWebSignup: jest.fn(),
     WebAuthError: ControlledWebAuthError,
   };
 });
@@ -169,6 +175,18 @@ beforeEach(() => {
     recovery: { otherSessionsRevoked: 4 },
     session: {
       accessToken: accessToken('aal2'),
+      refreshToken: 'controlled-refresh-token',
+      expiresIn: 3600,
+    },
+  }));
+  mockRequestNativeSignup.mockImplementation(async () => ({ status: 'code_sent' }));
+  mockVerifyNativeSignup.mockImplementation(async () => ({
+    authenticated: true,
+    user: { id: userId },
+    memberships: [{ organizationId: 'org-personal' }],
+    signup: { username: 'river_runner_7', organizationId: 'org-personal' },
+    session: {
+      accessToken: accessToken('aal1'),
       refreshToken: 'controlled-refresh-token',
       expiresIn: 3600,
     },
@@ -261,6 +279,60 @@ describe('native authentication state machine', () => {
       });
     });
     expect(recoveryResult).toEqual({ otherSessionsRevoked: 4 });
+  });
+
+  test('activates a consumer signup session through the same native activation contract', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    const signupInput = {
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'ko' as const,
+      captchaToken: 'controlled-captcha-input',
+    };
+    await expect(currentAuth().requestSignup(signupInput)).resolves.toBeUndefined();
+    expect(mockRequestNativeSignup).toHaveBeenCalledWith(signupInput);
+
+    await act(async () => {
+      await currentAuth().verifySignup({
+        destination: 'new.person@example.test',
+        code: '123456',
+      });
+    });
+    expect(mockVerifyNativeSignup).toHaveBeenCalledWith({
+      destination: 'new.person@example.test',
+      code: '123456',
+    });
+    expect(screen.getByText('signed-in')).toBeTruthy();
+    expect(currentAuth().user?.id).toBe(userId);
+  });
+
+  test('rejects a signup activation whose local session does not match the gateway user', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    mockSetSession.mockImplementationOnce(async () => ({
+      data: { session: { ...nativeSession(), user: { id: 'intruder-user' } } },
+      error: null,
+    }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    await expect(currentAuth().verifySignup({
+      destination: 'new.person@example.test',
+      code: '123456',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(screen.getByText('signed-out')).toBeTruthy();
   });
 
   test('refreshes assurance and always removes credentials and user-scoped data on sign-out', async () => {

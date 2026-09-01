@@ -10,11 +10,15 @@ import {
   redeemNativeInvitation,
   requestNativeOtp,
   requestNativeRecoveryOtp,
+  requestNativeSignup,
+  requestWebSignup,
   signOutWebSession,
   validateNativeMembership,
   verifyNativeOtp,
   verifyNativeRecoveryOtp,
+  verifyNativeSignup,
   verifyWebMfa,
+  verifyWebSignup,
   WebAuthError,
 } from '@/lib/web-auth';
 
@@ -246,6 +250,100 @@ describe('native identity gateway client', () => {
     })).rejects.toMatchObject({ code: 'invitation_rejected' });
   });
 
+  test('sends the exact native consumer signup request and accepts only a code_sent receipt', async () => {
+    jsonResponse({ data: { status: 'code_sent' } });
+    await expect(requestNativeSignup({
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'es',
+      captchaToken: 'controlled-captcha-input',
+    })).resolves.toEqual({ status: 'code_sent' });
+
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/native/signup/request');
+    expect(JSON.parse(String(init.body))).toEqual({
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'es',
+      captchaToken: 'controlled-captcha-input',
+      installationId: '20000000-0000-4000-8000-000000000002',
+    });
+
+    jsonResponse({ data: { status: 'queued' } });
+    await expect(requestNativeSignup({
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'es',
+      captchaToken: 'controlled-captcha-input',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  test('verifies native signup sessions with and without a new-account receipt', async () => {
+    jsonResponse({ data: {
+      authenticated: true,
+      user: { id: 'user-new', email: 'new.person@example.test' },
+      memberships: [{ organizationId: 'org-personal' }],
+      signup: { username: 'river_runner_7', organizationId: 'org-personal' },
+      session: {
+        accessToken: 'controlled-access-token',
+        refreshToken: 'controlled-refresh-token',
+        expiresIn: 3600,
+      },
+    } });
+    await expect(verifyNativeSignup({
+      destination: 'new.person@example.test',
+      code: '123456',
+    })).resolves.toMatchObject({
+      user: { id: 'user-new' },
+      signup: { username: 'river_runner_7', organizationId: 'org-personal' },
+      session: { expiresIn: 3600 },
+    });
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/native/signup/verify');
+    expect(JSON.parse(String(init.body))).toEqual({
+      destination: 'new.person@example.test',
+      code: '123456',
+      installationId: '20000000-0000-4000-8000-000000000002',
+    });
+
+    jsonResponse({ data: {
+      authenticated: true,
+      user: { id: 'user-existing' },
+      memberships: [{ organizationId: 'org-personal' }],
+      session: {
+        accessToken: 'controlled-access-token',
+        refreshToken: 'controlled-refresh-token',
+        expiresIn: 3600,
+      },
+    } });
+    const silentSignIn = await verifyNativeSignup({
+      destination: 'existing.person@example.test',
+      code: '123456',
+    });
+    expect(silentSignIn.user.id).toBe('user-existing');
+    expect(silentSignIn).not.toHaveProperty('signup');
+
+    jsonResponse({ data: {
+      authenticated: true,
+      user: { id: 'user-new' },
+      memberships: [{ organizationId: 'org-personal' }],
+      session: { accessToken: 'missing-refresh', expiresIn: 3600 },
+    } });
+    await expect(verifyNativeSignup({
+      destination: 'new.person@example.test',
+      code: '123456',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+
+    jsonResponse({ error: { code: 'signup_expired' } }, 410);
+    await expect(verifyNativeSignup({
+      destination: 'new.person@example.test',
+      code: '123456',
+    })).rejects.toMatchObject({ code: 'signup_expired' });
+  });
+
   test('classifies network failures without echoing transport details', async () => {
     controlledFetch.mockImplementationOnce(async () => {
       throw new Error('sensitive network implementation detail');
@@ -352,6 +450,89 @@ describe('same-origin web identity client', () => {
       })).resolves.toBeUndefined();
       await expect(signOutWebSession()).resolves.toBeUndefined();
       expect(controlledFetch).toHaveBeenCalledTimes(5);
+    } finally {
+      platform.restore();
+    }
+  });
+
+  test('sends the web signup request and verifies sessions with an optional signup receipt', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://app.example.test' } },
+    });
+    jsonResponse({ data: { status: 'code_sent' } });
+    jsonResponse({ data: {
+      authenticated: true,
+      user: { id: 'user-new', email: 'new.person@example.test' },
+      sessionId: 'session-new',
+      aal: 'aal1',
+      signup: { username: 'river_runner_7', organizationId: 'org-personal' },
+    } });
+    jsonResponse({ data: {
+      authenticated: true,
+      user: { id: 'user-existing' },
+    } });
+    jsonResponse({ error: { code: 'username_taken' } }, 409);
+    jsonResponse({ error: { code: 'signup_expired' } }, 410);
+    try {
+      await expect(requestWebSignup({
+        destination: 'new.person@example.test',
+        username: 'river_runner_7',
+        displayName: 'River Runner',
+        language: 'ko',
+        captchaToken: 'controlled-captcha-input',
+      })).resolves.toEqual({ status: 'code_sent' });
+      const [requestUrl, requestInit] = controlledFetch.mock.calls[0] as [string, RequestInit];
+      expect(requestUrl).toContain('/v2/auth/signup/request');
+      expect(requestInit.credentials).toBe('include');
+      const requestBody = JSON.parse(String(requestInit.body));
+      expect(requestBody).toMatchObject({
+        destination: 'new.person@example.test',
+        username: 'river_runner_7',
+        displayName: 'River Runner',
+        language: 'ko',
+        captchaToken: 'controlled-captcha-input',
+        installationId: '20000000-0000-4000-8000-000000000002',
+      });
+      expect(requestBody).toHaveProperty('locale');
+      expect(requestBody).toHaveProperty('appVersion');
+
+      await expect(verifyWebSignup({
+        destination: 'new.person@example.test',
+        code: '123456',
+      })).resolves.toMatchObject({
+        user: { id: 'user-new' },
+        sessionId: 'session-new',
+        aal: 'aal1',
+        signup: { username: 'river_runner_7', organizationId: 'org-personal' },
+      });
+      const [verifyUrl, verifyInit] = controlledFetch.mock.calls[1] as [string, RequestInit];
+      expect(verifyUrl).toContain('/v2/auth/signup/verify');
+      expect(JSON.parse(String(verifyInit.body))).toMatchObject({
+        destination: 'new.person@example.test',
+        code: '123456',
+        installationId: '20000000-0000-4000-8000-000000000002',
+      });
+
+      const silentSignIn = await verifyWebSignup({
+        destination: 'existing.person@example.test',
+        code: '123456',
+      });
+      expect(silentSignIn.user.id).toBe('user-existing');
+      expect(silentSignIn).not.toHaveProperty('signup');
+
+      await expect(requestWebSignup({
+        destination: 'new.person@example.test',
+        username: 'river_runner_7',
+        displayName: 'River Runner',
+        language: 'en',
+        captchaToken: 'controlled-captcha-input',
+      })).rejects.toMatchObject({ code: 'username_taken' });
+      await expect(verifyWebSignup({
+        destination: 'new.person@example.test',
+        code: '123456',
+      })).rejects.toMatchObject({ code: 'signup_expired' });
     } finally {
       platform.restore();
     }

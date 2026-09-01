@@ -26,15 +26,20 @@ import {
   refreshWebSession,
   requestNativeOtp,
   requestNativeRecoveryOtp,
+  requestNativeSignup,
   requestWebOtp,
   requestWebRecoveryOtp,
+  requestWebSignup,
   signOutWebSession,
   verifyWebOtp,
   verifyWebRecoveryOtp,
+  verifyWebSignup,
   verifyNativeOtp,
   verifyNativeRecoveryOtp,
+  verifyNativeSignup,
   validateNativeMembership,
   WebAuthError,
+  type SignupLanguage,
   type WebAuthUser,
 } from '@/lib/web-auth';
 
@@ -60,6 +65,17 @@ interface AuthState {
     destination: string;
     invitationToken?: string;
     employeeCode?: string;
+    code: string;
+  }) => Promise<void>;
+  requestSignup: (input: {
+    destination: string;
+    username: string;
+    displayName: string;
+    language: SignupLanguage;
+    captchaToken: string;
+  }) => Promise<void>;
+  verifySignup: (input: {
+    destination: string;
     code: string;
   }) => Promise<void>;
   requestRecoveryOtp: (input: {
@@ -383,6 +399,53 @@ export function AuthProvider({ children }: PropsWithChildren) {
           if (setSessionError || !data.session || data.session.user.id !== gatewaySession.user.id) {
             await nativeClient.auth.signOut({ scope: 'local' });
             throw new WebAuthError('The native identity gateway returned an invalid session.', 'invalid_response');
+          }
+          lastUserId.current = data.session.user.id;
+          setSession(data.session);
+          setError(null);
+        } finally {
+          activationInFlight.current = false;
+        }
+      },
+      requestSignup: async (input) => {
+        if (Platform.OS === 'web') {
+          await requestWebSignup({
+            destination: input.destination,
+            username: input.username,
+            displayName: input.displayName,
+            language: input.language,
+            captchaToken: input.captchaToken,
+          });
+          return;
+        }
+        await requestNativeSignup(input);
+      },
+      verifySignup: async (input) => {
+        // A returned signup receipt (new account) and a silent sign-in for an
+        // existing account commit the exact same session state.
+        if (Platform.OS === 'web') {
+          const webSession = await verifyWebSignup({
+            destination: input.destination,
+            code: input.code,
+          });
+          setWebUser(webSession.user);
+          setWebSessionId(webSession.sessionId ?? null);
+          setWebAal(webSession.aal ?? null);
+          setError(null);
+          return;
+        }
+        const nativeClient = getSupabaseClient();
+        if (!nativeClient) throw new WebAuthError('Native identity is unavailable.', 'gateway_unconfigured');
+        const gatewaySession = await verifyNativeSignup(input);
+        activationInFlight.current = true;
+        try {
+          const { data, error: setSessionError } = await nativeClient.auth.setSession({
+            access_token: gatewaySession.session.accessToken,
+            refresh_token: gatewaySession.session.refreshToken,
+          });
+          if (setSessionError || !data.session || data.session.user.id !== gatewaySession.user.id) {
+            await nativeClient.auth.signOut({ scope: 'local' });
+            throw new WebAuthError('The native signup gateway returned an invalid session.', 'invalid_response');
           }
           lastUserId.current = data.session.user.id;
           setSession(data.session);

@@ -54,10 +54,19 @@ function normalizeDestination(destinationType: 'email' | 'phone', value: string)
     : value.trim().replace(/[\s().-]/g, '');
 }
 
+// Mirrors the server-side consumer username contract exactly.
+const SIGNUP_USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
+
+const UI_LANGUAGES = [
+  { code: 'en', labelKey: 'auth.languageEnglish' },
+  { code: 'es', labelKey: 'auth.languageSpanish' },
+  { code: 'ko', labelKey: 'auth.languageKorean' },
+] as const;
+
 export default function SignInScreen() {
   const router = useRouter();
   const auth = useAuth();
-  const { t } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const { width } = useHydrationSafeWindowDimensions();
   const wide = Platform.OS === 'web' && width >= 920;
   const [destination, setDestination] = useState('');
@@ -70,11 +79,14 @@ export default function SignInScreen() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [initialInvitationToken] = useState(invitationFromInitialLocation);
-  const [accessMode, setAccessMode] = useState<'returning' | 'enrollment' | 'recovery'>(
-    initialInvitationToken ? 'enrollment' : 'returning',
+  const [accessMode, setAccessMode] = useState<'signup' | 'returning' | 'enrollment' | 'recovery'>(
+    initialInvitationToken ? 'enrollment' : 'signup',
   );
   const [invitationToken, setInvitationToken] = useState(initialInvitationToken);
   const [employeeCode, setEmployeeCode] = useState('');
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const signupMode = accessMode === 'signup';
   const enrollmentMode = accessMode === 'enrollment';
   const recoveryMode = accessMode === 'recovery';
 
@@ -88,7 +100,7 @@ export default function SignInScreen() {
     setCaptchaKey((current) => current + 1);
   };
 
-  const chooseAccessMode = (nextMode: 'returning' | 'enrollment' | 'recovery') => {
+  const chooseAccessMode = (nextMode: 'signup' | 'returning' | 'enrollment' | 'recovery') => {
     setAccessMode(nextMode);
     setAuthStep('identity');
     setCode('');
@@ -98,6 +110,11 @@ export default function SignInScreen() {
     if (nextMode !== 'enrollment') {
       setInvitationToken('');
       setEmployeeCode('');
+    }
+    if (nextMode === 'signup' && destinationType !== 'email') {
+      // Open signup is delivered exclusively over email.
+      setDestinationType('email');
+      setDestination('');
     }
   };
 
@@ -111,11 +128,22 @@ export default function SignInScreen() {
       ? /^\S+@\S+\.\S+$/.test(normalized)
       : /^\+[1-9][0-9]{7,14}$/.test(normalized);
     if (!destinationValid) {
-      setMessage(t(destinationType === 'email' ? 'auth.emailInvalid' : 'auth.phoneInvalid'));
+      setMessage(t(destinationType === 'email'
+        ? signupMode ? 'auth.signupEmailInvalid' : 'auth.emailInvalid'
+        : 'auth.phoneInvalid'));
       return;
     }
     if (!captchaToken || captchaToken.length < 20 || /\s/.test(captchaToken)) {
       setMessage(t('auth.challengeRequired'));
+      return;
+    }
+    const normalizedDisplayName = displayName.trim();
+    if (signupMode && !SIGNUP_USERNAME_PATTERN.test(username)) {
+      setMessage(t('auth.usernameInvalid'));
+      return;
+    }
+    if (signupMode && !normalizedDisplayName) {
+      setMessage(t('auth.displayNameInvalid'));
       return;
     }
     const normalizedInvitationToken = invitationToken.trim().toLocaleLowerCase();
@@ -127,6 +155,18 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage('');
     try {
+      if (signupMode) {
+        await auth.requestSignup({
+          destination: normalized,
+          username,
+          displayName: normalizedDisplayName,
+          language: locale,
+          captchaToken,
+        });
+        setAuthStep('verify');
+        setMessage(t('auth.signupOtpSent'));
+        return;
+      }
       const result = recoveryMode
         ? await auth.requestRecoveryOtp({
             destinationType,
@@ -166,7 +206,12 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage('');
     try {
-      if (recoveryMode) {
+      if (signupMode) {
+        await auth.verifySignup({
+          destination: normalizeDestination('email', destination),
+          code: normalizedCode,
+        });
+      } else if (recoveryMode) {
         await auth.verifyRecoveryOtp({
           destinationType,
           destination: normalizeDestination(destinationType, destination),
@@ -183,6 +228,19 @@ export default function SignInScreen() {
       }
       router.replace('/');
     } catch (verifyError) {
+      const signupExpired = signupMode
+        && typeof verifyError === 'object'
+        && verifyError !== null
+        && 'code' in verifyError
+        && (verifyError as { code?: unknown }).code === 'signup_expired';
+      if (signupExpired) {
+        // The code or username reservation lapsed: return to the signup form
+        // with every field intact so the member can request a fresh code.
+        setAuthStep('identity');
+        setCode('');
+        setCaptchaToken(null);
+        setCaptchaKey((current) => current + 1);
+      }
       setMessage(verifyError instanceof Error
         ? t(errorMessageKey(verifyError))
         : t('auth.verifyFailed'));
@@ -225,21 +283,54 @@ export default function SignInScreen() {
         <View style={[styles.card, wide ? styles.cardWide : styles.fullWidth, shadow]}>
           <View style={styles.cardTopline}>
             <StatusBadge
-              icon={recoveryMode ? 'shield-checkmark' : 'lock-closed'}
-              label={recoveryMode ? t('auth.recovery') : enrollmentMode ? t('auth.firstUse') : t('auth.returning')}
+              icon={recoveryMode ? 'shield-checkmark' : signupMode ? 'person-add' : 'lock-closed'}
+              label={
+                recoveryMode
+                  ? t('auth.recovery')
+                  : enrollmentMode
+                    ? t('auth.firstUse')
+                    : signupMode
+                      ? t('auth.modeSignup')
+                      : t('auth.returning')
+              }
               tone={recoveryMode ? 'warning' : 'success'}
             />
             <Text style={styles.cardStep}>{t('auth.secureAccess')}</Text>
           </View>
           <Text style={styles.title}>
-            {recoveryMode ? t('auth.titleRecovery') : enrollmentMode ? t('auth.titleEnroll') : t('auth.titleReturn')}
+            {recoveryMode
+              ? t('auth.titleRecovery')
+              : enrollmentMode
+                ? t('auth.titleEnroll')
+                : signupMode
+                  ? t('auth.titleSignup')
+                  : t('auth.titleReturn')}
           </Text>
           <Text style={styles.subtitle}>
-            {recoveryMode ? t('auth.subtitleRecovery') : enrollmentMode ? t('auth.subtitleEnroll') : t('auth.subtitleReturn')}
+            {recoveryMode
+              ? t('auth.subtitleRecovery')
+              : enrollmentMode
+                ? t('auth.subtitleEnroll')
+                : signupMode
+                  ? t('auth.subtitleSignup')
+                  : t('auth.subtitleReturn')}
           </Text>
+
+          <View style={styles.languageRow}>
+            <Text style={styles.languageLabel}>{t('auth.languageLabel')}</Text>
+            {UI_LANGUAGES.map((language) => (
+              <Chip
+                key={language.code}
+                label={t(language.labelKey)}
+                onPress={() => setLocale(language.code)}
+                selected={locale === language.code}
+              />
+            ))}
+          </View>
 
           {authStep === 'identity' ? (
             <View style={styles.modeChoices}>
+              <Chip label={t('auth.modeSignup')} onPress={() => chooseAccessMode('signup')} selected={signupMode} />
               <Chip label={t('auth.returning')} onPress={() => {
                 chooseAccessMode('returning');
               }} selected={accessMode === 'returning'} />
@@ -248,7 +339,7 @@ export default function SignInScreen() {
             </View>
           ) : null}
 
-          {authStep === 'identity' ? (
+          {authStep === 'identity' && !signupMode ? (
             <View style={styles.modeChoices}>
               <Chip
                 label={t('auth.emailChannel')}
@@ -307,7 +398,9 @@ export default function SignInScreen() {
           <Text style={styles.label}>
             {authStep === 'verify'
               ? t('auth.codeLabel')
-              : t(destinationType === 'email' ? 'auth.emailLabel' : 'auth.phoneLabel')}
+              : t(destinationType === 'email'
+                  ? signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel'
+                  : 'auth.phoneLabel')}
           </Text>
           <View style={[styles.inputWrap, destinationFocused && styles.inputWrapFocused]}>
             <Ionicons
@@ -338,14 +431,18 @@ export default function SignInScreen() {
                       ? t('auth.recoveryEmailHint')
                       : enrollmentMode
                         ? t('auth.emailInviteHint')
-                        : t('auth.emailHint')
+                        : signupMode
+                          ? t('auth.signupEmailHint')
+                          : t('auth.emailHint')
                     : recoveryMode
                       ? t('auth.recoveryPhoneHint')
                       : enrollmentMode
                         ? t('auth.phoneInviteHint')
                         : t('auth.phoneHint')
                 }
-                accessibilityLabel={t(destinationType === 'email' ? 'auth.emailLabel' : 'auth.phoneLabel')}
+                accessibilityLabel={t(destinationType === 'email'
+                  ? signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel'
+                  : 'auth.phoneLabel')}
                 autoCapitalize="none"
                 autoComplete={destinationType === 'email' ? 'email' : 'tel'}
                 keyboardType={destinationType === 'email' ? 'email-address' : 'phone-pad'}
@@ -353,7 +450,11 @@ export default function SignInScreen() {
                 onChangeText={setDestination}
                 onFocus={() => setDestinationFocused(true)}
                 onSubmitEditing={sendLink}
-                placeholder={destinationType === 'email' ? 'you@company.com' : '+52 81 5555 0192'}
+                placeholder={
+                  destinationType === 'email'
+                    ? signupMode ? 'you@example.com' : 'you@company.com'
+                    : '+52 81 5555 0192'
+                }
                 placeholderTextColor={colors.inkSubtle}
                 returnKeyType="send"
                 style={styles.input}
@@ -362,6 +463,40 @@ export default function SignInScreen() {
               />
             )}
           </View>
+          {authStep === 'identity' && signupMode ? (
+            <View style={styles.signupFields}>
+              <Text style={styles.label}>{t('auth.usernameLabel')}</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="at-outline" size={18} color={colors.inkSubtle} />
+                <TextInput
+                  accessibilityLabel={t('auth.usernameLabel')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={30}
+                  onChangeText={(value) => setUsername(value.toLocaleLowerCase())}
+                  placeholder={t('auth.usernamePlaceholder')}
+                  placeholderTextColor={colors.inkSubtle}
+                  style={styles.input}
+                  value={username}
+                />
+              </View>
+              <Text style={styles.helperText}>{t('auth.usernameHelp')}</Text>
+              <Text style={styles.label}>{t('auth.displayNameLabel')}</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="person-outline" size={18} color={colors.inkSubtle} />
+                <TextInput
+                  accessibilityLabel={t('auth.displayNameLabel')}
+                  autoCorrect={false}
+                  maxLength={80}
+                  onChangeText={setDisplayName}
+                  placeholder={t('auth.displayNamePlaceholder')}
+                  placeholderTextColor={colors.inkSubtle}
+                  style={styles.input}
+                  value={displayName}
+                />
+              </View>
+            </View>
+          ) : null}
           {authStep === 'identity' && !isWebAuthBlocked ? (
             <CaptchaChallenge
               key={captchaKey}
@@ -384,7 +519,7 @@ export default function SignInScreen() {
               isWebAuthBlocked
                 ? t('auth.webNotConfigured')
                 : authStep === 'verify'
-                  ? t(recoveryMode ? 'auth.verifyRecovery' : 'auth.verifySignIn')
+                  ? t(recoveryMode ? 'auth.verifyRecovery' : signupMode ? 'auth.verifySignup' : 'auth.verifySignIn')
                   : t('auth.continue')
             }
             loading={loading}
@@ -585,7 +720,28 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
+  languageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  languageLabel: {
+    color: colors.inkSubtle,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   enrollmentFields: { gap: spacing.xs, marginBottom: spacing.md },
+  signupFields: { gap: spacing.xs, marginTop: spacing.md },
+  helperText: {
+    color: colors.inkSubtle,
+    fontSize: 10,
+    lineHeight: 15,
+    marginBottom: spacing.xs,
+  },
   enrollmentNote: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: spacing.xs },
   recoveryWarning: {
     flexDirection: 'row',

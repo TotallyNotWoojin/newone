@@ -11,8 +11,10 @@ const mockRefreshWebSession = jest.fn();
 const mockGetWebRealtimeToken = jest.fn();
 const mockRequestWebOtp = jest.fn();
 const mockRequestWebRecoveryOtp = jest.fn();
+const mockRequestWebSignup = jest.fn();
 const mockVerifyWebOtp = jest.fn();
 const mockVerifyWebRecoveryOtp = jest.fn();
+const mockVerifyWebSignup = jest.fn();
 const mockSignOutWebSession = jest.fn();
 const mockInitializeStore = jest.fn();
 const mockGetCache = jest.fn();
@@ -70,14 +72,18 @@ jest.mock('@/lib/web-auth', () => {
     refreshWebSession: (...mockArgs: unknown[]) => mockRefreshWebSession(...mockArgs),
     requestNativeOtp: jest.fn(),
     requestNativeRecoveryOtp: jest.fn(),
+    requestNativeSignup: jest.fn(),
     requestWebOtp: (...mockArgs: unknown[]) => mockRequestWebOtp(...mockArgs),
     requestWebRecoveryOtp: (...mockArgs: unknown[]) => mockRequestWebRecoveryOtp(...mockArgs),
+    requestWebSignup: (...mockArgs: unknown[]) => mockRequestWebSignup(...mockArgs),
     signOutWebSession: (...mockArgs: unknown[]) => mockSignOutWebSession(...mockArgs),
     validateNativeMembership: jest.fn(),
     verifyNativeOtp: jest.fn(),
     verifyNativeRecoveryOtp: jest.fn(),
+    verifyNativeSignup: jest.fn(),
     verifyWebOtp: (...mockArgs: unknown[]) => mockVerifyWebOtp(...mockArgs),
     verifyWebRecoveryOtp: (...mockArgs: unknown[]) => mockVerifyWebRecoveryOtp(...mockArgs),
+    verifyWebSignup: (...mockArgs: unknown[]) => mockVerifyWebSignup(...mockArgs),
     WebAuthError: ControlledWebAuthError,
   };
 });
@@ -169,6 +175,11 @@ beforeEach(() => {
   mockVerifyWebRecoveryOtp.mockImplementation(async () => ({
     ...webSession(),
     recovery: { otherSessionsRevoked: 6 },
+  }));
+  mockRequestWebSignup.mockImplementation(async () => ({ status: 'code_sent' }));
+  mockVerifyWebSignup.mockImplementation(async () => ({
+    ...webSession(),
+    signup: { username: 'river_runner_7', organizationId: 'org-personal' },
   }));
   mockSignOutWebSession.mockImplementation(async () => undefined);
   mockInitializeStore.mockImplementation(async () => undefined);
@@ -398,6 +409,47 @@ describe('web authentication security state machine', () => {
     });
     expect(recovery).toEqual({ otherSessionsRevoked: 6 });
     expect(currentAuth().sessionId).toBe('session-web');
+    await view.unmount();
+  });
+
+  test('forwards consumer signup inputs and commits verified signup sessions identically with or without a receipt', async () => {
+    const view = await renderProvider();
+    await waitFor(() => expect(screen.getByText('signed-in:realtime-web-token')).toBeTruthy());
+    const signupInput = {
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'es' as const,
+      captchaToken: 'controlled-captcha-token',
+    };
+    await expect(currentAuth().requestSignup(signupInput)).resolves.toBeUndefined();
+    expect(mockRequestWebSignup).toHaveBeenCalledWith(signupInput);
+
+    mockVerifyWebSignup.mockImplementationOnce(async () => webSession({
+      sessionId: undefined,
+      aal: undefined,
+    }));
+    await act(async () => {
+      await currentAuth().verifySignup({
+        destination: 'new.person@example.test',
+        code: '123456',
+      });
+    });
+    expect(mockVerifyWebSignup).toHaveBeenCalledWith({
+      destination: 'new.person@example.test',
+      code: '123456',
+    });
+    expect(currentAuth().sessionId).toBeNull();
+    expect(currentAuth().assuranceLevel).toBeNull();
+
+    await act(async () => {
+      await currentAuth().verifySignup({
+        destination: 'new.person@example.test',
+        code: '654321',
+      });
+    });
+    expect(currentAuth().sessionId).toBe('session-web');
+    expect(currentAuth().user?.id).toBe(userId);
     await view.unmount();
   });
 

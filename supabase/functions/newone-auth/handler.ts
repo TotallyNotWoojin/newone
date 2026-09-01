@@ -7,7 +7,7 @@ import {
   loadClientEnvironment,
 } from '../_shared/clients.ts';
 import { hmacSha256Hex, randomBase64Url, safeEqual } from '../_shared/crypto.ts';
-import { ApiError, asApiError } from '../_shared/errors.ts';
+import { ApiError, asApiError, fromDatabaseError } from '../_shared/errors.ts';
 import {
   accessCredential,
   buildRequestMeta,
@@ -32,6 +32,7 @@ const OTP_PATTERN = /^[0-9]{6}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const EMPLOYEE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
+const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 export const OTP_SHOULD_CREATE_USER = false;
 
@@ -60,6 +61,44 @@ interface InviteAuthorization {
 interface OtpAuthorization {
   allowed: boolean;
   channelConfigured: boolean;
+}
+
+const SIGNUP_AUTHORIZATION_REASONS = [
+  'ok',
+  'rate_limited',
+  'invalid_destination',
+  'invalid_username',
+  'username_reserved',
+  'invalid_language',
+  'invalid_display_name',
+  'username_taken',
+  'account_exists',
+  'reservation_expired',
+] as const;
+
+type SignupAuthorizationReason = (typeof SIGNUP_AUTHORIZATION_REASONS)[number];
+
+interface SignupAuthorizationRow {
+  allowed?: boolean;
+  reason?: string;
+  existing_member?: boolean;
+  channel_configured?: boolean;
+  retry_after_seconds?: number;
+}
+
+export interface SignupAuthorization {
+  allowed: boolean;
+  reason: SignupAuthorizationReason;
+  existingMember: boolean;
+  channelConfigured: boolean;
+  retryAfterSeconds: number;
+}
+
+export interface RedeemedSignup {
+  organizationId: string;
+  username: string;
+  displayName: string;
+  preferredLanguage: 'en' | 'es' | 'ko';
 }
 
 interface AccountRecoveryCompletion {
@@ -139,6 +178,25 @@ export interface AuthDependencies {
     requestId: string,
     purpose: OtpPurpose,
   ): Promise<OtpAuthorization>;
+  authorizeSignupOtp(
+    destinationType: DestinationType,
+    destination: string,
+    username: string | null,
+    displayName: string | null,
+    language: string | null,
+    ipHash: string,
+    installationHash: string,
+    requestId: string,
+    purpose: OtpPurpose,
+  ): Promise<SignupAuthorization>;
+  ensureSignupUser(destination: string, displayName: string): Promise<void>;
+  redeemSignup(
+    userId: string,
+    destinationType: DestinationType,
+    destination: string,
+    requestId: string,
+  ): Promise<RedeemedSignup>;
+  completeSignupUser(userId: string): Promise<void>;
   authorizeRecoveryOtp(
     destinationType: DestinationType,
     destination: string,
@@ -246,6 +304,26 @@ function sessionTokens(value: unknown): SessionTokens {
       ? Math.max(60, Math.min(86400, session.expires_in))
       : 3600;
   return { accessToken, refreshToken, expiresIn, userId, ...identity };
+}
+
+function signupAuthorization(row: SignupAuthorizationRow): SignupAuthorization {
+  const reason = row.reason;
+  if (
+    typeof reason !== 'string' ||
+    !(SIGNUP_AUTHORIZATION_REASONS as readonly string[]).includes(reason)
+  ) {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+  return {
+    allowed: row.allowed === true,
+    reason: reason as SignupAuthorizationReason,
+    existingMember: row.existing_member === true,
+    channelConfigured: row.channel_configured === true,
+    retryAfterSeconds: typeof row.retry_after_seconds === 'number' &&
+        Number.isSafeInteger(row.retry_after_seconds) && row.retry_after_seconds >= 0
+      ? Math.min(86400, row.retry_after_seconds)
+      : 60,
+  };
 }
 
 function boundedCount(value: unknown, max = 100000): number {
@@ -412,6 +490,85 @@ export function defaultAuthDependencies(): AuthDependencies {
         allowed: result.allowed === true,
         channelConfigured: result.channel_configured === true,
       };
+    },
+    async authorizeSignupOtp(
+      destinationType,
+      destination,
+      username,
+      displayName,
+      language,
+      ipHash,
+      installationHash,
+      correlationId,
+      purpose,
+    ) {
+      const result = firstRow(
+        await invokeRpc<SignupAuthorizationRow | SignupAuthorizationRow[]>(
+          asRpcClient(createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId })),
+          'bff_authorize_signup_otp',
+          {
+            p_destination_type: destinationType,
+            p_destination: destination,
+            p_username: username,
+            p_display_name: displayName,
+            p_language: language,
+            p_ip_hash: ipHash,
+            p_installation_hash: installationHash,
+            p_purpose: purpose,
+          },
+        ),
+      );
+      return signupAuthorization(result);
+    },
+    async ensureSignupUser(destination, displayName) {
+      // Public GoTrue signup stays disabled; the trusted gateway provisions the
+      // pending auth user through the admin API only after signup authorization.
+      const { error } = await createAdminClient(clientEnvironment).auth.admin.createUser({
+        email: destination,
+        email_confirm: false,
+        app_metadata: { newone_signup_state: 'pending' },
+        user_metadata: { display_name: displayName },
+      });
+      // A prior abandoned signup leaves an unconfirmed auth user behind;
+      // recreating it must stay indistinguishable from first creation.
+      if (error && error.code !== 'email_exists' && error.status !== 422) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+    },
+    async redeemSignup(userId, destinationType, destination, correlationId) {
+      const { data, error } = await asRpcClient(
+        createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId }),
+      ).rpc('bff_redeem_signup', {
+        p_user_id: userId,
+        p_destination_type: destinationType,
+        p_destination: destination,
+      });
+      if (error) {
+        const code = (error as { code?: string }).code;
+        if (code === 'P0002') throw new ApiError(410, 'signup_expired');
+        if (code === '23505') throw new ApiError(409, 'username_taken');
+        throw fromDatabaseError(error);
+      }
+      if (data === null || data === undefined) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      const result = asObject(firstRow(data));
+      if (uuid(result.user_id) !== userId) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      return {
+        organizationId: uuid(result.organization_id),
+        username: normalizedString(result.username, { min: 4, max: 30 }) as string,
+        displayName: normalizedString(result.display_name, { min: 1, max: 120 }) as string,
+        preferredLanguage: oneOf(result.preferred_language, ['en', 'es', 'ko'] as const),
+      };
+    },
+    async completeSignupUser(userId) {
+      const { data, error } = await createAdminClient(clientEnvironment).auth.admin.updateUserById(
+        userId,
+        { app_metadata: { newone_signup_state: 'complete' } },
+      );
+      if (error || !data.user) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
     },
     async authorizeRecoveryOtp(
       destinationType,
@@ -851,6 +1008,168 @@ async function completeOtpAuthentication(
   }
 }
 
+interface SignupProfile {
+  username: string;
+  displayName: string;
+  language: 'en' | 'es' | 'ko';
+}
+
+function parseSignupIdentity(body: Record<string, unknown>): ParsedOtpIdentity {
+  return {
+    destinationType: 'email',
+    destination: parseEmail(body.destination),
+    inviteToken: null,
+    employeeCode: null,
+    installationId: uuid(body.installationId),
+    appVersion: optionalClientText(body.appVersion, 80),
+    locale: optionalLocale(body.locale),
+  };
+}
+
+function parseSignupProfile(body: Record<string, unknown>): SignupProfile {
+  if (typeof body.username !== 'string') throw new ApiError(400, 'invalid_username');
+  const username = body.username.trim().toLowerCase();
+  if (!USERNAME_PATTERN.test(username)) throw new ApiError(400, 'invalid_username');
+  if (typeof body.displayName !== 'string') throw new ApiError(400, 'invalid_display_name');
+  const displayName = body.displayName.trim().normalize('NFC');
+  const displayNameLength = Array.from(displayName).length;
+  if (displayNameLength < 1 || displayNameLength > 120) {
+    throw new ApiError(400, 'invalid_display_name');
+  }
+  if (body.language !== 'en' && body.language !== 'es' && body.language !== 'ko') {
+    throw new ApiError(400, 'invalid_language');
+  }
+  return { username, displayName, language: body.language };
+}
+
+function requireSignupAuthorization(authorization: SignupAuthorization): void {
+  if (authorization.allowed && authorization.reason === 'ok') return;
+  switch (authorization.reason) {
+    case 'rate_limited':
+      throw new ApiError(
+        429,
+        'rate_limited',
+        undefined,
+        Math.max(1, authorization.retryAfterSeconds || 60),
+      );
+    case 'invalid_destination':
+      // Mirrors the member flow: malformed destinations fail with the same
+      // generic validation error regardless of account state.
+      throw new ApiError(400, 'bad_request');
+    case 'invalid_username':
+      throw new ApiError(400, 'invalid_username');
+    case 'username_reserved':
+      throw new ApiError(409, 'username_reserved');
+    case 'invalid_language':
+      throw new ApiError(400, 'invalid_language');
+    case 'invalid_display_name':
+      throw new ApiError(400, 'invalid_display_name');
+    case 'username_taken':
+      throw new ApiError(409, 'username_taken');
+    case 'reservation_expired':
+      throw new ApiError(410, 'signup_expired');
+    default:
+      throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
+interface CompletedSignupAuthentication {
+  session: SessionTokens;
+  active: ActiveSession;
+  signup: RedeemedSignup;
+}
+
+async function completeSignupAuthentication(
+  dependencies: AuthDependencies,
+  identity: ParsedOtpIdentity,
+  code: string,
+  correlationId: string,
+  installation: SessionInstallationInput,
+): Promise<CompletedSignupAuthentication> {
+  const session = await dependencies.verifyOtp(
+    identity.destinationType,
+    identity.destination,
+    code,
+  );
+  if (!identityMatches(session, identity.destinationType, identity.destination)) {
+    try {
+      await dependencies.revoke(session.accessToken);
+    } catch {
+      // A mismatched session cannot pass the BFF destination checks.
+    }
+    throw new ApiError(401, 'unauthorized');
+  }
+  let signup: RedeemedSignup;
+  try {
+    // OTP verification just confirmed the destination; redemption requires the
+    // confirmed account. A redemption failure must never issue a session: the
+    // confirmed but memberless auth user stays inert until signup restarts.
+    signup = await dependencies.redeemSignup(
+      session.userId,
+      identity.destinationType,
+      identity.destination,
+      correlationId,
+    );
+    await dependencies.completeSignupUser(session.userId);
+  } catch (error) {
+    try {
+      await dependencies.revoke(session.accessToken);
+    } catch {
+      // No Newone data path accepts a session without active membership.
+    }
+    throw asApiError(error);
+  }
+  try {
+    const binding = await dependencies.bindSessionInstallation(session.accessToken, installation);
+    const active = await dependencies.inspect(session.accessToken);
+    if (
+      active.userId !== session.userId || active.sessionId !== binding.sessionId ||
+      !identityMatches(active, identity.destinationType, identity.destination) ||
+      !active.memberships.some((membership) =>
+        membership.organizationId === signup.organizationId
+      )
+    ) throw new ApiError(401, 'unauthorized');
+    return { session, active, signup };
+  } catch (error) {
+    try {
+      await dependencies.revoke(session.accessToken);
+    } catch {
+      // No Newone data path accepts a session without active membership.
+    }
+    if (error instanceof ApiError && error.code === 'rate_limited') throw error;
+    throw new ApiError(401, 'unauthorized');
+  }
+}
+
+function completedAuthResponse(
+  meta: RequestMeta,
+  config: RuntimeConfig,
+  native: boolean,
+  session: SessionTokens,
+  active: ActiveSession,
+  extra: Record<string, unknown>,
+): Response {
+  const responseBody: Record<string, unknown> = {
+    authenticated: true,
+    user: publicUser(session.userId, active),
+    memberships: active.memberships,
+    sessionId: active.sessionId,
+    aal: active.aal,
+    ...extra,
+  };
+  if (native) {
+    responseBody.session = {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      expiresIn: session.expiresIn,
+    };
+    return jsonResponse(meta, 200, responseBody);
+  }
+  const csrfToken = randomBase64Url();
+  responseBody.csrfToken = csrfToken;
+  return appendSessionCookies(jsonResponse(meta, 200, responseBody), config, session, csrfToken);
+}
+
 interface CompletedRecoveryAuthentication {
   session: SessionTokens;
   active: ActiveSession;
@@ -981,7 +1300,9 @@ function fallbackMeta(request: Request): RequestMeta {
 function isNativeOtpPath(path: string): boolean {
   return path === '/v2/auth/native/otp/request' || path === '/v2/auth/native/otp/verify' ||
     path === '/v2/auth/native/recovery/otp/request' ||
-    path === '/v2/auth/native/recovery/otp/verify';
+    path === '/v2/auth/native/recovery/otp/verify' ||
+    path === '/v2/auth/native/signup/request' ||
+    path === '/v2/auth/native/signup/verify';
 }
 
 function nativeInstallationId(request: Request): string {
@@ -1371,6 +1692,162 @@ export function createAuthHandler(
             session,
             csrfToken,
           );
+        } finally {
+          await dependencies.settleOtpRequest(startedAt);
+        }
+      }
+
+      if (
+        request.method === 'POST' &&
+        (path === '/v2/auth/signup/request' || path === '/v2/auth/native/signup/request')
+      ) {
+        const startedAt = Date.now();
+        try {
+          const native = path === '/v2/auth/native/signup/request';
+          const body = asObject((await parseJson(request, config)).value);
+          onlyKeys(body, [
+            'destination',
+            'username',
+            'displayName',
+            'language',
+            'installationId',
+            'appVersion',
+            'locale',
+            'captchaToken',
+          ]);
+          const identity = parseSignupIdentity(body);
+          if (native && identity.installationId !== nativeInstallationId(request)) {
+            throw new ApiError(400, 'bad_request');
+          }
+          const profile = parseSignupProfile(body);
+          const captcha = captchaToken(body.captchaToken, dependencies.captchaRequired);
+          const ipHash = await networkFingerprint(request, config);
+          const installationHash = await installationFingerprint(
+            config,
+            identity.installationId,
+          );
+          const authorization = await dependencies.authorizeSignupOtp(
+            identity.destinationType,
+            identity.destination,
+            profile.username,
+            profile.displayName,
+            profile.language,
+            ipHash,
+            installationHash,
+            meta.requestId,
+            'request',
+          );
+          if (authorization.reason === 'account_exists') {
+            // Silent downgrade to the member sign-in flow: the generic signup
+            // response must never reveal whether an account already exists.
+            const memberAuthorization = await dependencies.authorizeMemberOtp(
+              identity.destinationType,
+              identity.destination,
+              ipHash,
+              installationHash,
+              meta.requestId,
+              'request',
+            );
+            if (
+              memberAuthorization.allowed &&
+              otpChannelConfigured(dependencies, identity, memberAuthorization)
+            ) {
+              try {
+                await dependencies.requestOtp(
+                  identity.destinationType,
+                  identity.destination,
+                  captcha,
+                );
+              } catch {
+                // Delivery and CAPTCHA failures share the generic signup envelope.
+              }
+            }
+            return jsonResponse(meta, 202, { status: 'code_sent' });
+          }
+          requireSignupAuthorization(authorization);
+          await dependencies.ensureSignupUser(identity.destination, profile.displayName);
+          try {
+            await dependencies.requestOtp(
+              identity.destinationType,
+              identity.destination,
+              captcha,
+            );
+          } catch {
+            // OTP delivery and CAPTCHA failures are deliberately
+            // indistinguishable from the silent existing-account downgrade.
+          }
+          return jsonResponse(meta, 202, { status: 'code_sent' });
+        } finally {
+          await dependencies.settleOtpRequest(startedAt);
+        }
+      }
+
+      if (
+        request.method === 'POST' &&
+        (path === '/v2/auth/signup/verify' || path === '/v2/auth/native/signup/verify')
+      ) {
+        const startedAt = Date.now();
+        try {
+          const native = path === '/v2/auth/native/signup/verify';
+          const body = asObject((await parseJson(request, config)).value);
+          onlyKeys(body, ['destination', 'installationId', 'appVersion', 'locale', 'code']);
+          const identity = parseSignupIdentity(body);
+          if (native && identity.installationId !== nativeInstallationId(request)) {
+            throw new ApiError(400, 'bad_request');
+          }
+          const code = normalizedString(body.code, { min: 6, max: 6, trim: false }) as string;
+          if (!OTP_PATTERN.test(code)) throw new ApiError(401, 'unauthorized');
+          const ipHash = await networkFingerprint(request, config);
+          const installationHash = await installationFingerprint(
+            config,
+            identity.installationId,
+          );
+          const installation = sessionInstallation(
+            request,
+            identity,
+            native
+              ? oneOf(
+                request.headers.get('x-newone-client-platform'),
+                ['ios', 'android'] as const,
+              )
+              : 'web',
+          );
+          const authorization = await dependencies.authorizeSignupOtp(
+            identity.destinationType,
+            identity.destination,
+            null,
+            null,
+            null,
+            ipHash,
+            installationHash,
+            meta.requestId,
+            'verify',
+          );
+          if (authorization.reason === 'account_exists') {
+            // The destination already belongs to an active member: complete a
+            // plain member sign-in with the member verify response shape.
+            const { session, active } = await completeOtpAuthentication(
+              dependencies,
+              identity,
+              code,
+              ipHash,
+              installationHash,
+              meta.requestId,
+              installation,
+            );
+            return completedAuthResponse(meta, config, native, session, active, {});
+          }
+          requireSignupAuthorization(authorization);
+          const { session, active, signup } = await completeSignupAuthentication(
+            dependencies,
+            identity,
+            code,
+            meta.requestId,
+            installation,
+          );
+          return completedAuthResponse(meta, config, native, session, active, {
+            signup: { username: signup.username, organizationId: signup.organizationId },
+          });
         } finally {
           await dependencies.settleOtpRequest(startedAt);
         }

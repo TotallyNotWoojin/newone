@@ -179,6 +179,22 @@ function rpcResponse(name: string): unknown {
     case 'bff_authorize_member_otp':
     case 'bff_authorize_account_recovery_otp':
       return { allowed: true, channel_configured: true };
+    case 'bff_authorize_signup_otp':
+      return {
+        allowed: true,
+        reason: 'ok',
+        existing_member: false,
+        channel_configured: true,
+        retry_after_seconds: 0,
+      };
+    case 'bff_redeem_signup':
+      return {
+        organization_id: '11111111-1111-4111-8111-111111111111',
+        user_id: actorUserId,
+        username: 'coverage_member',
+        display_name: 'Coverage Member',
+        preferred_language: 'en',
+      };
     case 'redeem_organization_invite':
       return {
         redeemed: true,
@@ -369,6 +385,9 @@ const mockFetch: typeof fetch = async (input, init) => {
     return json({ id: policyId });
   }
   if (url.pathname.endsWith('/logout')) return json({});
+  if (url.pathname === '/auth/v1/admin/users' && init?.method === 'POST') {
+    return json({ id: actorUserId, email: 'newcomer@example.com' });
+  }
   if (url.pathname.startsWith('/auth/v1/admin/users/')) {
     if (url.pathname.endsWith('/factors')) return json({ factors: [] });
     return json({
@@ -820,6 +839,37 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
       ),
       { allowed: true, channelConfigured: true },
     );
+    assertEquals(
+      await dependencies.authorizeSignupOtp(
+        'email',
+        'newcomer@example.com',
+        'coverage_member',
+        'Coverage Member',
+        'en',
+        sha,
+        sha,
+        deviceId,
+        'request',
+      ),
+      {
+        allowed: true,
+        reason: 'ok',
+        existingMember: false,
+        channelConfigured: true,
+        retryAfterSeconds: 0,
+      },
+    );
+    await dependencies.ensureSignupUser('newcomer@example.com', 'Coverage Member');
+    assertEquals(
+      await dependencies.redeemSignup(actorUserId, 'email', 'newcomer@example.com', deviceId),
+      {
+        organizationId: '11111111-1111-4111-8111-111111111111',
+        username: 'coverage_member',
+        displayName: 'Coverage Member',
+        preferredLanguage: 'en',
+      },
+    );
+    await dependencies.completeSignupUser(actorUserId);
 
     await dependencies.requestOtp('email', 'owner@example.com', 'captcha-token');
     await dependencies.requestOtp('phone', '+15555550123', null);

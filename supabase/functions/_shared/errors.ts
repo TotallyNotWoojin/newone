@@ -11,6 +11,12 @@ export type ErrorCode =
   | 'not_found'
   | 'conflict'
   | 'idempotency_conflict'
+  | 'signup_expired'
+  | 'invalid_username'
+  | 'username_reserved'
+  | 'username_taken'
+  | 'invalid_display_name'
+  | 'invalid_language'
   | 'attachment_not_ready'
   | 'attachment_integrity_failed'
   | 'rate_limited'
@@ -35,6 +41,12 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   not_found: 'The requested resource was not found.',
   conflict: 'The request conflicts with the current state.',
   idempotency_conflict: 'The idempotency key was already used for another request.',
+  signup_expired: 'The signup verification window expired. Restart signup.',
+  invalid_username: 'The username format is not allowed.',
+  username_reserved: 'That username is reserved.',
+  username_taken: 'That username is already taken.',
+  invalid_display_name: 'The display name is not allowed.',
+  invalid_language: 'That language is not supported.',
   attachment_not_ready: 'The attachment upload is not ready.',
   attachment_integrity_failed: 'The uploaded attachment failed integrity verification.',
   rate_limited: 'Too many requests. Try again later.',

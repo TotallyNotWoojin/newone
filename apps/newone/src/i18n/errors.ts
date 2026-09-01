@@ -8,6 +8,12 @@ function errorCode(error: unknown) {
 /** Maps stable transport/domain codes to local copy; upstream English is never rendered. */
 export function errorMessageKey(error: unknown): MessageKey {
   const code = errorCode(error);
+  if (code === 'username_taken') return 'auth.usernameTaken';
+  if (code === 'username_reserved') return 'auth.usernameReserved';
+  if (code === 'invalid_username') return 'auth.usernameInvalid';
+  if (code === 'invalid_display_name') return 'auth.displayNameInvalid';
+  if (code === 'invalid_language') return 'auth.languageInvalid';
+  if (code === 'signup_expired') return 'auth.signupExpired';
   if (
     code === 'network_unavailable'
     || code.includes('unreachable')
