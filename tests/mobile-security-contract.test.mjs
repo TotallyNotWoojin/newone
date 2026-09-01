@@ -27,15 +27,22 @@ test('native build profiles bind push environments and default encrypted offline
   }
 });
 
-test('native photo capture declares narrow permission copy and no microphone permission', () => {
+test('native media capture declares narrow, user-choice-scoped permission copy', () => {
   const imagePicker = appConfig.expo?.plugins?.find((plugin) => (
     Array.isArray(plugin) && plugin[0] === 'expo-image-picker'
   ));
   assert.ok(imagePicker);
-  assert.equal(imagePicker[1]?.microphonePermission, false);
-  assert.match(imagePicker[1]?.photosPermission ?? '', /only the photos you choose/i);
-  assert.equal(appConfig.expo?.plugins?.includes('expo-audio'), false);
-  assert.equal('NSMicrophoneUsageDescription' in (appConfig.expo?.ios?.infoPlist ?? {}), false);
+  assert.match(imagePicker[1]?.photosPermission ?? '', /only the photos and videos you choose/i);
+  assert.match(imagePicker[1]?.cameraPermission ?? '', /only when you choose/i);
+  assert.match(imagePicker[1]?.microphonePermission ?? '', /only when you record/i);
+  assert.match(
+    appConfig.expo?.ios?.infoPlist?.NSMicrophoneUsageDescription ?? '',
+    /only when you record/i,
+  );
+  assert.match(
+    appConfig.expo?.ios?.infoPlist?.NSCameraUsageDescription ?? '',
+    /only when you choose/i,
+  );
 });
 
 test('native app switcher is covered by an opaque privacy shield', () => {

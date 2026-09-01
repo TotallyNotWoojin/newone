@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Newone",
-    "slug": "newone-workplace",
+    "slug": "newone",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "fingerprint"
@@ -17,15 +17,16 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/newone-app-icon.png",
-      "bundleIdentifier": "com.newone.workplace",
+      "bundleIdentifier": "com.newone.app",
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Newone uses the camera only when you choose to attach an operational photo."
+        "NSCameraUsageDescription": "Newone uses the camera only when you choose to take a photo or video to share in a conversation.",
+        "NSMicrophoneUsageDescription": "Newone uses the microphone only when you record a voice message or a video to share."
       }
     },
     "android": {
-      "package": "com.newone.workplace",
+      "package": "com.newone.app",
       "versionCode": 1,
       "allowBackup": false,
       "predictiveBackGestureEnabled": false
@@ -50,9 +51,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Newone accesses only the photos you choose to attach to a workplace conversation.",
-          "cameraPermission": "Newone uses the camera only when you choose to attach an operational photo.",
-          "microphonePermission": false
+          "photosPermission": "Newone accesses only the photos and videos you choose to share in a conversation.",
+          "cameraPermission": "Newone uses the camera only when you choose to take a photo or video to share in a conversation.",
+          "microphonePermission": "Newone uses the microphone only when you record a voice message or a video to share."
         }
       ],
       "expo-asset"
