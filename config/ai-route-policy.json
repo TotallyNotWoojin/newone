@@ -1,7 +1,7 @@
 {
   "$schema": "./ai-route-policy.schema.json",
-  "policyVersion": "2026-08-04.2",
-  "employeeDataEgressEnabled": false,
+  "policyVersion": "2026-09-01.1",
+  "employeeDataEgressEnabled": true,
   "model": "qwen/qwen3-235b-a22b-2507",
   "providerTag": "google-vertex/us-south1",
   "providerMetadataName": "Google",

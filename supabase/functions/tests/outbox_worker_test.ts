@@ -2,6 +2,7 @@ import { ApiError } from '../_shared/errors.ts';
 import type { RuntimeConfig } from '../_shared/http.ts';
 import {
   createOutboxWorkerHandler,
+  genericNotification,
   notificationSuppressed,
   type OutboxJob,
   type OutboxTopic,
@@ -672,6 +673,24 @@ Deno.test('shift-aware suppression uses authoritative state and only server crit
   assertEquals(providerData.notification_preview, 'generic');
   assertEquals('override_reason' in providerData, false);
   assertEquals(JSON.stringify(providerData).includes('authorized critical notice'), false);
+});
+
+Deno.test('generic push copy serves every supported language explicitly and falls back to English', () => {
+  const english = { title: 'Newone', body: 'Open Newone to view new activity.' };
+  const spanish = { title: 'Newone', body: 'Abre Newone para ver la actividad.' };
+  const korean = { title: 'Newone', body: '새 활동을 확인하려면 Newone을 여세요.' };
+  // English is a first-class case, matched for the bare tag and any region.
+  assertEquals(genericNotification('en'), english);
+  assertEquals(genericNotification('en-US'), english);
+  assertEquals(genericNotification('EN-GB'), english);
+  assertEquals(genericNotification('es'), spanish);
+  assertEquals(genericNotification('es-MX'), spanish);
+  assertEquals(genericNotification('ko'), korean);
+  assertEquals(genericNotification('ko-KR'), korean);
+  // Unknown, unsupported, or missing locales keep the English fallback.
+  for (const locale of [null, '', 'fr', 'de-DE', 'pt-BR', 'zz', 'zh-Hans-CN', 'e']) {
+    assertEquals(genericNotification(locale), english);
+  }
 });
 
 Deno.test('push resolver requires Expo project and environment binding', () => {

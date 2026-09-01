@@ -864,11 +864,21 @@ export function notificationSuppressed(
 
 const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as const;
 
-function genericNotification(locale: string | null): { title: string; body: string } {
+// Content-free push copy for every supported product language. English is a
+// first-class entry, not an implicit fallthrough; it also remains the
+// deliberate fallback for unknown, unsupported, or missing locales.
+const GENERIC_NOTIFICATION_COPY = {
+  en: { title: 'Newone', body: 'Open Newone to view new activity.' },
+  es: { title: 'Newone', body: 'Abre Newone para ver la actividad.' },
+  ko: { title: 'Newone', body: '새 활동을 확인하려면 Newone을 여세요.' },
+} as const;
+
+export function genericNotification(locale: string | null): { title: string; body: string } {
   const language = locale?.toLowerCase().split('-')[0];
-  if (language === 'ko') return { title: 'Newone', body: '새 활동을 확인하려면 Newone을 여세요.' };
-  if (language === 'es') return { title: 'Newone', body: 'Abre Newone para ver la actividad.' };
-  return { title: 'Newone', body: 'Open Newone to view new activity.' };
+  if (language === 'en' || language === 'es' || language === 'ko') {
+    return GENERIC_NOTIFICATION_COPY[language];
+  }
+  return GENERIC_NOTIFICATION_COPY.en;
 }
 
 export function providerPushData(

@@ -160,7 +160,7 @@ test('AI policy egress provenance and immutable history fail closed across every
   const schema = JSON.parse(files.schema);
   assert.equal(policy.providerTag, 'google-vertex/us-south1');
   assert.equal(policy.providerMetadataName, 'Google');
-  assert.equal(policy.policyVersion, '2026-08-04.2');
+  assert.equal(policy.policyVersion, '2026-09-01.1');
   assert.equal(policy.requirements.implicitCaching, false);
   assert.equal(policy.requirements.bringYourOwnKeys, false);
   assert.equal(policy.requirements.managementControlPlanePreflight, true);

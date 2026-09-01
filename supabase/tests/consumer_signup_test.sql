@@ -1,5 +1,5 @@
 begin;
-select plan(27);
+select plan(36);
 
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
@@ -255,6 +255,96 @@ select is(
     where destination = 'first-signup@example.test'),
   0,
   'redemption consumes the reservation'
+);
+
+-- Consumer AI policy: the first redeemed signup provisions the platform
+-- default personal-realm policy -- language detection and translation over
+-- the pinned zero-retention provider route -- approved by a realm member.
+select ok(
+  private.ai_use_case_approved(
+    private.personal_realm_organization_id(), 'language_detection', null
+  ),
+  'redemption enables personal-realm language detection'
+);
+
+select ok(
+  private.ai_use_case_approved(
+    private.personal_realm_organization_id(), 'translation',
+    'google-vertex/us-south1'
+  ),
+  'redemption enables personal-realm translation on the pinned provider'
+);
+
+select ok(
+  not private.ai_use_case_approved(
+    private.personal_realm_organization_id(), 'summary', null
+  ),
+  'summaries stay unapproved for the personal realm'
+);
+
+select ok(
+  not private.ai_use_case_approved(
+    '99210000-0000-4000-8000-000000000001', 'language_detection', null
+  ),
+  'a workspace organization without a policy row stays denied'
+);
+
+select ok(
+  exists (
+    select 1 from public.organization_ai_policies policy
+    where policy.organization_id = private.personal_realm_organization_id()
+      and policy.enabled
+      and policy.policy_version = 1
+      and policy.route_policy = 'approved_zero_retention'
+      and policy.approved_use_cases
+        = array['language_detection', 'translation']::text[]
+      and policy.provider_allowlist = array['google-vertex/us-south1']::text[]
+      and policy.approved_by_user_id = '99200000-0000-4000-8000-000000000002'
+      and policy.approved_at is not null
+      and policy.revoked_at is null
+  ),
+  'the realm policy row satisfies the approval-consistency contract with a realm-member approver'
+);
+
+select lives_ok(
+  $ensure$select private.ensure_personal_realm_ai_policy()$ensure$,
+  'the realm policy helper is idempotent'
+);
+
+select is(
+  (select count(*)::integer from public.organization_ai_policies policy
+    where policy.organization_id = private.personal_realm_organization_id()
+      and policy.policy_version = 1),
+  1,
+  'repeated provisioning leaves the single version-1 policy row untouched'
+);
+
+-- An explicit revocation is permanent: later signups never resurrect the
+-- platform default.
+update public.organization_ai_policies policy
+set enabled = false,
+    revoked_by_user_id = '99200000-0000-4000-8000-000000000002',
+    revoked_at = now(),
+    revocation_reason = 'pgTAP: simulated explicit realm revocation'
+where policy.organization_id = private.personal_realm_organization_id();
+
+select lives_ok(
+  $ensure$select private.ensure_personal_realm_ai_policy()$ensure$,
+  'the realm policy helper tolerates a revoked policy'
+);
+
+select ok(
+  not private.ai_use_case_approved(
+    private.personal_realm_organization_id(), 'translation',
+    'google-vertex/us-south1'
+  )
+  and exists (
+    select 1 from public.organization_ai_policies policy
+    where policy.organization_id = private.personal_realm_organization_id()
+      and not policy.enabled
+      and policy.revoked_at is not null
+  ),
+  'a revoked realm policy is never re-enabled by the platform default'
 );
 
 -- A claimed handle is refused to later signups case-insensitively.
