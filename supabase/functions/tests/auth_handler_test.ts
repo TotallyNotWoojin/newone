@@ -599,6 +599,54 @@ Deno.test('native bearer account deletion skips CSRF and tolerates revocation fa
   assertEquals(calls, ['tombstone', 'soft-delete', 'revoke']);
 });
 
+Deno.test('native origin-less bearer account deletion is accepted by the request-context guard', async () => {
+  // The real native client sends apikey + bearer with no Origin and no
+  // cookie. The account-delete route must clear requireAllowedRequestContext
+  // exactly as native invitation redemption does, or deletion 403s on device.
+  const calls: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      deleteAccount: async (userId) => {
+        calls.push('tombstone');
+        return { userId, membershipsDeactivated: 1 };
+      },
+      softDeleteAuthUser: async () => {
+        calls.push('soft-delete');
+      },
+    })
+  );
+  const request = new Request(
+    'https://project.supabase.co/functions/v1/newone-auth/v2/auth/account/delete',
+    {
+      method: 'POST',
+      headers: {
+        apikey: 'publishable',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer access-token-that-is-long-enough',
+      },
+      body: JSON.stringify({}),
+    },
+  );
+  const response = await handler(request);
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { status: 'deleted' });
+  assert(calls.includes('tombstone') && calls.includes('soft-delete'));
+});
+
+Deno.test('origin-less account deletion without a bearer is refused by the context guard', async () => {
+  const handler = createAuthHandler(() => dependencies({}));
+  const request = new Request(
+    'https://project.supabase.co/functions/v1/newone-auth/v2/auth/account/delete',
+    {
+      method: 'POST',
+      headers: { apikey: 'publishable', 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+  const response = await handler(request);
+  assertEquals(response.status, 403);
+});
+
 Deno.test('account deletion requires an authenticated session and an intact CSRF pair', async () => {
   let deleted = false;
   const handler = createAuthHandler(() =>

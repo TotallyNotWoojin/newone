@@ -1366,7 +1366,9 @@ function requireAllowedRequestContext(
     return;
   }
   if (
-    (path === '/v2/auth/invitations/redeem' || path.startsWith('/v2/auth/recovery/cases')) &&
+    (path === '/v2/auth/invitations/redeem' ||
+      path === '/v2/auth/account/delete' ||
+      path.startsWith('/v2/auth/recovery/cases')) &&
     /^Bearer\s+[^\s]+$/i.test(request.headers.get('authorization') ?? '') &&
     !request.headers.has('cookie')
   ) return;
