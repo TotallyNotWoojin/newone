@@ -48,3 +48,6 @@ next-env.d.ts
 
 # local source agreement is not part of the hosted application source
 /Newone_Woojin_Contractor_Agreement (Claude) v7.docx
+
+# Apple credentials must never enter the repository
+*.p8
