@@ -37,6 +37,17 @@ The product pivoted to a general consumer messenger per [CONSUMER_PIVOT_PLAN.md]
 | Real hosted signup smoke | `tests/hosted/signup-smoke.mjs` passed 7 steps against the deployed gateway, hosted GoTrue, and Postgres: request, pending user, admin-API OTP, verified session with signup receipt, durable state (username, ko language, private-directory personal-realm membership, request-first realm, consumed reservation), completion marker, returning-member acceptance. Secret-free artifact retained under `tests/hosted/.artifacts/` | Two real-integration defects were found by this smoke and fixed: the lifecycle hook refused pre-membership signup sessions, and the session parser rejected hosted GoTrue's 12-character refresh tokens. Mocked suites alone could not have caught either; rerun on the immutable candidate |
 | Hosted deployment | `newone-auth` redeployed with signup routes and failure telemetry; synthetic e2e-prefixed smoke identities retained in the development-data project pending harness-style confirmed cleanup | Development evidence only; not production |
 
+## Consumer pivot slice 2 evidence (September 1, 2026)
+
+| Check | Observed result | Disposition |
+|---|---|---|
+| Discovery/requests migration | `20260901020000` (username prefix search RPC with expression index, message-request pending arm in the DM policy predicate, realm-only anti-enumeration relaxation, connections-plus-conversations realm directory) applied locally and pushed; 41 migrations in parity | Rerun on the eventual immutable candidate |
+| Database suite | Full pgTAP 31 files / 1,062 assertions passed including the new 35-assertion discovery suite; strict lint clean; types in parity | Green on current working tree |
+| Edge suite | 282/282 Deno tests; drift contract verified (160 called RPCs) | Green on current working tree |
+| Client suite | 50/50 Jest suites, 650/650 tests; coverage 96.11/91.42/96.93/97.32 above the 91% gate; deterministic exports verified | Green on current working tree |
+| Root contracts | 272/272 | Green on current working tree |
+| Real hosted discovery smoke | `tests/hosted/discovery-smoke.mjs` passed 7 steps first-run against the deployed gateways: two gateway signups (en/es), username search surfacing a stranger, message request creating connection+conversation+first message atomically, correct pending direction on both sides, acceptance, recipient reply, and database evidence (accepted connection, exactly 2 messages, 2 members). Secret-free artifact retained | Rerun on the immutable candidate; authenticated browser/device workflows remain open |
+
 ## Current preliminary automated and development results
 
 These results were observed on the current uncommitted implementation worktree on August 5, 2026. They establish a verified working-tree checkpoint, not a release. Coverage reports and a real hosted core-backend simulation now exist, but their artifacts are gitignored and are not tied to an immutable revision. A clean immutable-candidate rerun, authenticated browser/device workflows, provider integrations, signed binaries, and owner-controlled production systems remain unavailable.
