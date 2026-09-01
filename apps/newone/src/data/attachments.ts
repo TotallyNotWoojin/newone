@@ -25,10 +25,17 @@ export const attachmentMimeTypes = [
   'audio/mpeg',
   'audio/mp4',
   'audio/ogg',
+  'video/mp4',
+  'video/quicktime',
 ] as const;
 
 const allowedMimeTypes = new Set<string>(attachmentMimeTypes);
 export const attachmentByteLimit = 25 * 1024 * 1024;
+export const videoAttachmentByteLimit = 100 * 1024 * 1024;
+
+function attachmentByteLimitFor(mimeType: string) {
+  return mimeType.startsWith('video/') ? videoAttachmentByteLimit : attachmentByteLimit;
+}
 
 export interface SelectedAttachment {
   uri: string;
@@ -103,8 +110,15 @@ export async function prepareAttachment(selected: SelectedAttachment): Promise<P
   if (!allowedMimeTypes.has(selected.mimeType)) {
     throw new RepositoryError('That file type is not allowed by company policy.', 'file_type_blocked', false);
   }
-  if (selected.size && selected.size > attachmentByteLimit) {
-    throw new RepositoryError('Attachments must be 25 MB or smaller.', 'file_too_large', false);
+  const byteLimit = attachmentByteLimitFor(selected.mimeType);
+  if (selected.size && selected.size > byteLimit) {
+    throw new RepositoryError(
+      byteLimit === videoAttachmentByteLimit
+        ? 'Videos must be 100 MB or smaller.'
+        : 'Attachments must be 25 MB or smaller.',
+      'file_too_large',
+      false,
+    );
   }
   let response: Response;
   try {
@@ -116,8 +130,14 @@ export async function prepareAttachment(selected: SelectedAttachment): Promise<P
     throw new RepositoryError('Newone could not read the selected file.', 'file_read_failed', false);
   }
   const bytes = await response.arrayBuffer();
-  if (bytes.byteLength < 1 || bytes.byteLength > attachmentByteLimit) {
-    throw new RepositoryError('Attachments must be between 1 byte and 25 MB.', 'file_size_invalid', false);
+  if (bytes.byteLength < 1 || bytes.byteLength > byteLimit) {
+    throw new RepositoryError(
+      byteLimit === videoAttachmentByteLimit
+        ? 'Videos must be between 1 byte and 100 MB.'
+        : 'Attachments must be between 1 byte and 25 MB.',
+      'file_size_invalid',
+      false,
+    );
   }
   const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
   return {

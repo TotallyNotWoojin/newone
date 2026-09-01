@@ -21,16 +21,18 @@ const mockDocumentPicker = jest.fn<(_options?: unknown) => Promise<{
     size: 2048,
   }],
 }));
+type PickedMediaAsset = {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  type?: 'image' | 'video';
+};
 const mockImageLibrary = jest.fn<(_options?: unknown) => Promise<{
   canceled: boolean;
-  assets: {
-    uri: string;
-    fileName: string;
-    mimeType: string;
-    fileSize: number;
-    width: number;
-    height: number;
-  }[];
+  assets: PickedMediaAsset[];
 }>>(async () => ({
   canceled: false,
   assets: [{
@@ -44,14 +46,7 @@ const mockImageLibrary = jest.fn<(_options?: unknown) => Promise<{
 }));
 const mockCamera = jest.fn<(_options?: unknown) => Promise<{
   canceled: boolean;
-  assets: {
-    uri: string;
-    fileName: string;
-    mimeType: string;
-    fileSize: number;
-    width: number;
-    height: number;
-  }[];
+  assets: PickedMediaAsset[];
 }>>(async () => ({
   canceled: false,
   assets: [{
@@ -2099,5 +2094,98 @@ describe('personal realm message-request thread states', () => {
     expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
     expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
     expect(screen.getByLabelText('chat.message')).toBeTruthy();
+  });
+
+  test('captures camera video with defaulted naming and sends it through the secure pipeline', async () => {
+    mockCamera.mockImplementationOnce(async () => ({
+      canceled: false,
+      assets: [{
+        uri: 'file://controlled-camera-video.mov',
+        fileSize: 30 * 1024 * 1024,
+        width: 1920,
+        height: 1080,
+        type: 'video',
+      }],
+    }));
+    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
+    await fireEvent.press(screen.getByLabelText('chat.camera'));
+    await waitFor(() => expect(screen.getByText(/^video-\d+\.mp4$/)).toBeTruthy());
+    expect(mockCamera).toHaveBeenCalledWith({ mediaTypes: ['images', 'videos'], quality: 0.9 });
+
+    // Video selections surface the 100 MB video cap and no image-quality choice.
+    expect(screen.getAllByText(/chat\.videoFileLimit/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByLabelText('chat.imageOriginal')).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
+      'conversation-main',
+      expect.objectContaining({
+        uri: 'file://controlled-camera-video.mov',
+        name: expect.stringMatching(/^video-\d+\.mp4$/),
+        mimeType: 'video/mp4',
+        imageMode: 'optimized',
+      }),
+      '',
+    ));
+  });
+
+  test('selects a quicktime library video and preserves the provided metadata', async () => {
+    mockImageLibrary.mockImplementationOnce(async () => ({
+      canceled: false,
+      assets: [{
+        uri: 'file://library-video.mov',
+        fileName: 'inspection.mov',
+        mimeType: 'video/quicktime',
+        fileSize: 12 * 1024 * 1024,
+        width: 1280,
+        height: 720,
+      }],
+    }));
+    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
+    await fireEvent.press(screen.getByLabelText('chat.photoLibrary'));
+    await waitFor(() => expect(screen.getByText('inspection.mov')).toBeTruthy());
+    expect(mockImageLibrary).toHaveBeenCalledWith({ mediaTypes: ['images', 'videos'], quality: 0.9 });
+
+    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
+      'conversation-main',
+      expect.objectContaining({
+        uri: 'file://library-video.mov',
+        name: 'inspection.mov',
+        mimeType: 'video/quicktime',
+      }),
+      '',
+    ));
+  });
+
+  test('renders received video attachments with the standard download card on both breakpoints', async () => {
+    const videoMessage = incomingMessage({
+      id: 'message-video',
+      serverId: 'message-video',
+      originalText: 'Video evidence attached.',
+      attachment: {
+        id: 'attachment-video',
+        kind: 'document',
+        name: 'line-two.mp4',
+        sizeLabel: '48 MB',
+        status: 'clean',
+        mimeType: 'video/mp4',
+        byteSize: 48 * 1024 * 1024,
+        downloadUrl: 'https://example.invalid/signed-video',
+      },
+    });
+    const mobileView = await render(
+      <ConversationPane conversation={conversation()} messages={[videoMessage]} onSend={noopSend} mobile />,
+    );
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    await waitFor(() => expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(videoMessage));
+    await mobileView.unmount();
+
+    mockWorkspace = buildWorkspace();
+    await render(<ConversationPane conversation={conversation()} messages={[videoMessage]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    await waitFor(() => expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(videoMessage));
   });
 });

@@ -167,6 +167,7 @@ interface WorkspaceState {
   connectivity: ConnectivityState;
   offlineQueueAvailable: boolean;
   realtimeState: RealtimeState;
+  realtimeToken: string | null;
   error: string | null;
   actionError: string | null;
   actionBusy: string | null;
@@ -5172,6 +5173,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       connectivity,
       offlineQueueAvailable: Boolean(snapshot && snapshot.currentUser.membershipType !== 'guest'),
       realtimeState,
+      realtimeToken: auth.realtimeToken ?? null,
       error,
       actionError,
       actionBusy,
@@ -5406,6 +5408,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       publishDynamicGroupPolicy,
       pauseDynamicGroupPolicy,
       realtimeState,
+      auth.realtimeToken,
       refresh,
       selectConversation,
       selectedConversationId,

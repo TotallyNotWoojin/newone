@@ -31,6 +31,7 @@ import {
   optimizeImageAttachment,
   prepareAttachment,
   uploadAttachment,
+  videoAttachmentByteLimit,
 } from '@/data/attachments';
 
 const grant = {
@@ -173,6 +174,50 @@ describe('attachment byte preparation', () => {
       temporary,
     });
     expect(mockDigest).toHaveBeenCalledWith('SHA-256', bytes);
+  });
+});
+
+describe('video attachment policy', () => {
+  test.each([
+    ['video/mp4', videoAttachmentByteLimit],
+    ['video/quicktime', attachmentByteLimit + 1],
+  ])('accepts %s within the dedicated 100 MB video cap', async (mimeType, size) => {
+    const bytes = Uint8Array.from([7, 7, 7]).buffer;
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => bytes,
+    } as Response);
+    mockDigest.mockResolvedValue(Uint8Array.from([171]).buffer);
+    await expect(prepareAttachment({
+      uri: 'file:///controlled-clip',
+      name: 'controlled-clip',
+      mimeType,
+      size,
+    })).resolves.toMatchObject({
+      mimeType,
+      byteSize: 3,
+      sha256Hex: 'ab',
+    });
+  });
+
+  test('rejects declared video sizes above the 100 MB cap before reading bytes', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    await prepareAttachment({
+      uri: 'file:///big.mp4',
+      name: 'big.mp4',
+      mimeType: 'video/mp4',
+      size: videoAttachmentByteLimit + 1,
+    }).then(() => { throw new Error('expected rejection'); }, (error) => repositoryError(error, 'file_too_large', false));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('rejects fetched video bytes above the 100 MB cap', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(videoAttachmentByteLimit + 1),
+    } as Response);
+    await prepareAttachment({ uri: 'file:///big.mov', name: 'big.mov', mimeType: 'video/quicktime' })
+      .then(() => { throw new Error('expected rejection'); }, (error) => repositoryError(error, 'file_size_invalid', false));
   });
 });
 

@@ -1,4 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  useAudioRecorder,
+} from 'expo-audio';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -21,10 +29,11 @@ import {
 
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments';
+import { useConversationTyping } from '@/data/realtime/use-conversation-typing';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
 import { firstUnreadMessageId } from '@/data/reconciliation/message-timeline.mjs';
 import type { ConversationMemberCandidate } from '@/data/repositories/contracts';
-import type { AiOutputErrorCategory, Conversation, Message, OperationalAction, Person } from '@/domain/types';
+import type { AiOutputErrorCategory, Attachment, Conversation, Message, OperationalAction, Person } from '@/domain/types';
 import { Avatar, Chip, EmptyState, IconButton, PrimaryButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import {
@@ -109,6 +118,14 @@ export function ConversationPane({
   const tail = messages.at(-1);
   const tailKey = tail?.serverId ?? tail?.clientMessageId ?? tail?.id ?? null;
   const currentUserId = workspace.currentUser?.id ?? null;
+  const { typingPeers, notifyTyping, notifyStopped } = useConversationTyping({
+    enabled: Boolean(conversationId) && Boolean(currentUserId) && conversation?.managementOnly !== true,
+    organizationId: workspace.organizationId,
+    conversationId,
+    userId: currentUserId ?? '',
+    displayName: workspace.currentUser?.displayName ?? '',
+    accessToken: workspace.realtimeToken ?? undefined,
+  });
   // Personal-realm direct threads surface person-level message-request state
   // derived from the counterpart's connection data.
   const requestCounterpart = conversation
@@ -311,10 +328,17 @@ export function ConversationPane({
   const submit = () => {
     if (!draft.trim() || conversation.isReadOnly || conversation.canPost === false) return;
     onSend(draft, replyingTo ?? undefined, selectedMentionUserIds);
+    notifyStopped();
     setDraft('');
     setReplyingTo(null);
     setSelectedMentionUserIds([]);
     setShowMentionPicker(false);
+  };
+
+  const handleChangeDraft = (value: string) => {
+    setDraft(value);
+    if (value.trim()) notifyTyping();
+    else notifyStopped();
   };
 
   if (conversation.managementOnly) {
@@ -419,6 +443,17 @@ export function ConversationPane({
           setShowControls(true);
         }}
       />
+
+      {typingPeers.length ? (
+        <View accessibilityLiveRegion="polite" style={styles.typingBanner}>
+          <Ionicons name="chatbubble-ellipses-outline" color={colors.mintDark} size={13} />
+          <Text numberOfLines={1} style={styles.typingBannerText}>
+            {typingPeers.length === 1
+              ? t('chat.typingSingle').replace('{name}', typingPeers[0].displayName)
+              : t('chat.typingSeveral')}
+          </Text>
+        </View>
+      ) : null}
 
       {conversation.priority === 'safety' ? (
         <View style={styles.safetyBanner}>
@@ -608,10 +643,14 @@ export function ConversationPane({
         replyingTo={replyingTo}
         selectedMentionUserIds={selectedMentionUserIds}
         showMentionPicker={showMentionPicker}
-        onChangeDraft={setDraft}
+        onChangeDraft={handleChangeDraft}
         onChangeMentionUserIds={setSelectedMentionUserIds}
         onChangeShowMentionPicker={setShowMentionPicker}
+        onComposerBlur={notifyStopped}
         onSend={submit}
+        onSendVoiceNote={(attachment) => {
+          void workspace.sendAttachment(conversation.id, attachment, '');
+        }}
         onCancelReply={() => setReplyingTo(null)}
         onAddAttachment={() => {
           if (conversation.isReadOnly || conversation.canPost === false) return;
@@ -733,16 +772,19 @@ export function ConversationPane({
         onPickCamera={async () => {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
           if (!permission.granted) return;
-          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
+          const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
           const asset = result.assets?.[0];
-          if (asset) setSelectedAttachment({
-            uri: asset.uri,
-            name: asset.fileName ?? `photo-${Date.now()}.jpg`,
-            mimeType: asset.mimeType ?? 'image/jpeg',
-            size: asset.fileSize,
-            width: asset.width,
-            height: asset.height,
-          });
+          if (asset) {
+            const video = asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
+            setSelectedAttachment({
+              uri: asset.uri,
+              name: asset.fileName ?? (video ? `video-${Date.now()}.mp4` : `photo-${Date.now()}.jpg`),
+              mimeType: asset.mimeType ?? (video ? 'video/mp4' : 'image/jpeg'),
+              size: asset.fileSize,
+              width: asset.width,
+              height: asset.height,
+            });
+          }
         }}
         onPickFile={async () => {
           const result = await DocumentPicker.getDocumentAsync({
@@ -761,16 +803,19 @@ export function ConversationPane({
         onPickLibrary={async () => {
           const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!permission.granted) return;
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
           const asset = result.assets?.[0];
-          if (asset) setSelectedAttachment({
-            uri: asset.uri,
-            name: asset.fileName ?? `media-${Date.now()}`,
-            mimeType: asset.mimeType ?? 'image/jpeg',
-            size: asset.fileSize,
-            width: asset.width,
-            height: asset.height,
-          });
+          if (asset) {
+            const video = asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
+            setSelectedAttachment({
+              uri: asset.uri,
+              name: asset.fileName ?? (video ? `video-${Date.now()}.mp4` : `media-${Date.now()}`),
+              mimeType: asset.mimeType ?? (video ? 'video/mp4' : 'image/jpeg'),
+              size: asset.fileSize,
+              width: asset.width,
+              height: asset.height,
+            });
+          }
         }}
         onSend={async () => {
           if (!selectedAttachment) return;
@@ -1503,7 +1548,13 @@ function MessageBubble({
             </View>
           ) : null}
 
-          {message.attachment ? <AttachmentCard message={message} onDownload={onDownload} /> : null}
+          {message.attachment ? (
+            isPlayableAudioAttachment(message.attachment) ? (
+              <AudioAttachmentBubble message={message} />
+            ) : (
+              <AttachmentCard message={message} onDownload={onDownload} />
+            )
+          ) : null}
 
           <View style={styles.originalLabelRow}>
             <Ionicons
@@ -1947,6 +1998,69 @@ function AiOutputErrorReportModal({
   );
 }
 
+function isPlayableAudioAttachment(attachment: Attachment) {
+  return attachment.mimeType?.startsWith('audio/') === true
+    && attachment.status === 'clean'
+    && Boolean(attachment.downloadUrl)
+    && (!attachment.transfer || attachment.transfer.state === 'uploaded');
+}
+
+function formatPlaybackTime(seconds: number) {
+  const whole = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function AudioAttachmentBubble({ message }: { message: Message }) {
+  const { t } = useI18n();
+  const attachment = message.attachment;
+  const player = useAudioPlayer(attachment?.downloadUrl ?? null);
+  const status = useAudioPlayerStatus(player);
+  const playing = status?.playing === true;
+  const duration = status?.duration ?? 0;
+  const currentTime = status?.currentTime ?? 0;
+  if (!attachment) return null;
+  const togglePlayback = () => {
+    if (playing) {
+      player.pause();
+      return;
+    }
+    if (duration > 0 && currentTime >= duration) void player.seekTo(0);
+    player.play();
+  };
+  return (
+    <View style={[styles.voiceBubble, message.isOwn && styles.voiceBubbleOwn]}>
+      <Pressable
+        accessibilityLabel={playing ? t('chat.pauseVoiceNote') : t('chat.playVoiceNote')}
+        accessibilityRole="button"
+        onPress={togglePlayback}
+        style={({ pressed }) => [
+          styles.voicePlayButton,
+          message.isOwn && styles.voicePlayButtonOwn,
+          pressed && styles.pressed,
+        ]}>
+        <Ionicons
+          name={playing ? 'pause' : 'play'}
+          size={18}
+          color={message.isOwn ? colors.white : colors.mintDark}
+        />
+      </Pressable>
+      <View style={styles.voiceCopy}>
+        <Text numberOfLines={1} style={[styles.voiceTitle, message.isOwn && styles.voiceTitleOwn]}>
+          {t('chat.voiceNote')}
+        </Text>
+        <Text style={[styles.voiceTime, message.isOwn && styles.voiceTimeOwn]}>
+          {formatPlaybackTime(currentTime)} / {formatPlaybackTime(duration)}
+        </Text>
+      </View>
+      <Ionicons
+        name="mic-outline"
+        size={16}
+        color={message.isOwn ? 'rgba(255,255,255,0.78)' : colors.inkMuted}
+      />
+    </View>
+  );
+}
+
 function AttachmentCard({ message, onDownload }: { message: Message; onDownload: () => void }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
@@ -1984,7 +2098,13 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
         style={({ pressed }) => [styles.attachmentMain, pressed && canDownload && styles.pressed]}>
         <View style={[styles.attachmentIcon, message.isOwn && styles.attachmentIconOwn]}>
           <Ionicons
-            name={attachment.kind === 'image' ? 'image-outline' : 'document-text-outline'}
+            name={attachment.kind === 'image'
+              ? 'image-outline'
+              : attachment.mimeType?.startsWith('video/')
+                ? 'videocam-outline'
+                : attachment.kind === 'voice'
+                  ? 'mic-outline'
+                  : 'document-text-outline'}
             size={19}
             color={message.isOwn ? colors.white : colors.mintDark}
           />
@@ -2079,7 +2199,9 @@ function Composer({
   onChangeDraft,
   onChangeMentionUserIds,
   onChangeShowMentionPicker,
+  onComposerBlur,
   onSend,
+  onSendVoiceNote,
   onAddAttachment,
   translationPair,
   replyingTo,
@@ -2096,13 +2218,52 @@ function Composer({
   onChangeDraft: (value: string) => void;
   onChangeMentionUserIds: (value: string[]) => void;
   onChangeShowMentionPicker: (value: boolean) => void;
+  onComposerBlur: () => void;
   onSend: () => void;
+  onSendVoiceNote: (attachment: SelectedAttachment) => void;
   onAddAttachment: () => void;
   translationPair?: string;
   replyingTo: Message | null;
   onCancelReply: () => void;
 }) {
   const { t } = useI18n();
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!recording) return;
+    const interval = setInterval(() => setRecordSeconds((value) => value + 1), 1000);
+    return () => clearInterval(interval);
+  }, [recording]);
+
+  const startRecording = async () => {
+    const permission = await AudioModule.requestRecordingPermissionsAsync();
+    if (!permission.granted) return;
+    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await recorder.prepareToRecordAsync();
+    recorder.record();
+    setRecordSeconds(0);
+    setRecording(true);
+  };
+
+  const finishRecording = async (send: boolean) => {
+    setRecording(false);
+    await recorder.stop();
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    const uri = recorder.uri;
+    if (send && uri) {
+      // Voice notes ride the existing quarantined attachment pipeline with no
+      // caption; audio/mp4 (AAC m4a) is already on the server allowlist.
+      onSendVoiceNote({
+        uri,
+        name: `voice-note-${Date.now()}.m4a`,
+        mimeType: 'audio/mp4',
+        temporary: true,
+      });
+    }
+  };
+
   return (
     <View style={styles.composerWrap}>
       {disabled ? (
@@ -2142,12 +2303,39 @@ function Composer({
         )}
         <Text style={styles.composerPrivacy}>{t('chat.originalPreserved')}</Text>
       </View> : null}
-      {!disabled ? <View style={styles.composer}>
+      {!disabled && recording ? (
+        <View style={styles.composer}>
+          <View
+            accessibilityLabel={t('chat.recordingVoiceNote')}
+            accessibilityLiveRegion="polite"
+            style={styles.recordingIndicator}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingTime}>{formatPlaybackTime(recordSeconds)}</Text>
+            <Text numberOfLines={1} style={styles.recordingLabel}>{t('chat.recordingVoiceNote')}</Text>
+          </View>
+          <IconButton
+            label={t('chat.cancelVoiceNote')}
+            name="trash-outline"
+            onPress={() => void finishRecording(false)}
+            size={38}
+            tone="danger"
+          />
+          <IconButton
+            label={t('chat.sendVoiceNote')}
+            name="arrow-up"
+            onPress={() => void finishRecording(true)}
+            size={40}
+            tone="accent"
+          />
+        </View>
+      ) : null}
+      {!disabled && !recording ? <View style={styles.composer}>
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={38} />
         <TextInput
           accessibilityLabel={t('chat.message')}
           blurOnSubmit={false}
           multiline
+          onBlur={onComposerBlur}
           onChangeText={onChangeDraft}
           onSubmitEditing={onSend}
           placeholder={t('chat.placeholder')}
@@ -2155,14 +2343,23 @@ function Composer({
           style={styles.composerInput}
           value={draft}
         />
-        <IconButton
-          disabled={!draft.trim()}
-          label={t('chat.send')}
-          name="arrow-up"
-          onPress={onSend}
-          size={40}
-          tone="accent"
-        />
+        {draft.trim() ? (
+          <IconButton
+            label={t('chat.send')}
+            name="arrow-up"
+            onPress={onSend}
+            size={40}
+            tone="accent"
+          />
+        ) : (
+          <IconButton
+            label={t('chat.recordVoiceNote')}
+            name="mic"
+            onPress={() => void startRecording()}
+            size={40}
+            tone="accent"
+          />
+        )}
       </View> : null}
     </View>
   );
@@ -3369,7 +3566,7 @@ function AttachmentPickerModal({
       onClose={onClose}
       title={t('chat.addAttachment')}
       visible={visible}>
-      <Text style={styles.modalNote}>{t('chat.fileLimit')}</Text>
+      <Text style={styles.modalNote}>{t('chat.fileLimit')} · {t('chat.videoFileLimit')}</Text>
       <View style={styles.attachmentChoices}>
         <PrimaryButton icon="images-outline" label={t('chat.photoLibrary')} onPress={onPickLibrary} tone="light" />
         <PrimaryButton icon="camera-outline" label={t('chat.camera')} onPress={onPickCamera} tone="light" />
@@ -3380,11 +3577,17 @@ function AttachmentPickerModal({
           {selected.mimeType.startsWith('image/') ? (
             <Image accessibilityLabel={t('chat.imagePreview')} resizeMode="cover" source={{ uri: selected.uri }} style={styles.imagePreview} />
           ) : (
-          <Ionicons name="document-attach-outline" color={colors.mintDark} size={22} />
+          <Ionicons
+            name={selected.mimeType.startsWith('video/') ? 'videocam-outline' : 'document-attach-outline'}
+            color={colors.mintDark}
+            size={22}
+          />
           )}
           <View style={styles.selectedFileCopy}>
             <Text numberOfLines={1} style={styles.selectedFileName}>{selected.name}</Text>
-            <Text style={styles.selectedFileMeta}>{selected.mimeType} · {t('chat.fileLimit')}</Text>
+            <Text style={styles.selectedFileMeta}>
+              {selected.mimeType} · {selected.mimeType.startsWith('video/') ? t('chat.videoFileLimit') : t('chat.fileLimit')}
+            </Text>
           </View>
         </View>
       ) : null}
@@ -4340,6 +4543,95 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     lineHeight: 20,
+  },
+  typingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.mintSoft,
+  },
+  typingBannerText: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.mintDark,
+    fontSize: 11,
+    fontWeight: '700',
+    fontStyle: 'italic',
+  },
+  recordingIndicator: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radii.pill,
+    backgroundColor: colors.red,
+  },
+  recordingTime: {
+    color: colors.ink,
+    fontSize: 13,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  recordingLabel: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.inkMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  voiceBubble: {
+    minWidth: 210,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+    padding: spacing.xs,
+    borderRadius: radii.sm,
+    backgroundColor: colors.paperMuted,
+  },
+  voiceBubbleOwn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  voicePlayButton: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mintSoft,
+  },
+  voicePlayButtonOwn: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  voiceCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  voiceTitle: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  voiceTitleOwn: {
+    color: colors.white,
+  },
+  voiceTime: {
+    color: colors.inkSubtle,
+    fontSize: 9,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  voiceTimeOwn: {
+    color: 'rgba(255,255,255,0.64)',
   },
   modalSection: {
     gap: spacing.sm,
