@@ -4131,6 +4131,7 @@ export type Database = {
         }
         Returns: Json
       }
+      bff_delete_account: { Args: { p_user_id: string }; Returns: Json }
       bff_delete_message: {
         Args: {
           p_actor_user_id: string

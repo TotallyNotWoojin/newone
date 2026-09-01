@@ -195,6 +195,8 @@ function rpcResponse(name: string): unknown {
         display_name: 'Coverage Member',
         preferred_language: 'en',
       };
+    case 'bff_delete_account':
+      return { user_id: actorUserId, memberships_deactivated: 1 };
     case 'redeem_organization_invite':
       return {
         redeemed: true,
@@ -919,6 +921,11 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
 
     await dependencies.listAdminMfaFactors(actorUserId);
     await dependencies.deleteAdminMfaFactor(actorUserId, policyId);
+    assertEquals(
+      await dependencies.deleteAccount(actorUserId, deviceId),
+      { userId: actorUserId, membershipsDeactivated: 1 },
+    );
+    await dependencies.softDeleteAuthUser(actorUserId);
     await dependencies.revoke(accessToken);
     const identity = await dependencies.identify(accessToken);
     assertEquals(identity.userId, actorUserId);

@@ -44,6 +44,8 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'audio/mpeg',
   'audio/mp4',
   'audio/ogg',
+  'video/mp4',
+  'video/quicktime',
 ]);
 
 export interface AttachmentScanJob {

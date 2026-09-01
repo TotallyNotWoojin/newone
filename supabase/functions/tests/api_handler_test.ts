@@ -1662,6 +1662,8 @@ Deno.test('conversation PATCH preserves omitted fields and attachment upload req
       'audio/mpeg',
       'audio/mp4',
       'audio/ogg',
+      'video/mp4',
+      'video/quicktime',
     ]
   ) {
     const parsed = parseCommand(attachment, {
@@ -1678,8 +1680,8 @@ Deno.test('conversation PATCH preserves omitted fields and attachment upload req
   }
   for (
     const mimeType of [
-      'video/mp4',
-      'video/quicktime',
+      'video/x-msvideo',
+      'video/webm',
       'application/x-msdownload',
       'text/html',
       'application/zip',
@@ -1698,6 +1700,30 @@ Deno.test('conversation PATCH preserves omitted fields and attachment upload req
       })
     );
   }
+});
+
+Deno.test('attachment upload grants enforce the per-type byte caps', async () => {
+  const attachment = matchRoute('POST', '/v2/attachments/grants');
+  assert(attachment);
+  const grant = (mimeType: string, byteSize: number) =>
+    parseCommand(attachment, {
+      organizationId,
+      action: 'upload',
+      conversationId: '00000000-0000-4000-8000-000000000030',
+      messageId: '101',
+      fileName: 'capped-file',
+      mimeType,
+      byteSize,
+      sha256Hex: 'a'.repeat(64),
+    });
+  // Videos get the full 100 MiB envelope.
+  assertEquals(grant('video/mp4', 104857600).values.byteSize, 104857600);
+  assertEquals(grant('video/quicktime', 104857600).values.byteSize, 104857600);
+  await assertRejects(() => grant('video/mp4', 104857601));
+  // Every other type keeps the 25 MiB cap.
+  assertEquals(grant('image/jpeg', 26214400).values.byteSize, 26214400);
+  await assertRejects(() => grant('image/jpeg', 26214401));
+  await assertRejects(() => grant('application/pdf', 104857600));
 });
 
 Deno.test('attachment completion hashes the immutable stored object before queueing its scan', async () => {

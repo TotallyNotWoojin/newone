@@ -87,6 +87,8 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     recoveryServiceRpc: async () => ({}),
     listAdminMfaFactors: async () => ({ factors: [] }),
     deleteAdminMfaFactor: async () => {},
+    deleteAccount: async () => ({ userId: session.userId, membershipsDeactivated: 1 }),
+    softDeleteAuthUser: async () => {},
     revoke: async () => {},
     identify: async () => ({
       userId: session.userId,
@@ -525,6 +527,119 @@ Deno.test('refresh rotates tokens and CSRF while sign-out revokes before clearin
     'revoke:access-token-that-is-long-enough',
   ]);
   assert(signOut.headers.getSetCookie().every((value) => value.includes('Max-Age=0')));
+});
+
+Deno.test('web account deletion tombstones before the Auth soft delete and clears cookies', async () => {
+  const calls: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      identify: async () => {
+        calls.push('identify');
+        return {
+          userId: session.userId,
+          destinationType: session.destinationType,
+          destination: session.destination,
+          email: session.email,
+          phone: session.phone,
+          expiresAt: 9999999999,
+        };
+      },
+      deleteAccount: async (userId, requestId) => {
+        assert(typeof requestId === 'string' && requestId.length > 0);
+        calls.push(`tombstone:${userId}`);
+        return { userId, membershipsDeactivated: 2 };
+      },
+      softDeleteAuthUser: async (userId) => {
+        calls.push(`soft-delete:${userId}`);
+      },
+      revoke: async (token) => {
+        calls.push(`revoke:${token}`);
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/account/delete', {}, {
+    Cookie: '__Host-newone_access=access-token-that-is-long-enough; __Host-newone_csrf=csrf-token',
+    'X-CSRF-Token': 'csrf-token',
+  }));
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { status: 'deleted' });
+  assertEquals(calls, [
+    'identify',
+    `tombstone:${session.userId}`,
+    `soft-delete:${session.userId}`,
+    'revoke:access-token-that-is-long-enough',
+  ]);
+  const cookies = response.headers.getSetCookie();
+  assertEquals(cookies.length, 3);
+  assert(cookies.every((value) => value.includes('Max-Age=0')));
+});
+
+Deno.test('native bearer account deletion skips CSRF and tolerates revocation failure', async () => {
+  const calls: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      deleteAccount: async (userId) => {
+        calls.push('tombstone');
+        return { userId, membershipsDeactivated: 1 };
+      },
+      softDeleteAuthUser: async () => {
+        calls.push('soft-delete');
+      },
+      revoke: async () => {
+        calls.push('revoke');
+        throw new ApiError(503, 'dependency_unavailable');
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/account/delete', {}, {
+    Authorization: 'Bearer access-token-that-is-long-enough',
+  }));
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { status: 'deleted' });
+  assertEquals(calls, ['tombstone', 'soft-delete', 'revoke']);
+});
+
+Deno.test('account deletion requires an authenticated session and an intact CSRF pair', async () => {
+  let deleted = false;
+  const handler = createAuthHandler(() =>
+    dependencies({
+      deleteAccount: async (userId) => {
+        deleted = true;
+        return { userId, membershipsDeactivated: 0 };
+      },
+    })
+  );
+  const unauthenticated = await handler(post('/v2/auth/account/delete', {}));
+  assertEquals(unauthenticated.status, 401);
+  const missingCsrf = await handler(post('/v2/auth/account/delete', {}, {
+    Cookie: '__Host-newone_access=access-token-that-is-long-enough; __Host-newone_csrf=csrf-token',
+  }));
+  assertEquals(missingCsrf.status, 403);
+  assertEquals(deleted, false);
+});
+
+Deno.test('a failed deletion tombstone never reaches the Auth soft delete', async () => {
+  const calls: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      deleteAccount: async () => {
+        calls.push('tombstone');
+        throw new ApiError(503, 'dependency_unavailable');
+      },
+      softDeleteAuthUser: async () => {
+        calls.push('soft-delete');
+      },
+      revoke: async () => {
+        calls.push('revoke');
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/account/delete', {}, {
+    Authorization: 'Bearer access-token-that-is-long-enough',
+  }));
+  assertEquals(response.status, 503);
+  assertEquals(calls, ['tombstone']);
+  assertEquals(response.headers.getSetCookie().length, 0);
 });
 
 Deno.test('web auth endpoints reject requests without an allowlisted browser origin', async () => {

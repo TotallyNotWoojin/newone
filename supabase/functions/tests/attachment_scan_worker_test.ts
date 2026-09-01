@@ -241,7 +241,9 @@ Deno.test('scanner polyglot and detected-MIME mismatch verdicts cannot be promot
   assertEquals(mismatch.result, 'quarantined');
   assertEquals(mismatch.policyCode, 'declared_type_mismatch');
 
-  const nextPhaseVideo = await parseScannerResponse(
+  // A detected video is an allowed type now, so a declared audio/mp4 that is
+  // really a video quarantines as a declaration mismatch, not as disallowed.
+  const declaredAudioActualVideo = await parseScannerResponse(
     new Response(
       JSON.stringify({
         result: 'clean',
@@ -256,7 +258,43 @@ Deno.test('scanner polyglot and detected-MIME mismatch verdicts cannot be promot
     digest,
     'audio/mp4',
   );
-  assertEquals(nextPhaseVideo.result, 'quarantined');
-  assertEquals(nextPhaseVideo.policyCode, 'detected_type_disallowed');
+  assertEquals(declaredAudioActualVideo.result, 'quarantined');
+  assertEquals(declaredAudioActualVideo.policyCode, 'declared_type_mismatch');
+
+  const cleanVideo = await parseScannerResponse(
+    new Response(
+      JSON.stringify({
+        result: 'clean',
+        digestSha256: digest,
+        detectedMimeType: 'video/mp4',
+        polyglotDetected: false,
+        scannerName: 'content-inspector',
+        scannerVersion: '2.0.0',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ),
+    digest,
+    'video/mp4',
+  );
+  assertEquals(cleanVideo.result, 'clean');
+  assertEquals(cleanVideo.policyCode, null);
+
+  const disallowedVideo = await parseScannerResponse(
+    new Response(
+      JSON.stringify({
+        result: 'clean',
+        digestSha256: digest,
+        detectedMimeType: 'video/x-msvideo',
+        polyglotDetected: false,
+        scannerName: 'content-inspector',
+        scannerVersion: '2.0.0',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ),
+    digest,
+    'video/x-msvideo',
+  );
+  assertEquals(disallowedVideo.result, 'quarantined');
+  assertEquals(disallowedVideo.policyCode, 'detected_type_disallowed');
   assertEquals([...signatureMimeCandidates(source)], ['text/plain', 'text/csv']);
 });

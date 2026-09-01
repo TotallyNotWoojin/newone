@@ -101,6 +101,11 @@ export interface RedeemedSignup {
   preferredLanguage: 'en' | 'es' | 'ko';
 }
 
+interface DeletedAccountRow {
+  user_id?: string;
+  memberships_deactivated?: number;
+}
+
 interface AccountRecoveryCompletion {
   recovered: boolean;
   currentSessionId: string;
@@ -243,6 +248,11 @@ export interface AuthDependencies {
   ): Promise<Record<string, unknown>>;
   listAdminMfaFactors(userId: string): Promise<unknown>;
   deleteAdminMfaFactor(userId: string, factorId: string): Promise<void>;
+  deleteAccount(
+    userId: string,
+    requestId: string,
+  ): Promise<{ userId: string; membershipsDeactivated: number }>;
+  softDeleteAuthUser(userId: string): Promise<void>;
   revoke(accessToken: string): Promise<void>;
   identify(
     accessToken: string,
@@ -731,6 +741,32 @@ export function defaultAuthDependencies(): AuthDependencies {
         userId,
         id: factorId,
       });
+      if (error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+    },
+    async deleteAccount(userId, correlationId) {
+      const result = firstRow(
+        await invokeRpc<DeletedAccountRow | DeletedAccountRow[]>(
+          asRpcClient(createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId })),
+          'bff_delete_account',
+          { p_user_id: userId },
+        ),
+      );
+      if (uuid(result.user_id) !== userId) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      return {
+        userId,
+        membershipsDeactivated: boundedCount(result.memberships_deactivated, 1000),
+      };
+    },
+    async softDeleteAuthUser(userId) {
+      // shouldSoftDelete: auth.users.deleted_at is set while the account row
+      // is preserved; every authorizer and the token lifecycle hook already
+      // fail closed on it.
+      const { error } = await createAdminClient(clientEnvironment).auth.admin.deleteUser(
+        userId,
+        true,
+      );
       if (error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
     },
     async revoke(accessToken) {
@@ -2391,6 +2427,32 @@ export function createAuthHandler(
         verifyCsrf(request, config, credential.viaCookie);
         await dependencies.revoke(credential.token);
         return clearSessionCookies(jsonResponse(meta, 200, { signedOut: true }), config);
+      }
+
+      if (request.method === 'POST' && path === '/v2/auth/account/delete') {
+        // App Store 5.1.1(v): in-app account deletion. Authenticated exactly
+        // like sign-out: web cookie sessions must present the CSRF pair,
+        // native bearer sessions are exempt from CSRF.
+        await emptyJson(request, config);
+        const credential = accessCredential(request, config);
+        verifyCsrf(request, config, credential.viaCookie);
+        const identity = await dependencies.identify(credential.token);
+        // Tombstone first: one database transaction quarantines the username,
+        // anonymizes the profile, deactivates every membership, and removes
+        // push registrations. Only then is the Auth principal soft-deleted
+        // (auth.users.deleted_at), which every authorizer and the token
+        // lifecycle hook fail closed on.
+        await dependencies.deleteAccount(identity.userId, meta.requestId);
+        await dependencies.softDeleteAuthUser(identity.userId);
+        try {
+          await dependencies.revoke(credential.token);
+        } catch {
+          // Best-effort, like the other terminal revocations: the tombstone
+          // and the soft delete already close every token path, and a
+          // revocation hiccup must not resurface a deleted account as a
+          // retryable error.
+        }
+        return clearSessionCookies(jsonResponse(meta, 200, { status: 'deleted' }), config);
       }
 
       if (request.method === 'POST' && path === '/v2/auth/invitations/redeem') {

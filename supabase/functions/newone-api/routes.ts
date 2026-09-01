@@ -50,7 +50,15 @@ const SAFE_MIME_TYPES = new Set([
   'audio/mpeg',
   'audio/mp4',
   'audio/ogg',
+  'video/mp4',
+  'video/quicktime',
 ]);
+// Video containers carry their own 100 MiB cap; every other attachment type
+// keeps the 25 MiB cap. The database grant function and the row constraint
+// enforce the same per-type discipline.
+const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/quicktime']);
+const ATTACHMENT_MAX_BYTES = 26214400;
+const VIDEO_ATTACHMENT_MAX_BYTES = 104857600;
 const CONVERSATION_AVATAR_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const CONVERSATION_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -2939,7 +2947,11 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           messageId: messageId(body.messageId),
           fileName,
           mimeType,
-          byteSize: integer(body.byteSize, 1, 26214400),
+          byteSize: integer(
+            body.byteSize,
+            1,
+            VIDEO_MIME_TYPES.has(mimeType) ? VIDEO_ATTACHMENT_MAX_BYTES : ATTACHMENT_MAX_BYTES,
+          ),
           sha256Hex: sha256,
         });
       } else {
@@ -2972,7 +2984,10 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           attachmentId: pathUuid(route, 'attachmentId'),
           bucketId,
           storagePath,
-          byteSize: integer(body.byteSize, 1, 26214400),
+          // The MIME type is not part of the completion request; the finalize
+          // RPC verifies the exact byte size against the granted row, which
+          // already carries the per-type cap.
+          byteSize: integer(body.byteSize, 1, VIDEO_ATTACHMENT_MAX_BYTES),
           sha256Hex: sha256,
         },
       };
@@ -4576,7 +4591,7 @@ async function completeAttachmentUpload(
 
   const { data: object, error: downloadError } = await bucket.download(storagePath);
   if (downloadError || !object) throw new ApiError(409, 'attachment_not_ready');
-  if (object.size !== byteSize || object.size > 26214400) {
+  if (object.size !== byteSize || object.size > VIDEO_ATTACHMENT_MAX_BYTES) {
     throw new ApiError(422, 'attachment_integrity_failed');
   }
   const observedSha256 = await sha256Hex(new Uint8Array(await object.arrayBuffer()));

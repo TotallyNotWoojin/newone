@@ -94,6 +94,8 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     recoveryServiceRpc: async () => ({}),
     listAdminMfaFactors: async () => ({ factors: [] }),
     deleteAdminMfaFactor: async () => {},
+    deleteAccount: async () => ({ userId: session.userId, membershipsDeactivated: 1 }),
+    softDeleteAuthUser: async () => {},
     revoke: async () => {},
     identify: async () => ({
       userId: session.userId,

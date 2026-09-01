@@ -94,7 +94,7 @@ select is(
 select ok(
   exists (
     select 1 from storage.buckets
-    where id = 'message-attachments' and public = false and file_size_limit = 26214400
+    where id = 'message-attachments' and public = false and file_size_limit = 104857600
   ),
   'attachment bucket is private and size-limited'
 );
@@ -105,7 +105,7 @@ select is(
 );
 select is(
   (select count(*)::bigint from pg_policies where schemaname = 'realtime' and policyname like 'newone_realtime_%'),
-  2::bigint,
+  4::bigint,
   'Realtime has private topic policies'
 );
 select ok(

@@ -88,6 +88,8 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
       factors: [{ id: factorId, factor_type: 'totp', status: 'verified' }],
     }),
     deleteAdminMfaFactor: async () => {},
+    deleteAccount: async () => ({ userId, membershipsDeactivated: 1 }),
+    softDeleteAuthUser: async () => {},
     revoke: async () => {},
     identify: async () => ({
       userId,
