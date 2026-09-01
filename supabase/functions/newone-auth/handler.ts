@@ -292,8 +292,11 @@ function sessionTokens(value: unknown): SessionTokens {
     max: 8192,
     trim: false,
   }) as string;
+  // GoTrue issues short opaque refresh tokens (observed at 12 characters on
+  // hosted projects); the floor exists only to reject empty or truncated
+  // values, never to assume a token format.
   const refreshToken = normalizedString(session.refresh_token, {
-    min: 20,
+    min: 10,
     max: 2048,
     trim: false,
   }) as string;
@@ -2452,11 +2455,20 @@ export function createAuthHandler(
       throw new ApiError(404, 'not_found');
     } catch (error) {
       const safe = asApiError(error);
-      if (safe.status >= 500) {
+      if (safe.status >= 400) {
+        // Operational failure telemetry: correlation id, route, and outcome
+        // only. The cause line carries the internal error class/message for
+        // unexpected (non-ApiError) failures; it never includes request
+        // bodies, tokens, or credentials.
         console.error(JSON.stringify({
           event: 'newone_auth_failure',
           correlation_id: meta.requestId,
+          path: authPath(request.url),
+          status: safe.status,
           code: safe.code,
+          cause: error instanceof ApiError
+            ? undefined
+            : String(error instanceof Error ? error.message : error).slice(0, 300),
         }));
       }
       return errorResponse(meta, error);

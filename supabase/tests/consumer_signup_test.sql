@@ -1,5 +1,5 @@
 begin;
-select plan(25);
+select plan(27);
 
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
@@ -176,6 +176,24 @@ insert into auth.users (id, email, email_confirmed_at) values (
   '99200000-0000-4000-8000-000000000002',
   'first-signup@example.test',
   now()
+);
+
+-- The token lifecycle hook issues claims during the live reservation window
+-- (before any membership exists), and only during it.
+select ok(
+  (public.hook_newone_custom_access_token(jsonb_build_object(
+    'user_id', '99200000-0000-4000-8000-000000000002',
+    'claims', jsonb_build_object('role', 'authenticated')
+  ))) ? 'claims',
+  'a live signup reservation permits token issuance before membership'
+);
+
+select ok(
+  (public.hook_newone_custom_access_token(jsonb_build_object(
+    'user_id', '99200000-0000-4000-8000-000000000001',
+    'claims', jsonb_build_object('role', 'authenticated')
+  ))) ? 'claims',
+  'an active member still receives claims through the hook'
 );
 
 select lives_ok(

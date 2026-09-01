@@ -23,7 +23,7 @@ const sessionId = '00000000-0000-4000-8000-000000000020';
 
 const session = {
   accessToken: 'signup-access-token-that-is-long-enough',
-  refreshToken: 'signup-refresh-token-that-is-long-enough',
+  refreshToken: 'AbC123dEf456',
   expiresIn: 3600,
   userId: '00000000-0000-4000-8000-000000000010',
   destinationType: 'email' as const,
