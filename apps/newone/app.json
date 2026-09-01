@@ -29,7 +29,10 @@
       "package": "com.newone.app",
       "versionCode": 1,
       "allowBackup": false,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -61,6 +64,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2300fd06-3789-4d86-a2bb-856d57dca912"
+      }
+    },
+    "owner": "totallynotwoojin"
   }
 }
