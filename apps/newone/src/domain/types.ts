@@ -226,6 +226,8 @@ export interface Person {
   membershipId?: string;
   organizationId?: string;
   displayName: string;
+  /** Consumer discovery handle; present only for personal-realm identities. */
+  username?: string | null;
   initials: string;
   roleLabel: string;
   role: MemberRole;

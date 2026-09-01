@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 
 import ConversationScreen from '@/app/conversation/[id]';
 import ChatsScreen from '@/app/index';
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 
 const mockRouter = {
   back: jest.fn(),
@@ -138,7 +139,9 @@ function conversation(id: string, overrides: Record<string, unknown> = {}) {
 function baseWorkspace(overrides: Record<string, unknown> = {}) {
   return {
     status: 'ready',
+    organizationId: '20000000-0000-4000-8000-000000000001',
     organizationName: 'Controlled Company',
+    currentUser: null,
     conversations: [
       conversation('conversation-primary'),
       conversation('conversation-secondary'),
@@ -246,6 +249,7 @@ describe('chats index route', () => {
     const view = await render(<ChatsScreen />);
 
     expect(screen.getByText('mobile-list')).toBeTruthy();
+    expect(screen.getByText('Controlled Company · chat.onShift')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'controlled select conversation' }));
     expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
     expect(mockRouter.push).toHaveBeenCalledWith({
@@ -256,6 +260,31 @@ describe('chats index route', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
     await fireEvent.press(screen.getByRole('button', { name: 'chat.compose' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
+
+    await view.unmount();
+  });
+
+  test('replaces the workspace subtitle with the consumer handle in the personal realm', async () => {
+    mockWidth = 390;
+    mockWorkspace = baseWorkspace({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      currentUser: { username: 'river_runner_7' },
+    });
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.getByText('@river_runner_7')).toBeTruthy();
+    expect(screen.queryByText('Controlled Company · chat.onShift')).toBeNull();
+
+    await view.unmount();
+  });
+
+  test('renders no subtitle for a personal-realm account without a username on desktop', async () => {
+    mockWidth = 1280;
+    mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.queryByText('Controlled Company · chat.onShift')).toBeNull();
+    expect(screen.queryByText(/chat\.onShift/)).toBeNull();
 
     await view.unmount();
   });

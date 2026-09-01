@@ -59,7 +59,8 @@
           "microphonePermission": "Newone uses the microphone only when you record a voice message or a video to share."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

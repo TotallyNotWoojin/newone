@@ -16,6 +16,7 @@ import { useWorkspace } from '@/state/workspace';
 import { useI18n } from '@/i18n/provider';
 import type { MessageKey } from '@/i18n/catalog';
 import { canAccessAdminSurface } from '@/features/admin/admin-access';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -72,6 +73,19 @@ const navItems: {
   },
 ];
 
+/**
+ * Consumers in the personal realm see only Chats, Search, and People here;
+ * updates and handoffs remain workspace-organization surfaces, and admin
+ * stays gated on server-granted capabilities.
+ */
+function visibleNavItems(personalRealm: boolean, canOpenAdmin: boolean) {
+  return navItems.filter((item) => {
+    if (item.key === 'admin') return canOpenAdmin;
+    if (item.key === 'updates' || item.key === 'handoffs') return !personalRealm;
+    return true;
+  });
+}
+
 export function AppScaffold({
   current,
   children,
@@ -110,7 +124,11 @@ export function AppScaffold({
   );
 }
 
-function BrandMark({ compact = false }: { compact?: boolean }) {
+export function BrandMark({ compact = false }: { compact?: boolean }) {
+  const workspace = useWorkspace();
+  // Consumer accounts see the plain product mark; the workplace tag remains
+  // the brand treatment for workspace organizations only.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
   return (
     <View style={[styles.brand, compact && styles.brandCompact]}>
       <View style={styles.logoMark}>
@@ -120,7 +138,7 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <View>
           <Text style={styles.brandName}>newone</Text>
-          <Text style={styles.brandTag}>WORKPLACE</Text>
+          {!personalRealm ? <Text style={styles.brandTag}>WORKPLACE</Text> : null}
         </View>
       ) : null}
     </View>
@@ -133,7 +151,7 @@ function DesktopRail({ current }: { current: NavigationKey }) {
   const { currentUser } = workspace;
   const { t } = useI18n();
   const canOpenAdmin = canAccessAdminSurface(workspace.capabilities);
-  const visibleItems = navItems.filter((item) => item.key !== 'admin' || canOpenAdmin);
+  const visibleItems = visibleNavItems(isPersonalRealm(workspace.organizationId), canOpenAdmin);
   return (
     <View style={styles.rail}>
       <BrandMark compact />
@@ -217,7 +235,7 @@ function MobileTabs({ current }: { current: NavigationKey }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
   const canOpenAdmin = canAccessAdminSurface(workspace.capabilities);
-  const visibleItems = navItems.filter((item) => item.key !== 'admin' || canOpenAdmin);
+  const visibleItems = visibleNavItems(isPersonalRealm(workspace.organizationId), canOpenAdmin);
   return (
     <View style={[styles.mobileTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {visibleItems.map((item) => {

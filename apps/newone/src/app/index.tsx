@@ -14,6 +14,7 @@ import {
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
@@ -34,6 +35,13 @@ export default function ChatsScreen() {
   );
   const firstOrdinaryConversationId = ordinaryConversations[0]?.id ?? '';
   const selectConversation = workspace.selectConversation;
+  // Consumer accounts see their own handle (when known) instead of the
+  // workspace organization-and-shift subtitle.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
+  const consumerUsername = workspace.currentUser?.username?.trim() || null;
+  const headerSubtitle = personalRealm
+    ? consumerUsername ? `@${consumerUsername}` : undefined
+    : `${workspace.organizationName} · ${t('chat.onShift')}`;
 
   useEffect(() => {
     if (!selectedConversation?.managementOnly) return;
@@ -63,7 +71,7 @@ export default function ChatsScreen() {
               />
             </View>
           }
-          subtitle={`${workspace.organizationName} · ${t('chat.onShift')}`}
+          subtitle={headerSubtitle}
           title={t('nav.chats')}
         />
       }>

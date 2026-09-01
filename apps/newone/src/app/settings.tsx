@@ -22,6 +22,7 @@ import type { OrganizationPreferences } from '@/domain/types';
 import type {
   DeviceNotificationPreferenceOverrides,
 } from '@/data/repositories/device-notification-preferences-dto.mjs';
+import { errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { getSupabaseClient } from '@/lib/supabase';
 import {
@@ -70,6 +71,10 @@ export default function SettingsScreen() {
   const [revokeVisible, setRevokeVisible] = useState(false);
   const [revokeTargetSessionId, setRevokeTargetSessionId] = useState('');
   const [revokeReason, setRevokeReason] = useState('');
+  const [deleteVisible, setDeleteVisible] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [preferenceDraft, setPreferenceDraft] = useState<OrganizationPreferences | null>(null);
   const [devicePreferenceDraft, setDevicePreferenceDraft] =
     useState<DeviceNotificationPreferenceOverrides | null>(null);
@@ -261,6 +266,24 @@ export default function SettingsScreen() {
     setMfaVisible(false);
     setMfaCode('');
     await loadMfa();
+  };
+
+  // Confirmation requires the account's username; DELETE is the deliberate
+  // fallback while a signed-in identity has no username to retype.
+  const deletionUsername = currentUser?.username?.trim() || null;
+  const deletionToken = deletionUsername ?? 'DELETE';
+
+  const confirmDeletion = async () => {
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await auth.deleteAccount();
+      router.replace('/sign-in');
+    } catch (deletionFailure) {
+      setDeleteError(t(errorMessageKey(deletionFailure)));
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const verifiedFactor = mfaFactors.find((factor) => factor.status === 'verified');
@@ -724,6 +747,38 @@ export default function SettingsScreen() {
           }}
           tone="light"
         />
+
+        <View style={[styles.dangerSection, shadow]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.dangerIcon}>
+              <Ionicons name="trash-outline" size={19} color={colors.red} />
+            </View>
+            <View style={styles.sectionHeaderCopy}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                {t('settings.dangerTitle')}
+              </Text>
+              <Text style={styles.sectionDescription}>{t('settings.dangerDescription')}</Text>
+            </View>
+          </View>
+          <View style={styles.sectionRows}>
+            <View style={styles.securityRow}>
+              <View style={styles.securityCopy}>
+                <Text style={styles.rowLabel}>{t('settings.deleteAccount')}</Text>
+                <Text style={styles.rowNote}>{t('settings.deleteAccountNote')}</Text>
+              </View>
+              <PrimaryButton
+                icon="trash-outline"
+                label={t('settings.deleteAccount')}
+                onPress={() => {
+                  setDeleteError('');
+                  setDeleteConfirmation('');
+                  setDeleteVisible(true);
+                }}
+                tone="danger"
+              />
+            </View>
+          </View>
+        </View>
       </ScrollView>
 
       <ActionModal
@@ -794,6 +849,32 @@ export default function SettingsScreen() {
           tone="danger"
         />
       </ActionModal>
+
+      <ActionModal
+        description={t('settings.deleteDialogDescription')}
+        onClose={() => {
+          if (!deleteBusy) setDeleteVisible(false);
+        }}
+        title={t('settings.deleteDialogTitle')}
+        visible={deleteVisible}>
+        <FormField
+          label={deletionUsername
+            ? t('settings.deleteConfirmUsername')
+            : t('settings.deleteConfirmFallback')}
+          onChangeText={setDeleteConfirmation}
+          placeholder={deletionToken}
+          value={deleteConfirmation}
+        />
+        <ActionError message={deleteError} />
+        <PrimaryButton
+          disabled={deleteConfirmation.trim() !== deletionToken}
+          icon="trash-outline"
+          label={t('settings.deleteConfirm')}
+          loading={deleteBusy}
+          onPress={() => void confirmDeletion()}
+          tone="danger"
+        />
+      </ActionModal>
     </SafeAreaView>
   );
 }
@@ -858,6 +939,8 @@ const styles = StyleSheet.create({
   profileRole: { color: colors.inkMuted, fontSize: 11, marginTop: 3 },
   profileBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
   section: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
+  dangerSection: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.paper },
+  dangerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.redSoft },
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.lg, backgroundColor: colors.paperMuted },
   sectionIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.mintSoft },
   sectionHeaderCopy: { flex: 1, minWidth: 0 },

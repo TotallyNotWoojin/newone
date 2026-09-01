@@ -21,6 +21,8 @@ import {
   isNativeSupabaseConfigured,
 } from '@/lib/supabase';
 import {
+  deleteNativeAccount,
+  deleteWebAccount,
   getWebSession,
   getWebRealtimeToken,
   refreshWebSession,
@@ -91,6 +93,7 @@ interface AuthState {
   refreshAssurance: () => Promise<'aal1' | 'aal2' | null>;
   signOut: () => Promise<void>;
   endAccess: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -585,6 +588,51 @@ export function AuthProvider({ children }: PropsWithChildren) {
           }
         }
         setError(t('errors.accessEnded'));
+      },
+      deleteAccount: async () => {
+        // The authenticated deletion call must complete before any local
+        // teardown; a rejected deletion leaves the session fully intact.
+        if (Platform.OS === 'web') {
+          await deleteWebAccount();
+          try {
+            await getRealtimeClient()?.removeAllChannels();
+          } catch {
+            // Local teardown must continue after the server-side deletion.
+          }
+          const userId = webUser?.id;
+          lastUserId.current = null;
+          setWebUser(null);
+          setWebRealtimeToken(null);
+          setWebSessionId(null);
+          setWebAal(null);
+          await forgetOfflineWebIdentity(userId).catch(() => {
+            if (userId) return clientStore.purgeUser(userId);
+          });
+          setError(null);
+          return;
+        }
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new WebAuthError('Account deletion requires an active session.', 'authentication_required');
+        }
+        await deleteNativeAccount({ accessToken });
+        try {
+          await getRealtimeClient()?.removeAllChannels();
+        } catch {
+          // Local teardown must continue after the server-side deletion.
+        }
+        const supabase = getSupabaseClient();
+        const userId = session?.user.id;
+        try {
+          if (supabase) await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // The account is already deleted server-side; finish local teardown.
+        } finally {
+          lastUserId.current = null;
+          setSession(null);
+          if (userId) await clientStore.purgeUser(userId);
+        }
+        setError(null);
       },
     });
     },

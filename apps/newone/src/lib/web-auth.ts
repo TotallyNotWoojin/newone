@@ -664,6 +664,57 @@ export async function signOutWebSession() {
   await webRequest('/v2/auth/sign-out', { method: 'POST', body: {}, csrf: true });
 }
 
+/** Account deletion succeeds only on an explicit server receipt. */
+function parseAccountDeletion(payload: Record<string, unknown>) {
+  if (payload.status !== 'deleted') {
+    throw new WebAuthError('The account deletion service returned an invalid receipt.', 'invalid_response');
+  }
+  return { status: 'deleted' as const };
+}
+
+export async function deleteWebAccount() {
+  return parseAccountDeletion(
+    await webRequest('/v2/auth/account/delete', { method: 'POST', body: {}, csrf: true }),
+  );
+}
+
+export async function deleteNativeAccount(input: { accessToken: string }) {
+  const url = apiUrlFor('/v2/auth/account/delete');
+  const edgeHeaders = nativeEdgeRequestHeaders(input.accessToken);
+  if (!url || url.startsWith('/') || !edgeHeaders) {
+    throw new WebAuthError('The native identity gateway is not configured.', 'gateway_unconfigured');
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...edgeHeaders,
+      },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    throw new WebAuthError('The account deletion service is unreachable.', 'network_unavailable');
+  }
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Invalid payloads are classified without echoing upstream content.
+  }
+  if (!response.ok) {
+    const problem = objectValue(objectValue(payload).error ?? payload);
+    throw new WebAuthError(
+      'The secure account deletion request was rejected.',
+      typeof problem.code === 'string' ? problem.code : `http_${response.status}`,
+    );
+  }
+  return parseAccountDeletion(objectValue(objectValue(payload).data ?? payload));
+}
+
 export async function redeemNativeInvitation(input: {
   accessToken: string;
   invitationToken: string;

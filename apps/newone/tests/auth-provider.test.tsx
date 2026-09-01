@@ -20,6 +20,7 @@ const mockRequestNativeRecoveryOtp = jest.fn();
 const mockVerifyNativeRecoveryOtp = jest.fn();
 const mockRequestNativeSignup = jest.fn();
 const mockVerifyNativeSignup = jest.fn();
+const mockDeleteNativeAccount = jest.fn();
 const mockPurgeUser = jest.fn();
 const mockTranslate = (key: string) => key;
 
@@ -71,6 +72,8 @@ jest.mock('@/lib/web-auth', () => {
     }
   }
   return {
+    deleteNativeAccount: (mockInput: unknown) => mockDeleteNativeAccount(mockInput),
+    deleteWebAccount: jest.fn(),
     getWebRealtimeToken: jest.fn(),
     getWebSession: jest.fn(),
     refreshWebSession: jest.fn(),
@@ -191,6 +194,7 @@ beforeEach(() => {
       expiresIn: 3600,
     },
   }));
+  mockDeleteNativeAccount.mockImplementation(async () => ({ status: 'deleted' }));
   mockPurgeUser.mockImplementation(async () => undefined);
 });
 
@@ -333,6 +337,85 @@ describe('native authentication state machine', () => {
     })).rejects.toMatchObject({ code: 'invalid_response' });
     expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(screen.getByText('signed-out')).toBeTruthy();
+  });
+
+  test('deletes the native account with the active bearer session then finishes full teardown', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+
+    await act(async () => {
+      await currentAuth().deleteAccount();
+    });
+
+    expect(mockDeleteNativeAccount).toHaveBeenCalledWith({ accessToken: accessToken('aal2') });
+    expect(mockRemoveAllChannels).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(mockPurgeUser).toHaveBeenCalledWith(userId);
+    expect(screen.getByText('signed-out')).toBeTruthy();
+  });
+
+  test('completes native deletion teardown even when the socket and local sign-out fail', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    mockRemoveAllChannels.mockImplementationOnce(async () => {
+      throw new Error('controlled socket failure');
+    });
+    mockSignOut.mockImplementationOnce(async () => {
+      throw new Error('controlled local sign-out failure');
+    });
+
+    await act(async () => {
+      await currentAuth().deleteAccount();
+    });
+
+    expect(mockDeleteNativeAccount).toHaveBeenCalledTimes(1);
+    expect(mockPurgeUser).toHaveBeenCalledWith(userId);
+    expect(screen.getByText('signed-out')).toBeTruthy();
+  });
+
+  test('a rejected deletion leaves the native session and local data untouched', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    mockDeleteNativeAccount.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('controlled rejection'), { code: 'recent_auth_required' });
+    });
+
+    await act(async () => {
+      await expect(currentAuth().deleteAccount()).rejects.toMatchObject({
+        code: 'recent_auth_required',
+      });
+    });
+
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(mockPurgeUser).not.toHaveBeenCalled();
+    expect(screen.getByText('signed-in')).toBeTruthy();
+  });
+
+  test('refuses account deletion without an authenticated native session', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    await expect(currentAuth().deleteAccount()).rejects.toMatchObject({
+      code: 'authentication_required',
+    });
+    expect(mockDeleteNativeAccount).not.toHaveBeenCalled();
   });
 
   test('refreshes assurance and always removes credentials and user-scoped data on sign-out', async () => {

@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 
 import {
   challengeWebMfa,
+  deleteNativeAccount,
+  deleteWebAccount,
   enrollWebMfa,
   getWebCsrfToken,
   getWebSession,
@@ -344,6 +346,43 @@ describe('native identity gateway client', () => {
     })).rejects.toMatchObject({ code: 'signup_expired' });
   });
 
+  test('deletes the native account only on an explicit bearer-authenticated receipt', async () => {
+    jsonResponse({ data: { status: 'deleted' } });
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .resolves.toEqual({ status: 'deleted' });
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/account/delete');
+    expect(init.headers).toMatchObject({
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      apikey: 'sb_publishable_controlled_test_key',
+      Authorization: 'Bearer controlled-access-token',
+    });
+    expect(JSON.parse(String(init.body))).toEqual({});
+
+    jsonResponse({ data: { status: 'queued' } });
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .rejects.toMatchObject({ code: 'invalid_response' });
+
+    controlledFetch.mockImplementationOnce(async () => new Response('not json', { status: 200 }));
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .rejects.toMatchObject({ code: 'invalid_response' });
+
+    jsonResponse({ error: { code: 'recent_auth_required' } }, 403);
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .rejects.toMatchObject({ code: 'recent_auth_required' });
+
+    jsonResponse({}, 500);
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .rejects.toMatchObject({ code: 'http_500' });
+
+    controlledFetch.mockImplementationOnce(async () => {
+      throw new Error('sensitive transport detail');
+    });
+    await expect(deleteNativeAccount({ accessToken: 'controlled-access-token' }))
+      .rejects.toMatchObject({ code: 'network_unavailable' });
+  });
+
   test('classifies network failures without echoing transport details', async () => {
     controlledFetch.mockImplementationOnce(async () => {
       throw new Error('sensitive network implementation detail');
@@ -450,6 +489,31 @@ describe('same-origin web identity client', () => {
       })).resolves.toBeUndefined();
       await expect(signOutWebSession()).resolves.toBeUndefined();
       expect(controlledFetch).toHaveBeenCalledTimes(5);
+    } finally {
+      platform.restore();
+    }
+  });
+
+  test('deletes the web account through the CSRF-protected gateway on an explicit receipt', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://app.example.test' } },
+    });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { cookie: '__Host-newone_csrf=csrf-value' },
+    });
+    jsonResponse({ data: { status: 'deleted' } });
+    jsonResponse({ data: { status: 'tombstoned' } });
+    try {
+      await expect(deleteWebAccount()).resolves.toEqual({ status: 'deleted' });
+      const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/v2/auth/account/delete');
+      expect(init.credentials).toBe('include');
+      expect(init.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-value' });
+
+      await expect(deleteWebAccount()).rejects.toMatchObject({ code: 'invalid_response' });
     } finally {
       platform.restore();
     }

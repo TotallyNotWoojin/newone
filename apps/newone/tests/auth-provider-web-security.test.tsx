@@ -16,6 +16,7 @@ const mockVerifyWebOtp = jest.fn();
 const mockVerifyWebRecoveryOtp = jest.fn();
 const mockVerifyWebSignup = jest.fn();
 const mockSignOutWebSession = jest.fn();
+const mockDeleteWebAccount = jest.fn();
 const mockInitializeStore = jest.fn();
 const mockGetCache = jest.fn();
 const mockPutCache = jest.fn();
@@ -67,6 +68,8 @@ jest.mock('@/lib/web-auth', () => {
     }
   }
   return {
+    deleteNativeAccount: jest.fn(),
+    deleteWebAccount: (...mockArgs: unknown[]) => mockDeleteWebAccount(...mockArgs),
     getWebRealtimeToken: (...mockArgs: unknown[]) => mockGetWebRealtimeToken(...mockArgs),
     getWebSession: (...mockArgs: unknown[]) => mockGetWebSession(...mockArgs),
     refreshWebSession: (...mockArgs: unknown[]) => mockRefreshWebSession(...mockArgs),
@@ -182,6 +185,7 @@ beforeEach(() => {
     signup: { username: 'river_runner_7', organizationId: 'org-personal' },
   }));
   mockSignOutWebSession.mockImplementation(async () => undefined);
+  mockDeleteWebAccount.mockImplementation(async () => ({ status: 'deleted' }));
   mockInitializeStore.mockImplementation(async () => undefined);
   mockGetCache.mockImplementation(async () => null);
   mockPutCache.mockImplementation(async () => undefined);
@@ -483,6 +487,62 @@ describe('web authentication security state machine', () => {
     });
     expect(screen.getByText('signed-out')).toBeTruthy();
     expect(mockPurgeUser).toHaveBeenCalledWith(userId);
+    await view.unmount();
+  });
+
+  test('deletes the web account server-side first and then runs the sign-out teardown', async () => {
+    const view = await renderProvider();
+    await waitFor(() => expect(screen.getByText('signed-in:realtime-web-token')).toBeTruthy());
+
+    await act(async () => {
+      await currentAuth().deleteAccount();
+    });
+
+    expect(mockDeleteWebAccount).toHaveBeenCalledTimes(1);
+    expect(mockSignOutWebSession).not.toHaveBeenCalled();
+    expect(mockRemoveAllChannels).toHaveBeenCalled();
+    expect(mockRemoveCache).toHaveBeenCalled();
+    expect(mockPurgeUser).toHaveBeenCalledWith(userId);
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    await view.unmount();
+  });
+
+  test('completes web deletion teardown when socket and cache maintenance fail', async () => {
+    const view = await renderProvider();
+    await waitFor(() => expect(screen.getByText('signed-in:realtime-web-token')).toBeTruthy());
+    mockRemoveAllChannels.mockImplementationOnce(async () => {
+      throw new Error('controlled socket failure');
+    });
+    mockInitializeStore.mockImplementationOnce(async () => {
+      throw new Error('controlled cache failure');
+    });
+
+    await act(async () => {
+      await currentAuth().deleteAccount();
+    });
+
+    expect(mockDeleteWebAccount).toHaveBeenCalledTimes(1);
+    expect(mockPurgeUser).toHaveBeenCalledWith(userId);
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    await view.unmount();
+  });
+
+  test('a rejected web deletion keeps the cookie session and local caches intact', async () => {
+    const view = await renderProvider();
+    await waitFor(() => expect(screen.getByText('signed-in:realtime-web-token')).toBeTruthy());
+    mockDeleteWebAccount.mockImplementationOnce(async () => {
+      throw authError('recent_auth_required');
+    });
+
+    await act(async () => {
+      await expect(currentAuth().deleteAccount()).rejects.toMatchObject({
+        code: 'recent_auth_required',
+      });
+    });
+
+    expect(mockRemoveCache).not.toHaveBeenCalled();
+    expect(mockPurgeUser).not.toHaveBeenCalled();
+    expect(screen.getByText('signed-in:realtime-web-token')).toBeTruthy();
     await view.unmount();
   });
 

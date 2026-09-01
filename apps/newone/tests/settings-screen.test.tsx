@@ -218,6 +218,7 @@ beforeEach(() => {
     session: { access_token: 'controlled-access-token' },
     refreshAssurance: successfulAction(),
     signOut: successfulAction(),
+    deleteAccount: successfulAction(),
   };
   mockListWebMfaFactors.mockResolvedValue([]);
   mockChallengeWebMfa.mockResolvedValue({ challengeId: 'web-challenge' });
@@ -629,6 +630,72 @@ describe('settings screen', () => {
       'Keep active after review',
     ));
     expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
+    view.unmount();
+  });
+
+  test('gates account deletion behind the exact username before the destructive action enables', async () => {
+    mockWidth = 390;
+    mockWorkspace = baseWorkspace({
+      currentUser: { ...currentUser, username: 'jordan_owner' },
+    });
+    const view = await renderAndHydrate();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
+    expect(screen.getByText('settings.deleteDialogTitle')).toBeTruthy();
+    expect(screen.getByText('settings.deleteDialogDescription')).toBeTruthy();
+
+    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
+    expect(screen.queryByText('settings.deleteDialogTitle')).toBeNull();
+    expect(mockAuth.deleteAccount).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
+    const confirmButton = () => screen.getByRole('button', { name: 'settings.deleteConfirm' });
+    expect(confirmButton().props.accessibilityState?.disabled).toBe(true);
+
+    await fireEvent.changeText(screen.getByLabelText('settings.deleteConfirmUsername'), 'jordan');
+    expect(confirmButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.press(confirmButton());
+    expect(mockAuth.deleteAccount).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('settings.deleteConfirmUsername'),
+      '  jordan_owner  ',
+    );
+    await pressEnabled('settings.deleteConfirm');
+    await waitFor(() => expect(mockAuth.deleteAccount).toHaveBeenCalledTimes(1));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
+    view.unmount();
+  });
+
+  test('falls back to the DELETE confirmation and completes deletion on desktop widths', async () => {
+    mockWidth = 1280;
+    const view = await renderAndHydrate();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
+    expect(screen.queryByLabelText('settings.deleteConfirmUsername')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('settings.deleteConfirmFallback'), 'DELETE');
+    await pressEnabled('settings.deleteConfirm');
+    await waitFor(() => expect(mockAuth.deleteAccount).toHaveBeenCalledTimes(1));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
+    view.unmount();
+  });
+
+  test('keeps the account and dialog on a rejected deletion and shows the mapped error', async () => {
+    mockWidth = 1280;
+    mockAuth = {
+      ...mockAuth,
+      deleteAccount: jest.fn(async () => {
+        throw Object.assign(new Error('controlled deletion rejection'), { code: 'http_503' });
+      }),
+    };
+    const view = await renderAndHydrate();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
+    await fireEvent.changeText(screen.getByLabelText('settings.deleteConfirmFallback'), 'DELETE');
+    await pressEnabled('settings.deleteConfirm');
+    await waitFor(() => expect(screen.getByText('errors.unavailable')).toBeTruthy());
+    expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
+    expect(screen.getByText('settings.deleteDialogTitle')).toBeTruthy();
     view.unmount();
   });
 
