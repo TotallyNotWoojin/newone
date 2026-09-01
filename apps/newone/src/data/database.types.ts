@@ -5236,6 +5236,16 @@ export type Database = {
         }
         Returns: Json
       }
+      bff_search_users_by_username: {
+        Args: {
+          p_actor_user_id: string
+          p_limit?: number
+          p_organization_id: string
+          p_query: string
+          p_session_id: string
+        }
+        Returns: Json
+      }
       bff_send_message: {
         Args: {
           p_actor_user_id: string
@@ -5251,6 +5261,16 @@ export type Database = {
           p_request_sha256: string
           p_session_id: string
           p_thread_root_message_id: number
+        }
+        Returns: Json
+      }
+      bff_send_message_request: {
+        Args: {
+          p_actor_user_id: string
+          p_body: string
+          p_organization_id: string
+          p_session_id: string
+          p_target_user_id: string
         }
         Returns: Json
       }
