@@ -48,6 +48,19 @@ The product pivoted to a general consumer messenger per [CONSUMER_PIVOT_PLAN.md]
 | Root contracts | 272/272 | Green on current working tree |
 | Real hosted discovery smoke | `tests/hosted/discovery-smoke.mjs` passed 7 steps first-run against the deployed gateways: two gateway signups (en/es), username search surfacing a stranger, message request creating connection+conversation+first message atomically, correct pending direction on both sides, acceptance, recipient reply, and database evidence (accepted connection, exactly 2 messages, 2 members). Secret-free artifact retained | Rerun on the immutable candidate; authenticated browser/device workflows remain open |
 
+## Consumer 1.0 feature-complete evidence (September 1–2, 2026)
+
+| Check | Observed result | Disposition |
+|---|---|---|
+| Feature waves | Account deletion (tombstone + auth soft delete), consumer branding/nav gating, typing-indicator realtime authorization, voice notes, video attachments (all six enforcement layers), and realm translation policy landed across migrations `20260901030000`/`20260901040000` | Working-tree green; immutable-candidate rerun open |
+| Suites | pgTAP 34 files / 1,105 assertions; Deno 290; Jest 52 suites / 688 tests; root contracts 272; coverage 96.14/91.43/96.99/97.37 | All green on current tree |
+| Real hosted deletion smoke | `tests/hosted/deletion-smoke.mjs` passed 4 steps: signup, gateway deletion, tombstone evidence (anonymized profile, quarantined username, deactivated memberships, purged devices, auth soft delete), quarantined-handle reuse refusal. Found and fixed a native-only guard bug (origin-less bearer deletion 403'd) | Rerun on candidate; browser/device matrix open |
+| Hosted worker scheduling | pg_cron + pg_net + Vault configured on the linked project per DEPLOYMENT.md: outbox worker every 5s and maintenance worker every minute, verified returning 200 with clean claims; worker token rotated into Vault; two integration findings recorded (pg_net duplicate Content-Type header causes gateway 400; worker batch limit caps at 10) | Environment state documented; not a migration |
+| Attachment scan worker | Deployed but unscheduled: requires an external scanner service (`NEWONE_ATTACHMENT_SCANNER_URL`/`TOKEN`), an open owner gate; attachments remain fail-closed pending scan | Owner decision required before media flows in production |
+| AI worker | Not deployed; `OPENROUTER_API_KEY`, key hash, policy JSON `2026-09-01.1`, and egress approval staged as secrets; blocked on owner-provided OpenRouter management key + workspace id | Owner gate |
+| iOS release pipeline | Headless signing chain via ASC API (bundle `com.totallynotwoojin.newone`, push capability, distribution certificate, App Store profile); first production build FINISHED; feature-complete candidate build launched | TestFlight blocked only on the UI-only ASC app-record creation (owner) |
+| Legal | Privacy policy and terms live at totallynotwoojin.github.io/newone-legal | App Store metadata prerequisite met |
+
 ## Current preliminary automated and development results
 
 These results were observed on the current uncommitted implementation worktree on August 5, 2026. They establish a verified working-tree checkpoint, not a release. Coverage reports and a real hosted core-backend simulation now exist, but their artifacts are gitignored and are not tied to an immutable revision. A clean immutable-candidate rerun, authenticated browser/device workflows, provider integrations, signed binaries, and owner-controlled production systems remain unavailable.
