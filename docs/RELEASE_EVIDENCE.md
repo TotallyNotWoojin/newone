@@ -22,6 +22,21 @@ This file records only observed results. Every final entry must identify the imm
 | Database network restrictions | Open pending stable developer and CI egress addresses; this remains a production security gate |
 | Production environment | Not provisioned or claimed |
 
+## Consumer pivot slice 1 evidence (September 1, 2026)
+
+The product pivoted to a general consumer messenger per [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md); rows below are observed working-tree results for pivot slice 1 (open signup), not release evidence.
+
+| Check | Observed result | Disposition |
+|---|---|---|
+| Dependency realignment | 16 drifted Expo packages realigned; regenerated client lockfile; `expo install --check` clean | Working-tree baseline restored after three weeks of ecosystem drift |
+| Signup migrations | `20260901000000` (personal realm, usernames, reservations, signup RPCs) and `20260901010000` (lifecycle-hook reservation arm) applied locally and pushed to the linked Pro project; 38 migrations in local/remote parity | Rerun full chain on the eventual immutable candidate |
+| Database suite | Full pgTAP including the new 27-assertion consumer signup suite passed; strict `public,private` lint clean; generated types in parity | Green on current working tree |
+| Edge suite | Deno check clean; 268/268 tests; Edge/database drift contract verified (158 called RPCs) | Green on current working tree |
+| Client suite | 49/49 Jest suites, 634/634 tests; coverage 96.09/91.40/96.92/97.29 all above the 91% gate; deterministic web/iOS/Android exports verified | Green on current working tree |
+| Root contracts | 272/272 including the updated consumer media-permission contract | Green on current working tree |
+| Real hosted signup smoke | `tests/hosted/signup-smoke.mjs` passed 7 steps against the deployed gateway, hosted GoTrue, and Postgres: request, pending user, admin-API OTP, verified session with signup receipt, durable state (username, ko language, private-directory personal-realm membership, request-first realm, consumed reservation), completion marker, returning-member acceptance. Secret-free artifact retained under `tests/hosted/.artifacts/` | Two real-integration defects were found by this smoke and fixed: the lifecycle hook refused pre-membership signup sessions, and the session parser rejected hosted GoTrue's 12-character refresh tokens. Mocked suites alone could not have caught either; rerun on the immutable candidate |
+| Hosted deployment | `newone-auth` redeployed with signup routes and failure telemetry; synthetic e2e-prefixed smoke identities retained in the development-data project pending harness-style confirmed cleanup | Development evidence only; not production |
+
 ## Current preliminary automated and development results
 
 These results were observed on the current uncommitted implementation worktree on August 5, 2026. They establish a verified working-tree checkpoint, not a release. Coverage reports and a real hosted core-backend simulation now exist, but their artifacts are gitignored and are not tied to an immutable revision. A clean immutable-candidate rerun, authenticated browser/device workflows, provider integrations, signed binaries, and owner-controlled production systems remain unavailable.
