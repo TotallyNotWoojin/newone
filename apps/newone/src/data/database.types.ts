@@ -3064,6 +3064,7 @@ export type Database = {
           time_zone: string
           updated_at: string
           user_id: string
+          username: string | null
         }
         Insert: {
           avatar_path?: string | null
@@ -3074,6 +3075,7 @@ export type Database = {
           time_zone?: string
           updated_at?: string
           user_id: string
+          username?: string | null
         }
         Update: {
           avatar_path?: string | null
@@ -3084,6 +3086,7 @@ export type Database = {
           time_zone?: string
           updated_at?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -3549,6 +3552,19 @@ export type Database = {
           p_recent_auth_seconds: number
           p_require_aal2: boolean
           p_session_id: string
+        }
+        Returns: Json
+      }
+      bff_authorize_signup_otp: {
+        Args: {
+          p_destination: string
+          p_destination_type: string
+          p_display_name: string
+          p_installation_hash: string
+          p_ip_hash: string
+          p_language: string
+          p_purpose?: string
+          p_username: string
         }
         Returns: Json
       }
@@ -4814,6 +4830,14 @@ export type Database = {
           p_provider_ticket_id?: string
           p_result: string
           p_worker_id: string
+        }
+        Returns: Json
+      }
+      bff_redeem_signup: {
+        Args: {
+          p_destination: string
+          p_destination_type: string
+          p_user_id: string
         }
         Returns: Json
       }
