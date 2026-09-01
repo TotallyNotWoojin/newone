@@ -38,7 +38,7 @@
       "ios": {
         "ascApiKeyPath": "/Users/woojin/.appstoreconnect/private_keys/AuthKey_UC3A2QGTRA.p8",
         "ascApiKeyId": "UC3A2QGTRA",
-        "ascApiKeyIssuerId": "PENDING_ISSUER_ID"
+        "ascApiKeyIssuerId": "9168fdb7-0fca-45a7-a81e-d7887be8317a"
       }
     }
   }
