@@ -17,7 +17,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/newone-app-icon.png",
-      "bundleIdentifier": "com.newone.app",
+      "bundleIdentifier": "com.totallynotwoojin.newone",
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
@@ -26,7 +26,7 @@
       }
     },
     "android": {
-      "package": "com.newone.app",
+      "package": "com.totallynotwoojin.newone",
       "versionCode": 1,
       "allowBackup": false,
       "predictiveBackGestureEnabled": false,

@@ -20,7 +20,10 @@
       "channel": "preview",
       "env": {
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
-        "EXPO_PUBLIC_PUSH_ENVIRONMENT": "preview"
+        "EXPO_PUBLIC_PUSH_ENVIRONMENT": "preview",
+        "EXPO_PUBLIC_API_URL": "/api",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://sfbkmnpduweusynopbig.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zp2CRMddXG_cKKo1cXvjMQ_iGKTNXHc"
       }
     },
     "production": {
@@ -29,8 +32,12 @@
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
-        "EXPO_PUBLIC_PUSH_ENVIRONMENT": "production"
-      }
+        "EXPO_PUBLIC_PUSH_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_API_URL": "/api",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://sfbkmnpduweusynopbig.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zp2CRMddXG_cKKo1cXvjMQ_iGKTNXHc"
+      },
+      "credentialsSource": "local"
     }
   },
   "submit": {
