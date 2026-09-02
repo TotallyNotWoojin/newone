@@ -12,7 +12,8 @@
       "env": {
         "EXPO_PUBLIC_OFFLINE_CACHE_ENABLED": "false",
         "EXPO_PUBLIC_PUSH_ENVIRONMENT": "development"
-      }
+      },
+      "node": "22.13.0"
     },
     "preview": {
       "distribution": "internal",
@@ -24,7 +25,8 @@
         "EXPO_PUBLIC_API_URL": "/api",
         "EXPO_PUBLIC_SUPABASE_URL": "https://sfbkmnpduweusynopbig.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zp2CRMddXG_cKKo1cXvjMQ_iGKTNXHc"
-      }
+      },
+      "node": "22.13.0"
     },
     "production": {
       "autoIncrement": true,
@@ -37,7 +39,8 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://sfbkmnpduweusynopbig.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zp2CRMddXG_cKKo1cXvjMQ_iGKTNXHc"
       },
-      "credentialsSource": "local"
+      "credentialsSource": "local",
+      "node": "22.13.0"
     }
   },
   "submit": {
