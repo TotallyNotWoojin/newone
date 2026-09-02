@@ -27,6 +27,7 @@ import {
 } from '../_shared/validation.ts';
 
 const MAX_ATTACHMENT_BYTES = 26_214_400;
+const MAX_VIDEO_ATTACHMENT_BYTES = 104_857_600;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const MIME_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,127}$/;
 const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
@@ -47,6 +48,13 @@ const ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
   'video/mp4',
   'video/quicktime',
 ]);
+const VIDEO_ATTACHMENT_MIME_TYPES = new Set(['video/mp4', 'video/quicktime']);
+
+function maxAttachmentBytes(mimeType: string): number {
+  return VIDEO_ATTACHMENT_MIME_TYPES.has(mimeType)
+    ? MAX_VIDEO_ATTACHMENT_BYTES
+    : MAX_ATTACHMENT_BYTES;
+}
 
 export interface AttachmentScanJob {
   id: string;
@@ -83,6 +91,24 @@ function requiredSecret(name: string, minimum: number): string {
   const value = Deno.env.get(name)?.trim() ?? '';
   if (value.length < minimum) throw new Error(`${name} is not configured`);
   return value;
+}
+
+export type AttachmentScanMode = 'external' | 'signature-only';
+
+/**
+ * NEWONE_ATTACHMENT_SCAN_MODE selects how a downloaded attachment is judged:
+ * 'external' (the default when the variable is absent) requires the external
+ * scanner URL/token secrets and fails closed without them; 'signature-only'
+ * runs entirely on the built-in magic-byte verification and needs no scanner
+ * secrets. Any other value refuses to boot.
+ */
+export function attachmentScanMode(): AttachmentScanMode {
+  const value = Deno.env.get('NEWONE_ATTACHMENT_SCAN_MODE')?.trim() ?? '';
+  if (value === '' || value === 'external') return 'external';
+  if (value === 'signature-only') return 'signature-only';
+  throw new Error(
+    "NEWONE_ATTACHMENT_SCAN_MODE must be 'external' or 'signature-only'",
+  );
 }
 
 function scannerUrl(): string {
@@ -146,12 +172,42 @@ export async function parseScannerResponse(
   };
 }
 
+/**
+ * The v1 stand-in for the external malware scanner: the attachment is clean
+ * exactly when its content signature family matches the declared MIME type.
+ * Failures keep the same quarantine policy codes the pre-egress signature
+ * gate emits, so verdict shapes are identical across both scan modes. No
+ * network egress happens here.
+ */
+export function createSignatureOnlyScan(): AttachmentScanWorkerDependencies['scan'] {
+  return (job, bytes) => {
+    const candidates = signatureMimeCandidates(bytes);
+    if (!candidates.has(job.declaredMimeType)) {
+      return Promise.resolve<ScannerVerdict>({
+        result: 'quarantined',
+        detectedMimeType: candidates.values().next().value ?? 'application/octet-stream',
+        policyCode: candidates.size === 0 ? 'unrecognized_signature' : 'declared_type_mismatch',
+        scannerName: 'newone-signature-gate',
+        scannerVersion: 'v1',
+      });
+    }
+    return Promise.resolve<ScannerVerdict>({
+      result: 'clean',
+      detectedMimeType: job.declaredMimeType,
+      policyCode: null,
+      scannerName: 'newone-signature-gate',
+      scannerVersion: 'v1',
+    });
+  };
+}
+
 export function defaultAttachmentScanWorkerDependencies(): AttachmentScanWorkerDependencies {
   const runtimeConfig = loadRuntimeConfig();
   const clientEnvironment = loadClientEnvironment();
   const workerToken = requiredSecret('NEWONE_WORKER_TOKEN', 32);
-  const scanUrl = scannerUrl();
-  const scannerToken = requiredSecret('NEWONE_ATTACHMENT_SCANNER_TOKEN', 32);
+  const externalScanner = attachmentScanMode() === 'external'
+    ? { url: scannerUrl(), token: requiredSecret('NEWONE_ATTACHMENT_SCANNER_TOKEN', 32) }
+    : null;
   let admin = createAdminClient(clientEnvironment);
   return {
     runtimeConfig,
@@ -174,20 +230,24 @@ export function defaultAttachmentScanWorkerDependencies(): AttachmentScanWorkerD
       if (info.size !== job.byteSize) throw new ApiError(422, 'attachment_integrity_failed');
       const { data, error } = await bucket.download(job.storagePath);
       if (error || !data) throw new ApiError(503, 'dependency_unavailable', undefined, 60);
-      if (data.size !== job.byteSize || data.size > MAX_ATTACHMENT_BYTES) {
+      if (data.size !== job.byteSize || data.size > maxAttachmentBytes(job.declaredMimeType)) {
         throw new ApiError(422, 'attachment_integrity_failed');
       }
       return new Uint8Array(await data.arrayBuffer());
     },
-    async scan(job, bytes, correlationId) {
+    scan: externalScanner === null ? createSignatureOnlyScan() : async (
+      job,
+      bytes,
+      correlationId,
+    ) => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60_000);
       try {
-        const response = await fetch(scanUrl, {
+        const response = await fetch(externalScanner.url, {
           method: 'POST',
           signal: controller.signal,
           headers: {
-            'Authorization': `Bearer ${scannerToken}`,
+            'Authorization': `Bearer ${externalScanner.token}`,
             'Content-Type': 'application/octet-stream',
             'Content-Length': String(bytes.byteLength),
             'X-Newone-Attachment-Id': job.attachmentId,
@@ -307,7 +367,7 @@ function parseJobs(value: unknown): AttachmentScanJob[] {
       attachmentId,
       bucketId: 'message-attachments',
       storagePath,
-      byteSize: integer(payload.byte_size, 1, MAX_ATTACHMENT_BYTES),
+      byteSize: integer(payload.byte_size, 1, maxAttachmentBytes(declaredMimeType)),
       sha256Hex: sha256,
       declaredMimeType,
     };
@@ -324,9 +384,12 @@ function asciiWindow(bytes: Uint8Array, maximum = 2_000_000): string {
 }
 
 /**
- * A local, intentionally conservative signature gate. The external scanner's
- * detected MIME and polyglot verdict remain mandatory; this gate prevents a
- * caller from reaching it with an obviously mislabeled executable/container.
+ * A local, intentionally conservative signature gate. In 'external' mode the
+ * scanner's detected MIME and polyglot verdict remain mandatory and this gate
+ * prevents a caller from reaching it with an obviously mislabeled
+ * executable/container; in 'signature-only' mode this same sniffing is the
+ * verdict authority and a declared type outside its candidate set is what
+ * quarantines a mislabeled upload.
  */
 export function signatureMimeCandidates(bytes: Uint8Array): ReadonlySet<string> {
   const candidates = new Set<string>();
@@ -354,8 +417,10 @@ export function signatureMimeCandidates(bytes: Uint8Array): ReadonlySet<string> 
     } else if (['qt  '].includes(brand)) {
       candidates.add('video/quicktime');
     } else {
-      // ISO BMFF brands alone do not distinguish an audio-only from a video
-      // track; the scanner must provide the exact media type.
+      // Generic ISO BMFF brands (isom/mp42/...) do not distinguish an
+      // audio-only container from a video track, so both remain candidates:
+      // the external scanner provides the exact type in 'external' mode, and
+      // 'signature-only' mode accepts either declared media type.
       candidates.add('audio/mp4');
       candidates.add('video/mp4');
     }
