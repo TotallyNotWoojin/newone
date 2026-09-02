@@ -57,7 +57,8 @@
         "appName": "Newone Messenger",
         "language": "en-US",
         "sku": "newone-app-1",
-        "companyName": "Newone"
+        "companyName": "Newone",
+        "ascAppId": "6808028951"
       }
     }
   }
