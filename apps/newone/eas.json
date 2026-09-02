@@ -39,8 +39,13 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://sfbkmnpduweusynopbig.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zp2CRMddXG_cKKo1cXvjMQ_iGKTNXHc"
       },
-      "credentialsSource": "local",
-      "node": "22.13.0"
+      "node": "22.13.0",
+      "ios": {
+        "credentialsSource": "local"
+      },
+      "android": {
+        "credentialsSource": "remote"
+      }
     }
   },
   "submit": {
