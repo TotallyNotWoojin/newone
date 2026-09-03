@@ -23,6 +23,10 @@ import {
   type RuntimeConfig,
   verifyCsrf,
 } from '../_shared/http.ts';
+import {
+  sendCodeEmail as sendCodeEmailViaResend,
+  type SendCodeEmailInput,
+} from '../_shared/mail.ts';
 import { asRpcClient, firstRow, invokeRpc } from '../_shared/rpc.ts';
 import { networkFingerprint, requireIdempotencyKey } from '../_shared/security.ts';
 import { asObject, normalizedString, oneOf, onlyKeys, uuid } from '../_shared/validation.ts';
@@ -230,6 +234,8 @@ export interface AuthDependencies {
     destination: string,
     captchaToken: string | null,
   ): Promise<void>;
+  generateEmailOtp(destination: string): Promise<string>;
+  sendCodeEmail(input: SendCodeEmailInput): Promise<void>;
   verifyOtp(
     destinationType: DestinationType,
     destination: string,
@@ -669,6 +675,26 @@ export function defaultAuthDependencies(): AuthDependencies {
         ? await client.auth.signInWithOtp({ email: destination, options })
         : await client.auth.signInWithOtp({ phone: destination, options });
       if (error) throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+    },
+    async generateEmailOtp(destination) {
+      // Signup-code minting: GoTrue's public /otp endpoint refuses OTP
+      // requests for unconfirmed users while public signups stay disabled
+      // (signup_disabled), so the trusted gateway mints the linked email OTP
+      // itself. generateLink never creates users, and verifyOtp accepts these
+      // link-minted codes unchanged (the review flow relies on the same
+      // property).
+      const { data, error } = await createAdminClient(clientEnvironment).auth.admin.generateLink({
+        type: 'magiclink',
+        email: destination,
+      });
+      const linkedOtp = data.properties?.email_otp;
+      if (error || typeof linkedOtp !== 'string' || linkedOtp.length === 0) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      }
+      return linkedOtp;
+    },
+    async sendCodeEmail(input) {
+      await sendCodeEmailViaResend(input);
     },
     async verifyOtp(destinationType, destination, code) {
       if (destinationType === 'phone' && !phoneOtpEnabled) {
@@ -1911,14 +1937,27 @@ export function createAuthHandler(
           requireSignupAuthorization(authorization);
           await dependencies.ensureSignupUser(identity.destination, profile.displayName);
           try {
-            await dependencies.requestOtp(
-              identity.destinationType,
-              identity.destination,
-              captcha,
-            );
-          } catch {
-            // OTP delivery and CAPTCHA failures are deliberately
-            // indistinguishable from the silent existing-account downgrade.
+            // Mid-signup users are unconfirmed, so GoTrue's public /otp
+            // endpoint would reject them with signup_disabled. The gateway
+            // owns signup-code delivery end to end instead: mint the linked
+            // email OTP through the admin API and send it directly.
+            const code = await dependencies.generateEmailOtp(identity.destination);
+            await dependencies.sendCodeEmail({
+              to: identity.destination,
+              code,
+              locale: profile.language,
+            });
+          } catch (error) {
+            // Minting and delivery failures keep the enumeration-safe generic
+            // envelope, but the outcome is recorded (without addresses or
+            // codes) so silent delivery loss stays visible in telemetry.
+            console.error(JSON.stringify({
+              event: 'newone_auth_failure',
+              correlation_id: meta.requestId,
+              path,
+              status: asApiError(error).status,
+              code: 'signup_mail_failed',
+            }));
           }
           return jsonResponse(meta, 202, { status: 'code_sent' });
         } finally {

@@ -71,6 +71,12 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
+    generateEmailOtp: async () => {
+      throw new Error('signup email OTP must not be minted');
+    },
+    sendCodeEmail: async () => {
+      throw new Error('signup code email must not be sent');
+    },
     verifyOtp: async () => session,
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');

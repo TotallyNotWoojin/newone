@@ -77,6 +77,8 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
+    generateEmailOtp: async () => '654321',
+    sendCodeEmail: async () => {},
     verifyOtp: async () => session,
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
@@ -197,8 +199,16 @@ Deno.test('signup request authorizes, provisions the pending user, and returns a
       ensureSignupUser: async (destination, displayName) => {
         calls.push({ event: 'create-user', destination, displayName });
       },
-      requestOtp: async (destinationType, destination, captcha) => {
-        calls.push({ event: 'deliver', destinationType, destination, captcha });
+      requestOtp: async () => {
+        calls.push({ event: 'unexpected-gotrue-deliver' });
+        throw new Error('signup delivery must not go through GoTrue signInWithOtp');
+      },
+      generateEmailOtp: async (destination) => {
+        calls.push({ event: 'mint', destination });
+        return '654321';
+      },
+      sendCodeEmail: async ({ to, code, locale }) => {
+        calls.push({ event: 'send', to, code, locale });
       },
     })
   );
@@ -218,13 +228,77 @@ Deno.test('signup request authorizes, provisions the pending user, and returns a
       purpose: 'request',
     },
     { event: 'create-user', destination: session.email, displayName: 'New Member' },
-    {
-      event: 'deliver',
-      destinationType: 'email',
-      destination: session.email,
-      captcha: requestBody.captchaToken,
-    },
+    { event: 'mint', destination: session.email },
+    { event: 'send', to: session.email, code: '654321', locale: 'en' },
   ]);
+});
+
+Deno.test('signup request sends the branded code email in the requested language', async () => {
+  for (const language of ['en', 'es', 'ko'] as const) {
+    const sent: Array<Record<string, unknown>> = [];
+    const handler = createAuthHandler(() =>
+      dependencies({
+        requestOtp: async () => {
+          throw new Error('signup delivery must not go through GoTrue signInWithOtp');
+        },
+        generateEmailOtp: async () => '246810',
+        sendCodeEmail: async ({ to, code, locale }) => {
+          sent.push({ to, code, locale });
+        },
+      })
+    );
+    const response = await handler(
+      post('/v2/auth/signup/request', { ...requestBody, language }),
+    );
+    assertEquals(response.status, 202);
+    assertEquals(await response.json(), { status: 'code_sent' });
+    assertEquals(sent, [{ to: session.email, code: '246810', locale: language }]);
+  }
+});
+
+Deno.test('signup mail failure keeps the generic envelope and records telemetry without addresses', async () => {
+  const failures = [
+    {
+      generateEmailOtp: async (): Promise<string> => {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      },
+    },
+    {
+      sendCodeEmail: async (): Promise<void> => {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      },
+    },
+  ];
+  for (const overrides of failures) {
+    const handler = createAuthHandler(() =>
+      dependencies({
+        requestOtp: async () => {
+          throw new Error('signup delivery must not go through GoTrue signInWithOtp');
+        },
+        ...overrides,
+      })
+    );
+    const logged: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args.map(String).join(' '));
+    };
+    try {
+      const response = await handler(post('/v2/auth/signup/request', requestBody));
+      assertEquals(response.status, 202);
+      assertEquals(await response.json(), { status: 'code_sent' });
+    } finally {
+      console.error = originalError;
+    }
+    assertEquals(logged.length, 1);
+    const entry = JSON.parse(logged[0] as string) as Record<string, unknown>;
+    assertEquals(entry.event, 'newone_auth_failure');
+    assertEquals(entry.code, 'signup_mail_failed');
+    assertEquals(entry.status, 503);
+    assertEquals(entry.path, '/v2/auth/signup/request');
+    assert(!(logged[0] as string).includes(session.email as string));
+    assert(!(logged[0] as string).includes('654321'));
+  }
 });
 
 Deno.test('signup request CAPTCHA is enforced before authorization or user creation', async () => {
@@ -244,8 +318,12 @@ Deno.test('signup request CAPTCHA is enforced before authorization or user creat
       ensureSignupUser: async () => {
         calls.push('create-user');
       },
-      requestOtp: async () => {
-        calls.push('deliver');
+      generateEmailOtp: async () => {
+        calls.push('mint');
+        return '654321';
+      },
+      sendCodeEmail: async () => {
+        calls.push('send');
       },
     })
   );
@@ -258,7 +336,7 @@ Deno.test('signup request CAPTCHA is enforced before authorization or user creat
   );
   assertEquals(calls, []);
   assertEquals((await handler(post('/v2/auth/signup/request', requestBody))).status, 202);
-  assertEquals(calls, ['authorize', 'create-user', 'deliver']);
+  assertEquals(calls, ['authorize', 'create-user', 'mint', 'send']);
 });
 
 Deno.test('signup request with an existing account silently falls back to member sign-in', async () => {
@@ -289,6 +367,14 @@ Deno.test('signup request with an existing account silently falls back to member
       },
       requestOtp: async (_destinationType, _destination, captcha) => {
         calls.push(`deliver:${captcha}`);
+      },
+      generateEmailOtp: async () => {
+        calls.push('unexpected-mint');
+        throw new Error('existing members must keep GoTrue login delivery');
+      },
+      sendCodeEmail: async () => {
+        calls.push('unexpected-send');
+        throw new Error('existing members must keep GoTrue login delivery');
       },
     })
   );
@@ -397,6 +483,8 @@ Deno.test('GoTrue public signup stays disabled and denied signups never create a
   assertEquals(OTP_SHOULD_CREATE_USER, false);
   let created = false;
   let delivered = false;
+  let minted = false;
+  let sent = false;
   const handler = createAuthHandler(() =>
     dependencies({
       authorizeSignupOtp: async () => ({
@@ -412,11 +500,20 @@ Deno.test('GoTrue public signup stays disabled and denied signups never create a
       requestOtp: async () => {
         delivered = true;
       },
+      generateEmailOtp: async () => {
+        minted = true;
+        return '654321';
+      },
+      sendCodeEmail: async () => {
+        sent = true;
+      },
     })
   );
   assertEquals((await handler(post('/v2/auth/signup/request', requestBody))).status, 429);
   assertEquals(created, false);
   assertEquals(delivered, false);
+  assertEquals(minted, false);
+  assertEquals(sent, false);
 });
 
 Deno.test('signup verification redeems the reservation before issuing session cookies', async () => {

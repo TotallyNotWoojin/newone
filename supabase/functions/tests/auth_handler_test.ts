@@ -67,6 +67,8 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
+    generateEmailOtp: async () => '654321',
+    sendCodeEmail: async () => {},
     verifyOtp: async () => session,
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
@@ -263,11 +265,15 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
 
 Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests still need a token', async () => {
   const delivered: Array<string | null> = [];
+  let signupMailSent = 0;
   const handler = createAuthHandler(() =>
     dependencies({
       captchaMode: 'web',
       requestOtp: async (_destinationType, _destination, token) => {
         delivered.push(token);
+      },
+      sendCodeEmail: async () => {
+        signupMailSent += 1;
       },
     })
   );
@@ -296,7 +302,9 @@ Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests 
     }))).status,
     202,
   );
-  assertEquals(delivered, [null, null, null]);
+  // Signup delivery is gateway-owned mail, never GoTrue signInWithOtp.
+  assertEquals(delivered, [null, null]);
+  assertEquals(signupMailSent, 1);
 
   // Requests arriving with a browser Origin still require token presence.
   assertEquals(
@@ -317,7 +325,8 @@ Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests 
     }))).status,
     400,
   );
-  assertEquals(delivered, [null, null, null]);
+  assertEquals(delivered, [null, null]);
+  assertEquals(signupMailSent, 1);
 });
 
 Deno.test('all CAPTCHA mode still requires token presence on native paths', async () => {

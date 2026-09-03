@@ -105,6 +105,8 @@ const environment: Record<string, string> = {
   NEWONE_RECOVERY_EVIDENCE_HASH_KEY: 'recovery-evidence-key-that-is-long-enough',
   NEWONE_AUTH_CAPTCHA_REQUIRED: 'true',
   NEWONE_AUTH_PHONE_OTP_ENABLED: 'true',
+  RESEND_API_KEY: 'resend-key-that-is-long-enough-for-coverage',
+  NEWONE_MAIL_FROM: 'Newone <no-reply@newone.example>',
 };
 
 function json(value: unknown, status = 200): Response {
@@ -387,6 +389,18 @@ const mockFetch: typeof fetch = async (input, init) => {
     return json({ id: policyId });
   }
   if (url.pathname.endsWith('/logout')) return json({});
+  if (url.hostname === 'api.resend.com') return json({ id: 'coverage-mail-1' });
+  if (url.pathname === '/auth/v1/admin/generate_link') {
+    return json({
+      action_link: 'https://project.supabase.co/auth/v1/verify?token=linked',
+      email_otp: '445566',
+      hashed_token: 'hashed-token-value',
+      redirect_to: 'https://app.newone.example',
+      verification_type: 'magiclink',
+      id: actorUserId,
+      email: 'newcomer@example.com',
+    });
+  }
   if (url.pathname === '/auth/v1/admin/users' && init?.method === 'POST') {
     return json({ id: actorUserId, email: 'newcomer@example.com' });
   }
@@ -875,6 +889,12 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
 
     await dependencies.requestOtp('email', 'owner@example.com', 'captcha-token');
     await dependencies.requestOtp('phone', '+15555550123', null);
+    assertEquals(await dependencies.generateEmailOtp('newcomer@example.com'), '445566');
+    await dependencies.sendCodeEmail({
+      to: 'newcomer@example.com',
+      code: '445566',
+      locale: 'ko',
+    });
     const emailSession = await dependencies.verifyOtp(
       'email',
       'owner@example.com',
