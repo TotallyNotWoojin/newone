@@ -12,7 +12,7 @@ appId: com.totallynotwoojin.newone
     visible: "Replying to"
     timeout: 10000
 - takeScreenshot: ${SHOT}-replying
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - inputText: ${REPLY}
 - tapOn: "Send message"
 - extendedWaitUntil:

@@ -16,9 +16,9 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: ${PEER}
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:

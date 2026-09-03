@@ -1,5 +1,5 @@
 appId: com.totallynotwoojin.newone
 ---
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - eraseText: 60
 - tapOn: "Original is always preserved"

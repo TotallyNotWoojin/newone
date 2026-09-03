@@ -32,7 +32,11 @@ export function createAreaContext({ area, devices, report, runDir }) {
     const shotPrefix = `${id}`;
     const started = Date.now();
     log(`start ${id} (${title}) on ${device}`);
-    const result = await runFlow({
+    // Maestro's iOS driver itself can crash on a loaded host (Kotlin stack
+    // trace, "hierarchy unavailable"); that says nothing about the app, so
+    // run the flow once more before recording a failure.
+    const driverCrash = (r) => !r.ok && /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}`);
+    let result = await runFlow({
       device,
       flow: flowPath,
       env: { SHOT: shotPrefix, ...env },
@@ -40,6 +44,19 @@ export function createAreaContext({ area, devices, report, runDir }) {
       timeoutMs,
       debugDir: join(areaDir, 'maestro-debug', id),
     });
+    if (driverCrash(result)) {
+      log(`driver crash during ${id} on ${device}; retrying once`);
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+      result = await runFlow({
+        device,
+        flow: flowPath,
+        env: { SHOT: shotPrefix, ...env },
+        cwd: areaDir,
+        timeoutMs,
+        debugDir: join(areaDir, 'maestro-debug', `${id}-retry`),
+      });
+      if (driverCrash(result)) result = { ...result, failure: `ENVIRONMENT (Maestro driver crashed twice): ${result.failure ?? ''}` };
+    }
     writeFileSync(join(areaDir, `${id}.maestro.txt`), `${result.stdout ?? ''}\n--- stderr ---\n${result.stderr ?? ''}`);
     const screenshots = screenshotsIn(areaDir, shotPrefix);
     let observed = '';

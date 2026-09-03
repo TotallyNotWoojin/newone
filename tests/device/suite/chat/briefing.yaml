@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.newone
 # Conversation briefing (AI summary): expand the card, request a draft, and
 # record exactly what the status badge and body say afterwards.
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - scrollUntilVisible:
     element:

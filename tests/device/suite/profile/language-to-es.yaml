@@ -19,7 +19,11 @@ appId: com.totallynotwoojin.newone
     visible: "Cerrar configuración"
     timeout: 15000
 - assertVisible: "Idioma de la interfaz"
-- assertVisible: "Cerrar sesión en Newone"
+- scrollUntilVisible:
+    element:
+      text: "Cerrar sesión en Newone"
+    direction: DOWN
+    timeout: 30000
 - takeScreenshot: ${SHOT}-spanish-settings
 - tapOn: "Cerrar configuración"
 - extendedWaitUntil:

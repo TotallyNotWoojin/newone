@@ -8,7 +8,7 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Sim Human"
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - longPressOn:
     text: ".*Accepted! Hi Sim A.*"
@@ -20,7 +20,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Replying to"
     timeout: 10000
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - inputText: "Replying in thread"
 - tapOn: "Send message"
 - extendedWaitUntil:

@@ -8,7 +8,7 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Sim Human"
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - tapOn: "Add attachment"
 - extendedWaitUntil:

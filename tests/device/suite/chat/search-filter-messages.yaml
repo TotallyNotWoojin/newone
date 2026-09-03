@@ -11,7 +11,7 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-filtered
 - tapOn: ".*Open .*"
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - assertVisible: ".*${QUERY}.*"
 - takeScreenshot: ${SHOT}-opened-from-search

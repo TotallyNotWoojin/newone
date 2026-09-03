@@ -7,5 +7,5 @@ appId: com.totallynotwoojin.newone
     text: "Close dialog"
     optional: true
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000

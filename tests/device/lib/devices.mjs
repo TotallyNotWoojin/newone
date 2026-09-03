@@ -50,9 +50,23 @@ export function bootAndInstall(udid, log = console.log) {
     simctl(['boot', udid]);
     log(`booted ${udid}`);
   }
-  simctl(['bootstatus', udid, '-b'], { timeout: 180_000 });
-  simctl(['install', udid, APP_PATH], { timeout: 180_000 });
-  log(`installed ${APP_PATH.split('/').pop()} on ${udid}`);
+  simctl(['bootstatus', udid, '-b'], { timeout: 600_000 });
+  // CoreSimulator gets very slow when several simulators boot on a loaded
+  // host (an install that normally takes a second timed out at 180s and
+  // killed a whole run). Give it time and retry rather than abort the suite.
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      simctl(['install', udid, APP_PATH], { timeout: 600_000 });
+      log(`installed ${APP_PATH.split('/').pop()} on ${udid}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+      return;
+    } catch (error) {
+      lastError = error;
+      log(`install attempt ${attempt} on ${udid} failed: ${error?.code ?? error?.message ?? error}`);
+      try { simctl(['terminate', udid, APP_ID]); } catch { /* not running */ }
+    }
+  }
+  throw lastError;
 }
 
 export function shutdown(udid) {

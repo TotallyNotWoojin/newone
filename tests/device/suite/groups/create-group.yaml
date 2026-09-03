@@ -39,7 +39,7 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-members-selected
 - tapOn: "Create"
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 40000
 - assertVisible: ${NAME}
 - takeScreenshot: ${SHOT}-group-open

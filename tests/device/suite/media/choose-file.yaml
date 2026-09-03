@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.newone
 # Add attachment → Choose file → the system document picker; pick the first
 # document if the simulator offers one, otherwise cancel (reported).
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - tapOn: "Add attachment"
 - extendedWaitUntil:

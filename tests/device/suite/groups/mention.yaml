@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # Composer → Mention people → pick NAME → type → send.
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - tapOn: "Mention people"
 - extendedWaitUntil:
@@ -16,7 +16,7 @@ appId: com.totallynotwoojin.newone
     visible: ".*Selected: ${NAME}.*"
     timeout: 15000
 - tapOn: "Close mentions"
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:

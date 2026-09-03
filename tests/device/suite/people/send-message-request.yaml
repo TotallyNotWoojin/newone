@@ -7,7 +7,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Send request"
     timeout: 15000
-- tapOn: "Introduce yourself"
+- tapOn: ".*Introduce yourself.*"
 - inputText: ${TEXT}
 - tapOn: "First message"
 - takeScreenshot: ${SHOT}-compose

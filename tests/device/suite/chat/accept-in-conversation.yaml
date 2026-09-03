@@ -17,6 +17,6 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-banner
 - tapOn: "Accept"
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-accepted

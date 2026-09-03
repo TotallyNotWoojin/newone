@@ -23,7 +23,7 @@ appId: com.totallynotwoojin.newone
 - tapOn: "All"
 - tapOn: ${PEER}
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - tapOn: "Conversation settings"
 - extendedWaitUntil:

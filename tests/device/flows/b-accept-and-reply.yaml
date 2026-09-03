@@ -18,7 +18,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Send message"
     timeout: 20000
-- tapOn: "Write a message…"
+- tapOn: ".*Write a message….*"
 - inputText: "Accepted! Hi Sim A."
 - tapOn: "Send message"
 - extendedWaitUntil:

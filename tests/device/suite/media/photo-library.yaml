@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.newone
 # Add attachment → Photo library → first photo → Send securely; the bubble
 # shows the attachment card that reaches "Scanned and safe".
 - extendedWaitUntil:
-    visible: "Write a message…"
+    visible: ".*Write a message….*"
     timeout: 20000
 - tapOn: "Add attachment"
 - extendedWaitUntil:
