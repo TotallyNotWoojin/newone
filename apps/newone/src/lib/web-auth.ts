@@ -210,7 +210,7 @@ function parseSignupReceipt(payload: Record<string, unknown>) {
     : {};
 }
 
-export async function requestWebOtp(input: OtpIdentity & { captchaToken: string }) {
+export async function requestWebOtp(input: OtpIdentity & { captchaToken?: string | null }) {
   const client = await webClientBinding();
   return parseOtpRequest(
     await webRequest('/v2/auth/otp/request', {
@@ -218,7 +218,7 @@ export async function requestWebOtp(input: OtpIdentity & { captchaToken: string 
       body: {
         destinationType: input.destinationType,
         destination: input.destination,
-        captchaToken: input.captchaToken,
+        ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
         installationId: client.installationId,
         locale: client.locale,
         appVersion: client.appVersion,
@@ -248,7 +248,7 @@ export async function verifyWebOtp(input: OtpIdentity & { code: string }) {
   );
 }
 
-export async function requestWebRecoveryOtp(input: OtpIdentity & { captchaToken: string }) {
+export async function requestWebRecoveryOtp(input: OtpIdentity & { captchaToken?: string | null }) {
   const client = await webClientBinding();
   return parseOtpRequest(
     await webRequest('/v2/auth/recovery/otp/request', {
@@ -256,7 +256,7 @@ export async function requestWebRecoveryOtp(input: OtpIdentity & { captchaToken:
       body: {
         destinationType: input.destinationType,
         destination: input.destination,
-        captchaToken: input.captchaToken,
+        ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
         installationId: client.installationId,
         locale: client.locale,
         appVersion: client.appVersion,
@@ -282,7 +282,7 @@ export async function verifyWebRecoveryOtp(input: OtpIdentity & { code: string }
   );
 }
 
-export async function requestWebSignup(input: SignupIdentity & { captchaToken: string }) {
+export async function requestWebSignup(input: SignupIdentity & { captchaToken?: string | null }) {
   const client = await webClientBinding();
   return parseSignupRequest(
     await webRequest('/v2/auth/signup/request', {
@@ -292,7 +292,7 @@ export async function requestWebSignup(input: SignupIdentity & { captchaToken: s
         username: input.username,
         displayName: input.displayName,
         language: input.language,
-        captchaToken: input.captchaToken,
+        ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
         installationId: client.installationId,
         locale: client.locale,
         appVersion: client.appVersion,
@@ -381,13 +381,13 @@ async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unkn
   return data;
 }
 
-export async function requestNativeOtp(input: NativeOtpIdentity & { captchaToken: string }) {
+export async function requestNativeOtp(input: NativeOtpIdentity & { captchaToken?: string | null }) {
   const payload = await nativeAuthRequest('/v2/auth/native/otp/request', {
     destinationType: input.destinationType,
     destination: input.destination,
     invitationToken: input.invitationToken ?? null,
     employeeCode: input.employeeCode ?? null,
-    captchaToken: input.captchaToken,
+    ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
   });
   return parseOtpRequest(payload);
 }
@@ -421,11 +421,11 @@ export async function verifyNativeOtp(input: NativeOtpIdentity & { code: string 
   };
 }
 
-export async function requestNativeRecoveryOtp(input: NativeOtpIdentity & { captchaToken: string }) {
+export async function requestNativeRecoveryOtp(input: NativeOtpIdentity & { captchaToken?: string | null }) {
   const payload = await nativeAuthRequest('/v2/auth/native/recovery/otp/request', {
     destinationType: input.destinationType,
     destination: input.destination,
-    captchaToken: input.captchaToken,
+    ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
   });
   return parseOtpRequest(payload);
 }
@@ -457,13 +457,13 @@ export async function verifyNativeRecoveryOtp(input: NativeOtpIdentity & { code:
   };
 }
 
-export async function requestNativeSignup(input: SignupIdentity & { captchaToken: string }) {
+export async function requestNativeSignup(input: SignupIdentity & { captchaToken?: string | null }) {
   const payload = await nativeAuthRequest('/v2/auth/native/signup/request', {
     destination: input.destination,
     username: input.username,
     displayName: input.displayName,
     language: input.language,
-    captchaToken: input.captchaToken,
+    ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
   });
   return parseSignupRequest(payload);
 }

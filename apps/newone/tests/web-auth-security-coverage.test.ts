@@ -12,8 +12,10 @@ import {
   refreshWebSession,
   requestNativeOtp,
   requestNativeRecoveryOtp,
+  requestNativeSignup,
   requestWebOtp,
   requestWebRecoveryOtp,
+  requestWebSignup,
   unenrollWebMfa,
   validateNativeMembership,
   verifyNativeOtp,
@@ -218,6 +220,35 @@ describe('web identity response and security contracts', () => {
     });
     expect(secondBody).not.toHaveProperty('invitationToken');
     expect(secondBody).not.toHaveProperty('employeeCode');
+  });
+
+  test('omits the captcha token key from web auth requests when no token is available', async () => {
+    queueJson({ accepted: true, channel: { type: 'email', configured: true } });
+    queueJson({ accepted: true, channel: { type: 'email', configured: true } });
+    queueJson({ status: 'code_sent' });
+
+    await expect(requestWebOtp({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+    })).resolves.toMatchObject({ accepted: true });
+    await expect(requestWebRecoveryOtp({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      captchaToken: null,
+    })).resolves.toMatchObject({ accepted: true });
+    await expect(requestWebSignup({
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'en',
+    })).resolves.toEqual({ status: 'code_sent' });
+
+    expect(controlledFetch).toHaveBeenCalledTimes(3);
+    for (const call of controlledFetch.mock.calls) {
+      const body = JSON.parse(String((call[1] as RequestInit).body));
+      expect(body).not.toHaveProperty('captchaToken');
+      expect(body).toHaveProperty('installationId', '30000000-0000-4000-8000-000000000003');
+    }
   });
 
   test('requests and verifies a complete web recovery receipt', async () => {
@@ -509,6 +540,36 @@ describe('native identity response and security contracts', () => {
       captchaToken: 'captcha-controlled-input',
     })).rejects.toMatchObject({ code: 'gateway_unconfigured' });
     expect(controlledFetch).not.toHaveBeenCalled();
+  });
+
+  test('omits the captcha token key from native auth requests when no token is available', async () => {
+    queueJson({ accepted: true, channel: { type: 'email', configured: true } });
+    queueJson({ accepted: true, channel: { type: 'phone', configured: true } });
+    queueJson({ status: 'code_sent' });
+
+    await expect(requestNativeOtp({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+    })).resolves.toMatchObject({ accepted: true });
+    await expect(requestNativeRecoveryOtp({
+      destinationType: 'phone',
+      destination: '+15555550100',
+      captchaToken: '',
+    })).resolves.toMatchObject({ accepted: true });
+    await expect(requestNativeSignup({
+      destination: 'new.person@example.test',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'en',
+      captchaToken: null,
+    })).resolves.toEqual({ status: 'code_sent' });
+
+    expect(controlledFetch).toHaveBeenCalledTimes(3);
+    for (const call of controlledFetch.mock.calls) {
+      const body = JSON.parse(String((call[1] as RequestInit).body));
+      expect(body).not.toHaveProperty('captchaToken');
+      expect(body).toHaveProperty('installationId', '30000000-0000-4000-8000-000000000003');
+    }
   });
 
   test('supports Android and classifies malformed and rejected native responses', async () => {

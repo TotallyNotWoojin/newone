@@ -44,8 +44,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
       secretKey: 'secret',
     },
     recoveryEvidenceHashKey: 'r'.repeat(32),
-    captchaRequired: true,
+    captchaMode: 'all',
     phoneOtpEnabled: false,
+    reviewAccount: null,
     settleOtpRequest: async () => {},
     authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
@@ -67,6 +68,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
     verifyOtp: async () => session,
+    generateReviewOtp: async () => {
+      throw new Error('review OTP must not be generated');
+    },
     redeemInvite: async () => ({
       organizationId: '00000000-0000-4000-8000-000000000001',
       role: 'member',
@@ -255,6 +259,130 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
     202,
   );
   assertEquals(delivered, [token]);
+});
+
+Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests still need a token', async () => {
+  const delivered: Array<string | null> = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      captchaMode: 'web',
+      requestOtp: async (_destinationType, _destination, token) => {
+        delivered.push(token);
+      },
+    })
+  );
+
+  // Native origin-less request paths accept requests without a captchaToken.
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/otp/request', {
+      destinationType: 'email',
+      destination: session.email,
+    }))).status,
+    202,
+  );
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/recovery/otp/request', {
+      destinationType: 'email',
+      destination: session.email,
+    }))).status,
+    202,
+  );
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/signup/request', {
+      destination: session.email,
+      username: 'new_member',
+      displayName: 'New Member',
+      language: 'en',
+    }))).status,
+    202,
+  );
+  assertEquals(delivered, [null, null, null]);
+
+  // Requests arriving with a browser Origin still require token presence.
+  assertEquals(
+    (await handler(post('/v2/auth/otp/request', { email: session.email }))).status,
+    400,
+  );
+  assertEquals(
+    (await handler(post('/v2/auth/recovery/otp/request', { email: session.email }))).status,
+    400,
+  );
+  assertEquals(
+    (await handler(post('/v2/auth/signup/request', {
+      destination: session.email,
+      username: 'new_member',
+      displayName: 'New Member',
+      language: 'en',
+      installationId,
+    }))).status,
+    400,
+  );
+  assertEquals(delivered, [null, null, null]);
+});
+
+Deno.test('all CAPTCHA mode still requires token presence on native paths', async () => {
+  let requested = false;
+  const handler = createAuthHandler(() =>
+    dependencies({
+      requestOtp: async () => {
+        requested = true;
+      },
+    })
+  );
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/otp/request', {
+      destinationType: 'email',
+      destination: session.email,
+    }))).status,
+    400,
+  );
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/recovery/otp/request', {
+      destinationType: 'email',
+      destination: session.email,
+    }))).status,
+    400,
+  );
+  assertEquals(
+    (await handler(nativePost('/v2/auth/native/signup/request', {
+      destination: session.email,
+      username: 'new_member',
+      displayName: 'New Member',
+      language: 'en',
+    }))).status,
+    400,
+  );
+  assertEquals(requested, false);
+});
+
+Deno.test('a provided CAPTCHA token is shape-validated in every mode', async () => {
+  for (const captchaMode of ['all', 'web', 'off'] as const) {
+    let requested = false;
+    const handler = createAuthHandler(() =>
+      dependencies({
+        captchaMode,
+        requestOtp: async () => {
+          requested = true;
+        },
+      })
+    );
+    assertEquals(
+      (await handler(post('/v2/auth/otp/request', {
+        email: session.email,
+        captchaToken: 'short',
+      }))).status,
+      400,
+    );
+    assertEquals(
+      (await handler(nativePost('/v2/auth/native/otp/request', {
+        destinationType: 'email',
+        destination: session.email,
+        captchaToken: 'short',
+      }))).status,
+      400,
+    );
+    assertEquals(requested, false);
+  }
 });
 
 Deno.test('returning active members authenticate without invitation redemption', async () => {

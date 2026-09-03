@@ -60,7 +60,7 @@ interface AuthState {
     destination: string;
     invitationToken?: string;
     employeeCode?: string;
-    captchaToken: string;
+    captchaToken?: string | null;
   }) => Promise<{ channelConfigured: boolean }>;
   verifyOtp: (input: {
     destinationType: 'email' | 'phone';
@@ -74,7 +74,7 @@ interface AuthState {
     username: string;
     displayName: string;
     language: SignupLanguage;
-    captchaToken: string;
+    captchaToken?: string | null;
   }) => Promise<void>;
   verifySignup: (input: {
     destination: string;
@@ -83,7 +83,7 @@ interface AuthState {
   requestRecoveryOtp: (input: {
     destinationType: 'email' | 'phone';
     destination: string;
-    captchaToken: string;
+    captchaToken?: string | null;
   }) => Promise<{ channelConfigured: boolean }>;
   verifyRecoveryOtp: (input: {
     destinationType: 'email' | 'phone';

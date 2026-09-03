@@ -17,6 +17,7 @@ import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 // Metro selects the Turnstile-backed web challenge or the native risk-adapter boundary.
 // eslint-disable-next-line import/no-unresolved
 import { CaptchaChallenge } from '@/components/security/captcha-challenge';
+import { publicRuntimeConfig } from '@/config/runtime';
 import { isWebAuthBlocked } from '@/lib/supabase';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useAuth } from '@/state/auth';
@@ -89,6 +90,9 @@ export default function SignInScreen() {
   const signupMode = accessMode === 'signup';
   const enrollmentMode = accessMode === 'enrollment';
   const recoveryMode = accessMode === 'recovery';
+  // Without a configured Turnstile site key the challenge cannot load; the
+  // server exempts tokenless native requests, so the client omits the token.
+  const captchaConfigured = Boolean(publicRuntimeConfig.turnstileSiteKey);
 
   const chooseDestinationType = (nextType: 'email' | 'phone') => {
     if (nextType === destinationType) return;
@@ -133,7 +137,7 @@ export default function SignInScreen() {
         : 'auth.phoneInvalid'));
       return;
     }
-    if (!captchaToken || captchaToken.length < 20 || /\s/.test(captchaToken)) {
+    if (captchaConfigured && (!captchaToken || captchaToken.length < 20 || /\s/.test(captchaToken))) {
       setMessage(t('auth.challengeRequired'));
       return;
     }
@@ -161,7 +165,7 @@ export default function SignInScreen() {
           username,
           displayName: normalizedDisplayName,
           language: locale,
-          captchaToken,
+          ...(captchaToken ? { captchaToken } : {}),
         });
         setAuthStep('verify');
         setMessage(t('auth.signupOtpSent'));
@@ -171,12 +175,12 @@ export default function SignInScreen() {
         ? await auth.requestRecoveryOtp({
             destinationType,
             destination: normalized,
-            captchaToken,
+            ...(captchaToken ? { captchaToken } : {}),
           })
         : await auth.requestOtp({
             destinationType,
             destination: normalized,
-            captchaToken,
+            ...(captchaToken ? { captchaToken } : {}),
             ...(enrollmentMode ? { invitationToken: normalizedInvitationToken } : {}),
             ...(normalizedEmployeeCode ? { employeeCode: normalizedEmployeeCode } : {}),
           });
@@ -497,7 +501,7 @@ export default function SignInScreen() {
               </View>
             </View>
           ) : null}
-          {authStep === 'identity' && !isWebAuthBlocked ? (
+          {authStep === 'identity' && captchaConfigured && !isWebAuthBlocked ? (
             <CaptchaChallenge
               key={captchaKey}
               label={t('auth.challengeLabel')}

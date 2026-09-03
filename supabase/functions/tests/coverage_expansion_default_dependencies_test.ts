@@ -802,7 +802,7 @@ Deno.test('default AI dependencies execute every workload and persistence branch
 Deno.test('default auth dependencies execute OTP, session, recovery, and MFA boundaries', async () => {
   await withDefaultEnvironment(async () => {
     const dependencies = defaultAuthDependencies();
-    assertEquals(dependencies.captchaRequired, true);
+    assertEquals(dependencies.captchaMode, 'all');
     assertEquals(dependencies.phoneOtpEnabled, true);
     await dependencies.settleOtpRequest(Date.now() - 2_000);
 

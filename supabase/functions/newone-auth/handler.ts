@@ -158,12 +158,27 @@ interface ActiveSession extends AuthIdentity {
   memberships: ActiveMembership[];
 }
 
+export interface ReviewAccountConfig {
+  email: string;
+  code: string;
+}
+
+/**
+ * CAPTCHA token-presence policy. 'all' requires a token on every OTP request
+ * route; 'web' requires it only for requests arriving with a browser Origin
+ * (the web BFF path) while the origin-less native paths are exempt; 'off' is
+ * the explicit local-development escape and never boots outside
+ * allowHttpLocal. A provided token is shape-validated in every mode.
+ */
+export type CaptchaMode = 'all' | 'web' | 'off';
+
 export interface AuthDependencies {
   runtimeConfig: RuntimeConfig;
   clientEnvironment: ClientEnvironment;
   recoveryEvidenceHashKey: string;
-  captchaRequired: boolean;
+  captchaMode: CaptchaMode;
   phoneOtpEnabled: boolean;
+  reviewAccount: ReviewAccountConfig | null;
   settleOtpRequest(startedAt: number): Promise<void>;
   authorizeInviteOtp(
     inviteToken: string,
@@ -220,6 +235,7 @@ export interface AuthDependencies {
     destination: string,
     code: string,
   ): Promise<SessionTokens>;
+  generateReviewOtp(destination: string): Promise<string>;
   redeemInvite(
     accessToken: string,
     expectedUserId: string,
@@ -379,15 +395,45 @@ export function defaultAuthDependencies(): AuthDependencies {
     );
   }
   const captchaSetting = Deno.env.get('NEWONE_AUTH_CAPTCHA_REQUIRED')?.trim();
-  const captchaRequired = captchaSetting === 'true';
-  if (!captchaRequired && !(captchaSetting === 'false' && runtimeConfig.allowHttpLocal)) {
-    throw new Error('NEWONE_AUTH_CAPTCHA_REQUIRED must be true outside explicit local development');
+  // 'true' keeps token presence mandatory everywhere; 'web' scopes it to
+  // browser-Origin requests because the native app has no CAPTCHA surface;
+  // 'false' remains valid only alongside explicit local development.
+  const captchaMode: CaptchaMode = captchaSetting === 'true'
+    ? 'all'
+    : captchaSetting === 'web'
+    ? 'web'
+    : 'off';
+  if (captchaMode === 'off' && !(captchaSetting === 'false' && runtimeConfig.allowHttpLocal)) {
+    throw new Error(
+      "NEWONE_AUTH_CAPTCHA_REQUIRED must be 'true' or 'web' outside explicit local development",
+    );
   }
   const phoneSetting = Deno.env.get('NEWONE_AUTH_PHONE_OTP_ENABLED')?.trim() ?? 'false';
   if (phoneSetting !== 'true' && phoneSetting !== 'false') {
     throw new Error('NEWONE_AUTH_PHONE_OTP_ENABLED must be true or false');
   }
   const phoneOtpEnabled = phoneSetting === 'true';
+  // App Store review sign-in stays dead unless both optional secrets are
+  // deployed together and well-formed; a half-configured pair must fail at
+  // boot instead of silently shipping a live static credential.
+  const reviewEmailSetting = Deno.env.get('NEWONE_REVIEW_ACCOUNT_EMAIL')?.trim() ?? '';
+  const reviewCodeSetting = Deno.env.get('NEWONE_REVIEW_ACCOUNT_CODE')?.trim() ?? '';
+  let reviewAccount: ReviewAccountConfig | null = null;
+  if (reviewEmailSetting !== '' || reviewCodeSetting !== '') {
+    const reviewEmail = reviewEmailSetting.toLowerCase();
+    if (
+      reviewEmail.length < 3 || reviewEmail.length > 254 || !EMAIL_PATTERN.test(reviewEmail) ||
+      reviewCodeSetting.length < 8 || reviewCodeSetting.length > 32 ||
+      !/^[\x21-\x7e]+$/.test(reviewCodeSetting)
+    ) {
+      // The message never echoes the configured secret values.
+      throw new Error(
+        'NEWONE_REVIEW_ACCOUNT_EMAIL and NEWONE_REVIEW_ACCOUNT_CODE must be configured together ' +
+          'as a valid email address and an 8-32 character printable code',
+      );
+    }
+    reviewAccount = { email: reviewEmail, code: reviewCodeSetting };
+  }
   const activeMemberships = async (
     accessToken: string,
     expectedUserId: string,
@@ -439,8 +485,9 @@ export function defaultAuthDependencies(): AuthDependencies {
     runtimeConfig,
     clientEnvironment,
     recoveryEvidenceHashKey,
-    captchaRequired,
+    captchaMode,
     phoneOtpEnabled,
+    reviewAccount,
     async settleOtpRequest(startedAt) {
       const jitter = crypto.getRandomValues(new Uint16Array(1))[0]! % 201;
       const remaining = 900 + jitter - (Date.now() - startedAt);
@@ -637,6 +684,21 @@ export function defaultAuthDependencies(): AuthDependencies {
         (destinationType === 'email' ? parsed.email : parsed.phone) !== destination
       ) throw new ApiError(401, 'unauthorized');
       return parsed;
+    },
+    async generateReviewOtp(destination) {
+      // App Store review sign-in: mint a linked email OTP for the designated,
+      // pre-existing review account without any email delivery. generateLink
+      // never creates users, so a missing or ineligible account stays
+      // indistinguishable from an invalid code.
+      const { data, error } = await createAdminClient(clientEnvironment).auth.admin.generateLink({
+        type: 'magiclink',
+        email: destination,
+      });
+      const linkedOtp = data.properties?.email_otp;
+      if (error || typeof linkedOtp !== 'string' || linkedOtp.length === 0) {
+        throw new ApiError(401, 'unauthorized');
+      }
+      return linkedOtp;
     },
     async redeemInvite(accessToken, expectedUserId, inviteToken, employeeCode) {
       const result = asObject(
@@ -928,6 +990,27 @@ function identityMatches(
   return (destinationType === 'email' ? identity.email : identity.phone) === destination;
 }
 
+function isReviewDestination(
+  review: ReviewAccountConfig | null,
+  identity: Pick<ParsedOtpIdentity, 'destinationType' | 'destination'>,
+): boolean {
+  // App Store review sign-in destination. parseEmail already lowercased the
+  // destination, so this equality is case-insensitive.
+  return review !== null && identity.destinationType === 'email' &&
+    safeEqual(identity.destination, review.email);
+}
+
+export function isReviewCredential(
+  review: ReviewAccountConfig | null,
+  identity: Pick<ParsedOtpIdentity, 'destinationType' | 'destination'>,
+  code: string,
+): boolean {
+  if (review === null) return false;
+  // Both factors use the constant-time comparison: a submitted code must
+  // never leak the configured static code through timing.
+  return isReviewDestination(review, identity) && safeEqual(code, review.code);
+}
+
 async function authorizeOtp(
   dependencies: AuthDependencies,
   identity: ParsedOtpIdentity,
@@ -999,10 +1082,17 @@ async function completeOtpAuthentication(
     throw new ApiError(409, 'delivery_channel_unavailable');
   }
   if (!authorization.allowed) throw new ApiError(401, 'unauthorized');
+  // App Store review sign-in: the static code never reaches GoTrue. A linked
+  // email OTP minted for the pre-existing review account is verified through
+  // the normal dependency instead, so every downstream check (identity match,
+  // installation binding, revocation, lifecycle hook) applies unchanged.
   const session = await dependencies.verifyOtp(
     identity.destinationType,
     identity.destination,
-    code,
+    identity.inviteToken === null &&
+      isReviewCredential(dependencies.reviewAccount, identity, code)
+      ? await dependencies.generateReviewOtp(identity.destination)
+      : code,
   );
   if (!identityMatches(session, identity.destinationType, identity.destination)) {
     try {
@@ -1316,6 +1406,13 @@ function optionalInviteToken(value: unknown): string | null {
   return value === null || value === undefined ? null : parseInviteToken(value);
 }
 
+function captchaRequiredFor(mode: CaptchaMode, native: boolean): boolean {
+  // 'web' waives token presence only on the origin-less native paths; the
+  // browser BFF path keeps proving a challenge token. A provided token is
+  // still shape-validated in every mode by captchaToken below.
+  return mode === 'all' || (mode === 'web' && !native);
+}
+
 function captchaToken(value: unknown, required: boolean): string | null {
   if (value === null || value === undefined) {
     if (required) throw new ApiError(400, 'bad_request');
@@ -1616,7 +1713,10 @@ export function createAuthHandler(
             identity.inviteToken !== null || identity.employeeCode !== null ||
             (native && identity.installationId !== nativeInstallationId(request))
           ) throw new ApiError(400, 'bad_request');
-          const captcha = captchaToken(body.captchaToken, dependencies.captchaRequired);
+          const captcha = captchaToken(
+            body.captchaToken,
+            captchaRequiredFor(dependencies.captchaMode, native),
+          );
           const ipHash = await networkFingerprint(request, config);
           const installationHash = await installationFingerprint(
             config,
@@ -1761,7 +1861,10 @@ export function createAuthHandler(
             throw new ApiError(400, 'bad_request');
           }
           const profile = parseSignupProfile(body);
-          const captcha = captchaToken(body.captchaToken, dependencies.captchaRequired);
+          const captcha = captchaToken(
+            body.captchaToken,
+            captchaRequiredFor(dependencies.captchaMode, native),
+          );
           const ipHash = await networkFingerprint(request, config);
           const installationHash = await installationFingerprint(
             config,
@@ -1909,7 +2012,10 @@ export function createAuthHandler(
           'captchaToken',
         ]);
         const identity = parseOtpIdentity(body);
-        const captcha = captchaToken(body.captchaToken, dependencies.captchaRequired);
+        const captcha = captchaToken(
+          body.captchaToken,
+          captchaRequiredFor(dependencies.captchaMode, false),
+        );
         const ipHash = await networkFingerprint(request, config);
         const installationHash = await installationFingerprint(config, identity.installationId);
         const authorization = await authorizeOtp(
@@ -1921,7 +2027,13 @@ export function createAuthHandler(
           'request',
         );
         const channelConfigured = otpChannelConfigured(dependencies, identity, authorization);
-        if (authorization.allowed && channelConfigured) {
+        // App Store review sign-in: authorization and rate limiting above ran
+        // unchanged, but the designated review destination never receives OTP
+        // email. The generic envelope below is identical either way.
+        if (
+          authorization.allowed && channelConfigured &&
+          !isReviewDestination(dependencies.reviewAccount, identity)
+        ) {
           try {
             await dependencies.requestOtp(identity.destinationType, identity.destination, captcha);
           } catch {
@@ -1956,7 +2068,10 @@ export function createAuthHandler(
         if (identity.installationId !== nativeInstallationId(request)) {
           throw new ApiError(400, 'bad_request');
         }
-        const captcha = captchaToken(body.captchaToken, dependencies.captchaRequired);
+        const captcha = captchaToken(
+          body.captchaToken,
+          captchaRequiredFor(dependencies.captchaMode, true),
+        );
         const ipHash = await networkFingerprint(request, config);
         const installationHash = await installationFingerprint(config, identity.installationId);
         const authorization = await authorizeOtp(
@@ -1968,7 +2083,13 @@ export function createAuthHandler(
           'request',
         );
         const channelConfigured = otpChannelConfigured(dependencies, identity, authorization);
-        if (authorization.allowed && channelConfigured) {
+        // App Store review sign-in: authorization and rate limiting above ran
+        // unchanged, but the designated review destination never receives OTP
+        // email. The generic envelope below is identical either way.
+        if (
+          authorization.allowed && channelConfigured &&
+          !isReviewDestination(dependencies.reviewAccount, identity)
+        ) {
           try {
             await dependencies.requestOtp(identity.destinationType, identity.destination, captcha);
           } catch {
@@ -2008,8 +2129,18 @@ export function createAuthHandler(
           if (native && identity.installationId !== nativeInstallationId(request)) {
             throw new ApiError(400, 'bad_request');
           }
-          const code = normalizedString(body.code, { min: 6, max: 6, trim: false }) as string;
-          if (!OTP_PATTERN.test(code)) throw new ApiError(401, 'unauthorized');
+          // The designated review account may submit its 8-32 character static
+          // code; every other destination keeps the exact six-digit contract.
+          const reviewDestination = isReviewDestination(dependencies.reviewAccount, identity);
+          const code = normalizedString(body.code, {
+            min: 6,
+            max: reviewDestination ? 64 : 6,
+            trim: false,
+          }) as string;
+          if (
+            !OTP_PATTERN.test(code) &&
+            !isReviewCredential(dependencies.reviewAccount, identity, code)
+          ) throw new ApiError(401, 'unauthorized');
           const ipHash = await networkFingerprint(request, config);
           const installationHash = await installationFingerprint(config, identity.installationId);
           const completed = await completeOtpAuthentication(

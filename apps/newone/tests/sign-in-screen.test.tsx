@@ -36,6 +36,12 @@ jest.mock('@/state/auth', () => ({ useAuth: () => mockAuth }));
 jest.mock('@/lib/supabase', () => ({
   get isWebAuthBlocked() { return mockWebAuthBlocked; },
 }));
+let mockTurnstileSiteKey: string | null = 'controlled-turnstile-site-key';
+jest.mock('@/config/runtime', () => ({
+  publicRuntimeConfig: {
+    get turnstileSiteKey() { return mockTurnstileSiteKey; },
+  },
+}));
 jest.mock('@/components/security/captcha-challenge', () => {
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
@@ -79,6 +85,7 @@ beforeEach(() => {
   mockWidth = 390;
   mockWebAuthBlocked = false;
   mockLocale = 'en';
+  mockTurnstileSiteKey = 'controlled-turnstile-site-key';
   mockAuth = authState();
 });
 
@@ -372,6 +379,76 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'auth.languageKorean' }));
     expect(mockSetLocale).toHaveBeenCalledWith('ko');
     expect(screen.getByRole('button', { name: 'auth.languageEnglish' })).toBeTruthy();
+    await view.unmount();
+  });
+
+  test('signs in a returning member without any challenge when Turnstile is not configured', async () => {
+    mockTurnstileSiteKey = null;
+    const view = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
+    expect(screen.queryByLabelText('controlled-captcha-error')).toBeNull();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), ' Person@Example.COM ');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+    expect(screen.queryByText('auth.challengeRequired')).toBeNull();
+    expect(mockAuth.requestOtp).toHaveBeenCalledWith({
+      destinationType: 'email',
+      destination: 'person@example.com',
+    });
+    expect(mockAuth.requestOtp.mock.calls[0][0]).not.toHaveProperty('captchaToken');
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
+    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
+      destinationType: 'email', destination: 'person@example.com', code: '123456',
+    }));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    await view.unmount();
+  });
+
+  test('creates a consumer account without any challenge when Turnstile is not configured', async () => {
+    mockTurnstileSiteKey = null;
+    const view = await render(<SignInScreen />);
+    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
+    await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
+    await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
+    expect(mockAuth.requestSignup).toHaveBeenCalledWith({
+      destination: 'new.person@example.com',
+      username: 'river_runner_7',
+      displayName: 'River Runner',
+      language: 'en',
+    });
+    expect(mockAuth.requestSignup.mock.calls[0][0]).not.toHaveProperty('captchaToken');
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '246810');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignup' }));
+    await waitFor(() => expect(mockAuth.verifySignup).toHaveBeenCalledWith({
+      destination: 'new.person@example.com',
+      code: '246810',
+    }));
+    await view.unmount();
+  });
+
+  test('requests account recovery without a captcha token when Turnstile is not configured', async () => {
+    mockTurnstileSiteKey = null;
+    const view = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
+    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'recover@example.com');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.recoveryOtpSent')).toBeTruthy());
+    expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledWith({
+      destinationType: 'email',
+      destination: 'recover@example.com',
+    });
+    expect(mockAuth.requestRecoveryOtp.mock.calls[0][0]).not.toHaveProperty('captchaToken');
     await view.unmount();
   });
 

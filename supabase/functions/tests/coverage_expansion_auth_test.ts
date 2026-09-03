@@ -5,7 +5,7 @@ import {
   createAuthHandler,
   defaultAuthDependencies,
 } from '../newone-auth/handler.ts';
-import { assert, assertEquals, assertRejects } from './assert.ts';
+import { assertEquals, assertRejects } from './assert.ts';
 
 const organizationId = '10000000-0000-4000-8000-000000000001';
 const userId = '20000000-0000-4000-8000-000000000002';
@@ -48,8 +48,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
       secretKey: 'coverage-secret-key',
     },
     recoveryEvidenceHashKey: 'r'.repeat(32),
-    captchaRequired: false,
+    captchaMode: 'off',
     phoneOtpEnabled: true,
+    reviewAccount: null,
     settleOtpRequest: async () => {},
     authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
@@ -71,6 +72,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
     verifyOtp: async () => session,
+    generateReviewOtp: async () => {
+      throw new Error('review OTP must not be generated');
+    },
     redeemInvite: async () => ({ organizationId, role: 'admin' }),
     refresh: async () => session,
     bindSessionInstallation: async () => ({ sessionId }),
@@ -197,7 +201,10 @@ Deno.test('auth default configuration rejects malformed recovery, CAPTCHA, and p
   try {
     for (const [key, value] of Object.entries(base)) Deno.env.set(key, value);
     Deno.env.delete('NEWONE_ALLOW_HTTP_LOCAL');
-    assert(defaultAuthDependencies());
+    assertEquals(defaultAuthDependencies().captchaMode, 'all');
+    Deno.env.set('NEWONE_AUTH_CAPTCHA_REQUIRED', 'web');
+    assertEquals(defaultAuthDependencies().captchaMode, 'web');
+    Deno.env.set('NEWONE_AUTH_CAPTCHA_REQUIRED', 'true');
     for (const invalid of ['', 'short', `${'r'.repeat(32)}\n`]) {
       Deno.env.set('NEWONE_RECOVERY_EVIDENCE_HASH_KEY', invalid);
       await assertRejects(async () => defaultAuthDependencies());
@@ -206,7 +213,7 @@ Deno.test('auth default configuration rejects malformed recovery, CAPTCHA, and p
     Deno.env.set('NEWONE_AUTH_CAPTCHA_REQUIRED', 'false');
     await assertRejects(async () => defaultAuthDependencies());
     Deno.env.set('NEWONE_ALLOW_HTTP_LOCAL', 'true');
-    assert(defaultAuthDependencies());
+    assertEquals(defaultAuthDependencies().captchaMode, 'off');
     Deno.env.set('NEWONE_AUTH_PHONE_OTP_ENABLED', 'invalid');
     await assertRejects(async () => defaultAuthDependencies());
   } finally {

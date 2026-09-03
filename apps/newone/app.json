@@ -43,7 +43,12 @@
       "favicon": "./assets/images/newone-favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "origin": "https://newonechat.com"
+        }
+      ],
       [
         "expo-splash-screen",
         {

@@ -54,8 +54,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
       secretKey: 'secret',
     },
     recoveryEvidenceHashKey: 'r'.repeat(32),
-    captchaRequired: true,
+    captchaMode: 'all',
     phoneOtpEnabled: false,
+    reviewAccount: null,
     settleOtpRequest: async () => {},
     authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
@@ -77,6 +78,9 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
     requestOtp: async () => {},
     verifyOtp: async () => session,
+    generateReviewOtp: async () => {
+      throw new Error('review OTP must not be generated');
+    },
     redeemInvite: async () => {
       throw new Error('signup flows must not redeem invitations');
     },
