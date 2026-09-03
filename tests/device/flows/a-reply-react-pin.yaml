@@ -1,0 +1,51 @@
+appId: com.totallynotwoojin.newone
+---
+# In an open conversation, user A long-presses the latest message and uses
+# the real action sheet: Reply (then sends), React with 👍, and Pin.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Sim Human"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- longPressOn:
+    text: ".*Accepted! Hi Sim A.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- takeScreenshot: feat-01-actions-sheet
+- tapOn: "Reply"
+- extendedWaitUntil:
+    visible: "Replying to"
+    timeout: 10000
+- tapOn: "Write a message…"
+- inputText: "Replying in thread"
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: "Replying in thread"
+    timeout: 20000
+- takeScreenshot: feat-02-reply-sent
+- longPressOn:
+    text: ".*Accepted! Hi Sim A.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- tapOn: "React"
+- tapOn: "👍"
+- extendedWaitUntil:
+    visible: "👍"
+    timeout: 15000
+- takeScreenshot: feat-03-reacted
+- longPressOn:
+    text: ".*Accepted! Hi Sim A.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- tapOn: "Pin"
+- extendedWaitUntil:
+    visible: "Unpin"
+    timeout: 15000
+    optional: true
+- takeScreenshot: feat-04-pinned

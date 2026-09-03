@@ -1,0 +1,10 @@
+appId: com.totallynotwoojin.newone
+---
+# With translation Off for this conversation, no TRANSLATION card renders.
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: 45000
+- extendedWaitUntil:
+    notVisible: ".*TRANSLATION · .*"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-no-translation

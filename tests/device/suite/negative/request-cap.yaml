@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.newone
+---
+# In a pending message-request conversation: send messages until the cap
+# error appears (the request holds 3 messages).
+- extendedWaitUntil:
+    visible: ".*Request pending.*"
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: ${TEXT2}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${TEXT2}
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: ${TEXT3}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${TEXT3}
+    timeout: 20000
+- takeScreenshot: ${SHOT}-three-messages
+- tapOn: "Write a message…"
+- inputText: ${TEXT4}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*(already holds its 3 messages|Not sent|could not|Too many|cannot).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-cap-error
+- assertVisible: ".*already holds its 3 messages.*"

@@ -1,0 +1,23 @@
+appId: com.totallynotwoojin.newone
+---
+- assertVisible: "Código de un solo uso"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- eraseText: 8
+- inputText: ${CODE}
+- tapOn: "Código de un solo uso"
+- takeScreenshot: ${SHOT}-code-entered
+- scrollUntilVisible:
+    element:
+      text: "Verificar y crear la cuenta"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verificar y crear la cuenta"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-signed-in

@@ -550,16 +550,21 @@ export async function validateNativeMembership(input: { accessToken: string; use
   }
   const root = objectValue(payload);
   const data = objectValue(root.data ?? root);
-  const memberships = data.activeMemberships;
+  // The bootstrap contract (schemaVersion 1): the caller's identity is
+  // `userId`, the resolved workspace is `organizationId`, and an active
+  // membership is proven by `currentUser.membershipRole`. Anything else is
+  // treated as no membership. Verified against the live payload shape.
+  const currentUser = objectValue(data.currentUser);
+  const membershipRole = currentUser.membershipRole;
   if (
-    data.currentUserId !== input.userId ||
-    typeof data.selectedOrganizationId !== 'string' ||
-    !Array.isArray(memberships) ||
-    memberships.length < 1
+    data.userId !== input.userId ||
+    typeof data.organizationId !== 'string' ||
+    typeof membershipRole !== 'string' ||
+    !['owner', 'admin', 'manager', 'member'].includes(membershipRole)
   ) {
     throw new WebAuthError('The membership service returned an invalid response.', 'invalid_response');
   }
-  return { organizationId: data.selectedOrganizationId };
+  return { organizationId: data.organizationId };
 }
 
 export async function getWebSession() {

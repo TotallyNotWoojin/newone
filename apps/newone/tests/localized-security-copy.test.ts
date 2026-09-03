@@ -22,7 +22,7 @@ import { handoffCorrectionCopy } from '@/features/handoffs/handoff-correction-co
 import { searchCopy } from '@/features/search/search-copy';
 import { outboxCopy } from '@/features/settings/outbox-copy';
 import { updateCopy } from '@/features/updates/update-copy';
-import { catalogs, type AppLocale } from '@/i18n/catalog';
+import { catalogs, type AppLocale, type MessageKey } from '@/i18n/catalog';
 
 const locales: AppLocale[] = ['en', 'ko', 'es'];
 
@@ -90,5 +90,40 @@ describe('localized security and workflow copy', () => {
 
   test.each(locales)('%s search action includes the selected result label', (locale) => {
     expect(searchCopy(locale).openResult('Safety team')).toContain('Safety team');
+  });
+});
+
+describe('consumer-surface catalog copy', () => {
+  const workplaceWording = /coworker|company|workplace|employee|shift|organization|administrator/i;
+  const consumerKeys: MessageKey[] = [
+    'auth.titleReturn', 'auth.subtitleReturn', 'auth.titleSignup', 'auth.subtitleSignup',
+    'help.introBody', 'help.onboardingTitle', 'help.onboardingBody', 'help.recoveryBody',
+    'help.privacyBody', 'help.translationBody', 'help.safetyBody', 'help.supportTitle',
+    'help.supportBody', 'help.supportUnconfigured',
+    'status.emptyChatsBodyConsumer', 'status.emptyPeopleConsumer', 'status.emptyPeopleBodyConsumer',
+    'chat.chooseBodyConsumer', 'chat.privateConsumer', 'chat.companyMemberConsumer',
+    'people.subtitleConsumer', 'people.eyebrowConsumer', 'people.descriptionConsumer',
+    'people.friends', 'people.requests', 'people.friendsEmpty', 'people.friendsEmptyBody',
+    'people.blockNoticeConsumer',
+    'settings.accountVerified', 'settings.preferencesDescriptionConsumer',
+    'settings.deviceNotificationsNoteConsumer', 'settings.devicePreferencesBoundaryConsumer',
+    'search.subtitleConsumer', 'search.eyebrowConsumer', 'search.descriptionConsumer',
+    'search.placeholderConsumer',
+  ];
+
+  test('English consumer copy carries no workplace wording', () => {
+    for (const key of consumerKeys) {
+      expect(catalogs.en[key]).not.toMatch(workplaceWording);
+    }
+  });
+
+  test.each(locales)('%s consumer copy is present and distinct from its workspace counterpart', (locale) => {
+    for (const key of consumerKeys) {
+      expect(catalogs[locale][key].trim()).not.toBe('');
+      const workspaceKey = key.replace(/Consumer$/, '') as MessageKey;
+      if (workspaceKey !== key) {
+        expect(catalogs[locale][key]).not.toBe(catalogs[locale][workspaceKey]);
+      }
+    }
   });
 });

@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.newone
+---
+# From anywhere: go to Chats, open the conversation titled ${PEER}, wait for
+# the composer.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ${PEER}
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    visible: ${PEER}
+    timeout: 45000
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: ".*(Write a message…|Accept|Request pending).*"
+    timeout: 20000

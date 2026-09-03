@@ -684,10 +684,10 @@ describe('native identity response and security contracts', () => {
   });
 
   test.each([
-    [{ currentUserId: 'other', selectedOrganizationId: 'org-a', activeMemberships: [{}] }],
-    [{ currentUserId: 'user-a', selectedOrganizationId: null, activeMemberships: [{}] }],
-    [{ currentUserId: 'user-a', selectedOrganizationId: 'org-a', activeMemberships: null }],
-    [{ currentUserId: 'user-a', selectedOrganizationId: 'org-a', activeMemberships: [] }],
+    [{ userId: 'other', organizationId: 'org-a', currentUser: { membershipRole: 'member' } }],
+    [{ userId: 'user-a', organizationId: null, currentUser: { membershipRole: 'member' } }],
+    [{ userId: 'user-a', organizationId: 'org-a', currentUser: {} }],
+    [{ userId: 'user-a', organizationId: 'org-a', currentUser: { membershipRole: 'guest' } }],
   ])('rejects an invalid membership success receipt', async (receipt) => {
     queueJson(receipt);
     await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
@@ -695,10 +695,12 @@ describe('native identity response and security contracts', () => {
   });
 
   test('accepts a direct membership success payload', async () => {
+    // Real bootstrap contract (captured payload in tests/fixtures/real-bootstrap.json):
+    // the gateway returns userId, organizationId and currentUser.membershipRole.
     queueJson({
-      currentUserId: 'user-a',
-      selectedOrganizationId: 'org-a',
-      activeMemberships: [{ organizationId: 'org-a' }],
+      userId: 'user-a',
+      organizationId: 'org-a',
+      currentUser: { membershipRole: 'member' },
     });
     await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
       .resolves.toEqual({ organizationId: 'org-a' });

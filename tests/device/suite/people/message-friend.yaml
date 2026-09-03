@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# From People, tap Message on the friend card, then send a text.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Message"
+    timeout: 30000
+- tapOn: "Message"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: ${TEXT}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: 20000
+- takeScreenshot: ${SHOT}-sent

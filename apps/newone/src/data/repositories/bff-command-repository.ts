@@ -1498,6 +1498,42 @@ export class BffCommandRepository implements CommandRepository {
     return data.joinRequests.map(parseJoinRequest);
   }
 
+  async updateProfile(input: Parameters<CommandRepository['updateProfile']>[0]) {
+    const payload = await this.request('/v2/profile', {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      method: 'PATCH',
+      body: {
+        displayName: input.displayName,
+        statusMessage: input.statusMessage ?? null,
+      },
+    });
+    const data = dataValue(payload);
+    const receiptKeys = ['userId', 'displayName', 'statusMessage'] as const;
+    if (!hasOnlyKeys(data, receiptKeys) || !receiptKeys.every((key) => key in data)) {
+      throw new RepositoryError('The service returned an invalid profile receipt.', 'invalid_response', true);
+    }
+    // Text fields are strictly strings here: the shared helpers coerce numbers,
+    // which is never a valid profile value.
+    const displayName = typeof data.displayName === 'string' ? data.displayName.trim() : '';
+    const statusMessage = data.statusMessage === null
+      ? null
+      : typeof data.statusMessage === 'string' ? data.statusMessage : undefined;
+    if (
+      displayName.length < 1
+      || displayName.length > 120
+      || statusMessage === undefined
+      || (statusMessage !== null && statusMessage.length > 280)
+    ) {
+      throw new RepositoryError('The service returned an invalid profile receipt.', 'invalid_response', true);
+    }
+    return {
+      userId: requiredUuidValue(data.userId, 'profile user id'),
+      displayName,
+      statusMessage,
+    };
+  }
+
   async updateConversationPreferences(
     input: Parameters<CommandRepository['updateConversationPreferences']>[0],
   ) {

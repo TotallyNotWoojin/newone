@@ -1,0 +1,11 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Close dialog"
+    optional: true
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000

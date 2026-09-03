@@ -22,6 +22,7 @@ import type { OrganizationPreferences } from '@/domain/types';
 import type {
   DeviceNotificationPreferenceOverrides,
 } from '@/data/repositories/device-notification-preferences-dto.mjs';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -55,6 +56,9 @@ export default function SettingsScreen() {
   const { width } = useHydrationSafeWindowDimensions();
   const compact = width < 520;
   const workspace = useWorkspace();
+  // Consumer accounts have no authenticator, recovery-case, or shift tooling;
+  // those sections stay exclusively on workspace organizations.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
   const loadAccountSettings = workspace.loadAccountSettings;
   const { currentUser } = workspace;
   const auth = useAuth();
@@ -78,6 +82,8 @@ export default function SettingsScreen() {
   const [preferenceDraft, setPreferenceDraft] = useState<OrganizationPreferences | null>(null);
   const [devicePreferenceDraft, setDevicePreferenceDraft] =
     useState<DeviceNotificationPreferenceOverrides | null>(null);
+  const [profileDraft, setProfileDraft] =
+    useState<{ displayName?: string; statusMessage?: string }>({});
   const devicePreferences = workspace.deviceNotificationPreferences;
 
   const loadMfa = useCallback(async () => {
@@ -125,9 +131,10 @@ export default function SettingsScreen() {
   }, [t]);
 
   useEffect(() => {
+    if (personalRealm) return;
     const timeout = setTimeout(() => void loadMfa(), 0);
     return () => clearTimeout(timeout);
-  }, [loadMfa]);
+  }, [loadMfa, personalRealm]);
 
   useEffect(() => {
     const timeout = setTimeout(() => void loadAccountSettings(), 0);
@@ -268,6 +275,28 @@ export default function SettingsScreen() {
     await loadMfa();
   };
 
+  // The draft holds only what the user has typed. Untouched fields follow the
+  // authoritative profile, and a successful save clears the draft so the
+  // inputs show the server's values rather than the text that was submitted.
+  const draftDisplayName = profileDraft.displayName ?? currentUser?.displayName ?? '';
+  const draftStatusMessage = profileDraft.statusMessage ?? currentUser?.statusMessage ?? '';
+  const trimmedDisplayName = draftDisplayName.trim();
+  const trimmedStatusMessage = draftStatusMessage.trim();
+  const profileValid = trimmedDisplayName.length >= 1
+    && trimmedDisplayName.length <= 120
+    && trimmedStatusMessage.length <= 280;
+  const profileDirty = trimmedDisplayName !== (currentUser?.displayName ?? '')
+    || trimmedStatusMessage !== (currentUser?.statusMessage ?? '');
+
+  const saveProfile = async () => {
+    if (await workspace.updateProfile({
+      displayName: draftDisplayName,
+      statusMessage: draftStatusMessage,
+    })) {
+      setProfileDraft({});
+    }
+  };
+
   // Confirmation requires the account's username; DELETE is the deliberate
   // fallback while a signed-in identity has no username to retype.
   const deletionUsername = currentUser?.username?.trim() || null;
@@ -323,7 +352,11 @@ export default function SettingsScreen() {
             <Text style={styles.profileName}>{currentUser.displayName}</Text>
             <Text style={styles.profileRole}>{currentUser.roleLabel}</Text>
             <View style={styles.profileBadges}>
-              <StatusBadge icon="checkmark-circle" label={t('settings.companyVerified')} tone="success" />
+              <StatusBadge
+                icon="checkmark-circle"
+                label={t(personalRealm ? 'settings.accountVerified' : 'settings.companyVerified')}
+                tone="success"
+              />
               <StatusBadge
                 icon="language"
                 label={locale === 'ko' ? '한국어' : locale === 'es' ? 'Español' : 'English'}
@@ -332,6 +365,41 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
+
+        <SettingsSection
+          description={t('settings.profileDescription')}
+          icon="person-circle-outline"
+          title={t('settings.profileTitle')}>
+          <View style={styles.preferenceForm}>
+            <FormField
+              label={t('settings.displayName')}
+              onChangeText={(value) => setProfileDraft((current) => ({ ...current, displayName: value }))}
+              value={draftDisplayName}
+            />
+            <FormField
+              label={t('settings.statusMessage')}
+              multiline
+              onChangeText={(value) => setProfileDraft((current) => ({ ...current, statusMessage: value }))}
+              placeholder={t('settings.statusMessagePlaceholder')}
+              value={draftStatusMessage}
+            />
+            <Text style={styles.rowNote}>{t('settings.profileLimits')}</Text>
+            {currentUser.username ? (
+              <Text style={styles.rowNote}>{t('settings.usernameNote')} @{currentUser.username}</Text>
+            ) : null}
+            <View style={styles.notificationActions}>
+              <PrimaryButton
+                disabled={!profileDirty || !profileValid}
+                icon="save-outline"
+                label={t('settings.saveProfile')}
+                loading={workspace.actionBusy === 'profile-update'}
+                onPress={() => void saveProfile()}
+                tone="dark"
+              />
+            </View>
+          </View>
+          <ActionError message={workspace.actionError} />
+        </SettingsSection>
 
         <SettingsSection
           description={t('settings.languageDescription')}
@@ -364,7 +432,7 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         <SettingsSection
-          description={t('settings.preferencesDescription')}
+          description={t(personalRealm ? 'settings.preferencesDescriptionConsumer' : 'settings.preferencesDescription')}
           icon="options-outline"
           title={t('settings.preferencesTitle')}>
           {workspace.actionBusy === 'account-settings-load' && !preferenceDraft ? (
@@ -439,11 +507,13 @@ export default function SettingsScreen() {
                   />
                 </View>
               </View>
-              <PreferenceSwitch
-                label={t('settings.shiftSuppression')}
-                onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, shiftAwareSuppression: value } : current)}
-                value={preferenceDraft.shiftAwareSuppression}
-              />
+              {!personalRealm ? (
+                <PreferenceSwitch
+                  label={t('settings.shiftSuppression')}
+                  onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, shiftAwareSuppression: value } : current)}
+                  value={preferenceDraft.shiftAwareSuppression}
+                />
+              ) : null}
               <PreferenceSwitch
                 label={t('settings.sound')}
                 onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, soundEnabled: value } : current)}
@@ -491,7 +561,9 @@ export default function SettingsScreen() {
             <View style={styles.securityRow}>
               <View style={styles.securityCopy}>
                 <Text style={styles.rowLabel}>{t('settings.deviceNotifications')}</Text>
-                <Text style={styles.rowNote}>{t('settings.deviceNotificationsNote')}</Text>
+                <Text style={styles.rowNote}>
+                  {t(personalRealm ? 'settings.deviceNotificationsNoteConsumer' : 'settings.deviceNotificationsNote')}
+                </Text>
               </View>
               {Platform.OS === 'web' ? (
                 <StatusBadge label={t('settings.nativeOnly')} />
@@ -516,7 +588,9 @@ export default function SettingsScreen() {
                   <Ionicons name="shield-checkmark-outline" color={colors.mintDark} size={18} />
                   <View style={styles.securityCopy}>
                     <Text style={styles.rowLabel}>{t('settings.currentDevicePreferences')}</Text>
-                    <Text style={styles.rowNote}>{t('settings.devicePreferencesBoundary')}</Text>
+                    <Text style={styles.rowNote}>
+                      {t(personalRealm ? 'settings.devicePreferencesBoundaryConsumer' : 'settings.devicePreferencesBoundary')}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.rowLabel}>{t('settings.notificationPreview')}</Text>
@@ -622,49 +696,53 @@ export default function SettingsScreen() {
           <ActionError message={workspace.actionError} />
         </SettingsSection>
 
-        <SettingsSection
-          description={t('settings.mfaDescription')}
-          icon="shield-checkmark-outline"
-          title={t('settings.securityTitle')}>
-          {mfaLoading && !mfaVisible ? <ActivityIndicator color={colors.mintDark} /> : null}
-          <View style={styles.securityRow}>
-            <View style={styles.securityCopy}>
-              <Text style={styles.rowLabel}>{t('settings.mfaTitle')}</Text>
-              <Text style={styles.rowNote}>
-                {Platform.OS === 'web'
-                  ? verifiedFactor
-                    ? mfaLevel === 'aal2'
-                      ? t('settings.mfaAal2')
-                      : t('settings.mfaEnrolled')
-                    : t('settings.mfaNotEnrolled')
-                  : verifiedFactor
-                    ? mfaLevel === 'aal2'
-                      ? t('settings.mfaAal2')
-                      : t('settings.mfaEnrolled')
-                    : t('settings.mfaNotEnrolled')}
-              </Text>
+        {!personalRealm ? (
+          <>
+          <SettingsSection
+            description={t('settings.mfaDescription')}
+            icon="shield-checkmark-outline"
+            title={t('settings.securityTitle')}>
+            {mfaLoading && !mfaVisible ? <ActivityIndicator color={colors.mintDark} /> : null}
+            <View style={styles.securityRow}>
+              <View style={styles.securityCopy}>
+                <Text style={styles.rowLabel}>{t('settings.mfaTitle')}</Text>
+                <Text style={styles.rowNote}>
+                  {Platform.OS === 'web'
+                    ? verifiedFactor
+                      ? mfaLevel === 'aal2'
+                        ? t('settings.mfaAal2')
+                        : t('settings.mfaEnrolled')
+                      : t('settings.mfaNotEnrolled')
+                    : verifiedFactor
+                      ? mfaLevel === 'aal2'
+                        ? t('settings.mfaAal2')
+                        : t('settings.mfaEnrolled')
+                      : t('settings.mfaNotEnrolled')}
+                </Text>
+              </View>
+              <PrimaryButton
+                icon={verifiedFactor ? 'key-outline' : 'add-circle-outline'}
+                label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
+                loading={mfaLoading}
+                onPress={() => void openMfa()}
+                tone={verifiedFactor ? 'dark' : privileged ? 'danger' : 'light'}
+              />
             </View>
-            <PrimaryButton
-              icon={verifiedFactor ? 'key-outline' : 'add-circle-outline'}
-              label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
-              loading={mfaLoading}
-              onPress={() => void openMfa()}
-              tone={verifiedFactor ? 'dark' : privileged ? 'danger' : 'light'}
-            />
-          </View>
-          {privileged && !verifiedFactor ? (
-            <View style={styles.warningRow}>
-              <Ionicons name="warning" size={16} color={colors.amber} />
-              <Text style={styles.warningText}>{t('settings.mfaPrivilegedWarning')}</Text>
-            </View>
-          ) : null}
-          <ActionError message={mfaError} />
-        </SettingsSection>
+            {privileged && !verifiedFactor ? (
+              <View style={styles.warningRow}>
+                <Ionicons name="warning" size={16} color={colors.amber} />
+                <Text style={styles.warningText}>{t('settings.mfaPrivilegedWarning')}</Text>
+              </View>
+            ) : null}
+            <ActionError message={mfaError} />
+          </SettingsSection>
 
-        <SelfRecoveryRequest
-          accessToken={auth.session?.access_token ?? null}
-          organizationId={workspace.organizationId}
-        />
+          <SelfRecoveryRequest
+            accessToken={auth.session?.access_token ?? null}
+            organizationId={workspace.organizationId}
+          />
+          </>
+        ) : null}
 
         <SettingsSection
           description={t('settings.sessionsDescription')}
@@ -728,10 +806,12 @@ export default function SettingsScreen() {
           ) : null}
         </SettingsSection>
 
-        <View style={styles.footerNote}>
-          <Ionicons name="lock-closed" size={14} color={colors.inkSubtle} />
-          <Text style={styles.footerNoteText}>{t('settings.privateDmNote')}</Text>
-        </View>
+        {!personalRealm ? (
+          <View style={styles.footerNote}>
+            <Ionicons name="lock-closed" size={14} color={colors.inkSubtle} />
+            <Text style={styles.footerNoteText}>{t('settings.privateDmNote')}</Text>
+          </View>
+        ) : null}
         <PrimaryButton
           icon="help-circle-outline"
           label={t('settings.help')}

@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → Devices and sessions must list the other device's session.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Devices and sessions"
+    direction: DOWN
+    timeout: 45000
+- takeScreenshot: ${SHOT}-sessions
+- extendedWaitUntil:
+    visible: "Revoke"
+    timeout: 30000
+- assertNotVisible: "No other active sessions were returned by the authorized session service."
+- takeScreenshot: ${SHOT}-other-session-listed

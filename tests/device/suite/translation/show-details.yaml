@@ -1,0 +1,12 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn:
+    text: "Show details"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*Source language · .*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-details
+- tapOn:
+    text: "Hide details"
+    index: 0

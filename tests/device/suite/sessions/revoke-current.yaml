@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Revoke this session"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Revoke this session"
+- extendedWaitUntil:
+    visible: "Revoke and sign out"
+    timeout: 15000
+- tapOn:
+    text: "Reason"
+    index: 1
+- inputText: "Done testing (suite)"
+- tapOn: "Revoke current session"
+- tapOn: "Revoke and sign out"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-signed-out-by-revoke

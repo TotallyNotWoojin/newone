@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { useEffect } from 'react';
-import { AppState, Linking, Text } from 'react-native';
+import { AppState, Linking, Text, type AppStateStatus } from 'react-native';
 
 import {
   RepositoryError,
@@ -1203,6 +1203,7 @@ describe('authoritative workspace provider', () => {
       results.push(await currentWorkspace().downloadAttachment(message));
       results.push(await currentWorkspace().updateConversation(conversation.id, { name: 'Updated' }));
       results.push(await currentWorkspace().updateConversationPreferences(conversation.id, { isPinned: true }));
+      results.push(await currentWorkspace().updateProfile({ displayName: 'Renamed Employee' }));
       results.push(await currentWorkspace().updateConversationControls(conversation.id, {
         postingMode: 'admins_only', reason: 'Controlled reason',
       }));
@@ -3715,6 +3716,90 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
+  test('renames the current user from the gateway receipt and rejects invalid or foreign receipts', async () => {
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    // Freeze subsequent refreshes so the receipt-driven patch stays observable.
+    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+
+    const outcomes: boolean[] = [];
+    await act(async () => {
+      outcomes.push(await currentWorkspace().updateProfile({ displayName: '   ' }));
+      outcomes.push(await currentWorkspace().updateProfile({ displayName: 'n'.repeat(121) }));
+      outcomes.push(await currentWorkspace().updateProfile({
+        displayName: 'Valid Name',
+        statusMessage: 's'.repeat(281),
+      }));
+    });
+    expect(outcomes).toEqual([false, false, false]);
+    expect(mockCommand).not.toHaveBeenCalled();
+
+    mockCommand.mockImplementation(async () => undefined);
+    await act(async () => {
+      outcomes.push(await currentWorkspace().updateProfile({ displayName: 'Renamed Employee' }));
+    });
+    expect(outcomes.at(-1)).toBe(false);
+    expect(currentWorkspace().currentUser?.displayName).toBe('Current Employee');
+
+    mockCommand.mockImplementation(async () => ({
+      userId: otherUserId, displayName: 'Impostor', statusMessage: null,
+    }));
+    await act(async () => {
+      outcomes.push(await currentWorkspace().updateProfile({ displayName: 'Renamed Employee' }));
+    });
+    expect(outcomes.at(-1)).toBe(false);
+    expect(currentWorkspace().currentUser?.displayName).toBe('Current Employee');
+
+    mockCommand.mockImplementation(async () => ({
+      userId, displayName: 'Renamed Employee', statusMessage: 'On shift',
+    }));
+    await act(async () => {
+      outcomes.push(await currentWorkspace().updateProfile({
+        displayName: '  Renamed Employee ',
+        statusMessage: ' On shift ',
+      }));
+    });
+    expect(outcomes.at(-1)).toBe(true);
+    expect(mockCommand).toHaveBeenLastCalledWith('updateProfile', {
+      organizationId: '70000000-0000-4000-8000-000000000007',
+      displayName: 'Renamed Employee',
+      statusMessage: 'On shift',
+      idempotencyKey: '50000000-0000-4000-8000-000000000005',
+    });
+    expect(currentWorkspace().currentUser).toMatchObject({
+      id: userId,
+      displayName: 'Renamed Employee',
+      initials: 'RE',
+      statusMessage: 'On shift',
+    });
+    expect(currentWorkspace().people.find((person) => person.id === otherUserId)?.displayName)
+      .toBe('Connected Employee');
+    expect(currentWorkspace().people.every(
+      (person) => person.id !== userId || person.displayName === 'Renamed Employee',
+    )).toBe(true);
+    expect(currentWorkspace().actionError).toBeNull();
+
+    mockCommand.mockImplementation(async () => ({
+      userId, displayName: 'Renamed Employee', statusMessage: null,
+    }));
+    await act(async () => {
+      outcomes.push(await currentWorkspace().updateProfile({
+        displayName: 'Renamed Employee',
+        statusMessage: '   ',
+      }));
+    });
+    expect(outcomes.at(-1)).toBe(true);
+    expect(mockCommand).toHaveBeenLastCalledWith('updateProfile', expect.objectContaining({
+      statusMessage: null,
+    }));
+    expect(currentWorkspace().currentUser?.statusMessage).toBeNull();
+    await view.unmount();
+  });
+
   test('searches usernames and sends message requests inside the personal realm', async () => {
     const strangerId = '60000000-0000-4000-8000-000000000010';
     const requestConversationId = '80000000-0000-4000-8000-000000000011';
@@ -3810,6 +3895,225 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
+  test('cancels an outgoing message request through the connection DELETE route and drops the optimistic thread', async () => {
+    const strangerId = '60000000-0000-4000-8000-000000000021';
+    const secondStrangerId = '60000000-0000-4000-8000-000000000022';
+    const unknownId = '60000000-0000-4000-8000-000000000023';
+    const requestConversationId = '80000000-0000-4000-8000-000000000024';
+    const secondRequestConversationId = '80000000-0000-4000-8000-000000000025';
+    const personalSnapshot = workspaceSnapshot();
+    personalSnapshot.organizationId = '11111111-1111-4111-8111-111111111111';
+    // An accepted friend with shared history must survive a connection removal.
+    personalSnapshot.conversations.push({
+      id: 'direct-friend',
+      organizationId: personalSnapshot.organizationId,
+      directParticipantId: otherUserId,
+      title: 'Connected Employee',
+      initials: 'CO',
+      avatarColor: '#654321',
+      kind: 'direct',
+      subtitle: 'Supervisor',
+      lastMessage: 'See you tomorrow',
+      lastActivity: 'now',
+      unreadCount: 0,
+      pinned: false,
+      favorite: false,
+      muted: false,
+      canPost: true,
+    });
+    personalSnapshot.messages['direct-friend'] = [];
+    personalSnapshot.cursors['direct-friend'] = null;
+    mockLoadWorkspace.mockImplementation(async () => personalSnapshot);
+    let removeConnectionFailure: RepositoryError | null = null;
+    mockCommand.mockImplementation(async (method: string, input: unknown) => {
+      if (method === 'sendMessageRequest') {
+        const target = (input as { targetUserId: string }).targetUserId;
+        return {
+          conversationId: target === strangerId ? requestConversationId : secondRequestConversationId,
+          messageId: target === strangerId ? '81' : '82',
+          connectionStatus: 'pending',
+        };
+      }
+      if (method === 'removeConnection' && removeConnectionFailure) throw removeConnectionFailure;
+      return undefined;
+    });
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:2')).toBeTruthy());
+    // Freeze subsequent refreshes so the local transitions stay observable.
+    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+
+    await act(async () => {
+      await currentWorkspace().sendMessageRequest(strangerId, 'Hello Sam', 'Sam Stranger');
+      await currentWorkspace().sendMessageRequest(secondStrangerId, 'Hello Pat', 'Pat Stranger');
+    });
+    expect(currentWorkspace().selectedConversationId).toBe(secondRequestConversationId);
+    expect(currentWorkspace().conversations.map((item) => item.id))
+      .toEqual([secondRequestConversationId, requestConversationId, 'conversation-a', 'direct-friend']);
+
+    // A rejected cancel keeps the card pending, keeps the thread, and maps the failure.
+    removeConnectionFailure = new RepositoryError('raw upstream', 'forbidden', false, undefined, 403);
+    let failed: unknown = 'unset';
+    await act(async () => {
+      failed = await currentWorkspace().removeConnection(secondStrangerId);
+    });
+    expect(failed).toBe(false);
+    expect(currentWorkspace().actionError).toBe('errors.permission');
+    expect(currentWorkspace().people.find((person) => person.id === secondStrangerId)).toMatchObject({
+      connectionState: 'pending',
+      connectionRequestDirection: 'outgoing',
+    });
+    expect(currentWorkspace().conversations.some((item) => item.id === secondRequestConversationId)).toBe(true);
+
+    // The selected pending request: DELETE addressed by the target user's UUID,
+    // the card flips back to available, the optimistic thread disappears with
+    // its timeline, and selection falls back to the next ordinary conversation.
+    removeConnectionFailure = null;
+    let cancelled: unknown = 'unset';
+    await act(async () => {
+      cancelled = await currentWorkspace().removeConnection(secondStrangerId);
+    });
+    expect(cancelled).toBe(true);
+    expect(mockCommand).toHaveBeenLastCalledWith('removeConnection', {
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      membershipId: secondStrangerId,
+      idempotencyKey: '50000000-0000-4000-8000-000000000005',
+    });
+    const cancelledPerson = currentWorkspace().people.find((person) => person.id === secondStrangerId);
+    expect(cancelledPerson).toMatchObject({ connectionState: 'available' });
+    expect(cancelledPerson?.connectionRequestDirection).toBeUndefined();
+    expect(currentWorkspace().conversations.map((item) => item.id))
+      .toEqual([requestConversationId, 'conversation-a', 'direct-friend']);
+    expect(currentWorkspace().messages[secondRequestConversationId]).toBeUndefined();
+    expect(currentWorkspace().selectedConversationId).toBe(requestConversationId);
+    expect(currentWorkspace().actionError).toBeNull();
+
+    // A search result the directory has not loaded yet still reaches the route
+    // in the realm, addressed by its raw user UUID.
+    let unknownCancelled: unknown = 'unset';
+    await act(async () => {
+      unknownCancelled = await currentWorkspace().removeConnection(unknownId);
+    });
+    expect(unknownCancelled).toBe(true);
+    expect(mockCommand).toHaveBeenLastCalledWith('removeConnection', expect.objectContaining({
+      membershipId: unknownId,
+    }));
+
+    // Removing an accepted connection keeps the shared direct history.
+    let removed: unknown = 'unset';
+    await act(async () => {
+      removed = await currentWorkspace().removeConnection(otherUserId);
+    });
+    expect(removed).toBe(true);
+    expect(mockCommand).toHaveBeenLastCalledWith('removeConnection', expect.objectContaining({
+      membershipId: 'membership-other',
+    }));
+    expect(currentWorkspace().people.find((person) => person.id === otherUserId)).toMatchObject({
+      connectionState: 'available',
+    });
+    expect(currentWorkspace().conversations.some((item) => item.id === 'direct-friend')).toBe(true);
+    await view.unmount();
+  });
+
+  test('keeps unknown cancel targets gated outside the personal realm', async () => {
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    let cancelled: unknown = 'unset';
+    await act(async () => {
+      cancelled = await currentWorkspace().removeConnection('60000000-0000-4000-8000-000000000023');
+    });
+    expect(cancelled).toBe(false);
+    expect(mockCommand).not.toHaveBeenCalledWith('removeConnection', expect.anything());
+    await view.unmount();
+  });
+
+  test('lets a requester post into a pending request thread the bootstrap marks can_post=false', async () => {
+    const requesterTargetId = '60000000-0000-4000-8000-000000000031';
+    const incomingRequesterId = '60000000-0000-4000-8000-000000000032';
+    const personalSnapshot = workspaceSnapshot();
+    personalSnapshot.organizationId = '11111111-1111-4111-8111-111111111111';
+    const template = personalSnapshot.conversations[0];
+    personalSnapshot.conversations.push(
+      { ...template, id: 'direct-outgoing', kind: 'direct', directParticipantId: requesterTargetId, memberIds: undefined, canPost: false },
+      { ...template, id: 'direct-incoming', kind: 'direct', directParticipantId: incomingRequesterId, memberIds: undefined, canPost: false },
+    );
+    personalSnapshot.messages['direct-outgoing'] = [];
+    personalSnapshot.messages['direct-incoming'] = [];
+    personalSnapshot.cursors['direct-outgoing'] = null;
+    personalSnapshot.cursors['direct-incoming'] = null;
+    const stranger = {
+      id: requesterTargetId,
+      membershipId: requesterTargetId,
+      organizationId: personalSnapshot.organizationId,
+      displayName: 'Sam Stranger',
+      initials: 'SS',
+      roleLabel: '',
+      role: 'employee' as const,
+      site: '',
+      department: '',
+      preferredLanguage: 'en' as const,
+      presence: 'offline' as const,
+      connectionState: 'pending' as const,
+      connectionRequestDirection: 'outgoing' as const,
+      avatarColor: '#496D62',
+    };
+    personalSnapshot.people.push(
+      stranger,
+      {
+        ...stranger,
+        id: incomingRequesterId,
+        membershipId: incomingRequesterId,
+        displayName: 'Ian Incoming',
+        initials: 'II',
+        connectionRequestDirection: 'incoming',
+      },
+    );
+    mockLoadWorkspace.mockImplementation(async () => personalSnapshot);
+    mockCommand.mockImplementation(async (method: string, input: unknown) =>
+      controlledCommandResponse(method, input)
+    );
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+
+    await act(async () => {
+      await currentWorkspace().sendMessage('direct-outgoing', 'Second request message');
+    });
+    expect(mockEnqueue).toHaveBeenCalledTimes(1);
+    expect(mockEnqueue.mock.calls[0]![0]).toMatchObject({
+      kind: 'send_message',
+      payload: expect.objectContaining({ conversationId: 'direct-outgoing', body: 'Second request message' }),
+    });
+    // The queued command reaches the send route unchanged; the service owns the cap.
+    expect(mockCommand).toHaveBeenCalledWith('sendMessage', expect.objectContaining({
+      conversationId: 'direct-outgoing',
+      body: 'Second request message',
+    }));
+    expect(currentWorkspace().messages['direct-outgoing']).toHaveLength(1);
+    expect(currentWorkspace().messages['direct-outgoing'][0]).toMatchObject({ deliveryState: 'sent' });
+    expect(currentWorkspace().actionError).toBeNull();
+
+    // The recipient of a pending request still cannot post until accepting.
+    await act(async () => {
+      await currentWorkspace().sendMessage('direct-incoming', 'Not yet');
+    });
+    expect(mockEnqueue).toHaveBeenCalledTimes(1);
+    expect(currentWorkspace().messages['direct-incoming']).toHaveLength(0);
+    expect(currentWorkspace().actionError).not.toBeNull();
+    await view.unmount();
+  });
+
   test('maps username search failures and keeps workspace-org connection gating closed', async () => {
     mockSearchUsers.mockImplementation(async () => {
       throw new RepositoryError('raw upstream', 'rate_limited', true, undefined, 429);
@@ -3884,5 +4188,167 @@ describe('authoritative workspace provider', () => {
     expect(mockSearchUsers).not.toHaveBeenCalled();
     expect(mockCommand).not.toHaveBeenCalled();
     await view.unmount();
+  });
+});
+
+describe('reconciliation safety net', () => {
+  let appStateListeners: ((state: AppStateStatus) => void)[];
+  let addEventListenerSpy: ReturnType<typeof jest.spyOn>;
+
+  function emitAppState(nextState: AppStateStatus) {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: nextState });
+    for (const listener of [...appStateListeners]) listener(nextState);
+  }
+
+  beforeEach(() => {
+    appStateListeners = [];
+    addEventListenerSpy = jest.spyOn(AppState, 'addEventListener').mockImplementation((
+      (_mockType: string, mockCallback: (state: AppStateStatus) => void) => {
+        appStateListeners.push(mockCallback);
+        return {
+          remove: () => {
+            appStateListeners = appStateListeners.filter((item) => item !== mockCallback);
+          },
+        };
+      }
+    ) as typeof AppState.addEventListener);
+  });
+
+  afterEach(() => {
+    addEventListenerSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
+  test('foregrounding refreshes the snapshot immediately and forces a realtime resubscribe with the current token; backgrounding does neither', async () => {
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    const loadsBefore = mockLoadWorkspace.mock.calls.length;
+    const nonceBefore = mockRealtimeOptions?.resubscribeNonce as number;
+    // A session refresh while backgrounded must be picked up on resume.
+    mockAuth.realtimeToken = 'refreshed-realtime-token';
+
+    await act(async () => { emitAppState('background'); });
+    expect(mockLoadWorkspace.mock.calls.length).toBe(loadsBefore);
+    expect(mockRealtimeOptions?.resubscribeNonce).toBe(nonceBefore);
+
+    await act(async () => { emitAppState('active'); });
+    await waitFor(() => expect(mockLoadWorkspace.mock.calls.length).toBeGreaterThan(loadsBefore));
+    expect(mockRealtimeOptions?.resubscribeNonce as number).toBeGreaterThan(nonceBefore);
+    expect(mockRealtimeOptions?.accessToken).toBe('refreshed-realtime-token');
+    await view.unmount();
+  });
+
+  test('reconciles only the currently open conversation once after each successful send', async () => {
+    const snapshot = richWorkspaceSnapshot();
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    mockCommand.mockImplementation(async (method: string, input: unknown) =>
+      controlledCommandResponse(method, input));
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
+    mockLoadWorkspace.mockClear();
+
+    await act(async () => {
+      await currentWorkspace().sendMessage('conversation-a', 'Reconcile the open thread');
+    });
+    await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledTimes(1));
+
+    mockLoadWorkspace.mockClear();
+    await act(async () => {
+      await currentWorkspace().sendMessage(conversationBId, 'Do not reconcile a background thread');
+    });
+    // The conversation that was actually sent to is not the open one, so no
+    // extra reconcile fires — nothing to wait for, the skip is synchronous.
+    expect(mockLoadWorkspace).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('polls the inbox snapshot on a jittered ~30s cadence, skipping a fetch already in flight or made moot by a recent realtime event', async () => {
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    jest.useFakeTimers();
+    try {
+      const view = await render(
+        <WorkspaceProvider>
+          <WorkspaceProbe />
+        </WorkspaceProvider>,
+      );
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy();
+      mockLoadWorkspace.mockClear();
+
+      // Base cadence: 30s jittered ±5s — deterministic here since Math.random is pinned.
+      await act(async () => { await jest.advanceTimersByTimeAsync(29_999); });
+      expect(mockLoadWorkspace).not.toHaveBeenCalled();
+      await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+
+      // A realtime event landing inside the 15s freshness window skips the next tick.
+      await act(async () => { await jest.advanceTimersByTimeAsync(25_000); });
+      await act(async () => {
+        (mockRealtimeOptions?.onInvalidate as () => void)();
+      });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2); // the invalidation's own reconcile
+      await act(async () => { await jest.advanceTimersByTimeAsync(5_000); }); // tick 30s after the last one
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2); // skipped: the event was under 15s old
+      await act(async () => { await jest.advanceTimersByTimeAsync(30_000); }); // next tick, now stale
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(3);
+
+      // A refresh already in flight is never joined by a second concurrent fetch.
+      mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
+      await act(async () => { await jest.advanceTimersByTimeAsync(30_000); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(4);
+      await act(async () => { await jest.advanceTimersByTimeAsync(30_000); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(4);
+
+      await view.unmount();
+    } finally {
+      randomSpy.mockRestore();
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  test('shortens the poll to 10s while realtime is degraded and stops it entirely once backgrounded', async () => {
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    jest.useFakeTimers();
+    try {
+      const view = await render(
+        <WorkspaceProvider>
+          <WorkspaceProbe />
+        </WorkspaceProvider>,
+      );
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy();
+      mockLoadWorkspace.mockClear();
+
+      await act(async () => {
+        (mockRealtimeOptions?.onStateChange as (state: string) => void)('degraded');
+      });
+      await act(async () => { await jest.advanceTimersByTimeAsync(9_999); });
+      expect(mockLoadWorkspace).not.toHaveBeenCalled();
+      await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(10_000); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2);
+
+      mockLoadWorkspace.mockClear();
+      await act(async () => { emitAppState('background'); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(120_000); });
+      expect(mockLoadWorkspace).not.toHaveBeenCalled();
+
+      await view.unmount();
+    } finally {
+      randomSpy.mockRestore();
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 });

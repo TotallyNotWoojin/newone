@@ -1,0 +1,25 @@
+appId: com.totallynotwoojin.newone
+---
+# On the code screen the user types a wrong six-digit code. The app must
+# show a visible, specific error and stay on the code screen.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- eraseText: 8
+- inputText: ${CODE}
+- tapOn: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "Verify and create account"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verify and create account"
+- extendedWaitUntil:
+    visible: ".*(could not be verified|could not complete|expired|Check the entered|Too many|cannot reach).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-wrong-code-error
+- assertVisible: "One-time code"

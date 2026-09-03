@@ -12,7 +12,8 @@ test('authorized incident controls require a reason and render retained read-onl
   assert.match(pane, /conversation\.canManage && conversation\.kind === 'incident' && !conversation\.isReadOnly/);
   assert.match(pane, /incidentCloseReason\.trim\(\)\.length < 3/);
   assert.match(pane, /workspace\.closeIncident\(conversation\.id, reason\)/);
-  assert.match(pane, /disabled=\{conversation\.isReadOnly === true \|\| conversation\.canPost === false\}/);
+  assert.match(pane, /disabled=\{composerDisabled\}/);
+  assert.match(pane, /conversation\.isReadOnly === true \|\| \(conversation\.canPost === false && !outgoingRequest\)/);
   assert.match(pane, /conversation\.closureReason \?\? t\('chat\.incidentClosedBody'\)/);
 });
 

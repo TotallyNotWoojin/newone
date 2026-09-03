@@ -1,0 +1,43 @@
+appId: com.totallynotwoojin.newone
+---
+# Add attachment → Photo library → first photo → Send securely; the bubble
+# shows the attachment card that reaches "Scanned and safe".
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Add attachment"
+- extendedWaitUntil:
+    visible: "Photo library"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-attachment-sheet
+- tapOn: "Photo library"
+- tapOn:
+    text: "Allow Full Access"
+    optional: true
+- tapOn:
+    text: "Allow Access to All Photos"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(Photos|Recents|Albums|Photo, ).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-picker
+- tapOn:
+    text: "Photo, .*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Send securely"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-staged
+- tapOn: "Send securely"
+- extendedWaitUntil:
+    notVisible: "Send securely"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: ".*(Scanned and safe|Security scan in progress|Quarantined for scanning|Uploading securely|Preparing secure upload).*"
+    timeout: 60000
+- takeScreenshot: ${SHOT}-sending
+- extendedWaitUntil:
+    visible: "Scanned and safe"
+    timeout: 120000
+- takeScreenshot: ${SHOT}-clean

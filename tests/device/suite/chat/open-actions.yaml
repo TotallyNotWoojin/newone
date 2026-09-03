@@ -1,0 +1,10 @@
+appId: com.totallynotwoojin.newone
+---
+# Long-press TARGET to open the Message actions sheet (shared preamble used
+# by observation-only steps; most action flows inline this themselves).
+- longPressOn:
+    text: ${TARGET}
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-actions

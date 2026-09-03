@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+# Sign out from Settings like a human.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Sign out of Newone"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-signed-out

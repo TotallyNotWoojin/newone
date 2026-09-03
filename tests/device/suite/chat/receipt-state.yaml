@@ -1,0 +1,7 @@
+appId: com.totallynotwoojin.newone
+---
+# The sender's own bubble exposes its receipt state through its meta row.
+- extendedWaitUntil:
+    visible: ".*(Read|delivered|Sent|Pending).*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-receipt

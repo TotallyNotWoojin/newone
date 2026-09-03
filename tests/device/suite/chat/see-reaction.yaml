@@ -1,0 +1,6 @@
+appId: com.totallynotwoojin.newone
+---
+- extendedWaitUntil:
+    visible: "👍"
+    timeout: 45000
+- takeScreenshot: ${SHOT}-reaction-visible

@@ -5544,6 +5544,16 @@ export type Database = {
         }
         Returns: Json
       }
+      bff_update_profile: {
+        Args: {
+          p_actor_user_id: string
+          p_display_name: string
+          p_organization_id: string
+          p_session_id: string
+          p_status_message: string
+        }
+        Returns: Json
+      }
       bff_update_saved_contact: {
         Args: {
           p_actor_user_id: string

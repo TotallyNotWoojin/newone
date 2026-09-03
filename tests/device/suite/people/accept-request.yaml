@@ -1,0 +1,19 @@
+appId: com.totallynotwoojin.newone
+---
+# From People → Requests, accept the incoming connect request from NAME.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Requests"
+    timeout: 60000
+- assertVisible: ${NAME}
+- tapOn: "Accept"
+- extendedWaitUntil:
+    visible: "Your friends"
+    timeout: 20000
+- assertVisible: ${NAME}
+- assertVisible: "Message"
+- takeScreenshot: ${SHOT}-accepted

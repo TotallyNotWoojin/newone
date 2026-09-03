@@ -1,0 +1,31 @@
+appId: com.totallynotwoojin.newone
+---
+# User A finds user B by username and sends a message request with a
+# first message, then lands in the new conversation.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Search by username"
+    timeout: 15000
+- tapOn: "Search by username"
+- inputText: ${USERNAME_B}
+- extendedWaitUntil:
+    visible: "Send message request"
+    timeout: 20000
+- takeScreenshot: msg-01-search-result
+- tapOn: "Send message request"
+- extendedWaitUntil:
+    visible: "Send request"
+    timeout: 15000
+- tapOn:
+    text: ".*Introduce yourself.*"
+- inputText: "Hey, it's Sim A. Want to chat?"
+- tapOn: "First message"
+- tapOn: "Send request"
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 30000
+- takeScreenshot: msg-02-a-in-conversation

@@ -1,0 +1,18 @@
+appId: com.totallynotwoojin.newone
+---
+# The revoked device must fall back to the sign-in screen: first on its
+# next action, at the latest after a relaunch.
+- tapOn:
+    text: "People"
+    optional: true
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 30000
+    optional: true
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: ".*(Create account|Chats).*"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-after-revoke
+- assertVisible: "Create account"

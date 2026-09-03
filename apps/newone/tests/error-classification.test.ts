@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 
 import { RepositoryError, isOfflineError } from '@/data/repositories/contracts';
-import { errorMessageKey } from '@/i18n/errors';
+import { errorIdentifier, errorMessageKey } from '@/i18n/errors';
 
 describe('safe client error classification', () => {
   test.each<[string, ReturnType<typeof errorMessageKey>]>([
@@ -37,6 +37,7 @@ describe('safe client error classification', () => {
     ['invalid_display_name', 'auth.displayNameInvalid'],
     ['invalid_language', 'auth.languageInvalid'],
     ['signup_expired', 'auth.signupExpired'],
+    ['push_needs_device', 'errors.pushNeedsDevice'],
     ['conflict', 'errors.conflict'],
     ['http_409', 'errors.conflict'],
     ['bad_request', 'errors.invalidRequest'],
@@ -54,6 +55,18 @@ describe('safe client error classification', () => {
     expect(errorMessageKey(null)).toBe('errors.action');
     expect(errorMessageKey({ code: 401 })).toBe('errors.action');
     expect(errorMessageKey(new Error('secret upstream failure'))).toBe('errors.action');
+  });
+
+  test('quotes the stable code and a short correlation id only for generic failures', () => {
+    expect(errorIdentifier(new RepositoryError('raw', 'weird_upstream_code', false, 'abcdef1234567890')))
+      .toBe('weird_upstream_code · abcdef12');
+    expect(errorIdentifier(new RepositoryError('raw', 'weird_upstream_code', false))).toBe('weird_upstream_code');
+    // Specific copy never carries an identifier suffix.
+    expect(errorIdentifier(new RepositoryError('raw', 'push_needs_device', false, 'abcdef1234567890'))).toBe('');
+    expect(errorIdentifier(new RepositoryError('raw', 'forbidden', false, 'abcdef1234567890'))).toBe('');
+    expect(errorIdentifier(new Error('no code'))).toBe('');
+    expect(errorIdentifier({ code: 'shouty_code', correlationId: 42 })).toBe('shouty_code');
+    expect(errorIdentifier(null)).toBe('');
   });
 
   test('offline detection requires the exact repository network code', () => {

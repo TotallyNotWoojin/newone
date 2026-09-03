@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 
 import SettingsScreen from '@/app/settings';
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 
 const mockRouter = {
   back: jest.fn(),
@@ -160,6 +161,7 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     enableNotifications: successfulAction(),
     loadDeviceNotificationPreferences: successfulAction(),
     saveDeviceNotificationPreferences: successfulAction(),
+    updateProfile: successfulAction(true),
     revokeSession: successfulAction(true),
     cancelOutboxMessage: successfulAction(),
     editOutboxMessage: successfulAction(),
@@ -699,6 +701,70 @@ describe('settings screen', () => {
     view.unmount();
   });
 
+  test('saves a profile edit through the workspace on compact widths and gates invalid drafts', async () => {
+    mockWidth = 390;
+    mockWorkspace = baseWorkspace({
+      currentUser: { ...currentUser, username: 'jordan_owner', statusMessage: 'Original status' },
+    });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Owner'));
+    expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('Original status');
+    expect(screen.getByText('settings.usernameNote @jordan_owner')).toBeTruthy();
+    const saveButton = () => screen.getByRole('button', { name: 'settings.saveProfile' });
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+
+    await fireEvent.changeText(screen.getByLabelText('settings.displayName'), '   ');
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText('settings.displayName'), 'n'.repeat(121));
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText('settings.displayName'), '  Jordan Renamed  ');
+    await fireEvent.changeText(screen.getByLabelText('settings.statusMessage'), 's'.repeat(281));
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.press(saveButton());
+    expect(mockWorkspace.updateProfile).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText('settings.statusMessage'), ' On shift ');
+    await pressEnabled('settings.saveProfile');
+    await waitFor(() => expect(mockWorkspace.updateProfile).toHaveBeenCalledWith({
+      displayName: '  Jordan Renamed  ',
+      statusMessage: ' On shift ',
+    }));
+    expect(mockWorkspace.updateProfile).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  test('keeps the profile draft bound to the authoritative user on desktop widths', async () => {
+    mockWidth = 1280;
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Owner'));
+    expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('');
+    expect(screen.queryByText(/settings\.usernameNote/)).toBeNull();
+    const saveButton = () => screen.getByRole('button', { name: 'settings.saveProfile' });
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+
+    // A status-only change is a real edit; trailing whitespace alone is not.
+    await fireEvent.changeText(screen.getByLabelText('settings.displayName'), 'Jordan Owner  ');
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText('settings.statusMessage'), 'Back at nine');
+    await pressEnabled('settings.saveProfile');
+    await waitFor(() => expect(mockWorkspace.updateProfile).toHaveBeenCalledWith({
+      displayName: 'Jordan Owner  ',
+      statusMessage: 'Back at nine',
+    }));
+
+    // The authoritative user changes (the receipt landed): the draft follows
+    // the server, never the text left in the inputs.
+    mockWorkspace = baseWorkspace({
+      currentUser: { ...currentUser, displayName: 'Jordan Renamed', statusMessage: 'Back at nine' },
+    });
+    view.rerender(<SettingsScreen />);
+    await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Renamed'));
+    expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('Back at nine');
+    expect(screen.getByText('Jordan Renamed')).toBeTruthy();
+    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
+    view.unmount();
+  });
+
   test('renders authoritative loading and unavailable preference/device/session states', async () => {
     mockLocale = 'es';
     mockWorkspace = baseWorkspace({
@@ -721,6 +787,87 @@ describe('settings screen', () => {
     expect(mockWorkspace.enableNotifications).toHaveBeenCalled();
     await pressEnabled('settings.mfaEnroll');
     expect(screen.queryByText('settings.mfaEnrollDialog')).toBeNull();
+    view.unmount();
+  });
+});
+
+describe('device notification registration failures', () => {
+  test.each([390, 1280])('keeps the device unregistered and shows the mapped failure at width %i', async (width) => {
+    mockWidth = width;
+    mockWorkspace = baseWorkspace({
+      deviceNotificationPreferences: null,
+      enableNotifications: successfulAction(false),
+    });
+    const view = await renderAndHydrate();
+    fireEvent.press(screen.getByRole('button', { name: 'settings.enableNotifications' }));
+    await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
+
+    // The provider reports the failure; the screen must not flip to a
+    // registered device and keeps offering the action.
+    mockWorkspace = { ...mockWorkspace, actionError: 'errors.pushNeedsDevice' };
+    await view.rerender(<SettingsScreen />);
+    expect(screen.getByRole('button', { name: 'settings.enableNotifications' })).toBeTruthy();
+    expect(screen.queryByText(/settings\.currentDevice ·/)).toBeNull();
+    expect(screen.getAllByText('errors.pushNeedsDevice').length).toBeGreaterThan(0);
+    view.unmount();
+  });
+});
+
+describe('personal realm settings', () => {
+  test.each([390, 1280])('hides workplace-only sections and rewords shared notes at width %i', async (width) => {
+    mockWidth = width;
+    mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(mockWorkspace.loadAccountSettings).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getAllByText('settings.sound').length).toBeGreaterThan(0));
+
+    // Hidden: authenticator, lost-authenticator recovery, administrator note, shift switch.
+    expect(screen.queryByText('settings.mfaTitle')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'settings.mfaEnroll' })).toBeNull();
+    expect(screen.queryAllByText('Request lost-authenticator recovery')).toHaveLength(0);
+    expect(screen.queryByText('settings.privateDmNote')).toBeNull();
+    expect(screen.queryByText('settings.shiftSuppression')).toBeNull();
+    expect(screen.queryByText('settings.companyVerified')).toBeNull();
+    expect(screen.queryByText('settings.preferencesDescription')).toBeNull();
+    expect(screen.queryByText('settings.deviceNotificationsNote')).toBeNull();
+    expect(screen.queryByText('settings.devicePreferencesBoundary')).toBeNull();
+    // No authenticator hydration is attempted for a consumer account.
+    expect(mockGetSupabaseClient).not.toHaveBeenCalled();
+
+    // Consumer wording replaces the shared notes.
+    expect(screen.getByText('settings.accountVerified')).toBeTruthy();
+    expect(screen.getByText('settings.preferencesDescriptionConsumer')).toBeTruthy();
+    expect(screen.getByText('settings.deviceNotificationsNoteConsumer')).toBeTruthy();
+    expect(screen.getByText('settings.devicePreferencesBoundaryConsumer')).toBeTruthy();
+
+    // Everything consumer-relevant stays.
+    for (const title of [
+      'settings.profileTitle', 'settings.languageTitle', 'settings.notificationsTitle',
+      'settings.sessionsTitle', 'settings.dangerTitle',
+    ]) {
+      expect(screen.getByText(title)).toBeTruthy();
+    }
+    expect(screen.getByText('settings.sessionsDescription')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.signOut' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.deleteAccount' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.saveProfile' })).toBeTruthy();
+    view.unmount();
+  });
+
+  test('keeps every workplace section for a workspace organization', async () => {
+    mockWidth = 390;
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaEnroll' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('settings.shiftSuppression')).toBeTruthy());
+    expect(screen.getByText('settings.mfaTitle')).toBeTruthy();
+    expect(screen.getAllByText('Request lost-authenticator recovery').length).toBeGreaterThan(0);
+    expect(screen.getByText('settings.privateDmNote')).toBeTruthy();
+    expect(screen.getByText('settings.companyVerified')).toBeTruthy();
+    expect(screen.getByText('settings.preferencesDescription')).toBeTruthy();
+    expect(screen.getByText('settings.deviceNotificationsNote')).toBeTruthy();
+    expect(screen.queryByText('settings.accountVerified')).toBeNull();
+    expect(screen.queryByText('settings.preferencesDescriptionConsumer')).toBeNull();
+    expect(mockGetSupabaseClient).toHaveBeenCalled();
     view.unmount();
   });
 });

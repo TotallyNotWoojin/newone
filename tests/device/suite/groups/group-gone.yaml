@@ -1,0 +1,11 @@
+appId: com.totallynotwoojin.newone
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: ${NAME}
+    timeout: 45000
+- takeScreenshot: ${SHOT}-not-listed

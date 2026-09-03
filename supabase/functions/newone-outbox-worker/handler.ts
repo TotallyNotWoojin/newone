@@ -50,6 +50,57 @@ interface BaseJob {
   attempts: number;
 }
 
+/**
+ * Content-free inbox invalidations forwarded from private.outbox_jobs. The
+ * (entity_type, reason) vocabulary mirrors
+ * private.workspace_invalidation_reason_allowed in the database; both sides
+ * fail closed on anything else. entity_id is the counterpart user for
+ * contact and block hints, the row id otherwise, and never carries content.
+ */
+export const INVALIDATION_REASONS = Object.freeze({
+  moderation_case: ['case_available', 'case_assigned', 'case_reassigned', 'case_status_changed'],
+  contact_connection: [
+    'contact_request_created',
+    'contact_accepted',
+    'contact_declined',
+    'contact_cancelled',
+    'contact_removed',
+  ],
+  member_block: ['member_blocked', 'member_unblocked'],
+  reaction: ['reaction_added', 'reaction_removed'],
+  pin: ['message_pinned', 'message_unpinned'],
+  message_visibility: ['message_hidden_for_user'],
+  attachment: [
+    'attachment_uploaded',
+    'attachment_scan_clean',
+    'attachment_scan_quarantined',
+    'attachment_scan_failed',
+  ],
+  translation: ['translation_completed', 'translation_failed', 'translation_blocked'],
+  summary: ['summary_queued', 'summary_draft', 'summary_failed', 'summary_stale', 'summary_approved'],
+  conversation: ['conversation_updated'],
+  conversation_preference: ['conversation_preferences_updated'],
+  profile: ['profile_updated', 'account_deleted'],
+} as const);
+export type InvalidationEntityType = keyof typeof INVALIDATION_REASONS;
+export type InvalidationReason = typeof INVALIDATION_REASONS[InvalidationEntityType][number];
+
+// Entities whose entity_id names a user (a counterpart in a pair, or the
+// profile owner). Their ids must be UUIDs and never the addressed user.
+const USER_ENTITY_TYPES: ReadonlySet<InvalidationEntityType> = new Set([
+  'contact_connection',
+  'member_block',
+  'profile',
+]);
+const UUID_ENTITY_TYPES: ReadonlySet<InvalidationEntityType> = new Set([
+  'moderation_case',
+  'attachment',
+  'summary',
+  'conversation',
+  'conversation_preference',
+]);
+const ROW_ID_PATTERN = /^[1-9][0-9]{0,18}$/;
+
 export interface RealtimeControlJob extends BaseJob {
   topic: 'realtime_control';
   payload:
@@ -68,9 +119,10 @@ export interface RealtimeControlJob extends BaseJob {
       schemaVersion: 1;
       eventId: string;
       occurredAt: string;
-      entityType: 'moderation_case';
+      entityType: InvalidationEntityType;
       entityId: string;
-      reason: 'case_available' | 'case_assigned' | 'case_reassigned' | 'case_status_changed';
+      conversationId?: string;
+      reason: InvalidationReason;
     };
 }
 
@@ -259,6 +311,9 @@ function validateRealtimePayload(
       revocationGeneration: integer(raw.revocation_generation, 1, 2_147_483_647),
     };
   }
+  // Every other realtime_control job is a content-free inbox invalidation
+  // addressed to exactly one member. The optional conversation id lets the
+  // client scope its refetch; nothing else may ride along.
   onlyKeys(raw, [
     'schema_version',
     'event_id',
@@ -269,12 +324,32 @@ function validateRealtimePayload(
     'user_id',
     'entity_type',
     'entity_id',
+    'conversation_id',
     'reason',
   ]);
+  const entityType = oneOf(
+    raw.entity_type,
+    Object.keys(INVALIDATION_REASONS) as InvalidationEntityType[],
+  );
+  const reason = oneOf(raw.reason, INVALIDATION_REASONS[entityType]);
   const occurredAt = normalizedString(raw.occurred_at, { min: 20, max: 64 }) as string;
+  let entityId: string;
+  if (USER_ENTITY_TYPES.has(entityType)) {
+    entityId = uuid(raw.entity_id);
+    // A contact or block hint names the counterpart; a profile hint names
+    // its owner, which may be the addressed user's own other devices.
+    if (entityType !== 'profile' && entityId === userId) {
+      throw new ApiError(503, 'dependency_unavailable');
+    }
+  } else if (UUID_ENTITY_TYPES.has(entityType)) {
+    entityId = uuid(raw.entity_id);
+  } else {
+    entityId = normalizedString(raw.entity_id, { min: 1, max: 40 }) as string;
+    if (!ROW_ID_PATTERN.test(entityId)) throw new ApiError(503, 'dependency_unavailable');
+  }
   if (
     raw.event !== 'workspace.invalidated' || raw.schema_version !== 1 ||
-    raw.entity_type !== 'moderation_case' || Number.isNaN(Date.parse(occurredAt)) ||
+    Number.isNaN(Date.parse(occurredAt)) ||
     controlTopic !== `org:${organizationId}:user:${userId}:inbox`
   ) throw new ApiError(503, 'dependency_unavailable');
   return {
@@ -285,12 +360,10 @@ function validateRealtimePayload(
     schemaVersion: 1,
     eventId: uuid(raw.event_id),
     occurredAt,
-    entityType: 'moderation_case',
-    entityId: uuid(raw.entity_id),
-    reason: oneOf(
-      raw.reason,
-      ['case_available', 'case_assigned', 'case_reassigned', 'case_status_changed'] as const,
-    ),
+    entityType,
+    entityId,
+    ...(raw.conversation_id === undefined ? {} : { conversationId: uuid(raw.conversation_id) }),
+    reason,
   };
 }
 
@@ -1089,6 +1162,7 @@ export function defaultOutboxWorkerDependencies(): OutboxWorkerDependencies {
           entityType: job.payload.entityType,
           entityId: job.payload.entityId,
           reason: job.payload.reason,
+          ...(job.payload.conversationId ? { conversationId: job.payload.conversationId } : {}),
         };
       await realtimeBroadcast(
         clientEnvironment,

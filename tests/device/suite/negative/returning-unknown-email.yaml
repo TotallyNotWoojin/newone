@@ -1,0 +1,26 @@
+appId: com.totallynotwoojin.newone
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Returning member"
+    timeout: 30000
+- tapOn: "English"
+- tapOn: "Returning member"
+- scrollUntilVisible:
+    element:
+      text: "you@example.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Email address"
+- scrollUntilVisible:
+    element:
+      text: "Continue securely"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue securely"
+- extendedWaitUntil:
+    visible: ".*(One-time code|could not|cannot|unavailable|invalid|Too many|not found|no account|does not).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-result

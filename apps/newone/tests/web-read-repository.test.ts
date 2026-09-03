@@ -1243,3 +1243,18 @@ describe('authoritative web read repository', () => {
     });
   });
 });
+
+describe('real hosted bootstrap payload', () => {
+  // Captured verbatim from the production /v2/bootstrap response for a
+  // freshly signed-up consumer. The parser must accept what the server
+  // actually sends — hand-built fixtures can drift from reality.
+  test('parses a captured production bootstrap response', async () => {
+    const captured = require('./fixtures/real-bootstrap.json') as { data?: Record<string, unknown> };
+    const data = (captured.data ?? captured) as Record<string, unknown>;
+    mockFetch.mockImplementationOnce(async () => response({ data }));
+    const repo = repository();
+    const snapshot = await repo.loadWorkspace(String(data.userId), null);
+    expect(snapshot.organizationId).toBe(String(data.organizationId));
+    expect(snapshot.currentUser.id).toBe(String(data.userId));
+  });
+});

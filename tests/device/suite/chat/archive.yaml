@@ -1,0 +1,17 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Archive conversation (groups only); the sheet closes.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Archive conversation"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Archive conversation"
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-archived

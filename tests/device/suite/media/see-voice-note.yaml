@@ -1,0 +1,13 @@
+appId: com.totallynotwoojin.newone
+---
+- extendedWaitUntil:
+    visible: "Voice message"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Play voice message"
+    timeout: 120000
+- tapOn: "Play voice message"
+- extendedWaitUntil:
+    visible: "Pause voice message"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-playing

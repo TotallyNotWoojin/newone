@@ -1,0 +1,60 @@
+appId: com.totallynotwoojin.newone
+---
+# Fill the sign-up form with the given values and expect ERROR instead of
+# the code screen.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: ".*(Chats|Create account).*"
+    timeout: 40000
+- runFlow:
+    when:
+      visible: "Chats"
+    commands:
+      - tapOn: "Settings"
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of Newone"
+          direction: DOWN
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 30000
+- tapOn: "English"
+- tapOn: "Create account"
+- scrollUntilVisible:
+    element:
+      text: "you@example.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Email address"
+- scrollUntilVisible:
+    element:
+      text: "your_username"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "your_username"
+- inputText: ${USERNAME}
+- tapOn: "Username"
+- scrollUntilVisible:
+    element:
+      text: "Your name as others will see it"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Your name as others will see it"
+- inputText: ${DISPLAY_NAME}
+- tapOn: "Display name"
+- scrollUntilVisible:
+    element:
+      text: "Continue securely"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue securely"
+- extendedWaitUntil:
+    visible: ${ERROR}
+    timeout: 30000
+- takeScreenshot: ${SHOT}-error
+- assertNotVisible: "One-time code"

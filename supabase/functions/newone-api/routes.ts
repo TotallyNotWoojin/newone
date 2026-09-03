@@ -120,6 +120,7 @@ export type RouteKind =
   | 'ai_output.error_report.review'
   | 'ai_output.regression.propose'
   | 'ai_output.regression.decide'
+  | 'profile.update'
   | 'contact.request'
   | 'contact.message_request'
   | 'contact.respond'
@@ -587,6 +588,7 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     requireAal2: true,
     recentAuthSeconds: 300,
   },
+  { method: 'PATCH', kind: 'profile.update', template: '/v2/profile', status: 200 },
   { method: 'POST', kind: 'contact.request', template: '/v2/contacts/connections', status: 201 },
   {
     method: 'POST',
@@ -2469,6 +2471,20 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       return {
         organizationId: organization(body),
         values: { targetUserId: pathUuid(route, 'membershipId') },
+      };
+    }
+    case 'profile.update': {
+      // A consumer edits the two self-service profile columns together. An
+      // absent, null, or blank status message clears the column; the
+      // username is gateway-owned and is not accepted here at all.
+      onlyKeys(body, ['organizationId', 'displayName', 'statusMessage']);
+      const statusMessage = optionalString(body, 'statusMessage', { max: 280, nullable: true });
+      return {
+        organizationId: organization(body),
+        values: {
+          displayName: requiredString(body, 'displayName', { min: 1, max: 120 }),
+          statusMessage: statusMessage ? statusMessage : null,
+        },
       };
     }
     case 'saved_contact.update': {
@@ -4383,6 +4399,22 @@ async function publicAuditExport(value: unknown): Promise<unknown> {
   }
 }
 
+function publicProfile(value: unknown, expectedUserId: string): JsonObject {
+  try {
+    const row = asObject(value);
+    exactDependencyKeys(row, ['user_id', 'display_name', 'status_message']);
+    const userId = uuid(row.user_id);
+    if (userId !== expectedUserId) throw new Error('profile receipt names another user');
+    return {
+      userId,
+      displayName: normalizedString(row.display_name, { min: 1, max: 120 }) as string,
+      statusMessage: normalizedString(row.status_message, { max: 280, nullable: true }),
+    };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
 function publicConversationPreference(value: unknown): unknown {
   const row = asObject(value);
   const { isHidden, ...rest } = row;
@@ -5782,6 +5814,20 @@ export async function executeCommand(
         body: await businessRpc(actor, org, idempotencyKey, requestDigest, 'bff_remove_contact', {
           p_other_user_id: values.targetUserId,
         }),
+      };
+    case 'profile.update':
+      return {
+        status: 200,
+        body: publicProfile(
+          await invokeRpc(asRpcClient(actor.adminClient), 'bff_update_profile', {
+            p_actor_user_id: actor.user.id,
+            p_organization_id: org,
+            p_session_id: actor.claims.sessionId,
+            p_display_name: values.displayName,
+            p_status_message: values.statusMessage,
+          }),
+          actor.user.id,
+        ),
       };
     case 'saved_contact.update':
       return {

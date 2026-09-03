@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-import type { Conversation, DiscoverableConversation, InboxFilter } from '@/domain/types';
+import type { Conversation, DiscoverableConversation, InboxFilter, Person } from '@/domain/types';
 import { Avatar, Chip, IconButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
@@ -69,10 +69,30 @@ export function ConversationList({
   onRequestJoin?: (conversationId: string) => Promise<boolean>;
   onCancelJoin?: (request: NonNullable<DiscoverableConversation['myJoinRequest']>) => Promise<boolean>;
 }) {
-  const visible = useMemo(
-    () => filterConversations(conversations, filter, search),
-    [conversations, filter, search],
+  const workspace = useWorkspace();
+  const people = workspace.people;
+  // Incoming message requests are direct threads whose counterpart is waiting
+  // on this member's decision. They get their own section so a request is
+  // never mistaken for an ordinary chat and is never hidden by the inbox
+  // filter or search; the request thread itself opens like any conversation.
+  const incomingRequests = useMemo(
+    () => conversations.flatMap((conversation) => {
+      if (conversation.managementOnly || conversation.kind !== 'direct' || !conversation.directParticipantId) {
+        return [];
+      }
+      const counterpart = people.find((person) => person.id === conversation.directParticipantId);
+      return counterpart?.connectionState === 'pending'
+        && counterpart.connectionRequestDirection === 'incoming'
+        ? [{ conversation, counterpart }]
+        : [];
+    }),
+    [conversations, people],
   );
+  const visible = useMemo(() => {
+    const requestIds = new Set(incomingRequests.map((request) => request.conversation.id));
+    return filterConversations(conversations, filter, search)
+      .filter((conversation) => !requestIds.has(conversation.id));
+  }, [conversations, filter, incomingRequests, search]);
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
       conversations.filter((conversation) => conversation.managementOnly).map((conversation) => conversation.id),
@@ -142,6 +162,27 @@ export function ConversationList({
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
+        {incomingRequests.length ? (
+          <View style={styles.requestSection}>
+            <View style={styles.sectionDivider}>
+              <Text style={styles.sectionDividerText}>{t('chat.requests')}</Text>
+              <View style={styles.sectionDividerLine} />
+            </View>
+            <Text style={styles.requestHint}>{t('chat.requestsHint')}</Text>
+            {incomingRequests.map(({ conversation, counterpart }) => (
+              <MessageRequestRow
+                busy={workspace.actionBusy === 'connection-respond'}
+                conversation={conversation}
+                counterpart={counterpart}
+                key={conversation.id}
+                onAccept={() => void workspace.respondConnection(counterpart.id, 'accepted')}
+                onDecline={() => void workspace.respondConnection(counterpart.id, 'declined')}
+                onPress={() => onSelect(conversation.id)}
+                selected={desktop && selectedId === conversation.id}
+              />
+            ))}
+          </View>
+        ) : null}
         {visibleDiscoverableConversations.length ? (
           <View style={styles.discoverySection}>
             <View style={styles.sectionDivider}>
@@ -187,7 +228,7 @@ export function ConversationList({
               }
             />
           ))
-        ) : (
+        ) : incomingRequests.length ? null : (
           <View style={styles.noResults}>
             <View style={styles.noResultsIcon}>
               <Ionicons name="search" size={21} color={colors.mintDark} />
@@ -197,6 +238,68 @@ export function ConversationList({
           </View>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+function MessageRequestRow({
+  conversation,
+  counterpart,
+  selected,
+  busy,
+  onPress,
+  onAccept,
+  onDecline,
+}: {
+  conversation: Conversation;
+  counterpart: Person;
+  selected: boolean;
+  busy: boolean;
+  onPress: () => void;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <View style={[styles.requestRow, selected && styles.rowSelected]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.requestRowBody, pressed && styles.rowPressed]}>
+        <Avatar
+          color={conversation.avatarColor}
+          initials={conversation.initials}
+          presence={conversation.presence}
+          size={44}
+        />
+        <View style={styles.rowBody}>
+          <Text numberOfLines={1} style={styles.rowTitle}>{counterpart.displayName}</Text>
+          <Text numberOfLines={2} style={styles.rowPreview}>{conversation.lastMessage}</Text>
+        </View>
+      </Pressable>
+      <View style={styles.requestActions}>
+        <Pressable
+          accessibilityLabel={t('people.accept')}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={onAccept}
+          style={({ pressed }) => [styles.requestButton, styles.requestButtonAccept, pressed && styles.rowPressed]}>
+          <Ionicons name="checkmark" size={14} color={colors.white} />
+          <Text style={styles.requestButtonAcceptText}>{t('people.accept')}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={t('people.decline')}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy }}
+          disabled={busy}
+          onPress={onDecline}
+          style={({ pressed }) => [styles.requestButton, pressed && styles.rowPressed]}>
+          <Ionicons name="close" size={14} color={colors.ink} />
+          <Text style={styles.requestButtonText}>{t('people.decline')}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -291,6 +394,60 @@ function ConversationRow({
 }
 
 const styles = StyleSheet.create({
+  requestSection: {
+    gap: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  requestHint: {
+    color: colors.inkMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    paddingHorizontal: spacing.sm,
+  },
+  requestRow: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.amberSoft,
+  },
+  requestRowBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.md,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  requestButton: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.paper,
+  },
+  requestButtonAccept: {
+    borderColor: colors.forest,
+    backgroundColor: colors.forest,
+  },
+  requestButtonText: {
+    color: colors.ink,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  requestButtonAcceptText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: '800',
+  },
   discoverySection: {
     gap: spacing.xs,
     paddingBottom: spacing.md,

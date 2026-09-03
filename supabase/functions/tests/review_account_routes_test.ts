@@ -89,13 +89,15 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     }),
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
-    requestOtp: async () => {},
-    generateEmailOtp: async () => {
-      throw new Error('signup email OTP must not be minted');
+    requestOtp: async (destinationType) => {
+      // GoTrue signInWithOtp is an SMS-only channel: its mailer would send the
+      // unusable magic-link template, so no route may reach it with an email.
+      if (destinationType === 'email') {
+        throw new Error('email OTP delivery must never go through GoTrue signInWithOtp');
+      }
     },
-    sendCodeEmail: async () => {
-      throw new Error('signup code email must not be sent');
-    },
+    generateEmailOtp: async () => '654321',
+    sendCodeEmail: async () => {},
     verifyOtp: async () => session,
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
@@ -191,8 +193,8 @@ Deno.test('absent review secrets leave the review email on the standard member p
   const handler = createAuthHandler(() =>
     dependencies({
       reviewAccount: null,
-      requestOtp: async (_destinationType, destination) => {
-        calls.push(`deliver:${destination}`);
+      sendCodeEmail: async ({ to }) => {
+        calls.push(`deliver:${to}`);
       },
       verifyOtp: async (_destinationType, _destination, code) => {
         calls.push(`verify:${code}`);
@@ -243,8 +245,12 @@ Deno.test('review OTP requests authorize and rate-limit normally but skip email 
         calls.push(`authorize:${destination}:${purpose}`);
         return { allowed: true, channelConfigured: true };
       },
-      requestOtp: async (_destinationType, destination) => {
-        calls.push(`deliver:${destination}`);
+      generateEmailOtp: async (destination) => {
+        calls.push(`mint:${destination}`);
+        return '654321';
+      },
+      sendCodeEmail: async ({ to }) => {
+        calls.push(`deliver:${to}`);
       },
     })
   );
@@ -265,6 +271,7 @@ Deno.test('review OTP requests authorize and rate-limit normally but skip email 
   assertEquals(calls, [
     `authorize:${reviewEmail}:request`,
     'authorize:worker@example.com:request',
+    'mint:worker@example.com',
     'deliver:worker@example.com',
   ]);
 
@@ -278,9 +285,12 @@ Deno.test('review OTP requests authorize and rate-limit normally but skip email 
     accepted: true,
     channel: { type: 'email', configured: true },
   });
+  // The review destination is authorized and rate limited but never minted
+  // or mailed; the ordinary member gets the gateway-owned code email.
   assertEquals(calls, [
     `authorize:${reviewEmail}:request`,
     'authorize:worker@example.com:request',
+    'mint:worker@example.com',
     'deliver:worker@example.com',
     `authorize:${reviewEmail}:request`,
   ]);

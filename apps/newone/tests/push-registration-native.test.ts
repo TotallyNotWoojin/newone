@@ -238,15 +238,28 @@ describe('permission request and refresh lifecycle', () => {
     expect(mockRequestPermissionsAsync).toHaveBeenCalledTimes(1);
   });
 
-  test('returns null when permission is denied or the device is unsupported', async () => {
+  test('returns null when permission is denied or the platform is unsupported', async () => {
     mockGetPermissionsAsync.mockResolvedValue({ granted: false });
     mockRequestPermissionsAsync.mockResolvedValue({ granted: false });
     await expect(requestDeviceRegistration('organization-controlled')).resolves.toBeNull();
-    mockIsDevice = false;
-    await expect(requestDeviceRegistration('organization-controlled')).resolves.toBeNull();
-    mockIsDevice = true;
     mockPlatform = 'web';
     await expect(requestDeviceRegistration('organization-controlled')).resolves.toBeNull();
+  });
+
+  test('rejects a simulator with a distinguishable push_needs_device code before any permission prompt', async () => {
+    mockIsDevice = false;
+    await expect(requestDeviceRegistration('organization-controlled')).rejects.toMatchObject({
+      name: 'RepositoryError',
+      code: 'push_needs_device',
+      retryable: false,
+    });
+    expect(mockGetPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockGetExpoPushTokenAsync).not.toHaveBeenCalled();
+    // Passive reads stay silent on a simulator; only the deliberate enable
+    // action explains itself.
+    await expect(getExistingDeviceRegistration('organization-controlled')).resolves.toBeNull();
+    await expect(getCurrentInstallationId()).resolves.toBeNull();
   });
 
   test('forwards a valid refreshed token registration and ignores unavailable registration', async () => {

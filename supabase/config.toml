@@ -457,6 +457,14 @@ s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
 
+# Enables pg_net (net.http_post/net.http_request_queue), which backs the
+# AI-worker wake-on-enqueue call in 20260903020000_request_sync_and_ai_wake
+# and its pgTAP coverage. The hosted `newone` project already has pg_net
+# enabled; this makes the local stack match so `create extension pg_net`
+# in 20260903030000_desync_audit_and_consumer_rules can succeed.
+[experimental.webhooks]
+enabled = true
+
 # pg-delta is the schema diff engine for db diff / db pull / db remote commit.
 # Set enabled = false to fall back to the legacy migra engine.
 [experimental.pgdelta]

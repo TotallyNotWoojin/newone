@@ -1,0 +1,13 @@
+appId: com.totallynotwoojin.newone
+---
+# The peer's message TEXT arrives, then its translation card for LANG.
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: 45000
+- takeScreenshot: ${SHOT}-original-arrived
+- extendedWaitUntil:
+    visible: ".*TRANSLATION · ${LANG}.*"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-translated
+- assertVisible: ".*ORIGINAL · .*"
+- assertVisible: ${TEXT}

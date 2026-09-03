@@ -669,3 +669,29 @@ describe('sign-in and account recovery screen', () => {
     platform.restore();
   });
 });
+
+describe('consumer-neutral sign-in copy', () => {
+  test.each([390, 1280])('uses a neutral email placeholder in every access mode at width %i', async (width) => {
+    mockWidth = width;
+    const view = await render(<SignInScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    expect(screen.getByText('auth.subtitleReturn')).toBeTruthy();
+    expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('you@company.com')).toBeNull();
+
+    // The phone placeholder is unchanged and comes back to the neutral email one.
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
+    expect(screen.getByPlaceholderText('+52 81 5555 0192')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.emailChannel' }));
+    expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
+
+    for (const mode of ['auth.firstUse', 'auth.recovery', 'auth.modeSignup']) {
+      await fireEvent.press(screen.getByRole('button', { name: mode }));
+      expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
+      expect(screen.queryByPlaceholderText('you@company.com')).toBeNull();
+    }
+
+    await view.unmount();
+  });
+});

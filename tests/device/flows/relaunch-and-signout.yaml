@@ -1,0 +1,24 @@
+appId: com.totallynotwoojin.newone
+---
+# The user force-quits and reopens the app: the session must persist and
+# land straight in Chats. Then they sign out from Settings like a human.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- takeScreenshot: device-05-relaunch-persisted
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Sign out of Newone"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 20000
+- takeScreenshot: device-06-signed-out

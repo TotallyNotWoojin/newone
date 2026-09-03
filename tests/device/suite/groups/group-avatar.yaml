@@ -1,0 +1,31 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Choose group photo"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Choose group photo"
+- tapOn:
+    text: "Allow Full Access"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(Photos|Recents|Albums|Photo, ).*"
+    timeout: 30000
+- tapOn:
+    text: "Photo, .*"
+    index: 0
+    optional: true
+- extendedWaitUntil:
+    visible: "Upload and use photo"
+    timeout: 30000
+- tapOn: "Upload and use photo"
+- extendedWaitUntil:
+    visible: "Change photo"
+    timeout: 90000
+- takeScreenshot: ${SHOT}-avatar-set
+- tapOn: "Close dialog"

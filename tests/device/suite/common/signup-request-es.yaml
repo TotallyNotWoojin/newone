@@ -1,0 +1,63 @@
+appId: com.totallynotwoojin.newone
+---
+# Same as common/signup-request.yaml, but the human picks Español as their
+# language before filling the form; the server stores preferred_language=es.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: ".*(Chats|Create account).*"
+    timeout: 40000
+- runFlow:
+    when:
+      visible: "Chats"
+    commands:
+      - tapOn: "Settings"
+      - extendedWaitUntil:
+          visible: "Close settings"
+          timeout: 15000
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of Newone"
+          direction: DOWN
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 30000
+- tapOn: "Español"
+- tapOn: "Create account"
+- scrollUntilVisible:
+    element:
+      text: "you@example.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Email address"
+- scrollUntilVisible:
+    element:
+      text: "your_username"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "your_username"
+- inputText: ${USERNAME}
+- tapOn: "Username"
+- scrollUntilVisible:
+    element:
+      text: "Your name as others will see it"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Your name as others will see it"
+- inputText: ${DISPLAY_NAME}
+- tapOn: "Display name"
+- takeScreenshot: ${SHOT}-form
+- scrollUntilVisible:
+    element:
+      text: "Continue securely"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue securely"
+- extendedWaitUntil:
+    visible: "Código de un solo uso"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-code-screen

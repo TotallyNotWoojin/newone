@@ -1,0 +1,11 @@
+appId: com.totallynotwoojin.newone
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Sim Human"
+- extendedWaitUntil:
+    visible: "Accepted! Hi Sim A."
+    timeout: 45000
+- takeScreenshot: msg-06-a-sees-reply

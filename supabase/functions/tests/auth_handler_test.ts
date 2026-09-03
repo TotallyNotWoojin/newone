@@ -228,9 +228,13 @@ Deno.test('invite OTP request is enumeration-resistant and rate authorization ru
 });
 
 Deno.test('OTP CAPTCHA is required, bounded, and passed only through the delivery boundary', async () => {
+  // Email OTP delivery is gateway-owned mail (generateEmailOtp + sendCodeEmail)
+  // and never reaches requestOtp; only the phone channel forwards the CAPTCHA
+  // token through to the delivery dependency, so that is what this exercises.
   const delivered: Array<string | null> = [];
   const handler = createAuthHandler(() =>
     dependencies({
+      phoneOtpEnabled: true,
       requestOtp: async (_destinationType, _destination, token) => {
         delivered.push(token);
       },
@@ -238,14 +242,16 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
   );
   assertEquals(
     (await handler(post('/v2/auth/otp/request', {
-      email: session.email,
+      destinationType: 'phone',
+      destination: '+12025550123',
       invitationToken: 'a'.repeat(64),
     }))).status,
     400,
   );
   assertEquals(
     (await handler(post('/v2/auth/otp/request', {
-      email: session.email,
+      destinationType: 'phone',
+      destination: '+12025550123',
       invitationToken: 'a'.repeat(64),
       captchaToken: 'short',
     }))).status,
@@ -254,7 +260,8 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
   const token = 'turnstile-token-that-is-long-enough';
   assertEquals(
     (await handler(post('/v2/auth/otp/request', {
-      email: session.email,
+      destinationType: 'phone',
+      destination: '+12025550123',
       invitationToken: 'a'.repeat(64),
       captchaToken: token,
     }))).status,
@@ -264,16 +271,15 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
 });
 
 Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests still need a token', async () => {
-  const delivered: Array<string | null> = [];
-  let signupMailSent = 0;
+  // Every email path (plain OTP, recovery OTP, and signup) is gateway-owned
+  // mail -- generateEmailOtp + sendCodeEmail -- never GoTrue signInWithOtp,
+  // so delivery is observed through that dependency for all three.
+  let mailSent = 0;
   const handler = createAuthHandler(() =>
     dependencies({
       captchaMode: 'web',
-      requestOtp: async (_destinationType, _destination, token) => {
-        delivered.push(token);
-      },
       sendCodeEmail: async () => {
-        signupMailSent += 1;
+        mailSent += 1;
       },
     })
   );
@@ -302,9 +308,7 @@ Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests 
     }))).status,
     202,
   );
-  // Signup delivery is gateway-owned mail, never GoTrue signInWithOtp.
-  assertEquals(delivered, [null, null]);
-  assertEquals(signupMailSent, 1);
+  assertEquals(mailSent, 3);
 
   // Requests arriving with a browser Origin still require token presence.
   assertEquals(
@@ -325,8 +329,7 @@ Deno.test('web CAPTCHA mode exempts origin-less native paths while web requests 
     }))).status,
     400,
   );
-  assertEquals(delivered, [null, null]);
-  assertEquals(signupMailSent, 1);
+  assertEquals(mailSent, 3);
 });
 
 Deno.test('all CAPTCHA mode still requires token presence on native paths', async () => {
@@ -849,9 +852,13 @@ Deno.test('web auth endpoints reject requests without an allowlisted browser ori
 });
 
 Deno.test('native OTP is preauthorized with CAPTCHA and installation rate binding', async () => {
+  // Phone is the only channel whose CAPTCHA token travels to a delivery
+  // dependency (requestOtp, into GoTrue) -- email OTP is gateway-owned mail
+  // and never reaches it.
   const calls: Array<Record<string, unknown>> = [];
   const handler = createAuthHandler(() =>
     dependencies({
+      phoneOtpEnabled: true,
       authorizeInviteOtp: async (
         token,
         destinationType,
@@ -878,8 +885,8 @@ Deno.test('native OTP is preauthorized with CAPTCHA and installation rate bindin
     })
   );
   const response = await handler(nativePost('/v2/auth/native/otp/request', {
-    destinationType: 'email',
-    destination: session.email,
+    destinationType: 'phone',
+    destination: '+12025550123',
     invitationToken: 'a'.repeat(64),
     employeeCode: 'EMP-1042',
     captchaToken: 'native-turnstile-token-long-enough',
@@ -887,15 +894,15 @@ Deno.test('native OTP is preauthorized with CAPTCHA and installation rate bindin
   assertEquals(response.status, 202);
   assertEquals(await response.json(), {
     accepted: true,
-    channel: { type: 'email', configured: true },
+    channel: { type: 'phone', configured: true },
   });
-  assertEquals(calls[0]?.destinationType, 'email');
+  assertEquals(calls[0]?.destinationType, 'phone');
   assertEquals(calls[0]?.employeeCode, 'EMP-1042');
   assertEquals(calls[0]?.purpose, 'request');
   assertEquals((calls[0]?.installationHash as string).length, 64);
   assertEquals(calls[1], {
-    destinationType: 'email',
-    destination: session.email,
+    destinationType: 'phone',
+    destination: '+12025550123',
     captcha: 'native-turnstile-token-long-enough',
   });
 
@@ -1179,12 +1186,15 @@ Deno.test('account recovery OTP request is CAPTCHA protected, generic, and uses 
   assertEquals((calls[0]?.ipHash as string).length, 64);
   assertEquals((calls[0]?.installationHash as string).length, 64);
 
-  const allowedCalls: string[] = [];
+  // An allowed recovery for an email destination delivers through the same
+  // gateway-owned mail dependency as every other email OTP path, never
+  // requestOtp -- the CAPTCHA gate above already ran before this point.
+  let mailSent = 0;
   const allowed = createAuthHandler(() =>
     dependencies({
       authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
-      requestOtp: async (_type, _destination, captcha) => {
-        allowedCalls.push(captcha ?? 'missing');
+      sendCodeEmail: async () => {
+        mailSent += 1;
       },
     })
   );
@@ -1197,7 +1207,7 @@ Deno.test('account recovery OTP request is CAPTCHA protected, generic, and uses 
     accepted: true,
     channel: { type: 'email', configured: true },
   });
-  assertEquals(allowedCalls, ['recovery-captcha-token-long-enough']);
+  assertEquals(mailSent, 1);
 });
 
 Deno.test('account recovery verification binds first, revokes every other session, and preserves only the new session', async () => {

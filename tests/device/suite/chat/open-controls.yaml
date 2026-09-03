@@ -1,0 +1,8 @@
+appId: com.totallynotwoojin.newone
+---
+# Header ellipsis → Conversation controls sheet.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-controls

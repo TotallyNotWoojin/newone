@@ -1,0 +1,27 @@
+appId: com.totallynotwoojin.newone
+---
+# Open the conversation with PEER and try to send TEXT; while blocked this
+# must fail with a visible error, not render as a normal sent bubble.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ${PEER}
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    visible: ${PEER}
+    timeout: 30000
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: ${TEXT}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*(Not sent|could not|blocked|failed|permission|error).*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-blocked-send

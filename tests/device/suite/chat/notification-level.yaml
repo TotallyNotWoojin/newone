@@ -1,0 +1,27 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Conversation notifications: Muted until changed, then a timed
+# mute, then remove it, then All activity.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Conversation notifications"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Muted until changed"
+- takeScreenshot: ${SHOT}-muted
+- tapOn: "1 hour"
+- extendedWaitUntil:
+    visible: ".*Timed mute ends.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-timed-mute
+- tapOn: "Remove timed mute"
+- extendedWaitUntil:
+    notVisible: ".*Timed mute ends.*"
+    timeout: 20000
+- tapOn: "All activity"
+- takeScreenshot: ${SHOT}-all-activity
+- tapOn: "Close dialog"

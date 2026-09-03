@@ -554,6 +554,46 @@ describe('BFF command transport security and parsing', () => {
       });
   });
 
+  test('updates the profile through PATCH /v2/profile and validates the receipt', async () => {
+    const repo = repository();
+    mockFetch.mockImplementationOnce(async () => response({ data: {
+      userId: membershipId, displayName: ' Jordan Renamed ', statusMessage: 'On shift',
+    } }));
+    await expect(repo.updateProfile({
+      organizationId, idempotencyKey, displayName: 'Jordan Renamed', statusMessage: 'On shift',
+    })).resolves.toEqual({ userId: membershipId, displayName: 'Jordan Renamed', statusMessage: 'On shift' });
+    const [url, init] = mockFetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.newone.test/v2/profile');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(String(init.body))).toEqual({
+      organizationId, displayName: 'Jordan Renamed', statusMessage: 'On shift',
+    });
+    expect(new Headers(init.headers).get('Idempotency-Key')).toBe(idempotencyKey);
+
+    mockFetch.mockImplementationOnce(async () => response({ data: {
+      userId: membershipId, displayName: 'Jordan', statusMessage: null,
+    } }));
+    await expect(repo.updateProfile({ organizationId, idempotencyKey, displayName: 'Jordan' }))
+      .resolves.toEqual({ userId: membershipId, displayName: 'Jordan', statusMessage: null });
+    expect(JSON.parse(String((mockFetch.mock.calls[1]![1] as RequestInit).body))).toEqual({
+      organizationId, displayName: 'Jordan', statusMessage: null,
+    });
+
+    for (const payload of [
+      { userId: 'not-a-uuid', displayName: 'Jordan', statusMessage: null },
+      { userId: membershipId, displayName: '', statusMessage: null },
+      { userId: membershipId, displayName: 'n'.repeat(121), statusMessage: null },
+      { userId: membershipId, displayName: 'Jordan', statusMessage: 's'.repeat(281) },
+      { userId: membershipId, displayName: 'Jordan', statusMessage: 5 },
+      { userId: membershipId, displayName: 'Jordan' },
+      { userId: membershipId, displayName: 'Jordan', statusMessage: null, username: 'leaked_handle' },
+    ]) {
+      await expectInvalidResponse(payload, () => repo.updateProfile({
+        organizationId, idempotencyKey, displayName: 'Jordan',
+      }));
+    }
+  });
+
   test('executes the production routes for state-changing commands and preserves optional-field intent', async () => {
     const repo = repository();
     const base = { organizationId, idempotencyKey };
@@ -633,6 +673,12 @@ describe('BFF command transport security and parsing', () => {
       translationMode: 'automatic',
     }));
     expect((mockFetch.mock.calls[3]![1] as RequestInit).method).toBe('DELETE');
+    // Cancelling a pending request and removing an accepted connection share
+    // one DELETE route addressed by the counterpart identifier.
+    expect(String(mockFetch.mock.calls[18]![0])).toMatch(
+      new RegExp(`/v2/contacts/connections/${membershipId}$`),
+    );
+    expect((mockFetch.mock.calls[18]![1] as RequestInit).method).toBe('DELETE');
     expect((mockFetch.mock.calls[20]![1] as RequestInit).method).toBe('PUT');
     expect((mockFetch.mock.calls[21]![1] as RequestInit).method).toBe('DELETE');
   });

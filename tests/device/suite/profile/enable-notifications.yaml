@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → Notifications → Enable notifications on this (simulator) device.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Device notifications"
+    direction: DOWN
+    timeout: 45000
+- takeScreenshot: ${SHOT}-before
+- tapOn: "Enable notifications"
+- tapOn:
+    text: "Allow"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(physical device|Current device|could not|cannot|unavailable|failed|not configured).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-after
+- extendedWaitUntil:
+    visible: ".*(Current device · IOS|physical device).*"
+    timeout: 5000

@@ -1,0 +1,36 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Add favorite → label flips to Remove favorite → remove again.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- tapOn: "Add favorite"
+- extendedWaitUntil:
+    visible: "Remove favorite"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-favorited
+- tapOn: "Close dialog"
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Favorites"
+    timeout: 15000
+- tapOn: "Favorites"
+- extendedWaitUntil:
+    visible: ${PEER}
+    timeout: 15000
+- takeScreenshot: ${SHOT}-favorites-filter
+- tapOn: "All"
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Remove favorite"
+    timeout: 15000
+- tapOn: "Remove favorite"
+- extendedWaitUntil:
+    visible: "Add favorite"
+    timeout: 20000
+- tapOn: "Close dialog"

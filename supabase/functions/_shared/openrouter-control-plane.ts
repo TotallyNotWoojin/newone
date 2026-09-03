@@ -197,3 +197,79 @@ export async function verifyOpenRouterEmployeeControlPlane(
   });
   if (eligible.length < 1) unavailable();
 }
+
+// ---------------------------------------------------------------------------
+// Preflight cache
+// ---------------------------------------------------------------------------
+
+/**
+ * The four management-API proofs above describe workspace state that changes
+ * on the order of days, yet the worker re-ran them for every job: a
+ * detection followed by a translation cost eight management calls before any
+ * tenant text moved. A successful proof is remembered in module scope for
+ * five minutes per (key hash, workspace, model, route, ceilings) tuple.
+ *
+ * Fail-closed properties are preserved: a failed or aborted proof is never
+ * cached (the error propagates and the next job re-proves), a proof for a
+ * different key/workspace/route never satisfies another, an expired or
+ * clock-skewed entry is discarded before re-proving, and the cache holds no
+ * secret material (the management key is not part of the key).
+ */
+export const CONTROL_PLANE_PREFLIGHT_TTL_MS = 5 * 60_000;
+
+interface PreflightCacheEntry {
+  key: string;
+  verifiedAt: number;
+}
+
+let preflightClock: () => number = Date.now;
+let preflightCache: PreflightCacheEntry | null = null;
+
+/** Drops the cached proof and installs the clock the cache reads (tests). */
+export function resetControlPlanePreflightCache(clock: () => number = Date.now): void {
+  preflightCache = null;
+  preflightClock = clock;
+}
+
+function preflightCacheKey(
+  controls: OpenRouterEmployeeControlPlane,
+  policy: OpenRouterControlPlanePolicy,
+): string {
+  return JSON.stringify([
+    controls.apiKeyHash,
+    controls.workspaceId,
+    policy.model,
+    policy.providerTag,
+    policy.providerMetadataName,
+    policy.priceCeilingsUsdPerMillionTokens.prompt,
+    policy.priceCeilingsUsdPerMillionTokens.completion,
+  ]);
+}
+
+/**
+ * verifyOpenRouterEmployeeControlPlane behind the five-minute cache. Resolves
+ * with whether the proof was served from cache; rejects exactly as the
+ * uncached proof does.
+ */
+export async function verifyOpenRouterEmployeeControlPlaneCached(
+  controls: OpenRouterEmployeeControlPlane,
+  policy: OpenRouterControlPlanePolicy,
+  fetcher: ControlPlaneFetch,
+  signal?: AbortSignal,
+): Promise<{ cached: boolean }> {
+  const key = preflightCacheKey(controls, policy);
+  const now = preflightClock();
+  if (
+    preflightCache !== null && preflightCache.key === key &&
+    now >= preflightCache.verifiedAt &&
+    now - preflightCache.verifiedAt < CONTROL_PLANE_PREFLIGHT_TTL_MS
+  ) {
+    return { cached: true };
+  }
+  // Anything stale, skewed, or for another tuple is forgotten before the
+  // proof runs, so a failure below leaves nothing that could authorize egress.
+  preflightCache = null;
+  await verifyOpenRouterEmployeeControlPlane(controls, policy, fetcher, signal);
+  preflightCache = { key, verifiedAt: preflightClock() };
+  return { cached: false };
+}

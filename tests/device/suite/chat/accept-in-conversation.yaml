@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# Recipient opens the incoming message request from Chats and accepts it in
+# the conversation banner; the composer unlocks.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ${NAME}
+    timeout: 60000
+- takeScreenshot: ${SHOT}-request-in-chats
+- tapOn: ${NAME}
+- extendedWaitUntil:
+    visible: "Accept"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-banner
+- tapOn: "Accept"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-accepted

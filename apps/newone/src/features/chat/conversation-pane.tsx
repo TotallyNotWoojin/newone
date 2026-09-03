@@ -143,6 +143,23 @@ export function ConversationPane({
   const outgoingRequest = pendingRequestCounterpart?.connectionRequestDirection === 'outgoing'
     ? pendingRequestCounterpart
     : null;
+  // The requester keeps an enabled composer while the request is pending: the
+  // bootstrap reports can_post=false for the not-yet-permitted pair, but the
+  // service itself enforces the request message cap.
+  const composerDisabled = conversation
+    ? conversation.isReadOnly === true || (conversation.canPost === false && !outgoingRequest)
+    : false;
+  const pendingRequestCounterpartId = pendingRequestCounterpart?.id ?? null;
+  const refreshWorkspace = workspace.refresh;
+
+  // Safety net: a missed inbox invalidation must not strand this thread in its
+  // pending state, so poll while a pending counterpart is on screen. The
+  // interval clears on unmount and as soon as the request resolves.
+  useEffect(() => {
+    if (!pendingRequestCounterpartId) return;
+    const interval = setInterval(() => void refreshWorkspace(), 8_000);
+    return () => clearInterval(interval);
+  }, [pendingRequestCounterpartId, refreshWorkspace]);
 
   useEffect(() => {
     if (!conversationId || conversation?.managementOnly) return;
@@ -317,7 +334,7 @@ export function ConversationPane({
     return (
       <View style={styles.emptyPane}>
         <EmptyState
-          body={t('chat.chooseBody')}
+          body={t(isPersonalRealm(workspace.organizationId) ? 'chat.chooseBodyConsumer' : 'chat.chooseBody')}
           icon="chatbubbles-outline"
           title={t('chat.choose')}
         />
@@ -326,7 +343,7 @@ export function ConversationPane({
   }
 
   const submit = () => {
-    if (!draft.trim() || conversation.isReadOnly || conversation.canPost === false) return;
+    if (!draft.trim() || composerDisabled) return;
     onSend(draft, replyingTo ?? undefined, selectedMentionUserIds);
     notifyStopped();
     setDraft('');
@@ -569,7 +586,12 @@ export function ConversationPane({
           ))
         ) : (
           <EmptyState
-            action={<StatusBadge label={t('chat.private')} icon="lock-closed" />}
+            action={(
+              <StatusBadge
+                icon="lock-closed"
+                label={t(isPersonalRealm(workspace.organizationId) ? 'chat.privateConsumer' : 'chat.private')}
+              />
+            )}
             body={t('chat.startBody')}
             icon="sparkles-outline"
             title={t('chat.start')}
@@ -625,18 +647,23 @@ export function ConversationPane({
       {outgoingRequest ? (
         <View accessibilityRole="alert" style={styles.requestPendingBanner}>
           <Ionicons name="time-outline" color={colors.amber} size={16} />
-          <Text style={styles.requestPendingText}>
-            {t('chat.messageRequestPending').replace('{name}', outgoingRequest.displayName)}
-          </Text>
+          <View style={styles.requestPendingCopy}>
+            <Text style={styles.requestPendingText}>
+              {t('chat.messageRequestPending').replace('{name}', outgoingRequest.displayName)}
+            </Text>
+            <ActionError message={workspace.actionError} />
+          </View>
         </View>
       ) : null}
       {incomingRequest ? null : (
       <Composer
         currentUserId={currentUserId}
-        disabled={conversation.isReadOnly === true || conversation.canPost === false}
-        disabledLabel={conversation.canPost === false && !conversation.isReadOnly
-          ? t('chat.adminsOnlyPosting')
-          : t('chat.incidentReadOnly')}
+        disabled={composerDisabled}
+        disabledLabel={conversation.isReadOnly
+          ? t('chat.incidentReadOnly')
+          : conversation.kind === 'direct'
+            ? t('chat.directPostingUnavailable')
+            : t('chat.adminsOnlyPosting')}
         draft={draft}
         memberUserIds={conversation.kind === 'direct' ? [] : conversation.memberIds ?? []}
         people={workspace.people}
@@ -653,7 +680,7 @@ export function ConversationPane({
         }}
         onCancelReply={() => setReplyingTo(null)}
         onAddAttachment={() => {
-          if (conversation.isReadOnly || conversation.canPost === false) return;
+          if (composerDisabled) return;
           workspace.clearActionError();
           setSelectedAttachment(null);
           setAttachmentCaption('');
@@ -1356,7 +1383,7 @@ function SystemEventRow({ message }: { message: Message }) {
   if (!event) return null;
   const targetName = event.targetUserId
     ? workspace.people.find((person) => person.id === event.targetUserId)?.displayName
-      ?? t('chat.companyMember')
+      ?? t(isPersonalRealm(workspace.organizationId) ? 'chat.companyMemberConsumer' : 'chat.companyMember')
     : '';
   const label = event.eventType === 'conversation.posting.admins_only'
     ? t('chat.systemPostingAdminsOnly')
@@ -1407,9 +1434,15 @@ function MessageBubble({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reportErrorOpen, setReportErrorOpen] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
-  const translationEnabled = workspace.conversations.find(
+  const translationConversation = workspace.conversations.find(
     (conversation) => conversation.id === message.conversationId,
-  )?.translationMode !== 'off';
+  );
+  const translationEnabled = translationConversation?.translationMode !== 'off';
+  // Consumer threads translate automatically server-side; a manual request
+  // would only duplicate that pipeline, so it stays hidden unless a row failed.
+  const automaticTranslation = translationEnabled
+    && isPersonalRealm(workspace.organizationId)
+    && (translationConversation?.translationMode ?? 'automatic') === 'automatic';
   const translation = translationEnabled ? message.translation : undefined;
   const translationErrorReport = translation
     ? workspace.aiOutputErrorReports.find((report) => report.translationId === translation.id)
@@ -1423,7 +1456,8 @@ function MessageBubble({
       && message.languageDetection?.state === 'completed'
       && workspace.messageDisplayLanguage !== null
       && message.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage
-      && (!translation || translation.status === 'failed' || translation.status === 'blocked'),
+      && (!translation || translation.status === 'failed' || translation.status === 'blocked')
+      && (!automaticTranslation || translation?.status === 'failed' || translation?.status === 'blocked'),
   );
   const translationStateLabel = ({
     not_requested: t('chat.translationNotRequested'),
@@ -2547,7 +2581,11 @@ function MessageActionsModal({
   onCopy: () => void;
   onPin: () => void;
 }) {
+  const workspace = useWorkspace();
   const { locale, t } = useI18n();
+  // Action items are a workplace concept; the personal realm never surfaces
+  // the affordance to propose one from a message.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
   const [forwardTargetId, setForwardTargetId] = useState('');
   const [actionTitle, setActionTitle] = useState('');
   const [actionDetails, setActionDetails] = useState('');
@@ -2754,19 +2792,21 @@ function MessageActionsModal({
               />
             </View>
           )}
-          <View style={styles.modalSection}>
-            <Text style={styles.modalLabel}>{t('chat.createAction')}</Text>
-            <FormField label={t('chat.actionTitle')} onChangeText={setActionTitle} value={actionTitle} />
-            <FormField label={t('chat.actionDetails')} multiline onChangeText={setActionDetails} value={actionDetails} />
-            <PrimaryButton
-              disabled={!actionTitle.trim()}
-              icon="checkbox-outline"
-              label={t('chat.actionCreate')}
-              loading={busy === 'action-propose'}
-              onPress={() => void onProposeAction(actionTitle, actionDetails)}
-              tone="dark"
-            />
-          </View>
+          {!personalRealm ? (
+            <View style={styles.modalSection}>
+              <Text style={styles.modalLabel}>{t('chat.createAction')}</Text>
+              <FormField label={t('chat.actionTitle')} onChangeText={setActionTitle} value={actionTitle} />
+              <FormField label={t('chat.actionDetails')} multiline onChangeText={setActionDetails} value={actionDetails} />
+              <PrimaryButton
+                disabled={!actionTitle.trim()}
+                icon="checkbox-outline"
+                label={t('chat.actionCreate')}
+                loading={busy === 'action-propose'}
+                onPress={() => void onProposeAction(actionTitle, actionDetails)}
+                tone="dark"
+              />
+            </View>
+          ) : null}
           <View style={styles.modalSection}>
             <Text style={styles.modalNote}>{t('chat.deleteMeHint')}</Text>
             <PrimaryButton
@@ -4381,7 +4421,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.amberSoft,
   },
-  requestPendingText: { flex: 1, color: colors.amber, fontSize: 11, lineHeight: 16, fontWeight: '700' },
+  requestPendingCopy: { flex: 1, gap: spacing.xs },
+  requestPendingText: { color: colors.amber, fontSize: 11, lineHeight: 16, fontWeight: '700' },
   composerWrap: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,

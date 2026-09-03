@@ -1,0 +1,17 @@
+appId: com.totallynotwoojin.newone
+---
+# Restrict the search to the Messages type chip and re-run.
+- tapOn: "Messages"
+- tapOn:
+    text: "Search"
+    index: 1
+- extendedWaitUntil:
+    visible: ".*${QUERY}.*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-filtered
+- tapOn: ".*Open .*"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- assertVisible: ".*${QUERY}.*"
+- takeScreenshot: ${SHOT}-opened-from-search

@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.newone
+---
+# The recipient opens the incoming request from Chats and declines it.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ${NAME}
+    timeout: 60000
+- tapOn: ${NAME}
+- extendedWaitUntil:
+    visible: ".*wants to message you.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-incoming
+- tapOn: "Decline"
+- extendedWaitUntil:
+    notVisible: ".*wants to message you.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-declined

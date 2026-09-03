@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Automatic translation → MODE chip.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Automatic translation"
+    direction: DOWN
+    timeout: 20000
+- tapOn: ${MODE}
+- extendedWaitUntil:
+    visible:
+      text: ${MODE}
+      selected: true
+    timeout: 20000
+- takeScreenshot: ${SHOT}-${MODE}
+- tapOn: "Close dialog"

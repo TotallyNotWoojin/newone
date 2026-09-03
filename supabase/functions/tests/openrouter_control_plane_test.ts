@@ -3,6 +3,7 @@ import { sha256Hex } from '../_shared/crypto.ts';
 import { OpenRouterLanguageProcessor, parseOpenRouterPolicy } from '../_shared/openrouter.ts';
 import {
   parseOpenRouterEmployeeControlPlane,
+  resetControlPlanePreflightCache,
   verifyOpenRouterEmployeeControlPlane,
 } from '../_shared/openrouter-control-plane.ts';
 import { assertEquals, assertRejects } from './assert.ts';
@@ -187,6 +188,9 @@ function directMetadata() {
 }
 
 Deno.test('employee processor proves controls with synthetic content before sending employee text', async () => {
+  // The processor caches a successful proof in module scope; each case
+  // starts from a cold cache so it exercises the live proof.
+  resetControlPlanePreflightCache();
   const sourceBody = 'Hold line MX-27 at 2.5 bar.';
   const sourceSha256 = await sha256Hex(sourceBody);
   const completionBodies: Record<string, unknown>[] = [];
@@ -238,6 +242,9 @@ Deno.test('employee processor proves controls with synthetic content before send
 });
 
 Deno.test('employee processor never sends employee text when pre-egress controls fail', async () => {
+  // The processor caches a successful proof in module scope; each case
+  // starts from a cold cache so it exercises the live proof.
+  resetControlPlanePreflightCache();
   const sourceBody = 'Private employee line MX-27.';
   const sourceSha256 = await sha256Hex(sourceBody);
   const completionBodies: string[] = [];

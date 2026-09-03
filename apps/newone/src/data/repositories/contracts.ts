@@ -261,6 +261,13 @@ export interface ConversationMemberReceipt {
   historyDisclosure: ConversationHistoryDisclosure;
 }
 
+/** Authoritative receipt for a self-service profile edit. */
+export interface ProfileUpdateReceipt {
+  userId: string;
+  displayName: string;
+  statusMessage: string | null;
+}
+
 export interface UpdateAudiencePreview {
   audienceCount: number;
   excludedCount: number;
@@ -573,6 +580,12 @@ export interface CommandRepository {
     conversationId: string;
     limit?: number;
   }): Promise<ConversationJoinRequest[]>;
+  updateProfile(input: {
+    organizationId: string;
+    displayName: string;
+    statusMessage?: string | null;
+    idempotencyKey: string;
+  }): Promise<ProfileUpdateReceipt>;
   updateConversationPreferences(input: {
     organizationId: string;
     conversationId: string;

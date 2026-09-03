@@ -45,7 +45,11 @@ const CODE_EMAIL_COPY: Record<MailLocale, CodeEmailCopy> = {
 };
 
 function codeEmailCopy(locale: string | null): CodeEmailCopy {
-  return locale === 'es' || locale === 'ko' ? CODE_EMAIL_COPY[locale] : CODE_EMAIL_COPY.en;
+  // Callers pass either a bare language ('ko') or the device's BCP 47 tag
+  // ('ko-KR', 'es-419'); copy is selected by the primary language subtag and
+  // falls back to English for everything else.
+  const language = locale?.split(/[-_]/, 1)[0]?.toLowerCase();
+  return language === 'es' || language === 'ko' ? CODE_EMAIL_COPY[language] : CODE_EMAIL_COPY.en;
 }
 
 function mailConfig(): { apiKey: string; from: string } {

@@ -229,6 +229,13 @@ export interface AuthDependencies {
     requestId: string,
     purpose: OtpPurpose,
   ): Promise<OtpAuthorization>;
+  /**
+   * GoTrue signInWithOtp. Only the SMS channel goes through it: GoTrue's own
+   * mailer sends its default magic-link template, which the code-based apps
+   * can never consume, so every email code is gateway-owned instead
+   * (generateEmailOtp + sendCodeEmail). Route code must never call this with
+   * an email destination.
+   */
   requestOtp(
     destinationType: DestinationType,
     destination: string,
@@ -1087,6 +1094,73 @@ function otpChannelConfigured(
     : dependencies.phoneOtpEnabled;
 }
 
+type OtpMailFailureCode = 'otp_mail_failed' | 'recovery_mail_failed' | 'signup_mail_failed';
+
+interface OtpDeliveryContext {
+  path: string;
+  correlationId: string;
+  failureCode: OtpMailFailureCode;
+}
+
+/**
+ * Gateway-owned email code delivery. GoTrue's signInWithOtp mailer sends its
+ * default magic-link template (a link at the project Site URL) that the
+ * code-based apps can never consume, so every email code is minted through
+ * the admin generateLink API and delivered as the branded Resend mail in the
+ * caller's language.
+ *
+ * Minting and delivery failures are never masked: the caller receives an
+ * explicit 503 code_delivery_failed (a delivery outage must be visible to
+ * users, not hidden behind a generic receipt) and the send-site-specific
+ * outcome is recorded without addresses or codes. Only eligible destinations
+ * reach this point, so unknown or ineligible accounts still get the generic
+ * envelope from their route.
+ */
+async function deliverEmailOtp(
+  dependencies: AuthDependencies,
+  destination: string,
+  locale: string | null,
+  context: OtpDeliveryContext,
+): Promise<void> {
+  try {
+    const code = await dependencies.generateEmailOtp(destination);
+    await dependencies.sendCodeEmail({ to: destination, code, locale: locale ?? 'en' });
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'newone_auth_failure',
+      correlation_id: context.correlationId,
+      path: context.path,
+      status: asApiError(error).status,
+      code: context.failureCode,
+    }));
+    throw new ApiError(503, 'code_delivery_failed');
+  }
+}
+
+/**
+ * OTP delivery for the member and recovery request routes. Email codes are
+ * gateway-owned (deliverEmailOtp). SMS stays a GoTrue channel behind the
+ * phoneOtpEnabled switch, and the caller's CAPTCHA token only travels with it.
+ */
+async function deliverOtp(
+  dependencies: AuthDependencies,
+  identity: Pick<ParsedOtpIdentity, 'destinationType' | 'destination'>,
+  locale: string | null,
+  captcha: string | null,
+  context: OtpDeliveryContext,
+): Promise<void> {
+  if (identity.destinationType === 'phone') {
+    try {
+      await dependencies.requestOtp('phone', identity.destination, captcha);
+    } catch {
+      // SMS delivery and CAPTCHA failures are deliberately indistinguishable
+      // from unknown or ineligible accounts.
+    }
+    return;
+  }
+  await deliverEmailOtp(dependencies, identity.destination, locale, context);
+}
+
 async function completeOtpAuthentication(
   dependencies: AuthDependencies,
   identity: ParsedOtpIdentity,
@@ -1762,16 +1836,14 @@ export function createAuthHandler(
             authorization,
           );
           if (authorization.allowed && channelConfigured) {
-            try {
-              await dependencies.requestOtp(
-                identity.destinationType,
-                identity.destination,
-                captcha,
-              );
-            } catch {
-              // Delivery, CAPTCHA, rate, membership, and identity state share
-              // the same signed-out response envelope.
-            }
+            // Rate, membership, and identity state share the same signed-out
+            // envelope; an email delivery failure for an eligible account is
+            // surfaced by deliverOtp as 503 code_delivery_failed.
+            await deliverOtp(dependencies, identity, identity.locale, captcha, {
+              path,
+              correlationId: meta.requestId,
+              failureCode: 'recovery_mail_failed',
+            });
           }
           return jsonResponse(meta, 202, {
             accepted: true,
@@ -1887,10 +1959,10 @@ export function createAuthHandler(
             throw new ApiError(400, 'bad_request');
           }
           const profile = parseSignupProfile(body);
-          const captcha = captchaToken(
-            body.captchaToken,
-            captchaRequiredFor(dependencies.captchaMode, native),
-          );
+          // Token presence and shape are enforced before any authorization or
+          // delivery. Signup is email-only and email delivery is gateway-owned,
+          // so the token has no downstream consumer on this route.
+          captchaToken(body.captchaToken, captchaRequiredFor(dependencies.captchaMode, native));
           const ipHash = await networkFingerprint(request, config);
           const installationHash = await installationFingerprint(
             config,
@@ -1922,43 +1994,27 @@ export function createAuthHandler(
               memberAuthorization.allowed &&
               otpChannelConfigured(dependencies, identity, memberAuthorization)
             ) {
-              try {
-                await dependencies.requestOtp(
-                  identity.destinationType,
-                  identity.destination,
-                  captcha,
-                );
-              } catch {
-                // Delivery and CAPTCHA failures share the generic signup envelope.
-              }
+              // The returning member receives the same branded code email, in
+              // the same signup language, as a fresh signup would: a different
+              // sender, template, or language would reveal account existence.
+              await deliverEmailOtp(dependencies, identity.destination, profile.language, {
+                path,
+                correlationId: meta.requestId,
+                failureCode: 'otp_mail_failed',
+              });
             }
             return jsonResponse(meta, 202, { status: 'code_sent' });
           }
           requireSignupAuthorization(authorization);
           await dependencies.ensureSignupUser(identity.destination, profile.displayName);
-          try {
-            // Mid-signup users are unconfirmed, so GoTrue's public /otp
-            // endpoint would reject them with signup_disabled. The gateway
-            // owns signup-code delivery end to end instead: mint the linked
-            // email OTP through the admin API and send it directly.
-            const code = await dependencies.generateEmailOtp(identity.destination);
-            await dependencies.sendCodeEmail({
-              to: identity.destination,
-              code,
-              locale: profile.language,
-            });
-          } catch (error) {
-            // Minting and delivery failures keep the enumeration-safe generic
-            // envelope, but the outcome is recorded (without addresses or
-            // codes) so silent delivery loss stays visible in telemetry.
-            console.error(JSON.stringify({
-              event: 'newone_auth_failure',
-              correlation_id: meta.requestId,
-              path,
-              status: asApiError(error).status,
-              code: 'signup_mail_failed',
-            }));
-          }
+          // Mid-signup users are unconfirmed, so GoTrue's public /otp endpoint
+          // would reject them with signup_disabled. The gateway owns
+          // signup-code delivery end to end instead.
+          await deliverEmailOtp(dependencies, identity.destination, profile.language, {
+            path,
+            correlationId: meta.requestId,
+            failureCode: 'signup_mail_failed',
+          });
           return jsonResponse(meta, 202, { status: 'code_sent' });
         } finally {
           await dependencies.settleOtpRequest(startedAt);
@@ -2069,25 +2125,30 @@ export function createAuthHandler(
         // App Store review sign-in: authorization and rate limiting above ran
         // unchanged, but the designated review destination never receives OTP
         // email. The generic envelope below is identical either way.
-        if (
-          authorization.allowed && channelConfigured &&
-          !isReviewDestination(dependencies.reviewAccount, identity)
-        ) {
-          try {
-            await dependencies.requestOtp(identity.destinationType, identity.destination, captcha);
-          } catch {
-            // OTP delivery and CAPTCHA failures are deliberately indistinguishable
-            // from unknown or ineligible accounts.
+        try {
+          if (
+            authorization.allowed && channelConfigured &&
+            !isReviewDestination(dependencies.reviewAccount, identity)
+          ) {
+            // Unknown and ineligible accounts share the generic envelope below;
+            // an email delivery failure for an eligible account is surfaced by
+            // deliverOtp as 503 code_delivery_failed instead of being masked.
+            await deliverOtp(dependencies, identity, identity.locale, captcha, {
+              path,
+              correlationId: meta.requestId,
+              failureCode: 'otp_mail_failed',
+            });
           }
+          return jsonResponse(meta, 202, {
+            accepted: true,
+            channel: {
+              type: identity.destinationType,
+              configured: channelConfigured,
+            },
+          });
+        } finally {
+          await dependencies.settleOtpRequest(startedAt);
         }
-        await dependencies.settleOtpRequest(startedAt);
-        return jsonResponse(meta, 202, {
-          accepted: true,
-          channel: {
-            type: identity.destinationType,
-            configured: channelConfigured,
-          },
-        });
       }
 
       if (request.method === 'POST' && path === '/v2/auth/native/otp/request') {
@@ -2125,24 +2186,30 @@ export function createAuthHandler(
         // App Store review sign-in: authorization and rate limiting above ran
         // unchanged, but the designated review destination never receives OTP
         // email. The generic envelope below is identical either way.
-        if (
-          authorization.allowed && channelConfigured &&
-          !isReviewDestination(dependencies.reviewAccount, identity)
-        ) {
-          try {
-            await dependencies.requestOtp(identity.destinationType, identity.destination, captcha);
-          } catch {
-            // The generic response cannot reveal account, invitation, or CAPTCHA state.
+        try {
+          if (
+            authorization.allowed && channelConfigured &&
+            !isReviewDestination(dependencies.reviewAccount, identity)
+          ) {
+            // The generic response cannot reveal account, invitation, or CAPTCHA
+            // state; an email delivery failure for an eligible account is
+            // surfaced by deliverOtp as 503 code_delivery_failed.
+            await deliverOtp(dependencies, identity, identity.locale, captcha, {
+              path,
+              correlationId: meta.requestId,
+              failureCode: 'otp_mail_failed',
+            });
           }
+          return jsonResponse(meta, 202, {
+            accepted: true,
+            channel: {
+              type: identity.destinationType,
+              configured: channelConfigured,
+            },
+          });
+        } finally {
+          await dependencies.settleOtpRequest(startedAt);
         }
-        await dependencies.settleOtpRequest(startedAt);
-        return jsonResponse(meta, 202, {
-          accepted: true,
-          channel: {
-            type: identity.destinationType,
-            configured: channelConfigured,
-          },
-        });
       }
 
       if (

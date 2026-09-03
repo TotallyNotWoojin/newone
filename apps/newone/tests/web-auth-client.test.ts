@@ -215,9 +215,9 @@ describe('native identity gateway client', () => {
   test('requires the exact user and at least one active membership', async () => {
     jsonResponse({
       data: {
-        currentUserId: 'user-a',
-        selectedOrganizationId: 'org-a',
-        activeMemberships: [{ organizationId: 'org-a' }],
+        userId: 'user-a',
+        organizationId: 'org-a',
+        currentUser: { userId: 'user-a', membershipRole: 'member' },
       },
     });
     await expect(validateNativeMembership({
@@ -231,7 +231,7 @@ describe('native identity gateway client', () => {
       userId: 'user-a',
     })).rejects.toMatchObject({ code: 'membership_required' });
 
-    jsonResponse({ data: { currentUserId: 'other-user', activeMemberships: [] } });
+    jsonResponse({ data: { userId: 'other-user', organizationId: 'org-a', currentUser: { membershipRole: 'member' } } });
     await expect(validateNativeMembership({
       accessToken: 'controlled-access-token',
       userId: 'user-a',

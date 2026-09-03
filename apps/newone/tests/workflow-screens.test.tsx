@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import HandoffsScreen from '@/app/handoffs';
 import NewGroupScreen from '@/app/new-group';
 import PeopleScreen from '@/app/people';
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 
 jest.setTimeout(20_000);
 
@@ -497,6 +498,52 @@ describe('group creation workflow screen', () => {
     ));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
     await view.unmount();
+  });
+
+  test('gates group creation to consumer kinds, friends-only candidates, and hides role promotion in the personal realm', async () => {
+    const friendCandidate = groupCandidate({ userId: 'membership-friend', displayName: 'Friend Candidate' });
+    const strangerCandidate = groupCandidate({ userId: 'membership-stranger', displayName: 'Stranger Candidate' });
+    const createGroupConversation = successfulAction('conversation-personal');
+    mockWorkspace = baseWorkspace({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      people: [self, person({ id: 'membership-friend', connectionState: 'connected' })],
+      queryGroupCreationCandidates: jest.fn(async () => [friendCandidate, strangerCandidate]),
+      createGroupConversation,
+    });
+
+    await render(<NewGroupScreen />);
+    await waitFor(() => expect(screen.getByText('Friend Candidate')).toBeTruthy());
+
+    // Only the accepted connection is offered — a non-friend never appears.
+    expect(screen.queryByText('Stranger Candidate')).toBeNull();
+
+    // Only the consumer group kind is offered; every workplace kind is gone.
+    expect(screen.getByRole('button', { name: 'group.private' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'group.team' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.shift' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.incident' })).toBeNull();
+
+    // Selecting the friend never offers owner/admin promotion.
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Friend Candidate' }));
+    expect(screen.queryByRole('button', { name: 'group.member' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.admin' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.owner' })).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'group.removePerson Friend Candidate' })).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('group.name'), 'Weekend Trip');
+    await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
+    await waitFor(() => expect(createGroupConversation).toHaveBeenCalledWith({
+      name: 'Weekend Trip',
+      description: '',
+      kind: 'group',
+      unitId: null,
+      historyPolicy: 'since_join',
+      postingMode: 'all_members',
+      joinPolicy: 'inherit',
+      incidentSeverity: undefined,
+      incidentClassification: undefined,
+      members: [{ membershipId: 'membership-friend', role: 'member' }],
+    }));
   });
 });
 

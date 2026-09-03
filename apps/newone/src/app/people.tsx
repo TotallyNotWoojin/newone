@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -138,6 +140,16 @@ export default function PeopleScreen() {
       return true;
     });
   }, [currentSite, filter, search, workspace.people]);
+  // Consumer accounts get a plain friends-and-requests list instead of the
+  // workplace directory; strangers only appear through username search.
+  const consumerFriends = useMemo(
+    () => workspace.people.filter((person) => person.connectionState === 'connected'),
+    [workspace.people],
+  );
+  const consumerRequests = useMemo(
+    () => workspace.people.filter((person) => person.connectionState === 'pending'),
+    [workspace.people],
+  );
 
   const openMessage = async (person: Person) => {
     const conversationId = await workspace.openOrCreateDirectConversation(person.id);
@@ -159,6 +171,20 @@ export default function PeopleScreen() {
     setReportConsent(false);
     setManagePersonId(person.id);
   };
+
+  const renderPersonCard = (person: Person) => (
+    <PersonCard
+      desktop={desktop}
+      key={person.id}
+      onConnect={() => void workspace.updateConnection(person.id)}
+      onDecline={() => void workspace.respondConnection(person.id, 'declined')}
+      onAccept={() => void workspace.respondConnection(person.id, 'accepted')}
+      onMessage={() => void openMessage(person)}
+      onManage={() => openManage(person)}
+      onRemove={() => void workspace.removeConnection(person.id)}
+      person={personalRealm && person.username ? { ...person, roleLabel: `@${person.username}` } : person}
+    />
+  );
 
   const searchResultPerson = (result: UserSearchResult): Person => {
     const known = workspace.people.find((person) => person.id === result.userId);
@@ -235,7 +261,7 @@ export default function PeopleScreen() {
       current="people"
       mobileHeader={
         <MobileBrandHeader
-          subtitle={t('people.subtitle')}
+          subtitle={t(personalRealm ? 'people.subtitleConsumer' : 'people.subtitle')}
           title={t('people.title')}
         />
       }>
@@ -244,14 +270,20 @@ export default function PeopleScreen() {
         || (workspace.people.length <= 1 && !personalRealm) ? (
         <WorkspaceStatePanel resource="people" />
       ) : (
+      // Keeps the username search field and its first results above the iOS
+      // keyboard; taps on results must not be swallowed by keyboard dismissal.
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {desktop ? (
           <DesktopPageHeader
-            description={t('people.description')}
-            eyebrow={t('people.eyebrow')}
+            description={t(personalRealm ? 'people.descriptionConsumer' : 'people.description')}
+            eyebrow={t(personalRealm ? 'people.eyebrowConsumer' : 'people.eyebrow')}
             title={t('people.heading')}
           />
         ) : null}
@@ -288,69 +320,87 @@ export default function PeopleScreen() {
               ) : null}
             </View>
           ) : null}
-          <View style={[styles.directoryTools, shadow]}>
-            <SearchField
-              onChangeText={setSearch}
-              placeholder={t('people.search')}
-              value={search}
-            />
-            <ScrollView
-              horizontal
-              contentContainerStyle={styles.filters}
-              showsHorizontalScrollIndicator={false}>
-              {[
-                ['all', t('people.everyone')],
-                ['connected', t('people.connections')],
-                ['online', t('people.online')],
-                ['my_site', t('people.mySite')],
-                ['pending', t('people.pending')],
-              ].map(([id, label]) => (
-                <Chip
-                  key={id}
-                  label={label}
-                  onPress={() => setFilter(id as PeopleFilter)}
-                  selected={filter === id}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.directoryTopline}>
-            <View>
-              <Text style={styles.directoryEyebrow}>{t('people.directory')}</Text>
-              <Text style={styles.directoryTitle}>{people.length} {t('people.countSuffix')}</Text>
+          {personalRealm ? (
+            <View style={styles.consumerSections}>
+              {consumerRequests.length ? (
+                <View style={styles.consumerSection}>
+                  <Text style={styles.directoryEyebrow}>{t('people.requests')}</Text>
+                  <View style={styles.peopleGrid}>
+                    {consumerRequests.map(renderPersonCard)}
+                  </View>
+                </View>
+              ) : null}
+              <View style={styles.consumerSection}>
+                <Text style={styles.directoryEyebrow}>{t('people.friends')}</Text>
+                {consumerFriends.length ? (
+                  <View style={styles.peopleGrid}>
+                    {consumerFriends.map(renderPersonCard)}
+                  </View>
+                ) : (
+                  <EmptyState
+                    body={t('people.friendsEmptyBody')}
+                    icon="people-outline"
+                    title={t('people.friendsEmpty')}
+                  />
+                )}
+              </View>
             </View>
-            <View style={styles.directoryPrivacy}>
-              <Ionicons name="shield-checkmark" size={14} color={colors.mintDark} />
-              <Text style={styles.directoryPrivacyText}>{t('people.safeFields')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.peopleGrid}>
-            {people.length ? (
-              people.map((person) => (
-                <PersonCard
-                  desktop={desktop}
-                  key={person.id}
-                  onConnect={() => void workspace.updateConnection(person.id)}
-                  onDecline={() => void workspace.respondConnection(person.id, 'declined')}
-                  onAccept={() => void workspace.respondConnection(person.id, 'accepted')}
-                  onMessage={() => void openMessage(person)}
-                  onManage={() => openManage(person)}
-                  onRemove={() => void workspace.removeConnection(person.id)}
-                  person={person}
+          ) : (
+            <>
+              <View style={[styles.directoryTools, shadow]}>
+                <SearchField
+                  onChangeText={setSearch}
+                  placeholder={t('people.search')}
+                  value={search}
                 />
-              ))
-            ) : (
-              <EmptyState
-                body={t('status.emptyPeopleBody')}
-                icon="search-outline"
-                title={t('status.emptyPeople')}
-              />
-            )}
-          </View>
+                <ScrollView
+                  horizontal
+                  contentContainerStyle={styles.filters}
+                  showsHorizontalScrollIndicator={false}>
+                  {[
+                    ['all', t('people.everyone')],
+                    ['connected', t('people.connections')],
+                    ['online', t('people.online')],
+                    ['my_site', t('people.mySite')],
+                    ['pending', t('people.pending')],
+                  ].map(([id, label]) => (
+                    <Chip
+                      key={id}
+                      label={label}
+                      onPress={() => setFilter(id as PeopleFilter)}
+                      selected={filter === id}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.directoryTopline}>
+                <View>
+                  <Text style={styles.directoryEyebrow}>{t('people.directory')}</Text>
+                  <Text style={styles.directoryTitle}>{people.length} {t('people.countSuffix')}</Text>
+                </View>
+                <View style={styles.directoryPrivacy}>
+                  <Ionicons name="shield-checkmark" size={14} color={colors.mintDark} />
+                  <Text style={styles.directoryPrivacyText}>{t('people.safeFields')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.peopleGrid}>
+                {people.length ? (
+                  people.map(renderPersonCard)
+                ) : (
+                  <EmptyState
+                    body={t('status.emptyPeopleBody')}
+                    icon="search-outline"
+                    title={t('status.emptyPeople')}
+                  />
+                )}
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
       )}
       <ActionModal
         description={t('people.manageDescription')}
@@ -371,7 +421,9 @@ export default function PeopleScreen() {
         />
         <View style={styles.privacyNote}>
           <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />
-          <Text style={styles.privacyNoteText}>{t('people.blockNotice')}</Text>
+          <Text style={styles.privacyNoteText}>
+            {t(personalRealm ? 'people.blockNoticeConsumer' : 'people.blockNotice')}
+          </Text>
         </View>
         <ActionError message={workspace.actionError} />
         <PrimaryButton
@@ -608,6 +660,9 @@ function PersonCard({
 }
 
 const styles = StyleSheet.create({
+  keyboard: {
+    flex: 1,
+  },
   page: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
@@ -623,6 +678,12 @@ const styles = StyleSheet.create({
   },
   contentDesktop: {
     paddingHorizontal: spacing.xxl,
+  },
+  consumerSections: {
+    gap: spacing.xl,
+  },
+  consumerSection: {
+    gap: spacing.sm,
   },
   directoryTools: {
     padding: spacing.md,

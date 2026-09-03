@@ -532,7 +532,7 @@ export default function SignInScreen() {
                 onSubmitEditing={sendLink}
                 placeholder={
                   destinationType === 'email'
-                    ? signupMode ? 'you@example.com' : 'you@company.com'
+                    ? 'you@example.com'
                     : '+52 81 5555 0192'
                 }
                 placeholderTextColor={colors.inkSubtle}

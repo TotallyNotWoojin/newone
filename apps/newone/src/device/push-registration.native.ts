@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { publicRuntimeConfig } from '@/config/runtime';
-import type { RegisterDeviceInput } from '@/data/repositories/contracts';
+import { RepositoryError, type RegisterDeviceInput } from '@/data/repositories/contracts';
 import { createClientId } from '@/lib/client-id';
 // Metro selects a stable device-protected native installation identity.
 // eslint-disable-next-line import/no-unresolved
@@ -97,7 +97,12 @@ export function addPushTokenRefreshListener(
 export async function requestDeviceRegistration(
   organizationId: string,
 ): Promise<RegisterDeviceInput | null> {
-  if (!Device.isDevice || (Platform.OS !== 'ios' && Platform.OS !== 'android')) return null;
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return null;
+  // A simulator can never obtain a push token. Fail with a stable, mappable
+  // code instead of a silent null so the Settings action can explain itself.
+  if (!Device.isDevice) {
+    throw new RepositoryError('Push notifications need a physical device.', 'push_needs_device', false);
+  }
   const current = await Notifications.getPermissionsAsync();
   const permission = current.granted ? current : await Notifications.requestPermissionsAsync();
   if (!permission.granted) return null;

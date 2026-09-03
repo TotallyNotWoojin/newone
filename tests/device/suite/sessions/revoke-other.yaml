@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn: "Revoke"
+- extendedWaitUntil:
+    visible: "Revoke and sign out"
+    timeout: 15000
+- tapOn:
+    text: "Reason"
+    index: 1
+- inputText: "Lost device (suite)"
+- tapOn: "Revoke current session"
+- takeScreenshot: ${SHOT}-revoke-dialog
+- tapOn: "Revoke and sign out"
+- extendedWaitUntil:
+    notVisible: "Revoke and sign out"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "No other active sessions were returned by the authorized session service."
+    timeout: 30000
+- takeScreenshot: ${SHOT}-revoked

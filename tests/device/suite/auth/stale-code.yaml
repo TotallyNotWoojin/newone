@@ -1,0 +1,25 @@
+appId: com.totallynotwoojin.newone
+---
+# After a resend, the superseded (old) code is entered. It must be refused.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- eraseText: 8
+- inputText: ${CODE}
+- tapOn: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "Verify and create account"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verify and create account"
+- extendedWaitUntil:
+    visible: ".*(could not be verified|could not complete|expired|Check the entered|Too many|Chats).*"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-stale-code-result
+- assertNotVisible: "Chats"
+- assertVisible: "One-time code"

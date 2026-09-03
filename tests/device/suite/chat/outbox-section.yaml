@@ -1,0 +1,18 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings shows the message outbox section (queued/failed sends).
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: ".*(outbox|Outbox|queued|Queued).*"
+    direction: DOWN
+    timeout: 45000
+- takeScreenshot: ${SHOT}-outbox
+- tapOn: "Close settings"

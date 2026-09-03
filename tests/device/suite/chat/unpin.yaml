@@ -1,0 +1,18 @@
+appId: com.totallynotwoojin.newone
+---
+# Long-press TARGET → Unpin; Pin is offered again afterwards.
+- longPressOn:
+    text: ${TARGET}
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Unpin"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Unpin"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-unpinned

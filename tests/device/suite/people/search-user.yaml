@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# People → search a username; the matching person card must appear.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Search by username"
+    timeout: 15000
+- tapOn: "Search by username"
+- eraseText: 40
+- inputText: ${USERNAME}
+- extendedWaitUntil:
+    visible: ${NAME}
+    timeout: 20000
+- tapOn: "Find people by username"
+- extendedWaitUntil:
+    visible: ${EXPECT_BUTTON}
+    timeout: 15000
+- takeScreenshot: ${SHOT}-result

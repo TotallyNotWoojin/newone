@@ -1,0 +1,26 @@
+appId: com.totallynotwoojin.newone
+---
+# Mic button → (permission) → record ~2s → Send voice message → audio bubble.
+- extendedWaitUntil:
+    visible: "Record voice message"
+    timeout: 20000
+- tapOn: "Record voice message"
+- tapOn:
+    text: "Allow"
+    optional: true
+- extendedWaitUntil:
+    visible: "Recording voice message"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*0:0[2-9].*"
+    timeout: 12000
+- takeScreenshot: ${SHOT}-recording
+- tapOn: "Send voice message"
+- extendedWaitUntil:
+    visible: "Voice message"
+    timeout: 60000
+- takeScreenshot: ${SHOT}-voice-bubble
+- extendedWaitUntil:
+    visible: "Play voice message"
+    timeout: 120000
+- takeScreenshot: ${SHOT}-playable

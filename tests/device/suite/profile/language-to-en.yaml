@@ -1,0 +1,30 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → Display language → English, starting from the Spanish tab bar
+# left behind by profile/language-to-es.yaml: the chrome switches back.
+- launchApp
+- extendedWaitUntil:
+    visible: "Ajustes"
+    timeout: 30000
+- tapOn: "Ajustes"
+- extendedWaitUntil:
+    visible: "Cerrar configuración"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Display language: English"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Display language: English"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- assertVisible: "Display language"
+- assertVisible: "Sign out of Newone"
+- takeScreenshot: ${SHOT}-english-settings
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 15000
+- assertVisible: "Chats"
+- takeScreenshot: ${SHOT}-english-tabs

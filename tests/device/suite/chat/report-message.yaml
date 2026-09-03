@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.newone
+---
+# Long-press the peer's TARGET → Report privately → Spam → consent → Submit.
+- longPressOn:
+    text: ${TARGET}
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Report privately"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Spam"
+- scrollUntilVisible:
+    element:
+      text: "Submit report"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: ${SHOT}-report-form
+- tapOn:
+    text: ".*(I consent|consent|understand).*"
+    index: 0
+- tapOn: "Submit report"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-report-submitted

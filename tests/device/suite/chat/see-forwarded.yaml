@@ -1,0 +1,13 @@
+appId: com.totallynotwoojin.newone
+---
+# Open DEST conversation: the forwarded text carries the FORWARDED label.
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: ${DEST}
+    timeout: 20000
+- tapOn: ${DEST}
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: 30000
+- assertVisible: "FORWARDED"
+- takeScreenshot: ${SHOT}-forwarded-visible

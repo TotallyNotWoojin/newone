@@ -1,0 +1,14 @@
+appId: com.totallynotwoojin.newone
+---
+# The requester's People tab must show the new friend (no relaunch first —
+# the app should learn of the acceptance on its own).
+- tapOn: "Chats"
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Your friends"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Message"
+    timeout: 45000
+- assertVisible: ${NAME}
+- takeScreenshot: ${SHOT}-friend-visible

@@ -1,0 +1,12 @@
+appId: com.totallynotwoojin.newone
+---
+# Only runs if the stranger was offered: add them and create.
+- tapOn: "Add ${STRANGER}"
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: ".*(Write a message…|could not|cannot|not allow|forbidden|permission|Check the entered).*"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-result
+- tapOn:
+    text: "Cancel group creation"
+    optional: true

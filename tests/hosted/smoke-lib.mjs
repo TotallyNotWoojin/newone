@@ -75,7 +75,10 @@ export async function managementSql(accessToken, query) {
   return body;
 }
 
-export async function gatewayPost(functionSlug, path, keys, options) {
+// Any-method gateway call (the command gateway also serves PATCH/PUT/DELETE
+// routes). Returns the raw status plus parsed JSON; callers decide what is
+// an acceptable outcome so expected denials can be asserted explicitly.
+export async function gatewayRequest(functionSlug, method, path, keys, options) {
   const { installationId, accessToken, idempotencyKey, body } = options;
   const headers = {
     'Content-Type': 'application/json',
@@ -86,13 +89,17 @@ export async function gatewayPost(functionSlug, path, keys, options) {
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const response = await fetch(`${PROJECT_URL}/functions/v1/${functionSlug}${path}`, {
-    method: 'POST',
+    method,
     headers,
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
   });
   const payload = await response.json().catch(() => null);
   return { status: response.status, payload };
+}
+
+export async function gatewayPost(functionSlug, path, keys, options) {
+  return await gatewayRequest(functionSlug, 'POST', path, keys, options);
 }
 
 export async function adminRequest(adminKey, path, init = {}) {

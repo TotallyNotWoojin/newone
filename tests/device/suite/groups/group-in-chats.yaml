@@ -1,0 +1,16 @@
+appId: com.totallynotwoojin.newone
+---
+# The group appears (or not) in this member's Chats list.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ${NAME}
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    visible: ${NAME}
+    timeout: 45000
+- takeScreenshot: ${SHOT}-listed

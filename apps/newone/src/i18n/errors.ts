@@ -14,6 +14,7 @@ export function errorMessageKey(error: unknown): MessageKey {
   if (code === 'invalid_display_name') return 'auth.displayNameInvalid';
   if (code === 'invalid_language') return 'auth.languageInvalid';
   if (code === 'signup_expired') return 'auth.signupExpired';
+  if (code === 'push_needs_device') return 'errors.pushNeedsDevice';
   if (
     code === 'network_unavailable'
     || code.includes('unreachable')
@@ -57,4 +58,20 @@ export function errorMessageKey(error: unknown): MessageKey {
     || code === 'http_422'
   ) return 'errors.invalidRequest';
   return 'errors.action';
+}
+
+/**
+ * Stable code plus a short correlation id for failures that only have the
+ * generic fallback copy, so a member can quote an otherwise indistinguishable
+ * failure to support. Specific copy stays clean and returns an empty string.
+ */
+export function errorIdentifier(error: unknown): string {
+  if (errorMessageKey(error) !== 'errors.action') return '';
+  const code = errorCode(error);
+  if (!code) return '';
+  const correlationId = error && typeof error === 'object' && 'correlationId' in error
+    && typeof error.correlationId === 'string'
+    ? error.correlationId.slice(0, 8)
+    : '';
+  return correlationId ? `${code} · ${correlationId}` : code;
 }

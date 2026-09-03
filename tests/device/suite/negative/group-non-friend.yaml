@@ -1,0 +1,37 @@
+appId: com.totallynotwoojin.newone
+---
+# New group → search the candidate list for a NON-friend's name. Expected:
+# "No authorized candidates match this search." If the stranger appears,
+# add them and try to create.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "Start a conversation"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "Start a conversation"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+- tapOn:
+    text: "Group name"
+    index: 1
+- inputText: ${NAME}
+- tapOn: "Create a group"
+- scrollUntilVisible:
+    element:
+      text: "Search company directory"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Search company directory"
+- inputText: ${STRANGER}
+- tapOn: "MEMBERS"
+- extendedWaitUntil:
+    visible: ".*(No authorized candidates match this search|Add ${STRANGER}).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-candidates
+- assertVisible: "No authorized candidates match this search."
+- tapOn: "Cancel group creation"

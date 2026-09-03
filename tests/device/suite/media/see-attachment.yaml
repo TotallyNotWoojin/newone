@@ -1,0 +1,17 @@
+appId: com.totallynotwoojin.newone
+---
+# Peer sees the attachment card and can open it.
+- extendedWaitUntil:
+    visible: ".*(Scanned and safe|Security scan in progress).*"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Scanned and safe"
+    timeout: 120000
+- takeScreenshot: ${SHOT}-peer-sees
+- tapOn:
+    text: ".*Scanned and safe.*"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*(Done|Newone|Write a message…|Cancel|Share).*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-opened

@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+# Search tab → type QUERY → Search → a Messages result with the text.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible: "Search your messages"
+    timeout: 15000
+- tapOn: "Search your messages"
+- inputText: ${QUERY}
+- tapOn:
+    text: "Search"
+    index: 1
+- extendedWaitUntil:
+    visible: ".*${QUERY}.*"
+    timeout: 30000
+- assertVisible: "Messages"
+- takeScreenshot: ${SHOT}-results

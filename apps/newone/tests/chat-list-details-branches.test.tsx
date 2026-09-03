@@ -52,7 +52,12 @@ function listProps(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  mockWorkspace = { conversationAvatarUrls: {} };
+  mockWorkspace = {
+    conversationAvatarUrls: {},
+    people: [],
+    actionBusy: null,
+    respondConnection: jest.fn(async (..._mockArgs: unknown[]) => true),
+  };
 });
 
 describe('conversation list branch behavior', () => {
@@ -139,6 +144,87 @@ describe('conversation list branch behavior', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'chat.cancelJoinRequest' }));
     expect(onRequestJoin).toHaveBeenCalledWith('open');
     expect(onCancelJoin).toHaveBeenCalledWith(pending);
+  });
+});
+
+describe('incoming message requests in the chat list', () => {
+  const requester = {
+    id: 'user-requester', displayName: 'Riley Requester', initials: 'RR', avatarColor: '#225544',
+    roleLabel: '', presence: 'online', connectionState: 'pending', connectionRequestDirection: 'incoming',
+  };
+  const friend = {
+    id: 'user-friend', displayName: 'Ana Friend', initials: 'AF', avatarColor: '#334455',
+    roleLabel: '', presence: 'away', connectionState: 'connected',
+  };
+  const request = conversation({
+    id: 'request', title: 'Riley Requester', kind: 'direct', directParticipantId: 'user-requester',
+    lastMessage: 'Hi! We met at the market.', unreadCount: 1,
+  });
+  const settled = conversation({
+    id: 'settled', title: 'Ana Friend', kind: 'direct', directParticipantId: 'user-friend',
+    lastMessage: 'See you soon',
+  });
+
+  test.each([[390, false], [1280, true]])('lists incoming requests with inline accept and decline at width %i', async (_width, desktop) => {
+    mockWorkspace.people = [requester, friend];
+    const onSelect = jest.fn();
+    await render(<ConversationList {...listProps({
+      conversations: [request, settled, conversation()],
+      desktop,
+      selectedId: 'request',
+      onSelect,
+    })} />);
+    expect(screen.getByText('chat.requests')).toBeTruthy();
+    expect(screen.getByText('chat.requestsHint')).toBeTruthy();
+    // The request lives only in its section; it is never duplicated as an ordinary row.
+    expect(screen.getAllByText('Riley Requester')).toHaveLength(1);
+    expect(screen.getByText('Hi! We met at the market.')).toBeTruthy();
+    expect(screen.getByText('Ana Friend')).toBeTruthy();
+    expect(screen.getByText('Alpha Crew')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(1, 'user-requester', 'accepted');
+    await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(2, 'user-requester', 'declined');
+    // The request row opens the thread, which carries the accept/decline banner.
+    await fireEvent.press(screen.getByText('Hi! We met at the market.'));
+    expect(onSelect).toHaveBeenCalledWith('request');
+  });
+
+  test('keeps requests above every filter and search, settles them into the list, and locks actions while responding', async () => {
+    mockWorkspace.people = [requester, friend];
+    mockWorkspace.actionBusy = 'connection-respond';
+    const props = listProps({ conversations: [request, settled] });
+    const view = await render(<ConversationList {...props} filter="groups" search="nothing-matches" />);
+    expect(screen.getByText('chat.requests')).toBeTruthy();
+    expect(screen.getByText('Riley Requester')).toBeTruthy();
+    expect(screen.queryByText('Ana Friend')).toBeNull();
+    // Requests on screen replace the empty-search placeholder.
+    expect(screen.queryByText('chat.noResults')).toBeNull();
+    expect(screen.getByRole('button', { name: 'people.accept' }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'people.decline' }).props.accessibilityState.disabled).toBe(true);
+
+    // An outgoing request is the requester's own thread, not an inbox request.
+    mockWorkspace.people = [{ ...requester, connectionRequestDirection: 'outgoing' }, friend];
+    await view.rerender(<ConversationList {...props} />);
+    expect(screen.queryByText('chat.requests')).toBeNull();
+    expect(screen.getByText('Riley Requester')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'people.accept' })).toBeNull();
+
+    // Acceptance moves the thread into the ordinary list without a restart.
+    mockWorkspace.people = [{ ...requester, connectionState: 'connected', connectionRequestDirection: undefined }, friend];
+    await view.rerender(<ConversationList {...props} />);
+    expect(screen.queryByText('chat.requests')).toBeNull();
+    expect(screen.getByText('Riley Requester')).toBeTruthy();
+
+    // A thread whose counterpart is unknown is an ordinary direct row, and the
+    // empty-search placeholder returns once no request is on screen.
+    mockWorkspace.people = [];
+    await view.rerender(<ConversationList {...props} />);
+    expect(screen.queryByText('chat.requests')).toBeNull();
+    expect(screen.getByText('Riley Requester')).toBeTruthy();
+    await view.rerender(<ConversationList {...props} search="zzz" />);
+    expect(screen.getByText('chat.noResults')).toBeTruthy();
   });
 });
 

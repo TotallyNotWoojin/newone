@@ -228,6 +228,8 @@ export interface Person {
   displayName: string;
   /** Consumer discovery handle; present only for personal-realm identities. */
   username?: string | null;
+  /** Self-service status line; surfaced for the current user only. */
+  statusMessage?: string | null;
   initials: string;
   roleLabel: string;
   role: MemberRole;

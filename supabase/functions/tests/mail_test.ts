@@ -83,6 +83,24 @@ Deno.test('code email posts branded localized subject and body to Resend', async
   });
 });
 
+Deno.test('BCP 47 locale tags select copy by primary language subtag', async () => {
+  await configured(async () => {
+    const cases = [
+      ['ko-KR', 'Newone 인증 코드'],
+      ['KO', 'Newone 인증 코드'],
+      ['es-419', 'Tu código de verificación de Newone'],
+      ['es_MX', 'Tu código de verificación de Newone'],
+      ['en-GB', 'Your Newone verification code'],
+      ['fr-CA', 'Your Newone verification code'],
+    ] as const;
+    for (const [locale, subject] of cases) {
+      const sends: RecordedSend[] = [];
+      await sendCodeEmail({ to: recipient, code, locale }, recordingFetcher(sends));
+      assertEquals(sends[0]?.body.subject, subject);
+    }
+  });
+});
+
 Deno.test('unknown or missing locales fall back to English copy', async () => {
   await configured(async () => {
     for (const locale of [null, 'fr']) {

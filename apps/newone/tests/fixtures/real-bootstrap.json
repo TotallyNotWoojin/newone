@@ -1,0 +1,83 @@
+{
+ "units": [],
+ "scopes": [],
+ "actions": [],
+ "updates": [],
+ "userId": "c25f668c-326c-4dca-a193-761f02a21207",
+ "handoffs": [],
+ "realtime": {
+  "inboxTopic": "org:11111111-1111-4111-8111-111111111111:user:c25f668c-326c-4dca-a193-761f02a21207:inbox",
+  "controlTopic": "org:11111111-1111-4111-8111-111111111111:user:c25f668c-326c-4dca-a193-761f02a21207:control"
+ },
+ "timeline": {
+  "hasMore": false,
+  "messages": [],
+  "nextBeforeMessageId": null
+ },
+ "directory": [],
+ "summaries": [],
+ "connections": [],
+ "preferences": {
+  "timeZone": "UTC",
+  "quietDays": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "uiLanguage": "en",
+  "soundEnabled": true,
+  "readVisibility": "everyone",
+  "vibrationEnabled": true,
+  "notificationPreview": "generic",
+  "shiftAwareSuppression": false
+ },
+ "auditEvents": [],
+ "capabilities": [
+  "actions.propose",
+  "attachments.upload",
+  "contacts.manage",
+  "conversation.direct.create",
+  "message.send",
+  "messaging.read",
+  "summary.request"
+ ],
+ "currentUser": {
+  "userId": "c25f668c-326c-4dca-a193-761f02a21207",
+  "timeZone": "UTC",
+  "displayName": "Smoke boot",
+  "membershipRole": "member",
+  "membershipType": "employee",
+  "preferredLanguage": "en",
+  "directoryVisibility": "private",
+  "revocationGeneration": 0
+ },
+ "organization": {
+  "name": "Newone",
+  "slug": "personal-realm",
+  "dmPolicy": "request_first",
+  "organizationId": "11111111-1111-4111-8111-111111111111",
+  "defaultLanguage": "en",
+  "allowExternalGuests": false,
+  "groupCreationPolicy": "members",
+  "messageRetentionDays": 365,
+  "requireMfaForAdmins": true,
+  "organizationPolicyVersion": 1,
+  "allowMemberDirectMessages": true,
+  "shiftScheduleAuthoritative": false,
+  "conversationControlsVersion": 1,
+  "externalGuestMaxAccessDays": 90
+ },
+ "conversations": [],
+ "memberBlocks": [],
+ "savedContacts": [],
+ "schemaVersion": 1,
+ "organizationId": "11111111-1111-4111-8111-111111111111",
+ "reconcileAfter": "2026-09-03T11:13:33.042443+00:00",
+ "moderationReports": [],
+ "selectedConversationId": null,
+ "discoverableConversations": []
+}

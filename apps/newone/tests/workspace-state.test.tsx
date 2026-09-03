@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 import {
   WorkspaceStatePanel,
   WorkspaceStatusBanner,
@@ -93,5 +94,92 @@ describe('authoritative workspace state surfaces', () => {
   test('stays absent when connectivity and delivery state are healthy', async () => {
     const view = await render(<WorkspaceStatusBanner />);
     expect(view.toJSON()).toBeNull();
+  });
+});
+
+describe('personal realm empty states', () => {
+  test('uses consumer copy for empty chats and people and keeps workspace copy for organizations', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.conversations = [];
+    const chats = await render(<WorkspaceStatePanel resource="chats" />);
+    expect(screen.getByText('status.emptyChats')).toBeTruthy();
+    expect(screen.getByText('status.emptyChatsBodyConsumer')).toBeTruthy();
+    expect(screen.queryByText('status.emptyChatsBody')).toBeNull();
+    await chats.unmount();
+
+    mockWorkspace.people = [{ id: 'self', connectionState: 'self' }];
+    const people = await render(<WorkspaceStatePanel resource="people" />);
+    expect(screen.getByText('status.emptyPeopleConsumer')).toBeTruthy();
+    expect(screen.getByText('status.emptyPeopleBodyConsumer')).toBeTruthy();
+    expect(screen.queryByText('status.emptyPeople')).toBeNull();
+    expect(screen.queryByText('status.emptyPeopleBody')).toBeNull();
+    await people.unmount();
+
+    mockWorkspace.organizationId = 'organization-a';
+    await render(<>
+      <WorkspaceStatePanel resource="chats" />
+      <WorkspaceStatePanel resource="people" />
+    </>);
+    expect(screen.getByText('status.emptyChatsBody')).toBeTruthy();
+    expect(screen.getByText('status.emptyPeople')).toBeTruthy();
+    expect(screen.getByText('status.emptyPeopleBody')).toBeTruthy();
+    expect(screen.queryByText('status.emptyChatsBodyConsumer')).toBeNull();
+    expect(screen.queryByText('status.emptyPeopleConsumer')).toBeNull();
+  });
+});
+
+describe('degraded realtime indicator', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('shows the reconnecting banner only after 10s of continuous degraded state, and rewaits after a recovery', async () => {
+    jest.useFakeTimers();
+    try {
+      mockWorkspace.realtimeState = 'degraded';
+      const view = await render(<WorkspaceStatusBanner />);
+      expect(screen.queryByText('status.reconnecting')).toBeNull();
+
+      await act(async () => { jest.advanceTimersByTime(9_999); });
+      expect(screen.queryByText('status.reconnecting')).toBeNull();
+
+      await act(async () => { jest.advanceTimersByTime(1); });
+      expect(screen.getByText('status.reconnecting')).toBeTruthy();
+
+      // Recovering hides it immediately — no lingering stale indicator.
+      mockWorkspace.realtimeState = 'connected';
+      await view.rerender(<WorkspaceStatusBanner />);
+      expect(screen.queryByText('status.reconnecting')).toBeNull();
+
+      // A fresh degraded spell always waits out the full delay again.
+      mockWorkspace.realtimeState = 'degraded';
+      await view.rerender(<WorkspaceStatusBanner />);
+      expect(screen.queryByText('status.reconnecting')).toBeNull();
+      await act(async () => { jest.advanceTimersByTime(9_999); });
+      expect(screen.queryByText('status.reconnecting')).toBeNull();
+      await act(async () => { jest.advanceTimersByTime(1); });
+      expect(screen.getByText('status.reconnecting')).toBeTruthy();
+
+      await view.unmount();
+    } finally {
+      jest.clearAllTimers();
+    }
+  });
+
+  test('surfaces the immediate connecting/error copy without waiting, and never both at once', async () => {
+    mockWorkspace.realtimeState = 'connecting';
+    const connecting = await render(<WorkspaceStatusBanner />);
+    expect(screen.getByText('status.reconnecting')).toBeTruthy();
+    await connecting.unmount();
+
+    mockWorkspace.realtimeState = 'error';
+    const errored = await render(<WorkspaceStatusBanner />);
+    expect(screen.getByText('status.reconnecting')).toBeTruthy();
+    await errored.unmount();
+
+    mockWorkspace.realtimeState = 'subscribed';
+    const healthy = await render(<WorkspaceStatusBanner />);
+    expect(screen.queryByText('status.reconnecting')).toBeNull();
+    await healthy.unmount();
   });
 });

@@ -1,0 +1,45 @@
+appId: com.totallynotwoojin.newone
+---
+# Chats → Start a conversation → name → add MEMBER(s) → Create.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "Start a conversation"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "Start a conversation"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+- tapOn:
+    text: "Group name"
+    index: 1
+- inputText: ${NAME}
+- tapOn: "Create a group"
+- takeScreenshot: ${SHOT}-details
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER1}"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Add ${MEMBER1}"
+- runFlow:
+    when:
+      true: ${HAS_MEMBER2}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Add ${MEMBER2}"
+          direction: DOWN
+          timeout: 20000
+      - tapOn: "Add ${MEMBER2}"
+- takeScreenshot: ${SHOT}-members-selected
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 40000
+- assertVisible: ${NAME}
+- takeScreenshot: ${SHOT}-group-open

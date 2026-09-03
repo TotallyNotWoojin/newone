@@ -1,0 +1,8 @@
+appId: com.totallynotwoojin.newone
+---
+# App was backgrounded (another app in front) for a minute, then brought
+# back: the message sent meanwhile must appear without a manual refresh.
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-after-foreground

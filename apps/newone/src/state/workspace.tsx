@@ -121,7 +121,7 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { createClientId } from '@/lib/client-id';
 import { activeMutedUntil, isConversationMuted } from '@/data/notification-preferences.mjs';
 import { getSupabaseClient } from '@/lib/supabase';
-import { errorMessageKey } from '@/i18n/errors';
+import { errorIdentifier, errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { isValidMentionSelection } from '@/features/chat/mention-controls.mjs';
 import { mentionCopy } from '@/features/chat/mention-copy';
@@ -357,6 +357,9 @@ interface WorkspaceState {
   updateConversationPreferences: (
     conversationId: string,
     patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+  ) => Promise<boolean>;
+  updateProfile: (
+    input: { displayName: string; statusMessage?: string | null },
   ) => Promise<boolean>;
   updateConversationControls: (
     conversationId: string,
@@ -607,6 +610,21 @@ function waitFor(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
+// Reconciliation safety net: while active and online, poll the inbox
+// snapshot on a jittered cadence so both sides of a conversation converge
+// even if a realtime invalidation was dropped. The window shrinks while
+// Realtime is degraded, and the poll is skipped whenever a refresh is
+// already in flight or a realtime event landed recently enough to make an
+// extra fetch redundant.
+const RECONCILE_POLL_BASE_MS = 30_000;
+const RECONCILE_POLL_JITTER_MS = 5_000;
+const RECONCILE_POLL_DEGRADED_MS = 10_000;
+const REALTIME_EVENT_FRESH_MS = 15_000;
+
+function jitteredReconcilePollDelay() {
+  return RECONCILE_POLL_BASE_MS + (Math.random() * 2 - 1) * RECONCILE_POLL_JITTER_MS;
+}
+
 interface AttachmentUploadOperation {
   organizationId: string;
   conversationId: string;
@@ -637,6 +655,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [connectivity, setConnectivity] = useState<ConnectivityState>('unknown');
   const [workspaceAccessDeadline, setWorkspaceAccessDeadline] = useState<string | null>(null);
   const [realtimeState, setRealtimeState] = useState<RealtimeState>('idle');
+  const [appStateActive, setAppStateActive] = useState(() => AppState.currentState === 'active');
+  const [realtimeResubscribeNonce, setRealtimeResubscribeNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -675,6 +695,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const receiptProgressRef = useRef(new Map<string, 'delivered' | 'read'>());
   const loadWorkspaceOnceRef = useRef<() => Promise<void>>(async () => {});
   const reconciliationRunnerRef = useRef<ReturnType<typeof createCoalescedRunner> | null>(null);
+  const lastRealtimeEventAtRef = useRef(0);
   const endAccessRef = useRef(auth.endAccess);
   const attachmentUploadsRef = useRef(new Map<string, AttachmentUploadOperation>());
   const attachmentCancellationsRef = useRef(new Map<string, AttachmentCancellation>());
@@ -1158,9 +1179,32 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     void refresh();
   }, [refresh]);
 
+  // A conversation stays fresh from its own successful sends even when
+  // nothing else prompts a reconcile: the sender must see server-assigned
+  // state (ids, ordering, receipts) without a duplicated optimistic row.
+  // mergeMessages() already reconciles by clientMessageId/serverId, so a
+  // plain refresh is safe here.
+  const reconcileConversationAfterSend = useCallback((conversationId: string) => {
+    if (conversationId && conversationId === selectedConversationIdRef.current) void refresh();
+  }, [refresh]);
+
   const handleAccessEnded = useCallback(() => {
     void endAccessRef.current();
   }, []);
+
+  // Any signal actually delivered over the socket makes an immediate extra
+  // poll redundant; the periodic reconcile timer checks this before running.
+  const markRealtimeEventFresh = useCallback(() => {
+    lastRealtimeEventAtRef.current = Date.now();
+  }, []);
+  const handleRealtimeInvalidate = useCallback(() => {
+    markRealtimeEventFresh();
+    reconcileWorkspace();
+  }, [markRealtimeEventFresh, reconcileWorkspace]);
+  const handleRealtimeReconcile = useCallback(() => {
+    markRealtimeEventFresh();
+    reconcileWorkspace();
+  }, [markRealtimeEventFresh, reconcileWorkspace]);
 
   useUserRealtime({
     enabled: Boolean(snapshot)
@@ -1168,10 +1212,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     organizationId: snapshot?.organizationId ?? '',
     userId: snapshot?.currentUser.id ?? '',
     accessToken: auth.realtimeToken ?? undefined,
+    resubscribeNonce: realtimeResubscribeNonce,
     // Broadcast data is never merged into local state. A session-aware read is
     // the authority for edits, removals, translations, membership, and policy.
-    onInvalidate: reconcileWorkspace,
-    onReconcile: reconcileWorkspace,
+    onInvalidate: handleRealtimeInvalidate,
+    onReconcile: handleRealtimeReconcile,
     onAccessEnded: handleAccessEnded,
     onStateChange: setRealtimeState,
   });
@@ -1321,6 +1366,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
                 deliveryState: 'sent',
                 failureReason: undefined,
               });
+              reconcileConversationAfterSend(input.conversationId);
             } else if (command.kind === 'message_receipt') {
               const input = command.payload as MessageReceiptInput;
               const receipt = await repositories.commands.markMessageReceipt(input);
@@ -1410,7 +1456,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       flushingRef.current = false;
     }
-  }, [markMessage, patchServerMessage, repositories.commands, t]);
+  }, [markMessage, patchServerMessage, reconcileConversationAfterSend, repositories.commands, t]);
 
   const enqueueMessageReceipt = useCallback(async (input: Omit<MessageReceiptInput, 'idempotencyKey'>) => {
     const key = receiptProgressKey(input);
@@ -1994,17 +2040,59 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return result === true;
   }, [executeImmediate, repositories.commands]);
 
+  // Tracked independently of the workspace snapshot so the reconcile-poll
+  // effect below can start and stop purely on foreground/background.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      setAppStateActive(nextState === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
   useEffect(() => {
     if (!snapshot?.organizationId) return;
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void reconcileConversation();
         void flushOutbox();
+        // A socket suspended in the background can go stale without ever
+        // emitting a close or error. Force a full unsubscribe/resubscribe of
+        // every private channel with whatever access token is current now
+        // that the app is foregrounded again (setAuth runs before the
+        // channels are recreated).
+        setRealtimeResubscribeNonce((current) => current + 1);
       }
     });
     void flushOutbox();
     return () => subscription.remove();
   }, [flushOutbox, reconcileConversation, snapshot?.organizationId]);
+
+  useEffect(() => {
+    if (!snapshot?.organizationId || !appStateActive || connectivity === 'offline') return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const runPoll = () => {
+      if (cancelled) return;
+      const inFlight = reconciliationRunnerRef.current?.isRunning() ?? false;
+      const sinceLastRealtimeEvent = Date.now() - lastRealtimeEventAtRef.current;
+      if (!inFlight && sinceLastRealtimeEvent >= REALTIME_EVENT_FRESH_MS) void refresh();
+      scheduleNext();
+    };
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const delay = realtimeState === 'degraded'
+        ? RECONCILE_POLL_DEGRADED_MS
+        : jitteredReconcilePollDelay();
+      timer = setTimeout(runPoll, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [appStateActive, connectivity, realtimeState, refresh, snapshot?.organizationId]);
 
   useEffect(() => {
     if (!snapshot?.organizationId) return;
@@ -2434,10 +2522,20 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       const conversation = snapshot.conversations.find((item) => item.id === conversationId);
+      // A personal-realm requester keeps posting into a pending request thread
+      // even though the bootstrap reports can_post=false for the not-yet
+      // permitted pair; the service itself enforces the request message cap.
+      const requestCounterpart = conversation?.kind === 'direct'
+        && conversation.directParticipantId
+        && isPersonalRealm(snapshot.organizationId)
+        ? snapshot.people.find((item) => item.id === conversation.directParticipantId)
+        : undefined;
+      const postingIntoPendingRequest = requestCounterpart?.connectionState === 'pending'
+        && requestCounterpart.connectionRequestDirection === 'outgoing';
       if (
         !conversation
         || conversation.managementOnly
-        || conversation.canPost === false
+        || (conversation.canPost === false && !postingIntoPendingRequest)
         || conversation.isReadOnly
         || !isValidMentionSelection(
           mentionUserIds,
@@ -2504,6 +2602,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             failureReason: undefined,
           });
           setConnectivity('online');
+          reconcileConversationAfterSend(conversationId);
         } catch (commandError) {
           const failure = snapshot.currentUser.membershipType === 'guest' && isOfflineError(commandError)
             ? t('errors.guestOnlineRequired')
@@ -2523,7 +2622,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setOutboxCount((current) => current + 1);
       await flushOutbox();
     },
-    [flushOutbox, locale, markMessage, repositories.commands, snapshot, t],
+    [flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, snapshot, t],
   );
 
   const synchronizeMessageOutbox = useCallback(async () => {
@@ -3502,6 +3601,47 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     },
     [executeImmediate, repositories.commands, snapshot],
   );
+
+  const updateProfile = useCallback(async (
+    input: { displayName: string; statusMessage?: string | null },
+  ) => {
+    if (!snapshot) return false;
+    const displayName = input.displayName.trim();
+    const statusMessage = input.statusMessage?.trim() || null;
+    if (
+      displayName.length < 1
+      || displayName.length > 120
+      || (statusMessage !== null && statusMessage.length > 280)
+    ) {
+      return false;
+    }
+    const receipt = await executeImmediate('profile-update', () =>
+      repositories.commands.updateProfile({
+        organizationId: snapshot.organizationId,
+        displayName,
+        statusMessage,
+        idempotencyKey: createClientId(),
+      }),
+    );
+    if (!receipt || receipt.userId !== snapshot.currentUser.id) return false;
+    // The receipt is authoritative: the local identity and its directory
+    // entry take the server's values, not the draft the user typed.
+    const renamed = <T extends Person>(person: T): T => ({
+      ...person,
+      displayName: receipt.displayName,
+      initials: nameInitials(receipt.displayName),
+      statusMessage: receipt.statusMessage,
+    });
+    setSnapshot((current) => current && current.currentUser.id === receipt.userId
+      ? {
+          ...current,
+          currentUser: renamed(current.currentUser),
+          people: current.people.map((person) =>
+            person.id === receipt.userId ? renamed(person) : person),
+        }
+      : current);
+    return true;
+  }, [executeImmediate, repositories.commands, snapshot]);
 
   const updateConversationControls = useCallback(async (
     conversationId: string,
@@ -4546,28 +4686,66 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const removeConnection = useCallback(
     async (personId: string) => {
-      const person = snapshot?.people.find((item) => item.id === personId);
-      if (!snapshot || !person || !['connected', 'pending'].includes(person.connectionState)) return false;
+      if (!snapshot) return false;
+      const person = snapshot.people.find((item) => item.id === personId);
+      // A username-search target is often absent from the loaded directory
+      // (right after Connect, or before the next bootstrap lands). The personal
+      // realm addresses connection routes by the target user's UUID, so an
+      // unknown pending target is still cancellable there; workspace
+      // organizations keep the directory gate.
+      if (
+        person
+          ? !['connected', 'pending'].includes(person.connectionState)
+          : !isPersonalRealm(snapshot.organizationId)
+      ) {
+        return false;
+      }
       const result = await executeImmediate('connection-remove', () =>
         repositories.commands.removeConnection({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           idempotencyKey: createClientId(),
         }),
       );
       if (result === null) return false;
-      setSnapshot((current) =>
-        current
-          ? {
-              ...current,
-              people: current.people.map((item) =>
-                item.id === personId
-                  ? { ...item, connectionState: 'available', connectionRequestDirection: undefined }
-                  : item,
-              ),
-            }
-          : current,
+      // Cancelling an outgoing request also drops its optimistic request
+      // thread; removing an accepted connection keeps the shared history.
+      const cancelledRequest = !person
+        || (person.connectionState === 'pending' && person.connectionRequestDirection === 'outgoing');
+      const removedConversationIds = new Set(
+        cancelledRequest
+          ? snapshot.conversations
+              .filter((item) => item.kind === 'direct' && item.directParticipantId === personId)
+              .map((item) => item.id)
+          : [],
       );
+      setSnapshot((current) => {
+        if (!current) return current;
+        const people = current.people.map((item) =>
+          item.id === personId
+            ? { ...item, connectionState: 'available' as const, connectionRequestDirection: undefined }
+            : item,
+        );
+        if (!removedConversationIds.size) return { ...current, people };
+        return {
+          ...current,
+          people,
+          conversations: current.conversations.filter((item) => !removedConversationIds.has(item.id)),
+          messages: Object.fromEntries(
+            Object.entries(current.messages).filter(([id]) => !removedConversationIds.has(id)),
+          ),
+          cursors: Object.fromEntries(
+            Object.entries(current.cursors).filter(([id]) => !removedConversationIds.has(id)),
+          ),
+        };
+      });
+      if (removedConversationIds.has(selectedConversationIdRef.current)) {
+        const fallback = snapshot.conversations.find(
+          (item) => !removedConversationIds.has(item.id) && !item.managementOnly,
+        )?.id ?? '';
+        selectedConversationIdRef.current = fallback;
+        setSelectedConversationId(fallback);
+      }
       return true;
     },
     [executeImmediate, repositories.commands, snapshot],
@@ -5111,7 +5289,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const enableNotifications = useCallback(async () => {
     if (!snapshot) return false;
-    const result = await executeImmediate('device-register', async () => {
+    setActionBusy('device-register');
+    setActionError(null);
+    try {
       const registration = await requestDeviceRegistration(snapshot.organizationId);
       if (!registration) {
         throw new RepositoryError(
@@ -5121,15 +5301,26 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         );
       }
       await repositories.commands.registerDevice(registration);
-      return repositories.commands.getDeviceNotificationPreferences({
+      const result = await repositories.commands.getDeviceNotificationPreferences({
         organizationId: snapshot.organizationId,
         installationId: registration.installationId,
       });
-    });
-    if (!result) return false;
-    setDeviceNotificationPreferences(result);
-    return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+      // The device state only flips once the service confirmed the binding.
+      setDeviceNotificationPreferences(result);
+      setConnectivity('online');
+      return true;
+    } catch (registrationError) {
+      // Generic failures quote the stable code and correlation id so a member
+      // can report them; specific copy (simulator, permission) stays clean.
+      const localized = t(errorMessageKey(registrationError));
+      const identifier = errorIdentifier(registrationError);
+      setActionError(identifier ? `${localized} (${identifier})` : localized);
+      if (isOfflineError(registrationError)) setConnectivity('offline');
+      return false;
+    } finally {
+      setActionBusy((current) => (current === 'device-register' ? null : current));
+    }
+  }, [repositories.commands, snapshot, t]);
 
   const hasCapability = useCallback((capability: WorkspaceCapability, unitId?: string | null) => {
     if (!snapshot?.capabilities.includes(capability)) return false;
@@ -5249,6 +5440,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       updateConversation,
       updateConversationPreferences,
       updateConversationControls,
+      updateProfile,
       requestConversationJoin,
       cancelConversationJoinRequest,
       loadConversationJoinRequests,
@@ -5425,6 +5617,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       updateConversationControls,
       updateConversationPreferences,
       updateConnection,
+      updateProfile,
       unreadDividerIds,
     ],
   );

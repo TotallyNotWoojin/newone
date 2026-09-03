@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- inputText: ${CODE}
+- tapOn: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "Verify and sign in"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verify and sign in"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- takeScreenshot: device-09-returning-signed-in

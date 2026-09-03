@@ -70,13 +70,15 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     }),
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
-    requestOtp: async () => {},
-    generateEmailOtp: async () => {
-      throw new Error('signup email OTP must not be minted');
+    requestOtp: async (destinationType) => {
+      // GoTrue signInWithOtp is an SMS-only channel: its mailer would send the
+      // unusable magic-link template, so no route may reach it with an email.
+      if (destinationType === 'email') {
+        throw new Error('email OTP delivery must never go through GoTrue signInWithOtp');
+      }
     },
-    sendCodeEmail: async () => {
-      throw new Error('signup code email must not be sent');
-    },
+    generateEmailOtp: async () => '654321',
+    sendCodeEmail: async () => {},
     verifyOtp: async () => session,
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
@@ -326,13 +328,14 @@ Deno.test('auth OTP and recovery authentication cover suppressed delivery and se
     email: 'coverage@example.com',
     installationId,
   };
+  // Email delivery failures for eligible accounts are surfaced, not masked.
   assertEquals(
     await status({
-      requestOtp: async () => {
+      sendCodeEmail: async () => {
         throw new Error('delivery failure');
       },
     }, browserPost('/v2/auth/otp/request', otpBody)),
-    202,
+    503,
   );
   assertEquals(
     await status(
@@ -403,11 +406,11 @@ Deno.test('auth OTP and recovery authentication cover suppressed delivery and se
   const recoveryRequest = '/v2/auth/recovery/otp/request';
   assertEquals(
     await status({
-      requestOtp: async () => {
+      sendCodeEmail: async () => {
         throw new Error('delivery failure');
       },
     }, browserPost(recoveryRequest, otpBody)),
-    202,
+    503,
   );
   assertEquals(
     await status({

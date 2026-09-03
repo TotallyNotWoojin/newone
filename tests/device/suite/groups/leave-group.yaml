@@ -1,0 +1,18 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Leave this group"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: ${SHOT}-leave-section
+- tapOn: "I understand that history is preserved and my future access ends."
+- tapOn: "Leave group"
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-after-leave

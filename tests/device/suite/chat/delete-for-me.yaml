@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+# Long-press TARGET → Delete for me; it disappears from this device only.
+- longPressOn:
+    text: ${TARGET}
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Delete for me"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Delete for me"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: ${TARGET}
+    timeout: 20000
+- takeScreenshot: ${SHOT}-hidden

@@ -76,7 +76,13 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     }),
     completeSignupUser: async () => {},
     authorizeRecoveryOtp: async () => ({ allowed: true, channelConfigured: true }),
-    requestOtp: async () => {},
+    requestOtp: async (destinationType) => {
+      // GoTrue signInWithOtp is an SMS-only channel: its mailer would send the
+      // unusable magic-link template, so no route may reach it with an email.
+      if (destinationType === 'email') {
+        throw new Error('email OTP delivery must never go through GoTrue signInWithOtp');
+      }
+    },
     generateEmailOtp: async () => '654321',
     sendCodeEmail: async () => {},
     verifyOtp: async () => session,
@@ -256,7 +262,7 @@ Deno.test('signup request sends the branded code email in the requested language
   }
 });
 
-Deno.test('signup mail failure keeps the generic envelope and records telemetry without addresses', async () => {
+Deno.test('signup mail failure surfaces as 503 code_delivery_failed and records telemetry without addresses', async () => {
   const failures = [
     {
       generateEmailOtp: async (): Promise<string> => {
@@ -285,19 +291,23 @@ Deno.test('signup mail failure keeps the generic envelope and records telemetry 
     };
     try {
       const response = await handler(post('/v2/auth/signup/request', requestBody));
-      assertEquals(response.status, 202);
-      assertEquals(await response.json(), { status: 'code_sent' });
+      assertEquals(response.status, 503);
+      const payload = await response.json();
+      assertEquals(payload.error.code, 'code_delivery_failed');
+      assertEquals(payload.error.message, 'We could not send your code. Try again.');
     } finally {
       console.error = originalError;
     }
-    assertEquals(logged.length, 1);
-    const entry = JSON.parse(logged[0] as string) as Record<string, unknown>;
+    const entries = logged.map((line) => JSON.parse(line) as Record<string, unknown>);
+    assertEquals(entries.map((entry) => entry.code), ['signup_mail_failed', 'code_delivery_failed']);
+    const entry = entries[0] as Record<string, unknown>;
     assertEquals(entry.event, 'newone_auth_failure');
-    assertEquals(entry.code, 'signup_mail_failed');
     assertEquals(entry.status, 503);
     assertEquals(entry.path, '/v2/auth/signup/request');
-    assert(!(logged[0] as string).includes(session.email as string));
-    assert(!(logged[0] as string).includes('654321'));
+    for (const line of logged) {
+      assert(!line.includes(session.email as string));
+      assert(!line.includes('654321'));
+    }
   }
 });
 
@@ -365,22 +375,26 @@ Deno.test('signup request with an existing account silently falls back to member
         calls.push('unexpected-create-user');
         throw new Error('existing accounts must not be recreated');
       },
-      requestOtp: async (_destinationType, _destination, captcha) => {
-        calls.push(`deliver:${captcha}`);
+      requestOtp: async () => {
+        calls.push('unexpected-gotrue-deliver');
+        throw new Error('existing members must not receive GoTrue magic links');
       },
-      generateEmailOtp: async () => {
-        calls.push('unexpected-mint');
-        throw new Error('existing members must keep GoTrue login delivery');
+      generateEmailOtp: async (destination) => {
+        calls.push(`mint:${destination}`);
+        return '654321';
       },
-      sendCodeEmail: async () => {
-        calls.push('unexpected-send');
-        throw new Error('existing members must keep GoTrue login delivery');
+      sendCodeEmail: async ({ to, code, locale }) => {
+        calls.push(`send:${to}:${code}:${locale}`);
       },
     })
   );
   const fallbackResponse = await fallback(post('/v2/auth/signup/request', requestBody));
   assertEquals(fallbackResponse.status, 202);
-  assertEquals(calls, ['member-authorize:request', `deliver:${requestBody.captchaToken}`]);
+  assertEquals(calls, [
+    'member-authorize:request',
+    `mint:${session.email}`,
+    `send:${session.email}:654321:en`,
+  ]);
 
   const fresh = createAuthHandler(() => dependencies());
   const freshResponse = await fresh(post('/v2/auth/signup/request', requestBody));
@@ -767,4 +781,95 @@ Deno.test('native signup mirrors web with installation binding and bounded token
     expiresIn: session.expiresIn,
   });
   assertEquals(platforms, ['ios']);
+});
+
+const accountExists = {
+  allowed: false,
+  reason: 'account_exists' as const,
+  existingMember: true,
+  channelConfigured: true,
+  retryAfterSeconds: 0,
+};
+
+Deno.test('existing-account downgrade emails the code in the signup language, never the device locale', async () => {
+  for (const [native, language] of [[false, 'ko'], [true, 'es']] as const) {
+    const sent: Array<Record<string, unknown>> = [];
+    const handler = createAuthHandler(() =>
+      dependencies({
+        authorizeSignupOtp: async () => accountExists,
+        ensureSignupUser: async () => {
+          throw new Error('existing accounts must not be recreated');
+        },
+        generateEmailOtp: async () => '246810',
+        sendCodeEmail: async ({ to, code, locale }) => {
+          sent.push({ to, code, locale });
+        },
+      })
+    );
+    const body = { ...requestBody, language, locale: 'en-US' };
+    const response = await handler(
+      native
+        ? nativePost('/v2/auth/native/signup/request', body)
+        : post('/v2/auth/signup/request', body),
+    );
+    assertEquals(response.status, 202);
+    assertEquals(await response.json(), { status: 'code_sent' });
+    // The same language a fresh signup would use: a different template or
+    // language for existing accounts would reveal account existence.
+    assertEquals(sent, [{ to: session.email, code: '246810', locale: language }]);
+  }
+});
+
+Deno.test('existing-account downgrade never delivers to ineligible members', async () => {
+  let minted = false;
+  let sent = false;
+  const handler = createAuthHandler(() =>
+    dependencies({
+      authorizeSignupOtp: async () => accountExists,
+      authorizeMemberOtp: async () => ({ allowed: false, channelConfigured: true }),
+      generateEmailOtp: async () => {
+        minted = true;
+        return '654321';
+      },
+      sendCodeEmail: async () => {
+        sent = true;
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/signup/request', requestBody));
+  assertEquals(response.status, 202);
+  assertEquals(await response.json(), { status: 'code_sent' });
+  assertEquals(minted, false);
+  assertEquals(sent, false);
+});
+
+Deno.test('existing-account downgrade mail failure surfaces as 503 code_delivery_failed with member telemetry', async () => {
+  const handler = createAuthHandler(() =>
+    dependencies({
+      authorizeSignupOtp: async () => accountExists,
+      sendCodeEmail: async () => {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      },
+    })
+  );
+  const logged: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args.map(String).join(' '));
+  };
+  try {
+    const response = await handler(post('/v2/auth/signup/request', requestBody));
+    assertEquals(response.status, 503);
+    const payload = await response.json();
+    assertEquals(payload.error.code, 'code_delivery_failed');
+    assertEquals(payload.error.message, 'We could not send your code. Try again.');
+  } finally {
+    console.error = originalError;
+  }
+  const entries = logged.map((line) => JSON.parse(line) as Record<string, unknown>);
+  assertEquals(entries.map((entry) => entry.code), ['otp_mail_failed', 'code_delivery_failed']);
+  for (const line of logged) {
+    assert(!line.includes(session.email as string));
+    assert(!line.includes('654321'));
+  }
 });

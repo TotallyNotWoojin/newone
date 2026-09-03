@@ -1,0 +1,11 @@
+appId: com.totallynotwoojin.newone
+---
+# A starts typing (no send) so the peer's typing indicator can be observed.
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: "typing indicator probe "
+- extendedWaitUntil:
+    visible: "typing indicator probe"
+    timeout: 5000

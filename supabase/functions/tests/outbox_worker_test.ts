@@ -75,6 +75,31 @@ function moderationEnvelope() {
   };
 }
 
+function contactEnvelope() {
+  return {
+    topics: ['realtime_control'],
+    jobs: [{
+      id: 708,
+      organization_id: organizationId,
+      topic: 'realtime_control',
+      attempts: 1,
+      payload: {
+        schema_version: 1,
+        event_id: '00000000-0000-4000-8000-000000000092',
+        event: 'workspace.invalidated',
+        control_topic: `org:${organizationId}:user:${userId}:inbox`,
+        organization_id: organizationId,
+        occurred_at: '2026-09-03T12:00:00.000Z',
+        user_id: userId,
+        entity_type: 'contact_connection',
+        entity_id: '00000000-0000-4000-8000-000000000011',
+        conversation_id: conversationId,
+        reason: 'contact_accepted',
+      },
+    }],
+  };
+}
+
 function moderationFanoutEnvelope(attempts = 1) {
   return {
     topics: ['moderation'],
@@ -236,6 +261,67 @@ Deno.test('moderation invalidations reject wrong topics and reporter or content 
     }]
   ) {
     const envelope = moderationEnvelope();
+    Object.assign(envelope.jobs[0]?.payload ?? {}, patch);
+    await assertRejects(
+      () => parseOutboxJobs(envelope, ['realtime_control'], 3),
+      (error) => error instanceof ApiError && error.status === 503,
+    );
+  }
+});
+
+Deno.test('contact invalidations name the counterpart and conversation for one participant', async () => {
+  const events: string[] = [];
+  const handler = createOutboxWorkerHandler(() =>
+    dependencies(['realtime_control'], {
+      claim: async () => contactEnvelope(),
+      dispatchRealtime: async (job) => {
+        if (
+          job.payload.event !== 'workspace.invalidated' ||
+          job.payload.entityType !== 'contact_connection'
+        ) throw new Error('expected contact invalidation fixture');
+        assertEquals(job.payload.controlTopic, `org:${organizationId}:user:${userId}:inbox`);
+        assertEquals(job.payload.userId, userId);
+        assertEquals(job.payload.entityId, '00000000-0000-4000-8000-000000000011');
+        assertEquals(job.payload.conversationId, conversationId);
+        assertEquals(job.payload.reason, 'contact_accepted');
+        assert(!('messageBody' in job.payload));
+        events.push(`${job.payload.event}:${job.payload.entityId}`);
+      },
+      complete: async (_workerId, job) => {
+        events.push(`complete:${job.id}`);
+      },
+    })
+  );
+  const response = await handler(request());
+  assertEquals(response.status, 200);
+  assertEquals(events, [
+    'workspace.invalidated:00000000-0000-4000-8000-000000000011',
+    'complete:708',
+  ]);
+
+  const withoutConversation = contactEnvelope();
+  delete (withoutConversation.jobs[0]?.payload as Record<string, unknown>).conversation_id;
+  const parsed = parseOutboxJobs(withoutConversation, ['realtime_control'], 3);
+  const payload = parsed[0]?.topic === 'realtime_control' ? parsed[0].payload : undefined;
+  assert(payload?.event === 'workspace.invalidated');
+  assert(!('conversationId' in payload));
+});
+
+Deno.test('contact invalidations reject moderation reasons, self-targets, and content fields', async () => {
+  for (
+    const patch of [{
+      reason: 'case_available',
+    }, {
+      entity_id: userId,
+    }, {
+      conversation_id: 'not-a-uuid',
+    }, {
+      control_topic: `org:${organizationId}:user:${userId}:control`,
+    }, {
+      message_body: 'must never enter an invalidation',
+    }]
+  ) {
+    const envelope = contactEnvelope();
     Object.assign(envelope.jobs[0]?.payload ?? {}, patch);
     await assertRejects(
       () => parseOutboxJobs(envelope, ['realtime_control'], 3),

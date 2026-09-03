@@ -1,0 +1,54 @@
+appId: com.totallynotwoojin.newone
+---
+# Switch UI language while a conversation exists: labels change, the
+# message original text does not.
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Display language: Español"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Display language: Español"
+- extendedWaitUntil:
+    visible: "Cerrar configuración"
+    timeout: 15000
+- tapOn: "Cerrar configuración"
+- extendedWaitUntil:
+    visible: ${PEER}
+    timeout: 20000
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: "Escribe un mensaje…"
+    timeout: 20000
+- assertVisible: ${TEXT}
+- assertVisible: "Volver a chats"
+- takeScreenshot: ${SHOT}-spanish-conversation
+- tapOn: "Volver a chats"
+- tapOn: "Ajustes"
+- extendedWaitUntil:
+    visible: "Cerrar configuración"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Idioma de la interfaz: English"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Idioma de la interfaz: English"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000

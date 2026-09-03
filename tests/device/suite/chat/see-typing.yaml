@@ -1,0 +1,6 @@
+appId: com.totallynotwoojin.newone
+---
+- extendedWaitUntil:
+    visible: ".*typing.*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-typing-indicator

@@ -1,0 +1,25 @@
+appId: com.totallynotwoojin.newone
+---
+# From the friend's card in People → Your friends, block them via Manage
+# contact and privacy.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: ${NAME}
+    timeout: 30000
+- tapOn: "Manage contact and privacy"
+- extendedWaitUntil:
+    visible: "Block this person"
+    timeout: 15000
+- tapOn: "Block this person"
+- extendedWaitUntil:
+    visible: "Unblock this person"
+    timeout: 20000
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: "Blocked"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-blocked

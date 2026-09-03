@@ -22,6 +22,7 @@ export type ErrorCode =
   | 'rate_limited'
   | 'delivery_channel_unavailable'
   | 'dependency_unavailable'
+  | 'code_delivery_failed'
   | 'ai_processing_disabled'
   | 'ai_output_needs_review'
   | 'provider_unavailable'
@@ -52,6 +53,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   rate_limited: 'Too many requests. Try again later.',
   delivery_channel_unavailable: 'That verification channel is not configured.',
   dependency_unavailable: 'A required service is temporarily unavailable.',
+  code_delivery_failed: 'We could not send your code. Try again.',
   ai_processing_disabled: 'Language processing is not enabled.',
   ai_output_needs_review: 'The generated language output requires review.',
   provider_unavailable: 'Language processing is temporarily unavailable.',

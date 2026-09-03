@@ -1,0 +1,27 @@
+appId: com.totallynotwoojin.newone
+---
+# User B sees the incoming request in Chats, opens it, accepts, replies.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Sim Human"
+    timeout: 45000
+- takeScreenshot: msg-03-b-request-in-chats
+- tapOn: "Sim Human"
+- extendedWaitUntil:
+    visible: "Accept"
+    timeout: 20000
+- takeScreenshot: msg-04-b-request-banner
+- tapOn: "Accept"
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 20000
+- tapOn: "Write a message…"
+- inputText: "Accepted! Hi Sim A."
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: "Accepted! Hi Sim A."
+    timeout: 20000
+- takeScreenshot: msg-05-b-replied

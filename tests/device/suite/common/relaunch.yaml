@@ -1,0 +1,9 @@
+appId: com.totallynotwoojin.newone
+---
+# Force-quit and reopen: the session must persist straight into Chats.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-relaunched

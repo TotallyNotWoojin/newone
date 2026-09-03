@@ -19,6 +19,7 @@ import type {
   InitialConversationRole,
 } from '@/data/repositories/group-creation-dto.mjs';
 import type { SelectedAttachment } from '@/data/attachments';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
@@ -64,6 +65,36 @@ export default function NewGroupScreen() {
   const requestSequence = useRef(0);
   const wide = width >= 920;
   const lockedInviteOnly = kind === 'shift' || kind === 'incident';
+  // The personal realm is a consumer messenger: no workplace conversation
+  // kinds, no owner/admin promotion at creation, and only accepted
+  // connections (friends) can be added — the directory-style candidate
+  // search is a workplace concept.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
+  const friendIds = useMemo(
+    () => new Set(
+      workspace.people
+        .filter((person) => person.connectionState === 'connected')
+        .map((person) => person.id),
+    ),
+    [workspace.people],
+  );
+  const visibleCandidates = useMemo(
+    () => personalRealm
+      ? candidates.filter((candidate) => friendIds.has(candidate.userId))
+      : candidates,
+    [candidates, friendIds, personalRealm],
+  );
+  const groupKindOptions = useMemo(
+    () => (personalRealm
+      ? [['group', t('group.private')]]
+      : [
+          ['group', t('group.private')],
+          ['team', t('group.team')],
+          ['shift', t('group.shift')],
+          ['incident', t('group.incident')],
+        ]) as [GroupKind, string][],
+    [personalRealm, t],
+  );
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
@@ -285,12 +316,7 @@ export default function NewGroupScreen() {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>{t('group.type')}</Text>
                 <ScrollView horizontal contentContainerStyle={styles.chips} showsHorizontalScrollIndicator={false}>
-                  {([
-                    ['group', t('group.private')],
-                    ['team', t('group.team')],
-                    ['shift', t('group.shift')],
-                    ['incident', t('group.incident')],
-                  ] as [GroupKind, string][]).map(([id, label]) => (
+                  {groupKindOptions.map(([id, label]) => (
                     <Chip key={id} label={label} onPress={() => selectKind(id)} selected={kind === id} />
                   ))}
                 </ScrollView>
@@ -449,11 +475,11 @@ export default function NewGroupScreen() {
                 <View style={styles.emptyCandidates}>
                   <Text style={styles.helperText}>{t('group.loadingCandidates')}</Text>
                 </View>
-              ) : candidates.length === 0 ? (
+              ) : visibleCandidates.length === 0 ? (
                 <View style={styles.emptyCandidates}>
                   <Text style={styles.helperText}>{t('group.noCandidates')}</Text>
                 </View>
-              ) : candidates.map((candidate) => {
+              ) : visibleCandidates.map((candidate) => {
                 const role = selected[candidate.userId];
                 const expiresAt = candidate.accessExpiresAt
                   ? new Date(candidate.accessExpiresAt).toLocaleDateString(
@@ -505,7 +531,7 @@ export default function NewGroupScreen() {
                           <StatusBadge label={t('group.member')} tone="warning" />
                           <Text style={styles.helperText}>{t('group.guestRoleLocked')}</Text>
                         </View>
-                      ) : (
+                      ) : personalRealm ? null : (
                         <View style={styles.roles}>
                           <Chip
                             label={t('group.member')}

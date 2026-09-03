@@ -1,0 +1,25 @@
+appId: com.totallynotwoojin.newone
+---
+# An existing user comes back: picks "Returning member", enters email, asks
+# for a code.
+- assertVisible: "Returning member"
+- tapOn: "Returning member"
+- scrollUntilVisible:
+    element:
+      text: "you@company.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@company.com"
+- inputText: ${EMAIL}
+- tapOn: "Email address"
+- takeScreenshot: device-07-returning-form
+- scrollUntilVisible:
+    element:
+      text: "Continue securely"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue securely"
+- extendedWaitUntil:
+    visible: "One-time code"
+    timeout: 25000
+- takeScreenshot: device-08-returning-code-screen

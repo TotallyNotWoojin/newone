@@ -1,0 +1,8 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn:
+    text: "Use a different email or phone"
+    optional: true
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 15000

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import SearchScreen from '@/app/search';
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 import { RepositoryError } from '@/data/repositories/contracts';
 import { searchCopy } from '@/features/search/search-copy';
 
@@ -29,6 +30,26 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('@/hooks/use-hydration-safe-window-dimensions', () => ({
   useHydrationSafeWindowDimensions: () => ({ width: mockWidth, height: 900 }),
 }));
+// The test renderer exposes host elements only, so the keyboard-avoiding
+// surface records its behavior on a host view for assertions.
+jest.mock('react-native', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  const KeyboardSurface = ({ behavior, children, style }: {
+    behavior?: string;
+    children?: ReactNode;
+    style?: unknown;
+  }) => (
+    <ReactNative.View style={style as undefined} testID={`controlled-keyboard-surface:${behavior ?? 'none'}`}>
+      {children}
+    </ReactNative.View>
+  );
+  return new Proxy(ReactNative, {
+    get(target, property, receiver) {
+      if (property === 'KeyboardAvoidingView') return KeyboardSurface;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+});
 jest.mock('@/i18n/provider', () => ({
   useI18n: () => ({ locale: 'en', t: (key: string) => key }),
 }));
@@ -104,6 +125,20 @@ beforeEach(() => {
 });
 
 describe('authorized workspace search screen', () => {
+  test('keeps the query field above the iOS keyboard on a 390-wide device', async () => {
+    mockWidth = 390;
+    const view = await render(<SearchScreen />);
+    const surface = screen.getAllByTestId(/^controlled-keyboard-surface:/)
+      .find((instance) => within(instance).queryByLabelText('search.placeholder'));
+    expect(surface).toBeDefined();
+    expect(surface!.props.testID).toBe('controlled-keyboard-surface:padding');
+    const scroll = surface!.queryAll((instance) => instance.props.keyboardShouldPersistTaps === 'handled')[0];
+    expect(scroll).toBeDefined();
+    expect(scroll!.props.keyboardDismissMode).toBe('interactive');
+    expect(within(scroll!).getByLabelText('search.placeholder')).toBeTruthy();
+    view.unmount();
+  });
+
   test('applies server filters, paginates without duplicates, suppresses management-only results, and routes every result type', async () => {
     const view = await render(<SearchScreen />);
     expect(screen.getByText('search.privateTitle')).toBeTruthy();
@@ -249,5 +284,35 @@ describe('authorized workspace search screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'search.submit' }));
     await waitFor(() => expect(screen.getByText('search.error')).toBeTruthy());
     await errorView.unmount();
+  });
+});
+
+describe('personal realm search copy', () => {
+  test('uses consumer header copy on desktop', async () => {
+    mockWorkspace = { ...workspace(), organizationId: PERSONAL_REALM_ORGANIZATION_ID };
+    const view = await render(<SearchScreen />);
+    expect(screen.getByText('search.eyebrowConsumer')).toBeTruthy();
+    expect(screen.getByText('search.descriptionConsumer')).toBeTruthy();
+    expect(screen.getByLabelText('search.placeholderConsumer')).toBeTruthy();
+    expect(screen.queryByText('search.eyebrow')).toBeNull();
+    expect(screen.queryByText('search.description')).toBeNull();
+    expect(screen.queryByLabelText('search.placeholder')).toBeNull();
+    await view.unmount();
+  });
+
+  test('uses the consumer subtitle on mobile and keeps workspace copy for organizations', async () => {
+    mockWidth = 390;
+    mockWorkspace = { ...workspace(), organizationId: PERSONAL_REALM_ORGANIZATION_ID };
+    const consumer = await render(<SearchScreen />);
+    expect(screen.getByText('search.subtitleConsumer')).toBeTruthy();
+    expect(screen.queryByText('search.subtitle')).toBeNull();
+    expect(screen.queryByText('search.eyebrowConsumer')).toBeNull();
+    await consumer.unmount();
+
+    mockWorkspace = workspace();
+    await render(<SearchScreen />);
+    expect(screen.getByText('search.subtitle')).toBeTruthy();
+    expect(screen.getByLabelText('search.placeholder')).toBeTruthy();
+    expect(screen.queryByText('search.subtitleConsumer')).toBeNull();
   });
 });

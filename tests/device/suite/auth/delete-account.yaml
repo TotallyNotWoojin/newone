@@ -1,0 +1,33 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → Delete account → type username → confirm → back at sign-in.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Permanently deletes your account, sign-in, and data from Newone."
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: ${SHOT}-danger-zone
+- tapOn:
+    text: "Delete account"
+    index: 1
+- extendedWaitUntil:
+    visible: "Permanently delete this account"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-delete-dialog
+- tapOn: ${USERNAME}
+- inputText: ${USERNAME}
+- tapOn: "Type your username to enable deletion"
+- takeScreenshot: ${SHOT}-username-typed
+- tapOn: "Delete account permanently"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-back-at-sign-in

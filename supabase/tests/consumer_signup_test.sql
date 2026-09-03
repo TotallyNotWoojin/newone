@@ -258,8 +258,10 @@ select is(
 );
 
 -- Consumer AI policy: the first redeemed signup provisions the platform
--- default personal-realm policy -- language detection and translation over
--- the pinned zero-retention provider route -- approved by a realm member.
+-- default personal-realm policy -- language detection, translation, and
+-- conversation summaries over the pinned zero-retention provider route --
+-- approved by a realm member. Summaries stay drafts pending human review;
+-- only the use-case gate is opened here (20260903030000).
 select ok(
   private.ai_use_case_approved(
     private.personal_realm_organization_id(), 'language_detection', null
@@ -276,10 +278,10 @@ select ok(
 );
 
 select ok(
-  not private.ai_use_case_approved(
+  private.ai_use_case_approved(
     private.personal_realm_organization_id(), 'summary', null
   ),
-  'summaries stay unapproved for the personal realm'
+  'redemption enables personal-realm conversation summaries'
 );
 
 select ok(
@@ -297,7 +299,7 @@ select ok(
       and policy.policy_version = 1
       and policy.route_policy = 'approved_zero_retention'
       and policy.approved_use_cases
-        = array['language_detection', 'translation']::text[]
+        = array['language_detection', 'translation', 'summary']::text[]
       and policy.provider_allowlist = array['google-vertex/us-south1']::text[]
       and policy.approved_by_user_id = '99200000-0000-4000-8000-000000000002'
       and policy.approved_at is not null

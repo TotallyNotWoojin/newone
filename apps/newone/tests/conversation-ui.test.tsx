@@ -409,6 +409,7 @@ function buildWorkspace() {
       'actions.confirm', 'language.review', 'reports.investigate',
     ].includes(capability)),
     observeConversation: successfulAction(),
+    refresh: successfulAction(),
     loadMyAiOutputErrorReports: successfulAction(),
     loadOlderMessages: successfulAction(),
     markConversationRead: successfulAction(),
@@ -2059,6 +2060,180 @@ describe('personal realm message-request thread states', () => {
     expect(onSend).toHaveBeenCalledWith('Second request message', undefined, []);
   });
 
+  test.each([
+    ['mobile', true],
+    ['desktop', false],
+  ])('keeps the requester composer enabled on %s when the pair is not yet permitted and surfaces the cap error', async (_layout, mobile) => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
+      candidate,
+    ];
+    mockWorkspace.actionError = 'errors.messageRequestCap';
+    const onSend = jest.fn(async () => undefined);
+    await render(
+      <ConversationPane
+        conversation={directRequestConversation({ canPost: false })}
+        messages={[]}
+        onSend={onSend}
+        mobile={mobile}
+      />,
+    );
+
+    expect(screen.getByText('chat.messageRequestPending')).toBeTruthy();
+    // The bootstrap's can_post=false for a pending pair must never read as an
+    // admins-only group restriction, and must not lock the requester out.
+    expect(screen.queryByText('chat.adminsOnlyPosting')).toBeNull();
+    expect(screen.queryByText('chat.directPostingUnavailable')).toBeNull();
+    expect(screen.getAllByText('errors.messageRequestCap').length).toBeGreaterThan(0);
+    await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Third request message');
+    await fireEvent.press(screen.getByLabelText('chat.send'));
+    expect(onSend).toHaveBeenCalledWith('Third request message', undefined, []);
+  });
+
+  test('locks a not-permitted direct thread with direct copy while groups keep the admins-only copy', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.people = [self, counterpart({ connectionState: 'available' }), candidate];
+    const onSend = jest.fn(async () => undefined);
+    const view = await render(
+      <ConversationPane
+        conversation={directRequestConversation({ canPost: false })}
+        messages={[]}
+        onSend={onSend}
+      />,
+    );
+    expect(screen.getByText('chat.directPostingUnavailable')).toBeTruthy();
+    expect(screen.queryByText('chat.adminsOnlyPosting')).toBeNull();
+    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
+    // A locked composer offers no input at all.
+    expect(screen.queryByLabelText('chat.message')).toBeNull();
+    expect(screen.queryByLabelText('chat.send')).toBeNull();
+    expect(onSend).not.toHaveBeenCalled();
+
+    await view.rerender(
+      <ConversationPane conversation={conversation({ canPost: false })} messages={[]} onSend={onSend} />,
+    );
+    expect(screen.getByText('chat.adminsOnlyPosting')).toBeTruthy();
+    expect(screen.queryByText('chat.directPostingUnavailable')).toBeNull();
+
+    // Read-only threads keep the incident copy regardless of kind.
+    await view.rerender(
+      <ConversationPane
+        conversation={directRequestConversation({ canPost: false, isReadOnly: true })}
+        messages={[]}
+        onSend={onSend}
+      />,
+    );
+    expect(screen.getByText('chat.incidentReadOnly')).toBeTruthy();
+    expect(screen.queryByText('chat.directPostingUnavailable')).toBeNull();
+  });
+
+  test('polls the workspace every 8 seconds while a request is pending and stops once it resolves or unmounts', async () => {
+    const setIntervalSpy = jest.spyOn(global, 'setInterval');
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const pollCalls = () => setIntervalSpy.mock.calls
+      .map((call, index) => ({ call, index }))
+      .filter(({ call }) => call[1] === 8_000);
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
+      candidate,
+    ];
+    const view = await render(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(pollCalls()).toHaveLength(1);
+    expect(mockWorkspace.refresh).not.toHaveBeenCalled();
+    const [{ call: firstPoll, index: firstIndex }] = pollCalls();
+    (firstPoll[0] as () => void)();
+    (firstPoll[0] as () => void)();
+    expect(mockWorkspace.refresh).toHaveBeenCalledTimes(2);
+
+    // Acceptance clears the poll without a restart.
+    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
+    await view.rerender(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[firstIndex]!.value);
+    expect(pollCalls()).toHaveLength(1);
+
+    // A requester's own pending thread polls too, and unmounting clears it.
+    mockWorkspace.people = [
+      self,
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
+      candidate,
+    ];
+    await view.rerender(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(pollCalls()).toHaveLength(2);
+    const { index: secondIndex } = pollCalls()[1]!;
+    await view.unmount();
+    expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[secondIndex]!.value);
+
+    // A settled thread never starts a poll.
+    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
+    await render(
+      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(pollCalls()).toHaveLength(2);
+  });
+
+  test('hides the manual translation request in automatic consumer threads but keeps retry on failed rows', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const failed = incomingMessage({
+      id: 'message-failed-translation',
+      serverId: 'message-failed-translation',
+      originalText: 'La bomba necesita servicio.',
+      attachment: undefined,
+      languageDetection: {
+        state: 'completed', detectedLanguage: 'es', confidence: 0.97,
+        method: 'server-detector', detectedAt: '2026-08-04T18:02:00.000Z',
+      },
+    });
+    const notRequested = incomingMessage({
+      id: 'message-not-requested',
+      serverId: 'message-not-requested',
+      originalText: 'Revise la presión.',
+      attachment: undefined,
+      translation: undefined,
+      translationState: 'not_requested',
+      languageDetection: {
+        state: 'completed', detectedLanguage: 'es', confidence: 0.95,
+        method: 'server-detector', detectedAt: '2026-08-04T18:03:00.000Z',
+      },
+    });
+    const automatic = conversation({ translationMode: 'automatic' });
+    mockWorkspace.conversations[0] = automatic;
+    const view = await render(
+      <ConversationPane conversation={automatic} messages={[failed, notRequested]} onSend={noopSend} />,
+    );
+    // The pipeline translates automatically; only a failed row offers a retry.
+    expect(screen.queryByText('chat.requestTranslation')).toBeNull();
+    await fireEvent.press(screen.getByText('chat.retryTranslation'));
+    expect(mockWorkspace.requestTranslation).toHaveBeenCalledTimes(1);
+    expect(mockWorkspace.requestTranslation).toHaveBeenCalledWith(failed);
+
+    // An unset mode is automatic as well.
+    const implicit = conversation({ translationMode: undefined });
+    mockWorkspace.conversations[0] = implicit;
+    await view.rerender(
+      <ConversationPane conversation={implicit} messages={[failed, notRequested]} onSend={noopSend} />,
+    );
+    expect(screen.queryByText('chat.requestTranslation')).toBeNull();
+    expect(screen.getByText('chat.retryTranslation')).toBeTruthy();
+
+    // Workspace organizations keep the manual request.
+    mockWorkspace.organizationId = 'organization-a';
+    await view.rerender(
+      <ConversationPane conversation={automatic} messages={[failed, notRequested]} onSend={noopSend} />,
+    );
+    expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
+    expect(screen.getByText('chat.retryTranslation')).toBeTruthy();
+  });
+
   test('keeps workspace organizations and settled personal-realm threads free of request banners', async () => {
     mockWorkspace.people = [
       self,
@@ -2187,5 +2362,153 @@ describe('personal realm message-request thread states', () => {
     await render(<ConversationPane conversation={conversation()} messages={[videoMessage]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
     await waitFor(() => expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(videoMessage));
+  });
+});
+
+describe('personal realm conversation copy', () => {
+  test('uses consumer wording for the empty pane, the fresh-thread badge, and system-event fallbacks', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const empty = await render(<ConversationPane messages={[]} onSend={noopSend} />);
+    expect(screen.getByText('chat.choose')).toBeTruthy();
+    expect(screen.getByText('chat.chooseBodyConsumer')).toBeTruthy();
+    expect(screen.queryByText('chat.chooseBody')).toBeNull();
+    await empty.unmount();
+
+    const fresh = await render(
+      <ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(screen.getByText('chat.privateConsumer')).toBeTruthy();
+    expect(screen.queryByText('chat.private')).toBeNull();
+    await fresh.unmount();
+
+    await render(
+      <ConversationPane
+        conversation={conversation()}
+        messages={[incomingMessage({
+          id: 'system-consumer',
+          serverId: 'system-consumer',
+          originalText: '',
+          attachment: undefined,
+          systemEvent: { eventType: 'conversation.member.added', targetUserId: 'unknown-consumer' },
+        })]}
+        onSend={noopSend}
+      />,
+    );
+    expect(screen.getByText('chat.companyMemberConsumer chat.systemMemberAdded')).toBeTruthy();
+    expect(screen.queryByText(/chat\.companyMember chat\./)).toBeNull();
+  });
+});
+
+describe('personal realm message actions', () => {
+  test('hides the workplace-only create-action-item affordance', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const message = translatedMessage();
+    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+
+    expect(screen.queryByText('chat.createAction')).toBeNull();
+    expect(screen.queryByLabelText('chat.actionTitle')).toBeNull();
+    expect(screen.queryByLabelText('chat.actionDetails')).toBeNull();
+    expect(screen.queryByLabelText('chat.actionCreate')).toBeNull();
+    // Every consumer-relevant action stays available.
+    expect(screen.getByLabelText('chat.reply')).toBeTruthy();
+    expect(screen.getByLabelText('chat.deleteMe')).toBeTruthy();
+  });
+
+  test('keeps the create-action-item affordance for workspace organizations', async () => {
+    const message = translatedMessage();
+    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+
+    expect(screen.getByText('chat.createAction')).toBeTruthy();
+    expect(screen.getByLabelText('chat.actionCreate')).toBeTruthy();
+  });
+});
+
+describe('personal realm group member management', () => {
+  function personalGroup(overrides: Record<string, unknown> = {}) {
+    return conversation({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      kind: 'group',
+      memberIds: [self.id, colleague.id, candidate.id],
+      ...overrides,
+    });
+  }
+
+  test('lets the owner promote, demote, and remove other members but never touch their own row', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const owner = personalGroup({
+      myRole: 'owner',
+      canManage: true,
+      canManageConversation: true,
+      memberRoles: { [self.id]: 'owner', [colleague.id]: 'admin', [candidate.id]: 'member' },
+    });
+    await render(<ConversationPane conversation={owner} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+
+    // Role chips for every other member, in every direction (promote and demote).
+    expect(screen.getByLabelText(`chat.memberRole · ${colleague.displayName}`)).toBeTruthy();
+    expect(screen.getByLabelText(`chat.adminRole · ${colleague.displayName}`)).toBeTruthy();
+    expect(screen.getByLabelText(`chat.ownerRole · ${colleague.displayName}`)).toBeTruthy();
+    expect(screen.getByLabelText(`chat.adminRole · ${candidate.displayName}`)).toBeTruthy();
+
+    // Remove is available for the admin and the member, never for the owner's own row.
+    expect(screen.getByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeTruthy();
+    expect(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`)).toBeTruthy();
+    expect(screen.queryByLabelText(`chat.removeMember ${self.displayName}`)).toBeNull();
+
+    // Nobody, including the owner, has an affordance to change their own role.
+    expect(screen.queryByLabelText(new RegExp(`Role · ${self.displayName}$`))).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(`chat.memberRole · ${colleague.displayName}`));
+    expect(mockWorkspace.updateConversationMemberRole).toHaveBeenCalledWith(
+      owner.id,
+      colleague.id,
+      'admin',
+      'member',
+    );
+    await fireEvent.press(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`));
+    expect(mockWorkspace.removeConversationMember).toHaveBeenCalledWith(owner.id, candidate.id);
+  });
+
+  test('lets an admin remove plain members but never touch the owner, other admins, or their own row', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const admin = personalGroup({
+      myRole: 'admin',
+      canManage: false,
+      canManageConversation: true,
+      memberRoles: { [self.id]: 'admin', [colleague.id]: 'owner', [candidate.id]: 'member' },
+    });
+    await render(<ConversationPane conversation={admin} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+
+    // An admin never sees role controls at all — only the server-trusted
+    // owner can promote or demote.
+    expect(screen.queryByLabelText(new RegExp('^chat\\.(member|admin|owner)Role · '))).toBeNull();
+
+    // Remove is available only for the plain member.
+    expect(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`)).toBeTruthy();
+    expect(screen.queryByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeNull();
+    expect(screen.queryByLabelText(`chat.removeMember ${self.displayName}`)).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`));
+    expect(mockWorkspace.removeConversationMember).toHaveBeenCalledWith(admin.id, candidate.id);
+  });
+
+  test('shows a plain member no management affordances at all', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const member = personalGroup({
+      myRole: 'member',
+      canManage: false,
+      canManageConversation: false,
+      memberRoles: { [self.id]: 'member', [colleague.id]: 'owner', [candidate.id]: 'admin' },
+    });
+    await render(<ConversationPane conversation={member} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+
+    expect(screen.getAllByText(colleague.displayName).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(new RegExp('^chat\\.(member|admin|owner)Role · '))).toBeNull();
+    expect(screen.queryByLabelText(/^chat\.removeMember /)).toBeNull();
+    expect(screen.queryByText('chat.addMember')).toBeNull();
   });
 });

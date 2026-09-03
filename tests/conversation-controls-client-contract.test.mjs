@@ -6,8 +6,11 @@ const load = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('shared web and native composer honors effective server posting access', async () => {
   const pane = await load('../apps/newone/src/features/chat/conversation-pane.tsx');
-  assert.match(pane, /conversation\.isReadOnly === true \|\| conversation\.canPost === false/);
+  // Server access is honored; the one explicit exception is the requester's
+  // own pending direct request, where the server enforces the message cap.
+  assert.match(pane, /conversation\.isReadOnly === true \|\| \(conversation\.canPost === false && !outgoingRequest\)/);
   assert.match(pane, /chat\.adminsOnlyPosting/);
+  assert.match(pane, /chat\.directPostingUnavailable/);
   assert.match(pane, /updateConversationControls/);
   assert.match(pane, /loadConversationJoinRequests/);
   assert.match(pane, /decideConversationJoinRequest/);

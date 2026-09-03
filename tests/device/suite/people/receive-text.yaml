@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.newone
+---
+# Recipient opens the conversation with PEER and sees TEXT.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ${PEER}
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    visible: ${PEER}
+    timeout: 45000
+- tapOn: ${PEER}
+- extendedWaitUntil:
+    visible: ${TEXT}
+    timeout: 45000
+- takeScreenshot: ${SHOT}-received

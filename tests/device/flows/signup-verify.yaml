@@ -1,0 +1,24 @@
+appId: com.totallynotwoojin.newone
+---
+# The user types the code from their real inbox and expects to land in
+# the app. Continues on the code screen left by the request flow.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- inputText: ${CODE}
+- tapOn: "One-time code"
+- takeScreenshot: device-03-code-entered
+- scrollUntilVisible:
+    element:
+      text: "Verify and create account"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verify and create account"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- takeScreenshot: device-04-signed-in

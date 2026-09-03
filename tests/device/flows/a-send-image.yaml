@@ -1,0 +1,46 @@
+appId: com.totallynotwoojin.newone
+---
+# In an open conversation, user A attaches a photo from the real iOS photo
+# library (the simulator ships with sample photos) and sends it.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Sim Human"
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- tapOn: "Add attachment"
+- extendedWaitUntil:
+    visible: "Photo library"
+    timeout: 10000
+- takeScreenshot: img-01-picker-options
+- tapOn: "Photo library"
+# System photo picker: pick the first thumbnail, then confirm.
+- extendedWaitUntil:
+    visible: "Photos"
+    timeout: 20000
+    optional: true
+- takeScreenshot: img-02-system-picker
+- tapOn:
+    point: "18%,28%"
+- tapOn:
+    text: "Add"
+    optional: true
+- tapOn:
+    text: "Done"
+    optional: true
+- extendedWaitUntil:
+    visible: "Send message"
+    timeout: 20000
+- takeScreenshot: img-03-attachment-staged
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*(Uploading|Upload progress|Preparing).*"
+    timeout: 20000
+    optional: true
+- takeScreenshot: img-04-uploading
+- extendedWaitUntil:
+    visible: ".*(image|Image|photo|Photo).*"
+    timeout: 60000
+- takeScreenshot: img-05-image-sent

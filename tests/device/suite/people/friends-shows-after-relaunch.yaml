@@ -1,0 +1,16 @@
+appId: com.totallynotwoojin.newone
+---
+# Fallback: force-quit + relaunch, then check the People tab lists the new
+# friend (used when the live update did not arrive on its own in time).
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 40000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Your friends"
+    timeout: 15000
+- assertVisible: ${NAME}
+- assertVisible: "Message"
+- takeScreenshot: ${SHOT}-friend-after-relaunch

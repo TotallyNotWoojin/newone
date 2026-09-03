@@ -1,14 +1,37 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, PrimaryButton } from '@/components/ui/primitives';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { colors, spacing } from '@/theme/tokens';
 
+/** A degraded realtime connection self-heals in the background (resubscribe
+ * with backoff); only surface the disruptive-looking indicator once the
+ * degraded state has actually persisted for a while. */
+const DEGRADED_INDICATOR_DELAY_MS = 10_000;
+
+function useDegradedRealtimeIndicator(realtimeState: string): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (realtimeState !== 'degraded') return undefined;
+    const timer = setTimeout(() => setVisible(true), DEGRADED_INDICATOR_DELAY_MS);
+    // Reset on cleanup (leaving 'degraded', or unmounting) rather than in the
+    // effect body, so a later degraded spell always waits out the delay again.
+    return () => {
+      clearTimeout(timer);
+      setVisible(false);
+    };
+  }, [realtimeState]);
+  return visible;
+}
+
 export function WorkspaceStatusBanner() {
   const workspace = useWorkspace();
   const { t } = useI18n();
+  const degradedIndicatorVisible = useDegradedRealtimeIndicator(workspace.realtimeState);
   let label = '';
   let icon: keyof typeof Ionicons.glyphMap = 'information-circle-outline';
   let tone: 'neutral' | 'warning' | 'danger' = 'neutral';
@@ -27,7 +50,11 @@ export function WorkspaceStatusBanner() {
     label = `${workspace.failedOutboxCount} · ${t('chat.failed')}`;
     icon = 'alert-circle-outline';
     tone = 'danger';
-  } else if (workspace.realtimeState === 'connecting' || workspace.realtimeState === 'error') {
+  } else if (
+    workspace.realtimeState === 'connecting'
+    || workspace.realtimeState === 'error'
+    || degradedIndicatorVisible
+  ) {
     label = t('status.reconnecting');
     icon = 'sync-outline';
     tone = 'warning';
@@ -60,6 +87,8 @@ export function WorkspaceStatePanel({
 }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
+  // Consumer accounts never see workplace directory wording in empty states.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
   if (workspace.status === 'loading') {
     return (
       <View accessibilityLiveRegion="polite" style={styles.loading}>
@@ -90,7 +119,7 @@ export function WorkspaceStatePanel({
   )) {
     return (
       <EmptyState
-        body={t('status.emptyChatsBody')}
+        body={t(personalRealm ? 'status.emptyChatsBodyConsumer' : 'status.emptyChatsBody')}
         icon="chatbubbles-outline"
         title={t('status.emptyChats')}
       />
@@ -99,9 +128,9 @@ export function WorkspaceStatePanel({
   if (resource === 'people' && workspace.people.filter((person) => person.connectionState !== 'self').length === 0) {
     return (
       <EmptyState
-        body={t('status.emptyPeopleBody')}
+        body={t(personalRealm ? 'status.emptyPeopleBodyConsumer' : 'status.emptyPeopleBody')}
         icon="people-outline"
-        title={t('status.emptyPeople')}
+        title={t(personalRealm ? 'status.emptyPeopleConsumer' : 'status.emptyPeople')}
       />
     );
   }

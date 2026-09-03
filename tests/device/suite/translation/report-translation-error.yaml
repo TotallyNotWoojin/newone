@@ -1,0 +1,23 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn:
+    text: "Report translation error"
+    index: 0
+- extendedWaitUntil:
+    visible: "AI quality review"
+    timeout: 15000
+- tapOn: "Incorrect meaning"
+- tapOn:
+    text: "Describe what went wrong"
+    index: 1
+- inputText: "Device suite: wording check"
+- tapOn: "AI quality review"
+- takeScreenshot: ${SHOT}-form
+- tapOn: "Submit quality report"
+- extendedWaitUntil:
+    visible: ".*(Quality report submitted|could not|cannot|failed).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-submitted
+- extendedWaitUntil:
+    notVisible: "AI quality review"
+    timeout: 20000

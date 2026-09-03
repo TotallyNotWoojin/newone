@@ -1,0 +1,23 @@
+appId: com.totallynotwoojin.newone
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "People"
+- extendedWaitUntil:
+    visible: "Blocked"
+    timeout: 30000
+- tapOn: "Manage contact and privacy"
+- extendedWaitUntil:
+    visible: "Unblock this person"
+    timeout: 15000
+- tapOn: "Unblock this person"
+- extendedWaitUntil:
+    visible: "Block this person"
+    timeout: 20000
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    notVisible: "Blocked"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-unblocked

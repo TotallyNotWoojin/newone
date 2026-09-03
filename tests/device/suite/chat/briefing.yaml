@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+# Conversation briefing (AI summary): expand the card, request a draft, and
+# record exactly what the status badge and body say afterwards.
+- extendedWaitUntil:
+    visible: "Write a message…"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Conversation briefing"
+    direction: UP
+    timeout: 30000
+- tapOn: "Conversation briefing"
+- extendedWaitUntil:
+    visible: ".*(Request summary draft|No summary draft|Queued|Generating|Unapproved draft|Summary unavailable).*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-briefing-expanded
+- tapOn:
+    text: "Request summary draft"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(Queued|Generating|Unapproved draft|Summary unavailable|could not|cannot|failed).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-after-request
+- extendedWaitUntil:
+    visible: ".*(Unapproved draft|Summary unavailable|Human approved|Failure code).*"
+    timeout: 120000
+- takeScreenshot: ${SHOT}-final
+- assertVisible: "Unapproved draft"

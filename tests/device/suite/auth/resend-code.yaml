@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+# The user taps "Resend code": the app confirms a new code was sent and the
+# link shows a cooldown countdown.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "Resend code"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Resend code"
+- extendedWaitUntil:
+    visible: ".*(We sent a new one-time code|could not|Too many|unavailable|cannot reach).*"
+    timeout: 20000
+# The "(NNs)" countdown is a child of the accessible Pressable, so it is only
+# visible in the screenshot; the disabled state is what the tree exposes.
+- takeScreenshot: ${SHOT}-resend-cooldown
+- assertVisible:
+    text: "Resend code"
+    enabled: false
+- assertVisible: "We sent a new one-time code through your selected channel."

@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,6 +37,7 @@ import { searchCopy } from '@/features/search/search-copy';
 import { useI18n } from '@/i18n/provider';
 import { errorMessageKey } from '@/i18n/errors';
 import { getSupabaseClient } from '@/lib/supabase';
+import { isPersonalRealm } from '@/constants/personal-realm';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
@@ -316,17 +319,30 @@ export default function SearchScreen() {
     [locale],
   );
 
+  const personalRealm = isPersonalRealm(workspace.organizationId);
+
   return (
     <AppScaffold
       current="search"
-      mobileHeader={<MobileBrandHeader subtitle={t('search.subtitle')} title={t('search.title')} />}>
+      mobileHeader={(
+        <MobileBrandHeader
+          subtitle={t(personalRealm ? 'search.subtitleConsumer' : 'search.subtitle')}
+          title={t('search.title')}
+        />
+      )}>
+      {/* Keeps the query field and the first results above the iOS keyboard;
+          result taps must not be swallowed by keyboard dismissal. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled">
         {desktop ? (
           <DesktopPageHeader
-            description={t('search.description')}
-            eyebrow={t('search.eyebrow')}
+            description={t(personalRealm ? 'search.descriptionConsumer' : 'search.description')}
+            eyebrow={t(personalRealm ? 'search.eyebrowConsumer' : 'search.eyebrow')}
             title={t('search.heading')}
           />
         ) : null}
@@ -340,7 +356,7 @@ export default function SearchScreen() {
                   resetResults();
                 }}
                 onSubmitEditing={() => void runSearch(false)}
-                placeholder={t('search.placeholder')}
+                placeholder={t(personalRealm ? 'search.placeholderConsumer' : 'search.placeholder')}
                 value={query}
               />
             </View>
@@ -546,11 +562,13 @@ export default function SearchScreen() {
           ) : null}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </AppScaffold>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboard: { flex: 1 },
   page: { flexGrow: 1, paddingBottom: spacing.xxxl },
   pageMobile: { padding: spacing.md, paddingBottom: 100 },
   content: {

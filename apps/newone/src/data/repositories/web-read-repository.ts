@@ -406,7 +406,7 @@ function personFromDirectory(
 }
 
 function currentPerson(row: JsonRecord, units: OrganizationUnitOption[]): Person {
-  return personFromDirectory(
+  const person = personFromDirectory(
     { ...row, unitIds: row.unitIds ?? [], isSavedContact: false, isBlocked: false },
     requiredString(row.userId, 'current user'),
     units,
@@ -414,6 +414,9 @@ function currentPerson(row: JsonRecord, units: OrganizationUnitOption[]): Person
     [],
     new Set(),
   );
+  // The bootstrap strips a null status, so only a present string is carried.
+  const statusMessage = optionalString(row.statusMessage);
+  return statusMessage === null ? person : { ...person, statusMessage };
 }
 
 function languageDetectionFromDto(message: JsonRecord): NonNullable<Message['languageDetection']> {

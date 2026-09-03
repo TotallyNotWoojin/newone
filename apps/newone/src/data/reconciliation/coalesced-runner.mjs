@@ -32,6 +32,9 @@ export function createCoalescedRunner(task) {
 
   return {
     run,
+    isRunning() {
+      return inFlight !== null;
+    },
     activate() {
       disposed = false;
     },

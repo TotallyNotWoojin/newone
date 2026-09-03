@@ -4,7 +4,7 @@ import {
   DISABLED_OPENROUTER_PLUGINS,
   type OpenRouterEmployeeControlPlane,
   parseOpenRouterEmployeeControlPlane,
-  verifyOpenRouterEmployeeControlPlane,
+  verifyOpenRouterEmployeeControlPlaneCached,
 } from './openrouter-control-plane.ts';
 import { ProtectedTokenError, protectTokens, restoreTokens } from './protected-tokens.ts';
 import { asObject, normalizedString, onlyKeys } from './validation.ts';
@@ -560,7 +560,10 @@ async function verifyEmployeeEgressBeforeContent(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), environment.policy.timeoutMilliseconds);
   try {
-    await verifyOpenRouterEmployeeControlPlane(
+    // Management-API proofs are cached for five minutes (see
+    // openrouter-control-plane.ts); the synthetic route probe below still
+    // runs per completion because it exercises the live completion route.
+    await verifyOpenRouterEmployeeControlPlaneCached(
       environment.employeeControlPlane,
       environment.policy,
       fetcher,

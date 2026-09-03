@@ -1,0 +1,58 @@
+appId: com.totallynotwoojin.newone
+---
+# A brand-new user opens the app and fills the sign-up form exactly as a
+# human would: scroll to each box, tap it, type, close the keyboard.
+- launchApp:
+    clearState: true
+# A previous simulated human may still be signed in (iOS keychain survives
+# clearState, exactly like a real phone). Sign out first, like a human would.
+- runFlow:
+    when:
+      visible: "Chats"
+    commands:
+      - tapOn: "Settings"
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of Newone"
+          direction: DOWN
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 20000
+- tapOn: "Create account"
+- scrollUntilVisible:
+    element:
+      text: "you@example.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "Email address"
+- scrollUntilVisible:
+    element:
+      text: "your_username"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "your_username"
+- inputText: ${USERNAME}
+- tapOn: "Username"
+- scrollUntilVisible:
+    element:
+      text: "Your name as others will see it"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Your name as others will see it"
+- inputText: "Sim Human"
+- tapOn: "Display name"
+- takeScreenshot: device-01-signup-form
+- scrollUntilVisible:
+    element:
+      text: "Continue securely"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue securely"
+- extendedWaitUntil:
+    visible: "One-time code"
+    timeout: 25000
+- takeScreenshot: device-02-code-screen

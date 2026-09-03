@@ -1,0 +1,6 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
