@@ -383,6 +383,25 @@ describe('native identity gateway client', () => {
       .rejects.toMatchObject({ code: 'network_unavailable' });
   });
 
+  test('captures the server correlation id only when the rejection envelope carries a string', async () => {
+    jsonResponse({ error: { code: 'bad_request', correlationId: 'corr-native-1234' } }, 400);
+    await expect(requestNativeOtp({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      captchaToken: 'controlled-captcha-input',
+    })).rejects.toMatchObject({ code: 'bad_request', correlationId: 'corr-native-1234' });
+
+    jsonResponse({ error: { code: 'bad_request', correlationId: 42 } }, 400);
+    const rejection = await requestNativeOtp({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      captchaToken: 'controlled-captcha-input',
+    }).catch((error: unknown) => error) as WebAuthError;
+    expect(rejection).toBeInstanceOf(WebAuthError);
+    expect(rejection.code).toBe('bad_request');
+    expect(rejection.correlationId).toBeUndefined();
+  });
+
   test('classifies network failures without echoing transport details', async () => {
     controlledFetch.mockImplementationOnce(async () => {
       throw new Error('sensitive network implementation detail');
@@ -514,6 +533,26 @@ describe('same-origin web identity client', () => {
       expect(init.headers).toMatchObject({ 'X-CSRF-Token': 'csrf-value' });
 
       await expect(deleteWebAccount()).rejects.toMatchObject({ code: 'invalid_response' });
+    } finally {
+      platform.restore();
+    }
+  });
+
+  test('captures the server correlation id on rejected web requests', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://app.example.test' } },
+    });
+    jsonResponse({ error: { code: 'bad_request', correlationId: 'corr-web-5678' } }, 400);
+    try {
+      await expect(requestWebSignup({
+        destination: 'new.person@example.test',
+        username: 'river_runner_7',
+        displayName: 'River Runner',
+        language: 'en',
+        captchaToken: 'controlled-captcha-input',
+      })).rejects.toMatchObject({ code: 'bad_request', correlationId: 'corr-web-5678' });
     } finally {
       platform.restore();
     }

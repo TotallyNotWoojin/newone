@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +23,7 @@ import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useAuth } from '@/state/auth';
 import { useI18n } from '@/i18n/provider';
 import { errorMessageKey } from '@/i18n/errors';
+import type { MessageKey } from '@/i18n/catalog';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 function invitationFromInitialLocation() {
@@ -58,6 +59,10 @@ function normalizeDestination(destinationType: 'email' | 'phone', value: string)
 // Mirrors the server-side consumer username contract exactly.
 const SIGNUP_USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 
+// Every code delivery (arrival on the verify step and each resend) closes the
+// resend window for this long.
+const RESEND_COOLDOWN_SECONDS = 60;
+
 const UI_LANGUAGES = [
   { code: 'en', labelKey: 'auth.languageEnglish' },
   { code: 'es', labelKey: 'auth.languageSpanish' },
@@ -77,6 +82,7 @@ export default function SignInScreen() {
   const [message, setMessage] = useState('');
   const [code, setCode] = useState('');
   const [authStep, setAuthStep] = useState<'identity' | 'verify'>('identity');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [initialInvitationToken] = useState(invitationFromInitialLocation);
@@ -93,6 +99,38 @@ export default function SignInScreen() {
   // Without a configured Turnstile site key the challenge cannot load; the
   // server exempts tokenless native requests, so the client omits the token.
   const captchaConfigured = Boolean(publicRuntimeConfig.turnstileSiteKey);
+
+  // One countdown ticker runs for the whole stay on the verify step; leaving
+  // the step (or unmounting) tears it down. The cooldown itself is armed by
+  // the actions that deliver a code.
+  useEffect(() => {
+    if (authStep !== 'verify') return undefined;
+    const ticker = setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [authStep]);
+
+  // Localizes a failed auth call; the generic fallback copy additionally quotes
+  // the stable error code and a short correlation id so members can report an
+  // otherwise indistinguishable failure to support. Specific copy stays clean.
+  const failureMessage = (error: unknown, fallbackKey: MessageKey) => {
+    if (!(error instanceof Error)) return t(fallbackKey);
+    const messageKey = errorMessageKey(error);
+    const localized = t(messageKey);
+    if (messageKey !== 'errors.action') return localized;
+    const errorCode = 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : '';
+    if (!errorCode) return localized;
+    const correlationId = 'correlationId' in error
+      && typeof (error as { correlationId?: unknown }).correlationId === 'string'
+      ? (error as { correlationId: string }).correlationId.slice(0, 8)
+      : '';
+    return correlationId
+      ? `${localized} (${errorCode} · ${correlationId})`
+      : `${localized} (${errorCode})`;
+  };
 
   const chooseDestinationType = (nextType: 'email' | 'phone') => {
     if (nextType === destinationType) return;
@@ -168,6 +206,7 @@ export default function SignInScreen() {
           ...(captchaToken ? { captchaToken } : {}),
         });
         setAuthStep('verify');
+        setResendCooldown(RESEND_COOLDOWN_SECONDS);
         setMessage(t('auth.signupOtpSent'));
         return;
       }
@@ -189,15 +228,54 @@ export default function SignInScreen() {
         return;
       }
       setAuthStep('verify');
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setMessage(t(recoveryMode ? 'auth.recoveryOtpSent' : 'auth.otpSent'));
     } catch (requestError) {
-      setMessage(requestError instanceof Error
-        ? t(errorMessageKey(requestError))
-        : t('auth.signInUnavailable'));
+      setMessage(failureMessage(requestError, 'auth.signInUnavailable'));
     } finally {
       setLoading(false);
       setCaptchaToken(null);
       setCaptchaKey((current) => current + 1);
+    }
+  };
+
+  // Re-runs the exact request that delivered the current code, with the values
+  // already entered on the identity step, then closes a fresh resend window.
+  const resendCode = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      if (signupMode) {
+        await auth.requestSignup({
+          destination: normalizeDestination('email', destination),
+          username,
+          displayName: displayName.trim(),
+          language: locale,
+        });
+        setMessage(t('auth.codeResent'));
+        return;
+      }
+      const result = recoveryMode
+        ? await auth.requestRecoveryOtp({
+            destinationType,
+            destination: normalizeDestination(destinationType, destination),
+          })
+        : await auth.requestOtp({
+            destinationType,
+            destination: normalizeDestination(destinationType, destination),
+            ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
+            ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
+          });
+      if (!result.channelConfigured) {
+        setMessage(t('auth.channelUnavailable'));
+        return;
+      }
+      setMessage(t('auth.codeResent'));
+    } catch (resendError) {
+      setMessage(failureMessage(resendError, 'auth.signInUnavailable'));
+    } finally {
+      setLoading(false);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
     }
   };
 
@@ -245,9 +323,7 @@ export default function SignInScreen() {
         setCaptchaToken(null);
         setCaptchaKey((current) => current + 1);
       }
-      setMessage(verifyError instanceof Error
-        ? t(errorMessageKey(verifyError))
-        : t('auth.verifyFailed'));
+      setMessage(failureMessage(verifyError, 'auth.verifyFailed'));
     } finally {
       setLoading(false);
     }
@@ -467,6 +543,25 @@ export default function SignInScreen() {
               />
             )}
           </View>
+          {authStep === 'verify' ? (
+            <Pressable
+              accessibilityLabel={t('auth.resendCode')}
+              accessibilityRole="button"
+              disabled={loading || resendCooldown > 0}
+              onPress={resendCode}
+              style={({ pressed }) => [styles.resendLink, pressed && styles.pressed]}>
+              <Text
+                style={[
+                  styles.resendText,
+                  (loading || resendCooldown > 0) && styles.resendTextDisabled,
+                ]}>
+                {t('auth.resendCode')}
+              </Text>
+              {resendCooldown > 0 ? (
+                <Text style={styles.resendCountdown}>{`(${resendCooldown}s)`}</Text>
+              ) : null}
+            </Pressable>
+          ) : null}
           {authStep === 'identity' && signupMode ? (
             <View style={styles.signupFields}>
               <Text style={styles.label}>{t('auth.usernameLabel')}</Text>
@@ -823,6 +918,27 @@ const styles = StyleSheet.create({
     fontSize: 9,
     textAlign: 'center',
     marginTop: spacing.xs,
+  },
+  resendLink: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  resendText: {
+    color: colors.mintDark,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  resendTextDisabled: {
+    color: colors.inkSubtle,
+  },
+  resendCountdown: {
+    color: colors.inkSubtle,
+    fontSize: 11,
+    fontWeight: '700',
   },
   secondaryLink: {
     minHeight: 44,

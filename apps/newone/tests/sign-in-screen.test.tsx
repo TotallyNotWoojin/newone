@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Platform } from 'react-native';
 
@@ -449,6 +449,202 @@ describe('sign-in and account recovery screen', () => {
       destination: 'recover@example.com',
     });
     expect(mockAuth.requestRecoveryOtp.mock.calls[0][0]).not.toHaveProperty('captchaToken');
+    await view.unmount();
+  });
+
+  test('gates code resend behind the cooldown and reuses the returning request without a stale captcha', async () => {
+    jest.useFakeTimers();
+    const setIntervalSpy = jest.spyOn(globalThis, 'setInterval');
+    const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval');
+    try {
+      const view = await render(<SignInScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
+      await solveCaptcha();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+      await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+
+      expect(screen.getByText('(60s)')).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(1);
+
+      await act(async () => { jest.advanceTimersByTime(59_000); });
+      expect(screen.getByText('(1s)')).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(1);
+
+      await act(async () => { jest.advanceTimersByTime(1_000); });
+      expect(screen.queryByText('(0s)')).toBeNull();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
+      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(2);
+      expect(mockAuth.requestOtp).toHaveBeenLastCalledWith({
+        destinationType: 'email',
+        destination: 'person@example.com',
+      });
+      expect(mockAuth.requestOtp.mock.calls[1][0]).not.toHaveProperty('captchaToken');
+      expect(screen.getByText('(60s)')).toBeTruthy();
+
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.differentIdentity' }));
+      expect(screen.queryByRole('button', { name: 'auth.resendCode' })).toBeNull();
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+      expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[0]?.value);
+      await view.unmount();
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  test('resends the signup code with the entered profile, maps resend failures, and cleans up on unmount', async () => {
+    jest.useFakeTimers();
+    mockAuth = authState({
+      requestSignup: jest.fn<(..._args: unknown[]) => Promise<void>>()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new RepositoryError('upstream throttle detail', 'rate_limited', true))
+        .mockResolvedValueOnce(undefined),
+    });
+    const setIntervalSpy = jest.spyOn(globalThis, 'setInterval');
+    const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval');
+    try {
+      const view = await render(<SignInScreen />);
+      await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
+      await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
+      await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), ' River Runner ');
+      await solveCaptcha();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+      await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
+
+      await act(async () => { jest.advanceTimersByTime(60_000); });
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('errors.rateLimit')).toBeTruthy());
+      expect(screen.queryByText('upstream throttle detail')).toBeNull();
+      expect(mockAuth.requestSignup).toHaveBeenLastCalledWith({
+        destination: 'new.person@example.com',
+        username: 'river_runner_7',
+        displayName: 'River Runner',
+        language: 'en',
+      });
+      expect(screen.getByText('(60s)')).toBeTruthy();
+
+      await act(async () => { jest.advanceTimersByTime(60_000); });
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
+      expect(mockAuth.requestSignup).toHaveBeenCalledTimes(3);
+
+      expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+      const ticker = setIntervalSpy.mock.results[0]?.value;
+      expect(clearIntervalSpy).not.toHaveBeenCalledWith(ticker);
+      await view.unmount();
+      expect(clearIntervalSpy).toHaveBeenCalledWith(ticker);
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  test('resends the recovery code through the recovery request and reports unconfigured channels', async () => {
+    jest.useFakeTimers();
+    mockAuth = authState({
+      requestRecoveryOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
+        .mockResolvedValueOnce({ channelConfigured: true })
+        .mockResolvedValueOnce({ channelConfigured: false })
+        .mockResolvedValueOnce({ channelConfigured: true }),
+    });
+    try {
+      const view = await render(<SignInScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
+      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'recover@example.com');
+      await solveCaptcha();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+      await waitFor(() => expect(screen.getByText('auth.recoveryOtpSent')).toBeTruthy());
+
+      await act(async () => { jest.advanceTimersByTime(60_000); });
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('auth.channelUnavailable')).toBeTruthy());
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenLastCalledWith({
+        destinationType: 'email',
+        destination: 'recover@example.com',
+      });
+      expect(screen.getByText('(60s)')).toBeTruthy();
+
+      await act(async () => { jest.advanceTimersByTime(60_000); });
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledTimes(3);
+      expect(mockAuth.requestOtp).not.toHaveBeenCalled();
+      await view.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('resends the enrollment code with the invitation credentials intact', async () => {
+    jest.useFakeTimers();
+    const invitation = 'a'.repeat(64);
+    try {
+      const view = await render(<SignInScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.firstUse' }));
+      await fireEvent.changeText(screen.getByLabelText('auth.invitationTokenLabel'), invitation);
+      await fireEvent.changeText(screen.getByLabelText('auth.employeeCodeLabel'), ' EMP-42 ');
+      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'invitee@example.com');
+      await solveCaptcha();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+      await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+
+      await act(async () => { jest.advanceTimersByTime(60_000); });
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
+      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
+      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(2);
+      expect(mockAuth.requestOtp).toHaveBeenLastCalledWith({
+        destinationType: 'email',
+        destination: 'invitee@example.com',
+        invitationToken: invitation,
+        employeeCode: 'EMP-42',
+      });
+      await view.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('appends the error code and short correlation id only to generic fallback failures', async () => {
+    const correlationId = '1a2b3c4d-9999-4000-8000-000000000000';
+    mockAuth = authState({
+      requestOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'quota_exhausted', false, correlationId))
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'quota_exhausted', false))
+        .mockRejectedValueOnce(new Error('unclassified failure'))
+        .mockRejectedValueOnce('not-an-error')
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'username_taken', false, correlationId)),
+    });
+    const view = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
+
+    await solveCaptcha();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('errors.action (quota_exhausted · 1a2b3c4d)')).toBeTruthy());
+    expect(screen.queryByText('upstream detail')).toBeNull();
+
+    await solveCaptcha();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('errors.action (quota_exhausted)')).toBeTruthy());
+
+    await solveCaptcha();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('errors.action')).toBeTruthy());
+
+    await solveCaptcha();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.signInUnavailable')).toBeTruthy());
+
+    await solveCaptcha();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.usernameTaken')).toBeTruthy());
+    expect(screen.queryByText(/1a2b3c4d/)).toBeNull();
     await view.unmount();
   });
 

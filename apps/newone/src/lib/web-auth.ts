@@ -27,12 +27,17 @@ export interface WebAuthSession {
 }
 
 export class WebAuthError extends Error {
+  /** Server-issued request identifier, kept so members can quote it to support. */
+  readonly correlationId?: string;
+
   constructor(
     message: string,
     public readonly code: string,
+    correlationId?: string,
   ) {
     super(message);
     this.name = 'WebAuthError';
+    if (typeof correlationId === 'string') this.correlationId = correlationId;
   }
 }
 
@@ -109,6 +114,7 @@ async function webRequest(
         ? 'Your web session has expired.'
         : 'The secure web request was rejected.',
       typeof problem.code === 'string' ? problem.code : `http_${response.status}`,
+      typeof problem.correlationId === 'string' ? problem.correlationId : undefined,
     );
   }
   return objectValue(objectValue(payload).data ?? payload);
@@ -376,6 +382,7 @@ async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unkn
     throw new WebAuthError(
       'The secure native sign-in request was rejected.',
       typeof problem.code === 'string' ? problem.code : `http_${response.status}`,
+      typeof problem.correlationId === 'string' ? problem.correlationId : undefined,
     );
   }
   return data;
