@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "64847717267",
+    "project_id": "newline-38a60",
+    "storage_bucket": "newline-38a60.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:64847717267:android:b8923c80da8444a2407e66",
+        "android_client_info": {
+          "package_name": "com.totallynotwoojin.newone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyNvEU4qBTzhazs-zisfY6wGyRnvMx6IA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

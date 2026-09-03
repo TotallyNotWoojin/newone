@@ -51,3 +51,6 @@ next-env.d.ts
 
 # Apple credentials must never enter the repository
 *.p8
+
+# Service-account credentials must never enter the repository
+*firebase-adminsdk*.json
