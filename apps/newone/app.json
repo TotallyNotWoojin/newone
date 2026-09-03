@@ -23,6 +23,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Newone uses the camera only when you choose to take a photo or video to share in a conversation.",
         "NSMicrophoneUsageDescription": "Newone uses the microphone only when you record a voice message or a video to share."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
