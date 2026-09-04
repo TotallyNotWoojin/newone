@@ -6,6 +6,7 @@ import {
   AppScaffold,
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
+import { ScreenErrorBoundary } from '@/components/ui/error-boundary';
 import { IconButton } from '@/components/ui/primitives';
 import {
   WorkspaceStatePanel,
@@ -96,12 +97,16 @@ export default function ChatsScreen() {
               onRequestJoin={workspace.requestConversationJoin}
               onCancelJoin={workspace.cancelConversationJoinRequest}
             />
-            <ConversationPane
-              conversation={selectedConversation}
-              messages={workspace.messages[workspace.selectedConversationId] ?? []}
-              onSend={(text, replyTo, mentionUserIds) =>
-                workspace.sendMessage(workspace.selectedConversationId, text, replyTo, mentionUserIds)}
-            />
+            <ScreenErrorBoundary
+              labels={{ title: t('errors.screenCrashed'), retry: t('errors.tryAgain') }}
+              scope="conversation">
+              <ConversationPane
+                conversation={selectedConversation}
+                messages={workspace.messages[workspace.selectedConversationId] ?? []}
+                onSend={(text, replyTo, mentionUserIds) =>
+                  workspace.sendMessage(workspace.selectedConversationId, text, replyTo, mentionUserIds)}
+              />
+            </ScreenErrorBoundary>
             {showDetails && selectedConversation && !selectedConversation.managementOnly ? (
               <ConversationDetails conversation={selectedConversation} />
             ) : null}

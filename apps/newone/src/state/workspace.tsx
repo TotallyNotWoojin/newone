@@ -1759,7 +1759,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       || !message.serverId
       || !targetLanguage
       || (detectionState !== 'completed' && detectionState !== 'failed')
-      || (detectionState === 'completed' && message.languageDetection?.detectedLanguage === targetLanguage)
+      || (detectionState === 'completed'
+        && message.languageDetection?.detectedLanguage === targetLanguage
+        && !message.languageDetection?.method?.endsWith(':sender-language'))
     ) return false;
     const result = await executeImmediate(`translation-request:${message.serverId}`, () =>
       repositories.commands.requestTranslation({

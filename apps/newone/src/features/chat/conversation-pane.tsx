@@ -757,6 +757,19 @@ export function ConversationPane({
             setSelectedMessage(null);
           }
         }}
+        onTranslate={selectedMessage && selectedMessage.isOwn && selectedMessage.serverId
+          && workspace.messageDisplayLanguage
+          && selectedMessage.languageDetection?.state === 'completed'
+          && (selectedMessage.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage
+            || Boolean(selectedMessage.languageDetection.method?.endsWith(':sender-language')))
+          && !(selectedMessage.translatedText && selectedMessage.translation?.status === 'completed')
+          ? () => {
+            // Owner request: a sender can ask for their own message in their
+            // display language from the actions sheet (long-press).
+            void workspace.requestTranslation(selectedMessage);
+            setSelectedMessage(null);
+          }
+          : null}
         onReport={async (disclosure) => {
           if (selectedMessage && await workspace.reportMessage(
             selectedMessage,
@@ -1798,7 +1811,7 @@ function MessageBubble({
                 </View>
               ) : null}
             </View>
-          ) : message.isOwn && (visibleTranslationState === 'not_requested' || visibleTranslationState === 'queued' || visibleTranslationState === 'translating') ? null : (
+          ) : message.isOwn && visibleTranslationState === 'not_requested' ? null : (
             <View style={[styles.translationStateCard, message.isOwn && styles.translationStateCardOwn]}>
               <View style={styles.translationTitleRow}>
                 <Ionicons
@@ -2228,7 +2241,7 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
           <Text
             numberOfLines={1}
             style={[styles.attachmentName, message.isOwn && styles.attachmentNameOwn]}>
-            {attachment.name}
+            {attachment.kind === 'voice' ? t('chat.voiceNote') : attachment.name}
           </Text>
           <Text style={[styles.attachmentMeta, message.isOwn && styles.attachmentMetaOwn]}>
             {attachment.sizeLabel} · {transferStatus.label}
@@ -2635,6 +2648,7 @@ function MessageActionsModal({
   onReply,
   onCopy,
   onPin,
+  onTranslate,
 }: {
   message: Message | null;
   conversations: Conversation[];
@@ -2662,6 +2676,7 @@ function MessageActionsModal({
   onReply: () => void;
   onCopy: () => void;
   onPin: () => void;
+  onTranslate?: (() => void) | null;
 }) {
   const workspace = useWorkspace();
   const { locale, t } = useI18n();
@@ -2694,6 +2709,9 @@ function MessageActionsModal({
           <PrimaryButton icon="arrow-undo-outline" label={t('chat.reply')} onPress={onReply} tone="light" />
           <PrimaryButton icon="copy-outline" label={t('chat.copy')} onPress={onCopy} tone="light" />
           <PrimaryButton icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? t('chat.unpin') : t('chat.pin')} loading={busy === 'message-pin'} onPress={onPin} tone="light" />
+          {onTranslate ? (
+            <PrimaryButton icon="language-outline" label={t('chat.translateForMe')} onPress={onTranslate} tone="light" />
+          ) : null}
         </View>
       ) : null}
       {message?.serverId && !message.deleted ? (

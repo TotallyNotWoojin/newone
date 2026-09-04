@@ -1,7 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
 - extendedWaitUntil:
-    visible: "Voice message"
+    visible: ".*(Voice message|voice-note-).*"
     timeout: 90000
 - extendedWaitUntil:
     visible: "Play voice message"

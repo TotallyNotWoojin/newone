@@ -17,7 +17,7 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-recording
 - tapOn: "Send voice message"
 - extendedWaitUntil:
-    visible: "Voice message"
+    visible: ".*(Voice message|voice-note-).*"
     timeout: 60000
 - takeScreenshot: ${SHOT}-voice-bubble
 - extendedWaitUntil:
