@@ -238,10 +238,12 @@ describe('permission request and refresh lifecycle', () => {
     expect(mockRequestPermissionsAsync).toHaveBeenCalledTimes(1);
   });
 
-  test('returns null when permission is denied or the platform is unsupported', async () => {
+  test('a denied permission is a distinct code; an unsupported platform is null', async () => {
     mockGetPermissionsAsync.mockResolvedValue({ granted: false });
     mockRequestPermissionsAsync.mockResolvedValue({ granted: false });
-    await expect(requestDeviceRegistration('organization-controlled')).resolves.toBeNull();
+    await expect(requestDeviceRegistration('organization-controlled')).rejects.toMatchObject({
+      code: 'notification_permission_denied',
+    });
     mockPlatform = 'web';
     await expect(requestDeviceRegistration('organization-controlled')).resolves.toBeNull();
   });

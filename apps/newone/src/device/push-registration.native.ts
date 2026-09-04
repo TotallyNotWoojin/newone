@@ -103,8 +103,25 @@ export async function requestDeviceRegistration(
   if (!Device.isDevice) {
     throw new RepositoryError('Push notifications need a physical device.', 'push_needs_device', false);
   }
+  // Each way this can fail gets its own stable code, so the Settings banner
+  // says what to do: a build without push configuration (a local archive
+  // that lacked EXPO_PUBLIC_PUSH_ENVIRONMENT shipped as TestFlight 19) is
+  // not a denied permission.
+  if (!pushBinding()) {
+    throw new RepositoryError('Push notifications are not configured in this build.', 'push_unconfigured', false);
+  }
   const current = await Notifications.getPermissionsAsync();
   const permission = current.granted ? current : await Notifications.requestPermissionsAsync();
-  if (!permission.granted) return null;
-  return getExistingDeviceRegistration(organizationId);
+  if (!permission.granted) {
+    throw new RepositoryError(
+      'Notification permission was not granted on this device.',
+      'notification_permission_denied',
+      false,
+    );
+  }
+  const registration = await getExistingDeviceRegistration(organizationId);
+  if (!registration) {
+    throw new RepositoryError('The push service did not issue a token for this device.', 'push_token_unavailable', true);
+  }
+  return registration;
 }

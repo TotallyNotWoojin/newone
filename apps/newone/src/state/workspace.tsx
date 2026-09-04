@@ -5371,7 +5371,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!registration) {
         throw new RepositoryError(
           'Notification permission was not granted on this device.',
-          'notification_permission_required',
+          'notification_permission_denied',
           false,
         );
       }
