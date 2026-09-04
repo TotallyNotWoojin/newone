@@ -308,3 +308,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Result | PASS 18 · FAIL 3 · UNREACHABLE 0. All product checks passed (blocked send fails, strangers cannot be messaged or added, error identifiers shown). |
 | setup-neg-x-signout-2 | X was already at the sign-in screen (the screen showed only Create account / Returning member, confirming the v2 sign-in). Sign-out flow now passes through when already signed out. |
 | neg-06 / neg-06b | The group form kept the keyboard up (iOS 26.5 keyboard without the prediction bar defeated the text guard), so the friends search never came into view; the stranger was correctly NOT offered (server: no group, no members). Flow now calls `hideKeyboard`. Product finding while reading the screenshot: the consumer group form still said "coworkers", "secure upload and malware scanning", and "Search company directory"; consumer copy added (`group.subtitleConsumer`, `group.avatarDescriptionConsumer`, `group.searchConsumer`). |
+
+### Sep 4 2026, 07:48–08:05 — media area, Play connected, chat-row tap finding
+
+| Item | Evidence |
+| --- | --- |
+| media (pool 2) | PASS 8 · FAIL 1: media-00c "Accept" not found after tapping the request row. Maestro tapped the row at bounds y 388–432; the hierarchy at failure shows the same row at y 258–334: the list shifted between the hierarchy read and the tap (the Requests section resolves once the people list arrives), so the tap hit empty space. Same signature as chat-open-a-3/-9 in the chat run. Open and accept flows now re-tap once when the conversation does not appear. |
+| Google Play | Owner enabled the Android Developer API, created the app, uploaded `newone-v2-build10.aab`, and granted the service account: `edits.insert` 200; internal track release "newchat 1", version code 10, status completed. Future bundles go up through the API. |
+| Clean rerun | Started 07:58 on the rebuilt simulator app (tsc clean, 50/50 in the three affected Jest files): groups (pool 3), profile, chat, translation, translation-ko, sessions. |
