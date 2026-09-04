@@ -8,6 +8,7 @@ import {
 } from '../_shared/cursors.ts';
 import { hmacSha256Hex } from '../_shared/crypto.ts';
 import { ApiError } from '../_shared/errors.ts';
+import { mailSinkDomain } from '../_shared/mail.ts';
 import { ExpoPushClient, type ExpoPushMessage } from '../_shared/expo-push.ts';
 import {
   accessCredential,
@@ -531,4 +532,13 @@ Deno.test('HTTP runtime, transport, credential, cookie, and JSON boundaries cove
   await assertRejects(() =>
     parseJson(jsonRequest(JSON.stringify({ oversized: 'x'.repeat(30) })), config)
   );
+});
+
+Deno.test('mail sink: configured throwaway domains skip the provider, everything else does not', () => {
+  const env = (value: string | undefined) => ({ get: (name: string) => (name === 'NEWONE_TEST_MAIL_SINK_DOMAINS' ? value : undefined) });
+  assertEquals(mailSinkDomain('a@guerrillamailblock.com', env('guerrillamailblock.com, example.test')), 'guerrillamailblock.com');
+  assertEquals(mailSinkDomain('B@EXAMPLE.TEST', env('guerrillamailblock.com,example.test')), 'example.test');
+  assertEquals(mailSinkDomain('person@gmail.com', env('guerrillamailblock.com,example.test')), null);
+  assertEquals(mailSinkDomain('a@guerrillamailblock.com', env(undefined)), null);
+  assertEquals(mailSinkDomain('a@guerrillamailblock.com', env('')), null);
 });

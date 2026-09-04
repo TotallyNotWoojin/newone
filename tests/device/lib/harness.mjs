@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runFlow, screenTexts, findErrorTexts, screenshotsIn } from './maestro.mjs';
 import { screenshot as simShot } from './devices.mjs';
-import { createMailbox, waitForCode } from './mailbox.mjs';
+import { createMailbox, waitForCode, mintCode, mintingEnabled } from './mailbox.mjs';
 import * as server from './server.mjs';
 
 export const SUITE_DIR = new URL('../suite/', import.meta.url).pathname;
@@ -132,7 +132,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
     });
     if (!form.uiOk) return account;
     const requestedAt = Date.now();
-    const code = await waitForCode(mailbox);
+    const code = mintingEnabled() ? await mintCode(mailbox.email) : await waitForCode(mailbox);
     if (!code) {
       note({ id: `setup-${label}-signup-email`, title: `Setup: signup email for ${displayName}`, status: 'FAIL', expected: 'verification email arrives in the real inbox within 150s', observed: 'no email with a six-digit code arrived' });
       return account;
@@ -176,5 +176,6 @@ export function createAreaContext({ area, devices, report, runDir }) {
     return account;
   }
 
-  return { area, devices, areaDir, log, shot, step, note, observe, signup, server, waitForCode, report };
+  const waitForAnyCode = (mailbox, options) => (mintingEnabled() ? mintCode(mailbox.email) : waitForCode(mailbox, options));
+  return { area, devices, areaDir, log, shot, step, note, observe, signup, server, waitForCode: waitForAnyCode, report };
 }

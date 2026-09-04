@@ -36,3 +36,29 @@ export async function waitForCode(mailbox, { timeoutMs = 150_000, intervalMs = 6
   }
   return null;
 }
+
+// Minted codes: when the project sinks mail for the throwaway domains
+// (NEWONE_TEST_MAIL_SINK_DOMAINS on the server) and NEWONE_DEVICE_MINT_CODES=1
+// here, the code comes from the auth admin API instead of the inbox. The app
+// verifies it exactly as it verifies an emailed code. Used on Sep 4 2026 when
+// the mail provider's daily quota was spent; the inbox path stays the default.
+export function mintingEnabled() {
+  return process.env.NEWONE_DEVICE_MINT_CODES === '1';
+}
+
+export async function mintCode(email) {
+  const { loadAccessToken } = await import('../../hosted/smoke-lib.mjs');
+  const { EXPECTED_PROJECT_REF } = await import('../../hosted/lib.mjs');
+  const token = loadAccessToken();
+  const keys = await (await fetch(`https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/api-keys?reveal=true`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  const service = keys.find((key) => key.name === 'service_role')?.api_key;
+  const response = await fetch(`https://${EXPECTED_PROJECT_REF}.supabase.co/auth/v1/admin/generate_link`, {
+    method: 'POST',
+    headers: { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'magiclink', email }),
+  });
+  const body = await response.json().catch(() => ({}));
+  const code = String(body.email_otp ?? body.properties?.email_otp ?? '');
+  if (!/^[0-9]{6}$/.test(code)) throw new Error(`could not mint a code for ${email} (${response.status})`);
+  return { code, subject: 'minted via auth admin API (mail sink)', receivedAt: new Date().toISOString() };
+}

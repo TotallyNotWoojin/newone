@@ -71,10 +71,32 @@ function mailConfig(): { apiKey: string; from: string } {
   return { apiKey, from };
 }
 
+/**
+ * Throwaway test domains configured on the project (NEWONE_TEST_MAIL_SINK_DOMAINS,
+ * comma-separated) never reach the provider: the simulator suite mints its
+ * codes through the auth admin API instead of an inbox, and a day of suite
+ * signups no longer spends the provider's daily quota (Sep 4 2026). Unset in
+ * production; a real address is never matched.
+ */
+export function mailSinkDomain(to: string, env: { get(name: string): string | undefined } = Deno.env): string | null {
+  const configured = (env.get('NEWONE_TEST_MAIL_SINK_DOMAINS') ?? '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter((domain) => domain.length > 0);
+  if (configured.length === 0) return null;
+  const domain = to.toLowerCase().split('@')[1] ?? '';
+  return configured.includes(domain) ? domain : null;
+}
+
 export async function sendCodeEmail(
   input: SendCodeEmailInput,
   fetcher: Fetcher = fetch,
 ): Promise<void> {
+  const sink = mailSinkDomain(input.to);
+  if (sink) {
+    console.log(JSON.stringify({ event: 'newone_mail_sink', domain: sink }));
+    return;
+  }
   const { apiKey, from } = mailConfig();
   const copy = codeEmailCopy(input.locale);
   const body = JSON.stringify({
