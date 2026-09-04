@@ -426,3 +426,13 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | media-05 | The seeded files landed in the iCloud Drive container, not `group.com.apple.FileProvider.LocalStorage`; `seed-files.sh` now selects the group by identifier and all three simulators are seeded. |
 | Unreachable | Pinned-messages view, outbox section (offline cache disabled in the simulator build), and push tap routing are consumer-UI/simulator limitations, unchanged. |
 | Next | translation → sessions → media → translation-ko reruns (post-queue), then a simulator rebuild and one more chat run. |
+
+### Translation rerun and AI provider flakiness (Sep 4 2026, 15:00)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T21-38-56: PASS 22 · FAIL 3 · UNREACHABLE 1. |
+| Provider | Between 21:28Z and 22:02Z the OpenRouter→Vertex path failed intermittently: detection for message 447 needed 4 attempts (137 s), message 445 succeeded on attempt 10, message 450 on attempt 7, one summary exhausted its attempts. Every failure was `provider_unavailable`, i.e. the worker's fail-closed router policy or the provider itself; the worker now keeps the rule label in the job's error code on retry (1741dfc, deployed) so the next episode names the check. trans-02 (translation still queued at check time), trans-13 and trans-16 ("Translate for me" is not offered while detection is pending) all trace to this. |
+| trans-06 | The report button sat below the composer; the flow now scrolls it into view (2529588). |
+| Deno | Full suite 347/347 after updating the mailer logging test to the structured provider-rejection events (eaee180). |
+| Next | sessions and media (post-queue), translation-ko, then a simulator rebuild and a final chat run; translation gets one more run alongside chat. |
