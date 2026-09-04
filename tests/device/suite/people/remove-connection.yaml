@@ -9,6 +9,11 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ${NAME}
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Remove connection"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "Remove connection"
 - extendedWaitUntil:
     notVisible: ${NAME}
