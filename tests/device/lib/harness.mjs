@@ -70,6 +70,14 @@ export function createAreaContext({ area, devices, report, runDir }) {
       visibleTexts = texts.texts;
       const errors = findErrorTexts(visibleTexts);
       observed = [result.failure, errors.length ? `on-screen: ${errors.join(' | ')}` : '', texts.raw ?? ''].filter(Boolean).join('\n');
+      // A failed step can leave a sheet, a dialog, or the keyboard open; the
+      // next step's long-press or tap would land on it and fail for that
+      // reason alone. Close whatever is open (best effort, never recorded).
+      try {
+        await runFlow({ device, flow: join(SUITE_DIR, 'common/recover.yaml'), env: { SHOT: `${id}-recover` }, cwd: areaDir, timeoutMs: 90_000, debugDir: join(areaDir, 'maestro-debug', `${id}-recover`) });
+      } catch {
+        // recovery is opportunistic
+      }
     } else {
       observed = env.OBSERVE ? `verified on screen: ${env.OBSERVE}` : 'as expected';
     }

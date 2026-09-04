@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# Recovery after a failed step: a Message actions sheet or a dialog left open
+# would swallow the next step's long-press or tap, and a stuck keyboard hides
+# bubbles behind the keys. Close what is open; do nothing otherwise.
+- runFlow:
+    when:
+      visible: "Close dialog"
+    commands:
+      - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: "Message actions"
+    commands:
+      - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
