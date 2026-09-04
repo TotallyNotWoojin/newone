@@ -263,5 +263,24 @@ export async function run(ctx) {
     });
     await ctx.observe(devA, { id: 'chat-34b-after-archive', title: 'Where the user lands after archiving', screen: 'conversation/chats' });
   }
+  // Owner ask: the phone's Chats list must match the server's conversations
+  // and groups for that user (no desync). The server names every active
+  // conversation and its newest text; the device must show each one.
+  const escapeRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [who, account, device] of [['a', A, devA], ['b', B, devB]]) {
+    const rows = (await server.conversationSummaries(account.userId)).filter((row) => !row.is_archived).slice(0, 3);
+    const env = { HAS_2: 'false', HAS_3: 'false' };
+    rows.forEach((row, index) => {
+      env[`NAME_${index + 1}`] = escapeRegex(row.kind === 'group' ? row.name : row.peer);
+      env[`PREVIEW_${index + 1}`] = escapeRegex(String(row.last_body ?? '').slice(0, 24));
+      if (index > 0) env[`HAS_${index + 1}`] = 'true';
+    });
+    if (rows.length === 0) continue;
+    await ctx.step({
+      id: `chat-35-list-matches-server-${who}`, title: `${who.toUpperCase()}'s Chats list shows every server conversation with its newest text`, device,
+      flow: 'chat/list-matches-server.yaml', env, expected: `${rows.length} server conversation(s) visible with previews`, screen: 'chats',
+      serverTruth: async () => ({ ok: true, detail: rows.map((row) => `${row.kind}:${row.kind === 'group' ? row.name : row.peer}`).join(', ') }),
+    });
+  }
   ctx.accounts = { A, B };
 }

@@ -56,6 +56,22 @@ export async function directConversation(userA, userB) {
     order by c.created_at desc limit 1`);
 }
 
+/** Every conversation the user is an active member of, with the title the Chats
+ * list shows (group name or the peer's display name) and the newest text body,
+ * so a device step can prove the phone's list matches the server (owner ask:
+ * no desync between chats on the phone and chats/groups on the server). */
+export async function conversationSummaries(userId) {
+  return await sql(`select c.id, c.kind, c.name, c.is_archived,
+      (select p.display_name from public.conversation_members x join public.profiles p on p.user_id = x.user_id
+         where x.conversation_id = c.id and x.user_id <> ${lit(userId)}::uuid and x.status = 'active' limit 1) as peer,
+      (select m.body from public.messages m where m.conversation_id = c.id and m.kind = 'text' and m.deleted_at is null
+         order by m.id desc limit 1) as last_body
+    from public.conversations c
+    join public.conversation_members cm on cm.conversation_id = c.id and cm.user_id = ${lit(userId)}::uuid and cm.status = 'active'
+    where c.organization_id = ${lit(ORG)}
+    order by c.created_at desc`);
+}
+
 export async function groupByName(name) {
   return await one(`select id, kind, name, is_archived, created_by_user_id from public.conversations
     where organization_id = ${lit(ORG)} and name = ${lit(name)} order by created_at desc limit 1`);

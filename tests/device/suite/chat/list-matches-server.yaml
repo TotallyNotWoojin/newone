@@ -1,0 +1,41 @@
+appId: com.totallynotwoojin.newone
+---
+# The Chats list shows every conversation the server says the user is in, with
+# the newest text as its preview. NAME_n/PREVIEW_n come from the server; HAS_2
+# and HAS_3 are "true"/"false".
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${NAME_1}.*"
+    commands:
+      - tapOn: "Chats"
+- scrollUntilVisible:
+    element:
+      text: ".*${NAME_1}.*"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: ".*${PREVIEW_1}.*"
+- runFlow:
+    when:
+      true: ${HAS_2}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: ".*${NAME_2}.*"
+          direction: DOWN
+          timeout: 15000
+      - assertVisible: ".*${PREVIEW_2}.*"
+- runFlow:
+    when:
+      true: ${HAS_3}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: ".*${NAME_3}.*"
+          direction: DOWN
+          timeout: 15000
+      - assertVisible: ".*${PREVIEW_3}.*"
+- takeScreenshot: ${SHOT}-chats-list

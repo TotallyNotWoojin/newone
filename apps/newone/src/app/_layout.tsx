@@ -23,6 +23,9 @@ import { colors, spacing, type } from '@/theme/tokens';
 // Metro selects the native notification bridge or the web no-op.
 // eslint-disable-next-line import/no-unresolved
 import { useNotificationNavigation } from '@/device/notification-navigation';
+import { installCrashGuard } from '@/lib/crash-guard';
+
+installCrashGuard();
 
 export default function RootLayout() {
   const [privacyShielded, setPrivacyShielded] = useState(
