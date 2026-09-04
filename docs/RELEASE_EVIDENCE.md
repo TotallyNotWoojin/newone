@@ -361,3 +361,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Meaning | Not a Supabase limit, not latency, not the key: the Resend plan's daily cap, consumed by ~200 simulator signups (two emails each) plus resends. Resets at 00:00 UTC (17:00 PDT). |
 | Also | The Supabase analytics log API returned no rows for the auth function for 40 minutes, so the provider-status logging added today could not be read back; the in-runtime probe was the only way. |
 | Unblock | Owner: upgrade the Resend plan (removes the daily cap) or wait for the reset; the delivery watcher re-arms the final rerun queue automatically. Android v2.1 (version code 11) is on the Play internal track; TestFlight 22 waits for the reruns. |
+
+### Sep 4 2026, 10:40–10:55 — tests without Resend, mail sink, final rerun started
+
+| Item | Evidence |
+| --- | --- |
+| Local suites | Jest 757/757. Node contract tests 273/273 after updating the secure-storage contract to the generation-switch layout. Deno: all files pass individually; the full run's only failure was a strict-null line in `openrouter_test.ts` plus that test's fake reply echoing each placeholder twice now that the prompt lists them (both fixed). Full Deno run to be repeated when the simulators are idle. |
+| Mail sink | `_shared/mail.ts` `mailSinkDomain`: recipients on `NEWONE_TEST_MAIL_SINK_DOMAINS` (set to `guerrillamailblock.com,example.test`) never reach Resend; unit-tested; `newone-auth` deployed 10:48. Hosted `signupUser` succeeded again at 10:50 (3.9 s). Real addresses are unaffected. |
+| Minted codes | Device harness: `NEWONE_DEVICE_MINT_CODES=1` makes signup and returning codes come from the auth admin API (`mintCode`) instead of the guerrillamail inbox; the app verifies them exactly like emailed codes. The inbox path stays the default. |
+| Final rerun | Simulator app rebuilt 10:53 (contains voice playback, attachment-state parser, consumer group copy, preference chip labels). Queue: groups, media, profile, chat, translation, translation-ko, sessions (pool 3, minted codes). |
