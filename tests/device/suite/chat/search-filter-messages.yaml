@@ -11,11 +11,9 @@ appId: com.totallynotwoojin.newone
           start: "50%, 24%"
           end: "50%, 44%"
           duration: 400
-- scrollUntilVisible:
-    element:
-      text: "Messages"
-    direction: UP
-    timeout: 20000
+# The type chips row is on screen after the keyboard goes; the chip can be
+# partially clipped in the horizontal row, so tap it rather than scroll for
+# full visibility (run-2026-09-04T08-10-25).
 - tapOn: "Messages"
 - tapOn:
     text: "Search"
