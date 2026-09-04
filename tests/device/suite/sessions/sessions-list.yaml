@@ -15,8 +15,12 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-sessions
-- extendedWaitUntil:
-    visible: "Revoke"
-    timeout: 30000
+# The session rows sit below the section header; scroll to the other device's
+# Revoke control rather than waiting for it to appear where the header is.
+- scrollUntilVisible:
+    element:
+      text: "Revoke"
+    direction: DOWN
+    timeout: 45000
 - assertNotVisible: "No other active sessions were returned by the authorized session service."
 - takeScreenshot: ${SHOT}-other-session-listed

@@ -1728,12 +1728,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const requestTranslation = useCallback(async (message: Message) => {
     const current = snapshotRef.current;
     const targetLanguage = current?.messageDisplayLanguage;
+    const detectionState = message.languageDetection?.state;
     if (
       !current
       || !message.serverId
       || !targetLanguage
-      || message.languageDetection?.state !== 'completed'
-      || message.languageDetection.detectedLanguage === targetLanguage
+      || (detectionState !== 'completed' && detectionState !== 'failed')
+      || (detectionState === 'completed' && message.languageDetection?.detectedLanguage === targetLanguage)
     ) return false;
     const result = await executeImmediate(`translation-request:${message.serverId}`, () =>
       repositories.commands.requestTranslation({

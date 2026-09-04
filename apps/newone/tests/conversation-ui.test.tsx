@@ -2183,7 +2183,7 @@ describe('personal realm message-request thread states', () => {
     expect(pollCalls()).toHaveLength(2);
   });
 
-  test('hides the manual translation request in automatic consumer threads but keeps retry on failed rows', async () => {
+  test('consumer threads offer a request for untranslated messages and a rate-limited retry for failed rows', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     const failed = incomingMessage({
       id: 'message-failed-translation',
@@ -2212,11 +2212,18 @@ describe('personal realm message-request thread states', () => {
     const view = await render(
       <ConversationPane conversation={automatic} messages={[failed, notRequested]} onSend={noopSend} />,
     );
-    // The pipeline translates automatically; only a failed row offers a retry.
-    expect(screen.queryByText('chat.requestTranslation')).toBeNull();
+    // Automatic mode does not backfill: a message that never got a row (for
+    // example received while translation was off) can still be requested, and
+    // a failed row offers a retry.
+    expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
     await fireEvent.press(screen.getByText('chat.retryTranslation'));
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledTimes(1);
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledWith(failed);
+    // The tap starts a 30-second cooldown on that bubble; a second tap inside
+    // it is ignored, so a retry cannot be spammed.
+    expect(screen.queryByText('chat.retryTranslation')).toBeNull();
+    await fireEvent.press(screen.getByText('chat.retryTranslationWait'));
+    expect(mockWorkspace.requestTranslation).toHaveBeenCalledTimes(1);
 
     // An unset mode is automatic as well.
     const implicit = conversation({ translationMode: undefined });
@@ -2224,16 +2231,16 @@ describe('personal realm message-request thread states', () => {
     await view.rerender(
       <ConversationPane conversation={implicit} messages={[failed, notRequested]} onSend={noopSend} />,
     );
-    expect(screen.queryByText('chat.requestTranslation')).toBeNull();
-    expect(screen.getByText('chat.retryTranslation')).toBeTruthy();
+    expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
+    expect(screen.getByText('chat.retryTranslationWait')).toBeTruthy();
 
-    // Workspace organizations keep the manual request.
+    // Workspace organizations keep the manual request as before.
     mockWorkspace.organizationId = 'organization-a';
     await view.rerender(
       <ConversationPane conversation={automatic} messages={[failed, notRequested]} onSend={noopSend} />,
     );
     expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
-    expect(screen.getByText('chat.retryTranslation')).toBeTruthy();
+    expect(screen.getByText('chat.retryTranslationWait')).toBeTruthy();
   });
 
   test('keeps workspace organizations and settled personal-realm threads free of request banners', async () => {

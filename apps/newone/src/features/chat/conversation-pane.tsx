@@ -1447,15 +1447,41 @@ function MessageBubble({
   const visibleTranslationState = translationEnabled ? message.translationState : 'not_requested';
   const correction = translation?.correction;
   const hasTranslation = Boolean(message.translatedText && translation?.status === 'completed');
+  // A reader can ask for (or retry) a translation when there is none to show:
+  // detection failed (the server re-runs it), the row failed or was blocked,
+  // or nothing was ever queued (received while translation was off). Own
+  // messages and messages already in the display language never qualify.
+  // Automatic mode does not backfill, so the button stays available there.
+  const detectionState = message.languageDetection?.state;
   const canRequestTranslation = Boolean(
     translationEnabled
       && message.serverId
-      && message.languageDetection?.state === 'completed'
+      && !message.isOwn
       && workspace.messageDisplayLanguage !== null
-      && message.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage
-      && (!translation || translation.status === 'failed' || translation.status === 'blocked')
-      && (!automaticTranslation || translation?.status === 'failed' || translation?.status === 'blocked'),
+      && (
+        detectionState === 'failed'
+        || (detectionState === 'completed'
+          && message.languageDetection?.detectedLanguage !== workspace.messageDisplayLanguage)
+      )
+      && (!translation || translation.status === 'failed' || translation.status === 'blocked'),
   );
+  // No spamming: 30 seconds between taps on one message, three taps at most
+  // while this bubble is mounted; the server rate-limits on top of this.
+  const [retryGate, setRetryGate] = useState({ count: 0, until: 0 });
+  const [retryNow, setRetryNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (retryGate.until <= Date.now()) return undefined;
+    const timer = setInterval(() => setRetryNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [retryGate.until]);
+  const retryExhausted = retryGate.count >= 3;
+  const retryCooling = retryGate.until > retryNow;
+  const requestTranslationGated = () => {
+    if (retryExhausted || retryCooling) return;
+    setRetryGate((gate) => ({ count: gate.count + 1, until: Date.now() + 30_000 }));
+    setRetryNow(Date.now());
+    void workspace.requestTranslation(message);
+  };
   const translationStateLabel = ({
     not_requested: t('chat.translationNotRequested'),
     queued: t('chat.translationQueued'),
@@ -1790,12 +1816,22 @@ function MessageBubble({
               {canRequestTranslation ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => void workspace.requestTranslation(message)}
-                  style={({ pressed }) => [styles.translationRequest, pressed && styles.pressed]}>
+                  accessibilityState={{ disabled: retryExhausted || retryCooling }}
+                  disabled={retryExhausted || retryCooling}
+                  onPress={requestTranslationGated}
+                  style={({ pressed }) => [
+                    styles.translationRequest,
+                    pressed && styles.pressed,
+                    (retryExhausted || retryCooling) && styles.translationRequestDisabled,
+                  ]}>
                   <Text style={styles.translationRequestText}>
-                    {translation?.status === 'failed' || translation?.status === 'blocked'
-                      ? t('chat.retryTranslation')
-                      : t('chat.requestTranslation')}
+                    {retryExhausted
+                      ? t('chat.retryTranslationLimit')
+                      : retryCooling
+                        ? t('chat.retryTranslationWait').replace('{seconds}', String(Math.max(1, Math.ceil((retryGate.until - retryNow) / 1000))))
+                        : translation?.status === 'failed' || translation?.status === 'blocked' || detectionState === 'failed'
+                          ? t('chat.retryTranslation')
+                          : t('chat.requestTranslation')}
                   </Text>
                 </Pressable>
               ) : null}
@@ -4203,6 +4239,7 @@ const styles = StyleSheet.create({
   translationStateTextOwn: { color: 'rgba(255,255,255,0.74)' },
   translationFailure: { color: colors.red, fontSize: 9, lineHeight: 13 },
   translationFailureOwn: { color: '#FFD4C7' },
+  translationRequestDisabled: { opacity: 0.55 },
   translationRequest: {
     minHeight: 32,
     alignSelf: 'flex-start',
