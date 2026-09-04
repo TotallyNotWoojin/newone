@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # The peer's message TEXT arrives, then its translation card for LANG.
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*${TEXT}.*"
     timeout: 45000
 - takeScreenshot: ${SHOT}-original-arrived
 - extendedWaitUntil:
@@ -10,4 +10,4 @@ appId: com.totallynotwoojin.newone
     timeout: ${TIMEOUT}
 - takeScreenshot: ${SHOT}-translated
 - assertVisible: ".*ORIGINAL · .*"
-- assertVisible: ${TEXT}
+- assertVisible: ".*${TEXT}.*"

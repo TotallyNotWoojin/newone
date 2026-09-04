@@ -18,9 +18,11 @@ appId: com.totallynotwoojin.newone
     visible: ".*(${NAME}|No eligible members).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-candidates
+# Candidate rows are merged accessibility nodes (initials + name + role) and the
+# search field above them now holds NAME too, so select the row below the button.
 - tapOn:
-    text: ${NAME}
-    index: 0
+    text: ".*${NAME}.*"
+    below: "Search members"
 - tapOn: "Add selected member"
 - extendedWaitUntil:
     notVisible: "Add selected member"

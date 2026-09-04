@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Pressable,
@@ -30,6 +29,7 @@ import {
   WorkspaceStatusBanner,
 } from '@/components/workspace/workspace-state';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
+import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import type { UserSearchResult } from '@/data/repositories/contracts';
 import type { Person } from '@/domain/types';
@@ -272,9 +272,7 @@ export default function PeopleScreen() {
       ) : (
       // Keeps the username search field and its first results above the iOS
       // keyboard; taps on results must not be swallowed by keyboard dismissal.
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboard}>
+      <KeyboardAvoidingScreen style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -400,7 +398,7 @@ export default function PeopleScreen() {
           )}
         </View>
       </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScreen>
       )}
       <ActionModal
         description={t('people.manageDescription')}

@@ -13,12 +13,10 @@ import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Image,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -36,6 +34,7 @@ import type { ConversationMemberCandidate } from '@/data/repositories/contracts'
 import type { AiOutputErrorCategory, Attachment, Conversation, Message, OperationalAction, Person } from '@/domain/types';
 import { Avatar, Chip, EmptyState, IconButton, PrimaryButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
+import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
 import {
   MAX_MESSAGE_MENTIONS,
   mentionablePeople,
@@ -445,10 +444,7 @@ export function ConversationPane({
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={mobile ? 0 : 24}
-      style={styles.container}>
+    <KeyboardAvoidingScreen extraOffset={mobile ? 0 : 24} style={styles.container}>
       <ConversationHeader
         conversation={conversation}
         mobile={mobile}
@@ -855,7 +851,7 @@ export function ConversationPane({
         onChangeImageMode={setAttachmentImageMode}
         visible={showAttachmentPicker}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingScreen>
   );
 }
 

@@ -12,12 +12,12 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-unread
 - tapOn: "Unread"
 - extendedWaitUntil:
-    visible: ${PEER}
+    visible: ".*${PEER}.*"
     timeout: 15000
 - tapOn: "All"
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*${TEXT}.*"
     timeout: 20000
 - tapOn: "Back to chats"
 - extendedWaitUntil:

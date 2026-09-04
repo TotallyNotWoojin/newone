@@ -14,11 +14,11 @@ appId: com.totallynotwoojin.newone
     visible: "Chats"
     timeout: 40000
 - extendedWaitUntil:
-    visible: ${PEER}
+    visible: ".*${PEER}.*"
     timeout: 30000
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*${TEXT}.*"
     timeout: 45000
 - takeScreenshot: ${SHOT}-recovered
 - extendedWaitUntil:

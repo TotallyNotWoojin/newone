@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # With translation Off for this conversation, no TRANSLATION card renders.
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*${TEXT}.*"
     timeout: 45000
 - extendedWaitUntil:
     notVisible: ".*TRANSLATION · .*"

@@ -7,10 +7,10 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - runFlow:
     when:
-      notVisible: ${NAME}
+      notVisible: ".*${NAME}.*"
     commands:
       - tapOn: "Chats"
 - extendedWaitUntil:
-    visible: ${NAME}
+    visible: ".*${NAME}.*"
     timeout: 45000
 - takeScreenshot: ${SHOT}-listed

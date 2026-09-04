@@ -17,11 +17,11 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Favorites"
 - extendedWaitUntil:
-    visible: ${PEER}
+    visible: ".*${PEER}.*"
     timeout: 15000
 - takeScreenshot: ${SHOT}-favorites-filter
 - tapOn: "All"
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000

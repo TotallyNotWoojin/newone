@@ -7,10 +7,10 @@ appId: com.totallynotwoojin.newone
     visible: "Chats"
     timeout: 30000
 - extendedWaitUntil:
-    visible: ${NAME}
+    visible: ".*${NAME}.*"
     timeout: 60000
 - takeScreenshot: ${SHOT}-request-in-chats
-- tapOn: ${NAME}
+- tapOn: ".*${NAME}.*"
 - extendedWaitUntil:
     visible: "Accept"
     timeout: 20000

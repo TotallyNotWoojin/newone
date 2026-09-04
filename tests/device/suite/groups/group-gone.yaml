@@ -6,6 +6,6 @@ appId: com.totallynotwoojin.newone
     visible: "Chats"
     timeout: 30000
 - extendedWaitUntil:
-    notVisible: ${NAME}
+    notVisible: ".*${NAME}.*"
     timeout: 45000
 - takeScreenshot: ${SHOT}-not-listed

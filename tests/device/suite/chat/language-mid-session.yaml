@@ -21,13 +21,13 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Cerrar configuración"
 - extendedWaitUntil:
-    visible: ${PEER}
+    visible: ".*${PEER}.*"
     timeout: 20000
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
     visible: "Escribe un mensaje…"
     timeout: 20000
-- assertVisible: ${TEXT}
+- assertVisible: ".*${TEXT}.*"
 - assertVisible: "Volver a chats"
 - takeScreenshot: ${SHOT}-spanish-conversation
 - tapOn: "Volver a chats"
@@ -48,7 +48,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 15000
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000

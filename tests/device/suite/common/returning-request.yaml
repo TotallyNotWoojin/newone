@@ -13,6 +13,7 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "you@example.com"
+- eraseText: 120
 - inputText: ${EMAIL}
 - tapOn: "Email address"
 - takeScreenshot: ${SHOT}-returning-form

@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 
 export const APP_ID = 'com.totallynotwoojin.newone';
 export const APP_PATH = process.env.NEWONE_APP_PATH
-  ?? '/Users/woojin/Library/Developer/Xcode/DerivedData/Newone-bowskecbalbwwcfmvmkdfargugzh/Build/Products/Release-iphonesimulator/Newone.app';
+  ?? '/Users/woojin/Library/Developer/Xcode/DerivedData/Newone-bncixaxagctigcezdsldwgsoxvsz/Build/Products/Release-iphonesimulator/Newone.app';
 export const OWNER_DEVICES = new Set([
   '084E6094-8685-40DA-AB64-9DF887F48842', // iPhone 17 Pro — owner uses by hand
   '74D8B645-02E0-4D3F-AEF2-1E8BB7813D7B', // iPhone 17 Pro Max — owner uses by hand
@@ -64,7 +64,29 @@ export function bootAndInstall(udid, log = console.log) {
     }
   }
   if (bootError) throw bootError;
-  simctl(['bootstatus', udid, '-b'], { timeout: 600_000 });
+  // A freshly created or upgraded simulator runs "Data Migration" plugins on
+  // its first boot; on a loaded host that phase alone exceeded ten minutes
+  // and the bootstatus wait died with ETIMEDOUT, killing the whole run.
+  // Wait in bounded rounds and reboot the simulator between rounds instead
+  // of failing the suite on the first timeout.
+  let statusError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      simctl(['bootstatus', udid, '-b'], { timeout: 600_000 });
+      statusError = null;
+      break;
+    } catch (error) {
+      statusError = error;
+      const tail = String(error?.stdout ?? '').trim().split('\n').filter(Boolean).slice(-3).join(' / ');
+      log(`bootstatus attempt ${attempt} on ${udid} ${error?.code ?? 'failed'}: ${tail.slice(0, 200)}`);
+      if (attempt < 3) {
+        try { simctl(['shutdown', udid], { timeout: 120_000 }); } catch { /* already down */ }
+        execFileSync('sleep', ['20']);
+        try { simctl(['boot', udid], { timeout: 120_000 }); } catch { /* bootstatus will report */ }
+      }
+    }
+  }
+  if (statusError) throw statusError;
   // CoreSimulator gets very slow when several simulators boot on a loaded
   // host (an install that normally takes a second timed out at 180s and
   // killed a whole run). Give it time and retry rather than abort the suite.

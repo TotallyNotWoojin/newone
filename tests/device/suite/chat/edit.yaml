@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press own TARGET → edit field → Save edit → new text + "edited" label.
 - longPressOn:
-    text: ${TARGET}
+    text: ".*${TARGET}.*"
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000
@@ -22,7 +22,7 @@ appId: com.totallynotwoojin.newone
     notVisible: "Message actions"
     timeout: 15000
 - extendedWaitUntil:
-    visible: ${EDITED}
+    visible: ".*${EDITED}.*"
     timeout: 20000
 - assertVisible: "edited"
 - takeScreenshot: ${SHOT}-edited

@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press TARGET → Pin; the sheet offers Unpin afterwards.
 - longPressOn:
-    text: ${TARGET}
+    text: ".*${TARGET}.*"
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000

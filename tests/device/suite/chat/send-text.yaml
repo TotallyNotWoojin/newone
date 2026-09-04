@@ -8,6 +8,9 @@ appId: com.totallynotwoojin.newone
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*Write a message….*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-sent

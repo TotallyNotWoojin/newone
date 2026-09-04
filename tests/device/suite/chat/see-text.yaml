@@ -3,6 +3,6 @@ appId: com.totallynotwoojin.newone
 # TEXT must render within TIMEOUT ms (a message arriving on the other
 # device, or reappearing on this one after an edit/relaunch/foreground).
 - extendedWaitUntil:
-    visible: ${TEXT}
+    visible: ".*${TEXT}.*"
     timeout: ${TIMEOUT}
 - takeScreenshot: ${SHOT}-visible

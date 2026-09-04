@@ -20,7 +20,7 @@ appId: com.totallynotwoojin.newone
 - eraseText: 60
 - inputText: ${DISPLAY_NAME}
 - tapOn: "Edit profile"
-- tapOn: ".*What are you up to\?.*"
+- tapOn: '.*What are you up to\?.*'
 - inputText: ${STATUS}
 - tapOn: "Edit profile"
 - takeScreenshot: ${SHOT}-profile-filled

@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import {
   DesktopPageHeader,
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
+import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
 import { Chip, EmptyState, PrimaryButton, SearchField } from '@/components/ui/primitives';
 import { BffSearchRepository } from '@/data/repositories/bff-search-repository';
 import { RepositoryError } from '@/data/repositories/contracts';
@@ -332,9 +332,7 @@ export default function SearchScreen() {
       )}>
       {/* Keeps the query field and the first results above the iOS keyboard;
           result taps must not be swallowed by keyboard dismissal. */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboard}>
+      <KeyboardAvoidingScreen style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -562,7 +560,7 @@ export default function SearchScreen() {
           ) : null}
         </View>
       </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidingScreen>
     </AppScaffold>
   );
 }

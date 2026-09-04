@@ -24,6 +24,6 @@ appId: com.totallynotwoojin.newone
     notVisible: "Conversation controls"
     timeout: 20000
 - extendedWaitUntil:
-    visible: ${NAME}
+    visible: ".*${NAME}.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-renamed

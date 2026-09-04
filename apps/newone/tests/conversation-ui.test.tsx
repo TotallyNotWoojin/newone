@@ -1137,7 +1137,9 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     });
     const layoutNodes = root.queryAll((node) => typeof node.props.onLayout === 'function');
     for (const [index, node] of layoutNodes.entries()) {
-      await fireEvent(node, 'layout', { nativeEvent: { layout: { y: 120 + index * 40 } } });
+      // Real layout events are persistable; RN's KeyboardAvoidingView (now a
+      // descendant of the measured wrapper) calls event.persist() first.
+      await fireEvent(node, 'layout', { persist() {}, nativeEvent: { layout: { y: 120 + index * 40, height: 40 } } });
     }
     await fireEvent(scroll, 'contentSizeChange', 320, 1000);
 

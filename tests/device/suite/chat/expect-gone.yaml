@@ -2,6 +2,6 @@ appId: com.totallynotwoojin.newone
 ---
 # On the other device, TEXT must disappear (delete for everyone) …
 - extendedWaitUntil:
-    notVisible: ${TEXT}
+    notVisible: ".*${TEXT}.*"
     timeout: ${TIMEOUT}
 - takeScreenshot: ${SHOT}-gone

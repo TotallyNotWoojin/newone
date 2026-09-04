@@ -5,5 +5,5 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 30000
-- assertVisible: ${PEER}
+- assertVisible: ".*${PEER}.*"
 - takeScreenshot: ${SHOT}-deep-link

@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press TARGET → React 👍 → a 👍 chip appears under the message.
 - longPressOn:
-    text: ${TARGET}
+    text: ".*${TARGET}.*"
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000

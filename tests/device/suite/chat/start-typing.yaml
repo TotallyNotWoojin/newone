@@ -7,5 +7,5 @@ appId: com.totallynotwoojin.newone
 - tapOn: ".*Write a message….*"
 - inputText: "typing indicator probe "
 - extendedWaitUntil:
-    visible: "typing indicator probe"
+    visible: ".*typing indicator probe.*"
     timeout: 5000

@@ -15,5 +15,5 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*Request pending.*"
     timeout: 30000
-- assertVisible: ${TEXT}
+- assertVisible: ".*${TEXT}.*"
 - takeScreenshot: ${SHOT}-pending-conversation

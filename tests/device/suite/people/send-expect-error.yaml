@@ -8,13 +8,13 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - runFlow:
     when:
-      notVisible: ${PEER}
+      notVisible: ".*${PEER}.*"
     commands:
       - tapOn: "Chats"
 - extendedWaitUntil:
-    visible: ${PEER}
+    visible: ".*${PEER}.*"
     timeout: 30000
-- tapOn: ${PEER}
+- tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000

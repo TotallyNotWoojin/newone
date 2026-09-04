@@ -2,7 +2,7 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press own TARGET → Delete for everyone; it disappears here.
 - longPressOn:
-    text: ${TARGET}
+    text: ".*${TARGET}.*"
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000
@@ -16,6 +16,6 @@ appId: com.totallynotwoojin.newone
     notVisible: "Message actions"
     timeout: 15000
 - extendedWaitUntil:
-    notVisible: ${TARGET}
+    notVisible: ".*${TARGET}.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-deleted
