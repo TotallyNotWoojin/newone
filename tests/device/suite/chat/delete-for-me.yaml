@@ -31,10 +31,44 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 2000
+- takeScreenshot: ${SHOT}-sheet
 - tapOn: "Delete for me"
 - extendedWaitUntil:
     notVisible: "Message actions"
     timeout: 15000
+# In every run today the sheet closed on this tap while the message stayed and
+# no hide call reached the service: the tap most likely landed on the backdrop
+# after the sheet's content scrolled (stale frame). A person would simply try
+# again; do so once, without scrolling this time.
+- runFlow:
+    when:
+      visible: ".*${TARGET}.*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            visible: ".*${TARGET}.*"
+          commands:
+            - longPressOn:
+                text: ".*${TARGET}.*"
+            - extendedWaitUntil:
+                visible: "Message actions"
+                timeout: 10000
+            - waitForAnimationToEnd:
+                timeout: 2000
+            - scrollUntilVisible:
+                element:
+                  text: "Delete for me"
+                direction: DOWN
+                timeout: 20000
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - takeScreenshot: ${SHOT}-sheet-retry
+            - tapOn: "Delete for me"
+            - extendedWaitUntil:
+                notVisible: "Message actions"
+                timeout: 15000
 - extendedWaitUntil:
     notVisible: ".*${TARGET}.*"
     timeout: 20000
