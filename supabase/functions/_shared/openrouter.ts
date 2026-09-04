@@ -792,9 +792,12 @@ export class OpenRouterLanguageProcessor {
     const sourceLanguage = normalizeLanguage(request.sourceLanguage);
     const targetLanguage = normalizeLanguage(request.targetLanguage);
     const sourceBody = request.sourceBody.normalize('NFC');
+    // 'und' names a mixed or undetermined source: the whole text is rendered
+    // in the target language, whatever languages it holds (owner request,
+    // mixed-language messages, Sep 4 2026).
     if (
       !LANGUAGE_PATTERN.test(sourceLanguage) || !LANGUAGE_PATTERN.test(targetLanguage) ||
-      sourceLanguage === targetLanguage || sourceBody.length === 0 ||
+      (sourceLanguage === targetLanguage && sourceLanguage !== 'und') || sourceBody.length === 0 ||
       Array.from(sourceBody).length > policy.maxSourceCharacters ||
       !/^[0-9a-f]{64}$/.test(request.sourceSha256) ||
       await sha256Hex(sourceBody) !== request.sourceSha256
@@ -833,7 +836,7 @@ export class OpenRouterLanguageProcessor {
           : 'Do not output placeholder tokens of any kind. ') +
         'Preserve line breaks and uncertainty. Return only the requested JSON object.',
       user:
-        `Source language: ${sourceLanguage}\nTarget language: ${targetLanguage}\nSource fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
+        `Source language: ${sourceLanguage === 'und' ? 'mixed or unknown; render every part in the target language' : sourceLanguage}\nTarget language: ${targetLanguage}\nSource fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
         (protectedSource.tokens.length > 0
           ? `Placeholders in the source: ${protectedSource.tokens.map((token) => token.placeholder).join(', ')}\n`
           : '') +

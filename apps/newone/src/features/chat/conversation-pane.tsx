@@ -1475,6 +1475,12 @@ function MessageBubble({
   // messages and messages already in the display language never qualify.
   // Automatic mode does not backfill, so the button stays available there.
   const detectionState = message.languageDetection?.state;
+  // A message whose language could not be determined completed as the
+  // sender's language (method suffixed ':sender-language'); it may hold other
+  // languages, so a reader who shares that language can still ask for it in
+  // their own (owner request, mixed-language messages).
+  const mixedLanguage = detectionState === 'completed'
+    && Boolean(message.languageDetection?.method?.endsWith(':sender-language'));
   const canRequestTranslation = Boolean(
     translationEnabled
       && message.serverId
@@ -1482,6 +1488,7 @@ function MessageBubble({
       && workspace.messageDisplayLanguage !== null
       && (
         detectionState === 'failed'
+        || mixedLanguage
         || (detectionState === 'completed'
           && message.languageDetection?.detectedLanguage !== workspace.messageDisplayLanguage)
       )
