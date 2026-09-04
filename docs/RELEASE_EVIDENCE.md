@@ -352,3 +352,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Resend | Owner: dashboard healthy, a few delayed deliveries and bounces ("recipient's inbox is full"). Our side still gets 503 on every code send (probes 10:01–10:14). Auth function log at 17:03:46Z: `signup_mail_failed` → `code_delivery_failed` with no provider detail (old helper). Mail helper now: 30 s timeout, one retry on timeout/429/5xx, provider status and error name logged (`newone_mail_provider_rejected`, `newone_mail_send_error`); deployed 10:13. A background poll reads the first logged provider status; a watcher probes signups every 5 min and arms the final rerun queue when delivery recovers. |
 | Second queue | translation-ko and sessions failed at signup (code delivery); QUEUE FINISHED 10:18:47. Final queue (groups, media, profile, chat, translation, translation-ko, sessions on a rebuilt app with the group-photo and voice fixes) armed behind delivery recovery. |
 | Android | run-queue's `pkill -9 -f "maestro|java"` killed the first local Gradle build (exit 137, 10:10). Rebuild started 10:19:15 with version code 11, release signing on the EAS upload keystore; `scratchpad/builds/play-upload.mjs` uploads to the internal track through the Play API. |
+
+### Sep 4 2026, 10:35 — delivery outage root cause: Resend daily quota
+
+| Item | Evidence |
+| --- | --- |
+| Probe | A temporary edge function called Resend with the project's key from inside the runtime: `429 {"statusCode":429,"message":"You have reached your daily email sending quota.","name":"daily_quota_exceeded"}` for resend.dev, example.test, and guerrillamail recipients alike (key `re_…`, from `Newone <no-reply@newonechat.com>`). Function deleted afterwards. |
+| Meaning | Not a Supabase limit, not latency, not the key: the Resend plan's daily cap, consumed by ~200 simulator signups (two emails each) plus resends. Resets at 00:00 UTC (17:00 PDT). |
+| Also | The Supabase analytics log API returned no rows for the auth function for 40 minutes, so the provider-status logging added today could not be read back; the in-runtime probe was the only way. |
+| Unblock | Owner: upgrade the Resend plan (removes the daily cap) or wait for the reset; the delivery watcher re-arms the final rerun queue automatically. Android v2.1 (version code 11) is on the Play internal track; TestFlight 22 waits for the reruns. |
