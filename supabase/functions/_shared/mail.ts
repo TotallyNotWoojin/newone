@@ -6,7 +6,12 @@ import { ApiError } from './errors.ts';
 // This module must never log the code or the recipient address.
 
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
-const SEND_TIMEOUT_MS = 10_000;
+// Resend answered slowly enough on Sep 4 2026 (delivery delays on their side)
+// that a 10 s abort turned every code send into code_delivery_failed for an
+// hour; the send now waits 30 s and retries once on a timeout, a network
+// error, or a provider 429/5xx.
+const SEND_TIMEOUT_MS = 30_000;
+const SEND_ATTEMPTS = 2;
 
 export type MailLocale = 'en' | 'es' | 'ko';
 
@@ -72,42 +77,55 @@ export async function sendCodeEmail(
 ): Promise<void> {
   const { apiKey, from } = mailConfig();
   const copy = codeEmailCopy(input.locale);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
-  try {
-    const response = await fetcher(RESEND_EMAILS_URL, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to: [input.to],
-        subject: copy.subject,
-        text: copy.body(input.code),
-      }),
-    });
-    if (!response.ok) {
+  const body = JSON.stringify({
+    from,
+    to: [input.to],
+    subject: copy.subject,
+    text: copy.body(input.code),
+  });
+  for (let attempt = 1; attempt <= SEND_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+    try {
+      const response = await fetcher(RESEND_EMAILS_URL, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body,
+      });
+      if (response.ok) {
+        await response.body?.cancel();
+        return;
+      }
       // The provider's status and error name are needed to tell a quota from
-      // a key problem (Sep 4 2026: every code send failed for an hour with no
-      // trace); the recipient and the code never reach the log.
+      // a key problem; the recipient and the code never reach the log.
       const detail = await response.text().catch(() => '');
       console.error(JSON.stringify({
         event: 'newone_mail_provider_rejected',
+        attempt,
         status: response.status,
         detail: detail.replace(/[\r\n]+/g, ' ').slice(0, 240),
       }));
-      throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      const retryable = response.status === 429 || response.status >= 500;
+      if (!retryable || attempt === SEND_ATTEMPTS) {
+        throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      console.error(JSON.stringify({
+        event: 'newone_mail_send_error',
+        attempt,
+        name: error instanceof Error ? error.name : 'unknown',
+      }));
+      // Timeouts and network failures: one more try, then the generic
+      // dependency error; details stay out of logs by design.
+      if (attempt === SEND_ATTEMPTS) throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+    } finally {
+      clearTimeout(timeout);
     }
-    await response.body?.cancel();
-  } catch (error) {
-    // Timeouts, network failures, and provider rejections converge on the
-    // same generic dependency error; details stay out of logs by design.
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(503, 'dependency_unavailable', undefined, 30);
-  } finally {
-    clearTimeout(timeout);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
 }
