@@ -1147,7 +1147,7 @@ export class OpenRouterLanguageProcessor {
     // or punctuation there; a device draft persisted "," on Sep 4 2026) takes
     // the summary's first sentence instead of failing the whole draft.
     if (!/[\p{L}\p{N}]/u.test(primaryTopic)) {
-      primaryTopic = summary.split(/(?<=[.!?。])\s+/)[0].slice(0, 240).trim() || 'Conversation summary';
+      primaryTopic = (summary.split(/(?<=[.!?。])\s+/)[0] ?? '').slice(0, 240).trim() || 'Conversation summary';
     }
     return {
       primaryTopic,

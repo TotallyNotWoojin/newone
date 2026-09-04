@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'origin_not_allowed'
   | 'not_found'
   | 'conflict'
+  | 'summary_no_text_sources'
   | 'idempotency_conflict'
   | 'signup_expired'
   | 'invalid_username'
@@ -43,6 +44,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   origin_not_allowed: 'The request origin is not allowed.',
   not_found: 'The requested resource was not found.',
   conflict: 'The request conflicts with the current state.',
+  summary_no_text_sources: 'The selected messages have no text to summarize.',
   idempotency_conflict: 'The idempotency key was already used for another request.',
   signup_expired: 'The signup verification window expired. Restart signup.',
   invalid_username: 'The username format is not allowed.',

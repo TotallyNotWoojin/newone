@@ -1,4 +1,5 @@
 import { ApiError } from '../_shared/errors.ts';
+import { parseSummaryResolution } from '../newone-ai-worker/handler.ts';
 import type { RuntimeConfig } from '../_shared/http.ts';
 import type {
   OpenRouterEnvironment,
@@ -362,4 +363,68 @@ Deno.test('summary persistence keeps source evidence and remains within database
   });
   assertEquals(persisted.actionItems[0]?.sourceMessageIds, ['3']);
   assert(JSON.stringify(persisted.provenance).includes('summary-generation'));
+});
+
+// Defect M (Sep 4 2026): a thread with a photo and a voice note made the
+// summary fail with bad_request (bodiless sources) and the row stayed
+// "processing" because the terminal failure needed a source hash.
+Deno.test('summary resolution drops bodiless attachment and system messages and fails when nothing is left', () => {
+  const job = { id: '3', organizationId, topic: 'summary' as const, payload: {}, attempts: 1 };
+  const provider = openRouterEnvironment.policy.providerTag;
+  const row = (messages: unknown[]) => ({
+    authorized: true,
+    provider_egress_allowed: true,
+    organization_id: organizationId,
+    processor_id: provider,
+    route_policy: 'approved_zero_retention',
+    provider_route_policy: 'zero_retention_only',
+    ai_policy_version: 2,
+    summary_id: '11111111-1111-4111-8111-111111111111',
+    conversation_id: '22222222-2222-4222-8222-222222222222',
+    requested_by_user_id: '33333333-3333-4333-8333-333333333333',
+    source_fingerprint: 'c'.repeat(64),
+    language_code: 'en',
+    messages,
+  });
+  const resolved = parseSummaryResolution(
+    row([
+      { message_id: '3', body: 'Keep the line stopped.' },
+      { message_id: '4', body: null },
+      { message_id: '5', body: '' },
+    ]),
+    job,
+    provider,
+  );
+  assert(resolved.authorized);
+  assertEquals(resolved.authorized && resolved.source.sources.map((source) => source.messageId), ['3']);
+  let code = '';
+  try {
+    parseSummaryResolution(row([{ message_id: '4', body: null }]), job, provider);
+  } catch (error) {
+    code = error instanceof ApiError ? error.code : 'other';
+  }
+  assertEquals(code, 'summary_no_text_sources');
+});
+
+Deno.test('a summary that cannot run is failed terminally without a source hash', async () => {
+  const terminal: Array<{ topic: string; sourceHash: string | null; code: string }> = [];
+  let retried = 0;
+  const handler = createAiWorkerHandler(() =>
+    dependencies({
+      claim: onceClaim(['summary']),
+      resolveSummary: async () => {
+        throw new ApiError(400, 'summary_no_text_sources');
+      },
+      terminalFailure: async (_workerId, job, sourceHash, code) => {
+        terminal.push({ topic: job.topic, sourceHash, code });
+      },
+      retryFailure: async () => {
+        retried += 1;
+      },
+    })
+  );
+  const response = await handler(request());
+  assertEquals(response.status, 200);
+  assertEquals(terminal, [{ topic: 'summary', sourceHash: null, code: 'summary_no_text_sources' }]);
+  assertEquals(retried, 0);
 });

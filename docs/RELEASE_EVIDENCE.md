@@ -283,3 +283,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Cause | The first consumer no-scan migration (deployed ~04:09 PDT) changed the finalize response shape; the app rejected it as an invalid response before reaching activation. The shape fix (`20260904170100`) landed 04:14 PDT, after the attempt. The upload pipeline itself (digest fix + no-scan) works: the row is clean with the detected MIME type. |
 | Proof pending | groups area `group-avatar` step in the running queue (v2 build) must show the activated avatar and `avatar_path` set. |
 | Host | Owner asked me to free memory: Safari and the codex extension process closed (swap 9.2 GB → 3.8 GB); passport screenshot removed from the repo root; the five `.ips` files stay untracked. |
+
+### Sep 4 2026, 06:40–07:05 — Chat area on the v2 build; defect M (summaries over threads with attachments)
+
+| Item | Evidence |
+| --- | --- |
+| Run | `run-2026-09-04T12-44-46` chat (pool 2): PASS 50 · FAIL 18 · UNREACHABLE 5. During this run I was building the simulator app and running deno/jest locally; taps and 20–45 s waits timed out (row tap on the Chats list registered on the merged row node but no navigation within 20 s; sheet taps closed the sheet without reaching the server). Chat is queued for a clean rerun on three simulators with no local work in parallel. |
+| Defect M | chat-26 briefing: summary job 1508 failed 8× with `bad_request`, row stuck `processing`. Sources included attachment messages (photo, voice note) whose body is null; the worker required a non-empty body for every source, threw 400 before any provider call, and the terminal-failure path needed a source hash it never had, so the summary row was never marked failed. |
+| Fix | Worker: bodiless sources are dropped from the prompt (the fingerprint still covers them); `summary_no_text_sources` when nothing is left; summary jobs are failed terminally without a source hash. Tests: worker 14/14 (two new), shared 6/6. Deployed; job 1508 re-queued. |

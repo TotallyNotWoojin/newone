@@ -261,7 +261,7 @@ function parseTranslationResolution(
   };
 }
 
-function parseSummaryResolution(
+export function parseSummaryResolution(
   value: unknown,
   job: AiJob,
   provider: string,
@@ -275,17 +275,23 @@ function parseSummaryResolution(
   if (!Array.isArray(row.messages) || row.messages.length < 1 || row.messages.length > 200) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
   }
-  const sources = row.messages.map((entry) => {
+  // Attachment and system messages have no body; they are part of the source
+  // fingerprint but carry nothing to summarize, so they are left out of the
+  // prompt (defect M, Sep 4 2026: a thread with a photo and a voice note made
+  // the whole summary fail with bad_request and stay "processing").
+  const sources = row.messages.flatMap((entry) => {
     const message = asObject(entry);
     const messageId = positiveBigint(message.message_id);
-    return {
+    if (message.body === null || message.body === undefined || message.body === '') return [];
+    return [{
       messageId,
       body: normalizedString(message.body, { min: 1, max: 20_000, trim: false }) as string,
-    };
+    }];
   });
   if (new Set(sources.map((source) => source.messageId)).size !== sources.length) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
   }
+  if (sources.length === 0) throw new ApiError(400, 'summary_no_text_sources');
   return {
     authorized: true,
     source: {
@@ -616,7 +622,9 @@ async function processJob(
   } catch (error) {
     const safe = asApiError(error);
     try {
-      if (terminal(safe, job.attempts) && sourceHash) {
+      // A summary can be failed without a source hash (the fail RPC keys on
+      // the job); detection and translation need the hash to name the source.
+      if (terminal(safe, job.attempts) && (sourceHash || job.topic === 'summary')) {
         await dependencies.terminalFailure(workerId, job, sourceHash, safe.code.slice(0, 120));
       } else {
         await dependencies.retryFailure(
