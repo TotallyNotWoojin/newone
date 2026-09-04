@@ -413,7 +413,7 @@ Deno.test('translation of text with nothing to protect drops an echoed placehold
           message: {
             content: JSON.stringify({
               translatedText: '우리 침식 상황의 날씨는 어떤가요? __NEWONE_PROTECTED_0000__ 침식',
-              sourceFingerprint: (sent?.messages as Array<Record<string, string>>)[1].content.match(/Source fingerprint: ([0-9a-f]{16})/)?.[1],
+              sourceFingerprint: (sent?.messages as Array<Record<string, string>>)[1]?.content?.match(/Source fingerprint: ([0-9a-f]{16})/)?.[1],
             }),
           },
         }],

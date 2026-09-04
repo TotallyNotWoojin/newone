@@ -73,9 +73,11 @@ test('native Turnstile is origin-bounded, nonce-CSP protected, and nonpersistent
 test('native credential chunking is bounded before overwriting committed credentials', () => {
   assert.match(nativeSecureStorage, /const MAX_CHUNKS = 64/);
   assert.match(nativeSecureStorage, /if \(chunks\.length > MAX_CHUNKS\)/);
+  // Generation-switch writes (Sep 4 2026): the bound is checked before the new
+  // generation's chunks and its metadata pointer are written.
   assert.ok(
     nativeSecureStorage.indexOf('if (chunks.length > MAX_CHUNKS)')
-      < nativeSecureStorage.indexOf('await this.removeItem(key)'),
+      < nativeSecureStorage.indexOf('await SecureStore.setItemAsync(metadataKey(key)'),
   );
   assert.match(nativeSecureStorage, /STORAGE_KEY_PATTERN/);
 });
