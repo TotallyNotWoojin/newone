@@ -14,11 +14,26 @@ appId: com.totallynotwoojin.newone
     index: 1
 - eraseText: 80
 - inputText: ${NAME}
+# The keyboard covers the Description field after typing the name; the tap then
+# lands on the keys and the description is appended to the name (chat-33,
+# run-2026-09-04T15-47-18). Hide it first, and again before Save.
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Description"
+      index: 1
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: "Description"
     index: 1
 - inputText: ${DESCRIPTION}
-- tapOn: "Conversation controls"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Save conversation"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Save conversation"
 - extendedWaitUntil:
     notVisible: "Conversation controls"

@@ -21,7 +21,14 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: ".*${TEXT}.*"
+    visible: ".*(Write a message…|Accept|Request pending).*"
+    timeout: 30000
+# The thread opens at the unread divider when the peer's message is unread,
+# so the recovered message can sit below the fold (chat-27, run-15-47-18).
+- scrollUntilVisible:
+    element:
+      text: ".*${TEXT}.*"
+    direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-recovered
 - extendedWaitUntil:

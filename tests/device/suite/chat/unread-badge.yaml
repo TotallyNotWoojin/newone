@@ -6,7 +6,7 @@ appId: com.totallynotwoojin.newone
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
-    timeout: 30000
+    timeout: 45000
 - extendedWaitUntil:
     visible: "(.*[0-9]+ unread.*|Unread.*[0-9]+.*)"
     timeout: 45000

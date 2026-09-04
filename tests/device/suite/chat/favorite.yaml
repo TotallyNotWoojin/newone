@@ -11,50 +11,9 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - takeScreenshot: ${SHOT}-favorited
 - tapOn: "Close dialog"
-- tapOn: "Back to chats"
-# The tap right after the sheet closes can be swallowed by the dismiss
-# animation (run 2026-09-04T04-57-19); tap again if the composer is still up.
-- runFlow:
-    when:
-      visible: ".*Write a message….*"
-    commands:
-      - tapOn: "Back to chats"
-- extendedWaitUntil:
-    visible: "Start a conversation"
-    timeout: 20000
-# The filter chips scroll horizontally; "Favorites" sits past "Official".
-- swipe:
-    start: "85%, 26%"
-    end: "15%, 26%"
-    duration: 400
-- swipe:
-    start: "85%, 26%"
-    end: "15%, 26%"
-    duration: 400
-- extendedWaitUntil:
-    visible: "Favorites"
-    timeout: 10000
-- tapOn: "Favorites"
-- extendedWaitUntil:
-    visible: ".*${PEER}.*"
-    timeout: 15000
-- takeScreenshot: ${SHOT}-favorites-filter
-- swipe:
-    start: "15%, 26%"
-    end: "85%, 26%"
-    duration: 400
-- swipe:
-    start: "15%, 26%"
-    end: "85%, 26%"
-    duration: 400
-- extendedWaitUntil:
-    visible: "All"
-    timeout: 10000
-- tapOn: "All"
-- tapOn: ".*${PEER}.*"
-- extendedWaitUntil:
-    visible: ".*Write a message….*"
-    timeout: 20000
+# The consumer Chats filter row has no Favorites chip (All · Unread · DMs ·
+# Groups · Official); the favorite is proven by the server row and by the
+# controls sheet offering Remove favorite (chat-24, run-2026-09-04T15-47-18).
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Remove favorite"

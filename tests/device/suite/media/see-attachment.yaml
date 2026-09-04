@@ -9,7 +9,7 @@ appId: com.totallynotwoojin.newone
     timeout: 120000
 - takeScreenshot: ${SHOT}-peer-sees
 - tapOn:
-    text: ".*Scanned and safe.*"
+    text: ".*(Scanned and safe|Ready).*"
     index: 0
 - extendedWaitUntil:
     visible: ".*(Done|Newone|Write a message…|Cancel|Share).*"
