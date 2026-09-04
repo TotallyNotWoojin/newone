@@ -377,3 +377,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | --- | --- |
 | Result | `run-2026-09-04T17-53-11`: PASS 37 · FAIL 2. groups-20 group photo PASS with `avatar_path` set on the server (defect N closed on device). Promote/demote system messages PASS. |
 | Remaining 2 | groups-10 mention: the chip's accessibility label is "Remove mention: NAME", not "@NAME"; flow updated. groups-11 cascaded. Groups queued once more after the final queue to close them. |
+
+### Defect P — bootstrap rejected system events without a target (Sep 4 2026)
+
+| Item | Evidence |
+| --- | --- |
+| Symptom | Accounts whose group had received a photo stayed on the loading spinner forever (media/chat/translation reruns failed at setup on sim 2 with account pdm1). |
+| Cause | `bff_bootstrap_messaging_state_impl` built `system_event` inside `jsonb_strip_nulls`, so `conversation.avatar.changed` (no target) arrived as `{"eventType":"conversation.avatar.changed"}`. The client's exact-key check rejected the event and threw away the whole bootstrap. Reproduced by parsing the live pdm1 payload through `WebReadRepository`: "The service returned an invalid conversation system event". |
+| Client fix | 6925386: `web-read-repository.ts` defaults a missing `targetUserId` to null before validation; test `web-read-repository.test.ts` covers an avatar system message (11/11). Shipped in the next TestFlight/Play build. |
+| Server fix | 653d9c0: migration `20260904240000_system_event_target_key.sql` appends `system_event` outside the stripped object (first push placed the concatenation inside `jsonb_strip_nulls`; repaired and re-pushed). Verified via the public wrapper for pdm1: message 411 now returns `{"event_type":"conversation.avatar.changed","target_user_id":null}`. The read Edge function's `camelize` keeps nulls, so build 21 users are unblocked without an app update. |
