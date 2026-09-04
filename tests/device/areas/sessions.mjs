@@ -3,7 +3,6 @@
 // on the first, revokes it (the second phone must be signed out), then
 // revokes the current session. Also: Help screen and communication
 // preferences (Settings surfaces without a durable conversation effect).
-import { waitForCode } from '../lib/mailbox.mjs';
 
 export const meta = { id: 'sessions', devices: 2, title: 'SESSIONS + SETTINGS extras' };
 
@@ -25,7 +24,8 @@ export async function run(ctx) {
   await ctx.step({ id: 'sessions-01b-back', title: 'Back to mode chips on device 2', device: dev2, flow: 'negative/back-to-modes.yaml', expected: 'Create account', screen: 'sign-in' });
   const request = await ctx.step({ id: 'sessions-02-returning-on-second-device', title: 'A requests a returning code on the second device', device: dev2, flow: 'common/returning-request.yaml', env: { EMAIL: A.email }, expected: 'code screen', screen: 'sign-in' });
   if (!request.uiOk) return;
-  const code = await waitForCode(A.mailbox);
+  // ctx.waitForCode mints the code when NEWONE_DEVICE_MINT_CODES=1 (no mail dependency).
+  const code = await ctx.waitForCode(A.mailbox);
   ctx.note({ id: 'sessions-02b-email', title: 'Returning code email arrives', status: code ? 'PASS' : 'FAIL', observed: code ? 'arrived' : 'no email' });
   if (!code) return;
   const verify = await ctx.step({
