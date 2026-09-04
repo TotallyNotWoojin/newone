@@ -29,7 +29,21 @@ appId: com.totallynotwoojin.newone
     text: "Describe what went wrong"
     index: 1
 - inputText: "Device suite: wording check"
-- tapOn: "AI quality review"
+# Tapping a label inside the sheet does not dismiss the keyboard, and the Submit
+# button sits behind it (run-2026-09-04T23-29-08). Hide the keyboard, then bring
+# the button fully into view before tapping.
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Submit quality report"
+    direction: DOWN
+    timeout: 15000
+- swipe:
+    start: "50%, 72%"
+    end: "50%, 45%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
 - takeScreenshot: ${SHOT}-form
 - tapOn: "Submit quality report"
 - extendedWaitUntil:
