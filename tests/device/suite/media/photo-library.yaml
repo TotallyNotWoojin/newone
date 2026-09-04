@@ -40,6 +40,6 @@ appId: com.totallynotwoojin.newone
     timeout: 60000
 - takeScreenshot: ${SHOT}-sending
 - extendedWaitUntil:
-    visible: "(Scanned and safe|Ready)"
+    visible: ".*(Scanned and safe|Ready).*"
     timeout: 120000
 - takeScreenshot: ${SHOT}-clean

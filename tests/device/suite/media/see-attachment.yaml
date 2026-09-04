@@ -5,7 +5,7 @@ appId: com.totallynotwoojin.newone
     visible: ".*(Scanned and safe|Ready|Security scan in progress|Uploading).*"
     timeout: 90000
 - extendedWaitUntil:
-    visible: "(Scanned and safe|Ready)"
+    visible: ".*(Scanned and safe|Ready).*"
     timeout: 120000
 - takeScreenshot: ${SHOT}-peer-sees
 - tapOn:
