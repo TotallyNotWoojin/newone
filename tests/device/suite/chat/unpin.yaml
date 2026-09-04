@@ -22,11 +22,15 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
 - scrollUntilVisible:
     element:
       text: "Unpin"
     direction: DOWN
     timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn: "Unpin"
 - extendedWaitUntil:
     notVisible: "Message actions"

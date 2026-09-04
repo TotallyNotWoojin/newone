@@ -22,11 +22,15 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
 - scrollUntilVisible:
     element:
       text: "Delete for everyone"
     direction: DOWN
     timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn: "Delete for everyone"
 - extendedWaitUntil:
     notVisible: "Message actions"

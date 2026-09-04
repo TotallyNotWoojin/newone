@@ -22,6 +22,8 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Message actions"
     timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn: "React 👍"
 - extendedWaitUntil:
     notVisible: "Message actions"
