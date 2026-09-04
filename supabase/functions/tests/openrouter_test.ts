@@ -56,7 +56,9 @@ Deno.test('OpenRouter adapter enforces the versioned route, privacy controls, ce
     sentHeaders = new Headers(init?.headers);
     const messages = sent?.messages as Array<Record<string, string>>;
     const sourcePrompt = messages[1]?.content ?? '';
-    const placeholders = sourcePrompt.match(/__NEWONE_PROTECTED_[0-9]{4}__/g) ?? [];
+    // The prompt now names each placeholder once in a list and once in the
+    // protected text; the fake model copies each placeholder once, as asked.
+    const placeholders = [...new Set(sourcePrompt.match(/__NEWONE_PROTECTED_[0-9]{4}__/g) ?? [])];
     return new Response(
       JSON.stringify({
         id: 'gen-test',
