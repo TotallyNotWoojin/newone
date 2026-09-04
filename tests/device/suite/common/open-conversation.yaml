@@ -15,6 +15,20 @@ appId: com.totallynotwoojin.newone
     visible: ".*${PEER}.*"
     timeout: 45000
 - tapOn: ".*${PEER}.*"
+# The list can shift right after launch (the Requests section resolves once the
+# people list arrives), so a tap taken from a just-stale hierarchy lands on
+# empty space (chat-open-a-3, media-00c). A person taps again; so do we.
+- runFlow:
+    when:
+      notVisible: ".*(Write a message…|Accept|Request pending).*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            notVisible: ".*(Write a message…|Accept|Request pending).*"
+          commands:
+            - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
     visible: ".*(Write a message…|Accept|Request pending).*"
     timeout: 20000

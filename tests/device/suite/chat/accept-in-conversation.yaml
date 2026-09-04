@@ -11,6 +11,18 @@ appId: com.totallynotwoojin.newone
     timeout: 60000
 - takeScreenshot: ${SHOT}-request-in-chats
 - tapOn: ".*${NAME}.*"
+# Re-tap once if the list shifted under the first tap (see open-conversation).
+- runFlow:
+    when:
+      notVisible: "Accept"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            notVisible: "Accept"
+          commands:
+            - tapOn: ".*${NAME}.*"
 - extendedWaitUntil:
     visible: "Accept"
     timeout: 20000
