@@ -44,8 +44,14 @@ function matchingIndex(messages, candidate) {
 /**
  * Merge authoritative pages and optimistic rows with deterministic order and
  * identity. This is safe for prepended history and concurrent tail arrivals.
+ *
+ * With `pruneMissingWithinPage`, an authoritative page is also treated as the
+ * complete truth for the id range it spans: a server-backed row that sits
+ * between the page's oldest and newest ids but is absent from the page was
+ * deleted for everyone or hidden for this member, and is dropped. Rows older
+ * than the page and optimistic rows without a server id are untouched.
  */
-export function mergeTimelineMessages(existing, incoming) {
+export function mergeTimelineMessages(existing, incoming, options = {}) {
   const merged = [...existing];
   for (const message of incoming) {
     const index = matchingIndex(merged, message);
@@ -61,7 +67,22 @@ export function mergeTimelineMessages(existing, incoming) {
       failureReason: message.deliveryState === 'failed' ? message.failureReason : undefined,
     };
   }
-  return merged.sort(compareMessages);
+  const pruned = options.pruneMissingWithinPage ? pruneMissingWithinPage(merged, incoming) : merged;
+  return pruned.sort(compareMessages);
+}
+
+function pruneMissingWithinPage(merged, incoming) {
+  const pageIds = incoming.map((message) => message.serverId).filter(Boolean);
+  if (!pageIds.length) return merged;
+  const oldest = pageIds.reduce((low, id) => (compareMessageIds(id, low) < 0 ? id : low));
+  const newest = pageIds.reduce((high, id) => (compareMessageIds(id, high) > 0 ? id : high));
+  const present = new Set(pageIds);
+  return merged.filter((message) =>
+    !message.serverId
+    || present.has(message.serverId)
+    || compareMessageIds(message.serverId, oldest) < 0
+    || compareMessageIds(message.serverId, newest) > 0
+  );
 }
 
 export function firstUnreadMessageId(messages, lastReadMessageId, unreadCount) {

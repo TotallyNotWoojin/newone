@@ -577,6 +577,13 @@ function mergeMessages(current: Message[], incoming: Message[]) {
   return mergeTimelineMessages(current, incoming) as Message[];
 }
 
+// A reconcile page is the server's complete view of the ids it spans, so rows
+// deleted for everyone (or hidden for this member) drop out instead of
+// lingering until the next cold start.
+function reconcileMessages(current: Message[], incoming: Message[]) {
+  return mergeTimelineMessages(current, incoming, { pruneMissingWithinPage: true }) as Message[];
+}
+
 function receiptProgressKey(input: Pick<MessageReceiptInput, 'organizationId' | 'conversationId' | 'messageId'>) {
   return `${input.organizationId}:${input.conversationId}:${input.messageId}`;
 }
@@ -1130,7 +1137,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           return [
             conversation.id,
             incomingMessages.length
-              ? mergeMessages(previousMessages, incomingMessages)
+              ? reconcileMessages(previousMessages, incomingMessages)
               : previousMessages,
           ];
         }));
