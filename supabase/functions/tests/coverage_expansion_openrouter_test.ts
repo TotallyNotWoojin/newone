@@ -378,7 +378,7 @@ Deno.test('OpenRouter translation and detection validate each request and struct
     completion({ ...detectionOutput, ambiguous: true, confidence: 0.6 })
   ).detectLanguage(detectionBase);
   assertEquals(flagged.detectedSourceLanguage, 'en');
-  assertEquals(flagged.ambiguous, true);
+  assertEquals(flagged.ambiguous, false);
   assertEquals(flagged.confidence, 0.6);
   // An undetermined language is always ambiguous, whatever the flag says.
   const undetermined = await processor(async () =>

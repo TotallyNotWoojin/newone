@@ -965,7 +965,9 @@ export class OpenRouterLanguageProcessor {
     // ten times over half an hour and then left it undetected (hosted, Sep 4
     // 2026, reason provider_detection_ambiguity). Keep the named language and
     // its confidence; an undetermined language is always ambiguous.
-    const ambiguous = detectedSourceLanguage === 'und' ? true : output.ambiguous;
+    // A named language is never ambiguous for our purposes: the completion
+    // path would otherwise store 'und' and block every translation.
+    const ambiguous = detectedSourceLanguage === 'und';
     return {
       detectedSourceLanguage,
       confidence: confidence(output.confidence),
