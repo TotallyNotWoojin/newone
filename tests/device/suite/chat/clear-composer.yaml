@@ -1,5 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
-- tapOn: ".*Write a message….*"
+# Clear whatever draft sits in the composer. With a draft present the
+# placeholder is gone, so match the field by placeholder or by the draft text.
+- tapOn: ".*(Write a message…|typing indicator probe).*"
 - eraseText: 60
 - tapOn: "Original is always preserved"
