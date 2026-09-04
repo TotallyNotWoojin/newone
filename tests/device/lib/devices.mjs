@@ -45,11 +45,25 @@ export function ensurePool(count) {
 
 export function bootAndInstall(udid, log = console.log) {
   if (OWNER_DEVICES.has(udid)) throw new Error(`refusing to boot owner device ${udid}`);
-  const state = listDevices().find((entry) => entry.udid === udid)?.state;
-  if (state !== 'Booted') {
-    simctl(['boot', udid]);
-    log(`booted ${udid}`);
+  // CoreSimulator answers "Invalid argument" (NSPOSIXErrorDomain 22) or
+  // "Unable to boot" while a device is still shutting down or its previous
+  // launchd is being torn down; wait it out instead of failing the run.
+  let bootError = null;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    const state = listDevices().find((entry) => entry.udid === udid)?.state;
+    if (state === 'Booted') { bootError = null; break; }
+    try {
+      simctl(['boot', udid], { timeout: 120_000 });
+      log(`booted ${udid}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+      bootError = null;
+      break;
+    } catch (error) {
+      bootError = error;
+      log(`boot attempt ${attempt} on ${udid} (state ${state ?? 'unknown'}) failed: ${String(error?.stderr ?? error?.message ?? error).trim().split('\n')[0]}`);
+      execFileSync('sleep', ['15']);
+    }
   }
+  if (bootError) throw bootError;
   simctl(['bootstatus', udid, '-b'], { timeout: 600_000 });
   // CoreSimulator gets very slow when several simulators boot on a loaded
   // host (an install that normally takes a second timed out at 180s and

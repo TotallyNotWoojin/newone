@@ -12,7 +12,8 @@
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ensurePool, bootAndInstall, shutdown, appBuildInfo, OWNER_DEVICES } from './lib/devices.mjs';
+import { ensurePool, bootAndInstall, shutdown, appBuildInfo, OWNER_DEVICES, APP_ID } from './lib/devices.mjs';
+import { warmDriver } from './lib/maestro.mjs';
 import { Report } from './lib/report.mjs';
 import { createAreaContext } from './lib/harness.mjs';
 import { buildInventorySection, buildBugList } from './lib/summary.mjs';
@@ -63,6 +64,13 @@ const pool = EXPLICIT_DEVICES.length ? EXPLICIT_DEVICES : ensurePool(POOL_SIZE);
 report.meta.devices = pool;
 report.log('suite', `run ${RUN_ID}; devices ${pool.join(', ')}`);
 for (const udid of pool) bootAndInstall(udid, (message) => report.log('suite', message));
+// Bring Maestro's iOS driver up on each device one at a time before the
+// waves start; concurrent driver installs on a loaded host end in
+// "iOS driver not ready in time" for every flow.
+for (const udid of pool) {
+  const ready = await warmDriver(udid, { appId: APP_ID, cwd: runDir, log: (message) => report.log('suite', message) });
+  if (!ready) report.log('suite', `WARNING: driver never became ready on ${udid}; flows there will likely fail`);
+}
 
 const areaModules = {};
 for (const wave of WAVES) {

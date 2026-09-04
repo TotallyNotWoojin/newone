@@ -55,3 +55,5 @@ next-env.d.ts
 # Service-account credentials must never enter the repository
 *firebase-adminsdk*.json
 .metadata_never_index
+*.nosync
+*.nosync/

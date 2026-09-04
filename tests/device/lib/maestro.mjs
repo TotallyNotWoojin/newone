@@ -2,7 +2,8 @@
 // its env passed via -e; on failure the on-screen text is captured through
 // `maestro hierarchy` so the report can quote the exact error the user saw.
 import { execFile } from 'node:child_process';
-import { mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -35,7 +36,10 @@ export async function runFlow({ device, flow, env = {}, cwd, timeoutMs = 300_000
       encoding: 'utf8',
       timeout: timeoutMs,
       maxBuffer: 16 * 1024 * 1024,
-      env: { ...process.env, MAESTRO_CLI_NO_ANALYTICS: '1' },
+      // The XCUITest driver can take minutes to come up on a loaded host;
+      // Maestro's default startup timeout then fails every flow with
+      // "iOS driver not ready in time" before the app is even launched.
+      env: { MAESTRO_DRIVER_STARTUP_TIMEOUT: '300000', ...process.env, MAESTRO_CLI_NO_ANALYTICS: '1' },
     });
     return { ok: true, durationMs: Date.now() - started, stdout, stderr, failure: '' };
   } catch (error) {
@@ -92,4 +96,20 @@ export function screenshotsIn(dir, prefix) {
     .filter((name) => name.startsWith(prefix) && name.endsWith('.png'))
     .sort()
     .map((name) => join(dir, name));
+}
+
+// Start Maestro's iOS driver on a device before any real flow needs it, one
+// device at a time, so two driver installs never race on a loaded host. The
+// flow only launches the app and waits for its first screen.
+export async function warmDriver(device, { appId, cwd, log = () => {} } = {}) {
+  const dir = join(tmpdir(), 'newone-device-suite');
+  mkdirSync(dir, { recursive: true });
+  const flow = join(dir, 'warm-driver.yaml');
+  writeFileSync(flow, `appId: ${appId}\n---\n- launchApp\n- extendedWaitUntil:\n    visible: ".*(Chats|Create account|Newone).*"\n    timeout: 60000\n`);
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const result = await runFlow({ device, flow, cwd, timeoutMs: 420_000 });
+    if (result.ok) { log(`driver ready on ${device} (${Math.round(result.durationMs / 1000)}s${attempt > 1 ? `, attempt ${attempt}` : ''})`); return true; }
+    log(`driver warm-up ${attempt} on ${device} failed: ${(result.failure || '').split('\n')[0].slice(0, 160)}`);
+  }
+  return false;
 }

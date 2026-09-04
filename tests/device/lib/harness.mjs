@@ -35,7 +35,9 @@ export function createAreaContext({ area, devices, report, runDir }) {
     // Maestro's iOS driver itself can crash on a loaded host (Kotlin stack
     // trace, "hierarchy unavailable"); that says nothing about the app, so
     // run the flow once more before recording a failure.
-    const driverCrash = (r) => !r.ok && /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}`);
+    // A flow that hangs until the harness limit (e.g. inputText never
+    // returning while the keyboard is up) is the driver stalling, too.
+    const driverCrash = (r) => !r.ok && (r.timedOut === true || /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver|driver not ready in time|IOSDriverTimeoutException/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}`));
     let result = await runFlow({
       device,
       flow: flowPath,
