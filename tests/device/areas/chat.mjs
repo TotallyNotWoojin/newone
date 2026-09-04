@@ -227,7 +227,13 @@ export async function run(ctx) {
   await sleep(60_000);
   launchApp(devA);
   const fg = Date.now();
-  await ctx.step({ id: 'chat-29-foreground-realtime', title: 'After 60s in background, A shows the message on return', device: devA, flow: 'chat/foreground-see.yaml', env: { TEXT: t5, TIMEOUT: '30000' }, expected: 'Text visible within 30s of foregrounding', screen: 'conversation', latencyFrom: fg });
+  const fgSeen = await ctx.step({ id: 'chat-29-foreground-realtime', title: 'After 60s in background, A shows the message on return', device: devA, flow: 'chat/foreground-see.yaml', env: { TEXT: t5, TIMEOUT: '30000' }, expected: 'Text visible within 30s of foregrounding', screen: 'conversation', latencyFrom: fg });
+  if (!fgSeen.uiOk) {
+    // Run 2026-09-04T04-57-19: the thread showed its top after foregrounding,
+    // so the message may have arrived below the fold. Separate that case.
+    await ctx.step({ id: 'chat-29b-foreground-scroll', title: 'The message is in the thread after scrolling (arrived but the list sat at the top)', device: devA, flow: 'chat/foreground-see-scroll.yaml', env: { TEXT: t5, TIMEOUT: '30000' }, expected: 'Text found after scrolling down', screen: 'conversation', latencyFrom: fg,
+      serverTruth: async () => { const row = await server.messageByBody(convId, t5); return { ok: Boolean(row), detail: row ? `server row ${row.id}` : 'no server row' }; } });
+  }
 
   await ctx.step({ id: 'chat-30-language-mid-session', title: 'Switch display language mid-session; originals unchanged', device: devA, flow: 'chat/language-mid-session.yaml', env: { PEER: B.displayName, TEXT: t5 }, expected: 'Spanish chrome in the conversation ("Escribe un mensaje…", "Volver a chats"), message text unchanged, English restored', screen: 'settings / conversation' });
 

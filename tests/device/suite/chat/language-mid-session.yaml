@@ -25,10 +25,10 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: "Escribe un mensaje…"
+    visible: ".*Escribe un mensaje….*"
     timeout: 20000
 - assertVisible: ".*${TEXT}.*"
-- assertVisible: "Volver a chats"
+- assertVisible: ".*Volver a chats.*"
 - takeScreenshot: ${SHOT}-spanish-conversation
 - tapOn: "Volver a chats"
 - tapOn: "Ajustes"

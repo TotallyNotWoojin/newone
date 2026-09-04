@@ -1,6 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-- tapOn: "Back to chats"
+# Accept the Spanish label too, so a language step that ended mid-way does not
+# strand every later step.
+- tapOn: "(Back to chats|Volver a chats)"
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 15000

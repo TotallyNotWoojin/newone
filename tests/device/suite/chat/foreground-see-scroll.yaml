@@ -1,0 +1,11 @@
+appId: com.totallynotwoojin.newone
+---
+# Fallback after foreground-see.yaml: the message may have arrived while the
+# list sat at the top of the thread. Scroll down to find it, so the report can
+# tell "arrived but hidden" from "never arrived".
+- scrollUntilVisible:
+    element:
+      text: ".*${TEXT}.*"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-after-scroll
