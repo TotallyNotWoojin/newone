@@ -286,7 +286,7 @@ function routerObject(value: unknown): Record<string, unknown> {
   try {
     return asObject(value);
   } catch {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_object', 5);
   }
 }
 
@@ -304,7 +304,7 @@ function validateRouterMetadata(
     metadata.requested !== expectedModel || metadata.strategy !== 'direct' ||
     metadata.attempt !== 1 || metadata.is_byok !== false
   ) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_metadata_request', 5);
   }
 
   const endpoints = routerObject(metadata.endpoints);
@@ -314,7 +314,7 @@ function validateRouterMetadata(
     endpoints.available.length < 1 || endpoints.available.length > 100 ||
     (endpoints.total as number) < endpoints.available.length
   ) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_endpoints', 5);
   }
   const selected = endpoints.available.filter((entry) => {
     const endpoint = routerObject(entry);
@@ -332,12 +332,12 @@ function validateRouterMetadata(
     !validProviderModelReceipt(selectedEndpoint.model) ||
     selectedEndpoint.provider !== expectedProviderMetadataName
   ) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_endpoint_selection', 5);
   }
 
   if (metadata.attempts !== undefined) {
     if (!Array.isArray(metadata.attempts) || metadata.attempts.length !== 1) {
-      throw new ApiError(503, 'provider_unavailable', undefined, 5);
+      throw new ApiError(503, 'provider_unavailable', 'provider_router_attempts', 5);
     }
     const attempt = routerObject(metadata.attempts[0]);
     if (
@@ -345,12 +345,12 @@ function validateRouterMetadata(
       !validProviderModelReceipt(attempt.model) ||
       !Number.isSafeInteger(attempt.status) || (attempt.status as number) < 200 ||
       (attempt.status as number) > 299
-    ) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    ) throw new ApiError(503, 'provider_unavailable', 'provider_router_attempt', 5);
   }
 
   if (metadata.pipeline === undefined) return;
   if (!Array.isArray(metadata.pipeline) || metadata.pipeline.length > 20) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_pipeline_shape', 5);
   }
   // Account-level guardrails can inspect employee text, while other pipeline
   // stages can alter prompts, invoke tools/plugins, or rewrite output. This
@@ -359,7 +359,7 @@ function validateRouterMetadata(
   // later approves named guardrails, add their immutable IDs to the versioned
   // policy instead of accepting every stage whose type happens to be known.
   if (metadata.pipeline.length > 0) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_router_pipeline_stage', 5);
   }
 }
 
@@ -383,7 +383,7 @@ const PROTECTED_PLACEHOLDER_PATTERN = /__NEWONE_PROTECTED_[0-9]{4}__/g;
 
 function confidence(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_output_confidence', 5);
   }
   return value;
 }
@@ -432,16 +432,16 @@ function sourceReferences(
   allowed: ReadonlySet<string>,
 ): string[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 50) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_summary_source_refs_shape', 5);
   }
   const refs = value.map((entry) => {
     if (typeof entry !== 'string' || !allowed.has(entry)) {
-      throw new ApiError(503, 'provider_unavailable', undefined, 5);
+      throw new ApiError(503, 'provider_unavailable', 'provider_summary_source_ref_unknown', 5);
     }
     return entry;
   });
   if (new Set(refs).size !== refs.length) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_summary_source_refs_duplicate', 5);
   }
   return refs;
 }
@@ -493,7 +493,7 @@ function summaryEvidence(
   try {
     onlyKeys(row, ['text', 'sourceRefs']);
   } catch {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_summary_evidence_keys', 5);
   }
   return {
     text: restoreSummaryString(row.text, 1, maximumTextLength, tokens),
@@ -503,7 +503,7 @@ function summaryEvidence(
 
 function boundedArray(value: unknown, maximum: number): unknown[] {
   if (!Array.isArray(value) || value.length > maximum) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_output_array_shape', 5);
   }
   return value;
 }
@@ -570,7 +570,7 @@ async function responseEnvelope(response: Response): Promise<Record<string, unkn
     if (bytes.byteLength > 131072) throw new Error('oversized response');
     return asObject(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)));
   } catch {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_response_envelope', 5);
   }
 }
 
@@ -674,12 +674,12 @@ async function verifyEmployeeEgressBeforeContent(
       },
       body: JSON.stringify(completionBody(environment.policy, probe)),
     });
-    if (!response.ok) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    if (!response.ok) throw new ApiError(503, 'provider_unavailable', `provider_probe_http_${response.status}`, 5);
     const envelope = await responseEnvelope(response);
     if (
       envelope.model !== environment.policy.model || !Array.isArray(envelope.choices) ||
       envelope.choices.length !== 1
-    ) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    ) throw new ApiError(503, 'provider_unavailable', 'provider_probe_envelope', 5);
     validateRouterMetadata(
       envelope.openrouter_metadata,
       environment.policy.model,
@@ -689,13 +689,13 @@ async function verifyEmployeeEgressBeforeContent(
     const output = typeof message.content === 'string'
       ? routerObject(JSON.parse(message.content))
       : null;
-    if (!output) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    if (!output) throw new ApiError(503, 'provider_unavailable', 'provider_probe_output', 5);
     try {
       onlyKeys(output, ['ok']);
     } catch {
-      throw new ApiError(503, 'provider_unavailable', undefined, 5);
+      throw new ApiError(503, 'provider_unavailable', 'provider_probe_output', 5);
     }
-    if (output.ok !== true) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    if (output.ok !== true) throw new ApiError(503, 'provider_unavailable', 'provider_probe_output_keys', 5);
     const provenAt = routeProbeClock();
     routeProbeCache = { key, verifiedAt: provenAt };
     if (store) {
@@ -707,7 +707,7 @@ async function verifyEmployeeEgressBeforeContent(
     }
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_probe_error', 5);
   } finally {
     clearTimeout(timeout);
   }
@@ -735,7 +735,7 @@ async function structuredCompletion(
       body: JSON.stringify(completionBody(policy, spec)),
     });
   } catch {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_completion_fetch', 5);
   } finally {
     clearTimeout(timeout);
   }
@@ -745,14 +745,14 @@ async function structuredCompletion(
     const retryAfter = Number.isFinite(retryHeader) && retryHeader > 0
       ? Math.min(3600, Math.ceil(retryHeader))
       : 5;
-    throw new ApiError(503, 'provider_unavailable', undefined, retryAfter);
+    throw new ApiError(503, 'provider_unavailable', `provider_completion_http_${response.status}`, retryAfter);
   }
 
   const envelope = await responseEnvelope(response);
   if (
     envelope.model !== policy.model || !Array.isArray(envelope.choices) ||
     envelope.choices.length !== 1
-  ) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+  ) throw new ApiError(503, 'provider_unavailable', 'provider_completion_envelope', 5);
   validateRouterMetadata(
     envelope.openrouter_metadata,
     policy.model,
@@ -761,7 +761,7 @@ async function structuredCompletion(
   const choice = routerObject(envelope.choices[0]);
   const message = routerObject(choice.message);
   if (typeof message.content !== 'string' || message.content.length > 65536) {
-    throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    throw new ApiError(503, 'provider_unavailable', 'provider_completion_content', 5);
   }
   let output: Record<string, unknown>;
   try {
@@ -839,7 +839,7 @@ export class OpenRouterLanguageProcessor {
       trim: false,
     }) as string;
     if (output.sourceFingerprint !== sourceFingerprint(request.sourceSha256)) {
-      throw new ApiError(503, 'provider_unavailable', undefined, 5);
+      throw new ApiError(503, 'provider_unavailable', 'provider_translation_fingerprint', 5);
     }
     // Every safety-sensitive value recognized in the source was replaced by a
     // placeholder before egress. Anything matching the same recognizer outside
@@ -951,10 +951,14 @@ export class OpenRouterLanguageProcessor {
     const detectedSourceLanguage = output.detectedSourceLanguage;
     if (
       (detectedSourceLanguage !== 'ko' && detectedSourceLanguage !== 'es' &&
-        detectedSourceLanguage !== 'en' && detectedSourceLanguage !== 'und') ||
-      output.sourceFingerprint !== sourceFingerprint(request.sourceSha256) || typeof output.ambiguous !== 'boolean' ||
-      (detectedSourceLanguage === 'und') !== output.ambiguous
-    ) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+        detectedSourceLanguage !== 'en' && detectedSourceLanguage !== 'und')
+    ) throw new ApiError(503, 'provider_unavailable', 'provider_detection_language', 5);
+    if (output.sourceFingerprint !== sourceFingerprint(request.sourceSha256)) {
+      throw new ApiError(503, 'provider_unavailable', 'provider_detection_fingerprint', 5);
+    }
+    if (
+      typeof output.ambiguous !== 'boolean' || (detectedSourceLanguage === 'und') !== output.ambiguous
+    ) throw new ApiError(503, 'provider_unavailable', 'provider_detection_ambiguity', 5);
     return {
       detectedSourceLanguage,
       confidence: confidence(output.confidence),

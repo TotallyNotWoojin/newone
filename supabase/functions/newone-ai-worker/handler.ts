@@ -638,9 +638,7 @@ async function processJob(
       code: failureCode(error),
       // The review reason is one of the worker's own rule labels, never text
       // from a message or from the provider.
-      reason: safe.code === 'ai_output_needs_review' && /^summary_[a-z_]+$/.test(safe.message)
-        ? safe.message
-        : undefined,
+      reason: /^(summary|provider)_[a-z0-9_]+$/.test(safe.message) ? safe.message : undefined,
     }));
     return 'failed';
   }
