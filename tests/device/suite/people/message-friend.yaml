@@ -6,8 +6,10 @@ appId: com.totallynotwoojin.newone
     visible: "Chats"
     timeout: 30000
 - tapOn: "People"
-- extendedWaitUntil:
-    visible: "Message"
+- scrollUntilVisible:
+    element:
+      text: "Message"
+    direction: DOWN
     timeout: 30000
 - tapOn: "Message"
 - extendedWaitUntil:
