@@ -21,6 +21,17 @@ appId: com.totallynotwoojin.newone
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
+# Typing the name leaves the keyboard up over the member section; a tap on the
+# search field then lands on the keys and the stranger's name is appended to
+# the group name. Dismiss it first (see groups/create-group.yaml).
+- tapOn: "GROUP SETUP"
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - scrollUntilVisible:
     element:
       text: "Search company directory"
