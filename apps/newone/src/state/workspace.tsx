@@ -282,6 +282,12 @@ interface WorkspaceState {
     selected: SelectedAttachment,
   ) => Promise<boolean>;
   removeConversationAvatar: (conversationId: string) => Promise<boolean>;
+  /** Signed profile-picture URLs by user id (empty when the user has none). */
+  profileAvatarUrls: Record<string, string>;
+  /** Ask for a user's profile picture; cached, safe to call on every render. */
+  requestProfileAvatar: (userId: string) => void;
+  uploadProfileAvatar: (selected: SelectedAttachment) => Promise<boolean>;
+  removeProfileAvatar: () => Promise<boolean>;
   sendMessage: (
     conversationId: string,
     originalText: string,
@@ -735,6 +741,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const attachmentScanTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const conversationAvatarCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const conversationAvatarTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [profileAvatarUrls, setProfileAvatarUrls] = useState<Record<string, string>>({});
+  // Profile pictures are fetched on demand per user: a positive entry holds the
+  // signed URL and its path (the sender's own path is the activation
+  // precondition); a negative entry remembers "no picture" for ten minutes.
+  const profileAvatarCacheRef = useRef(new Map<string, { url: string | null; avatarPath: string | null; expiresAt: number }>());
+  const profileAvatarInflightRef = useRef(new Set<string>());
+  const profileAvatarTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const conversationAvatarLoaderRef = useRef<(
     organizationId: string,
     conversationId: string,
@@ -887,6 +900,132 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     conversationAvatarLoaderRef.current = loadConversationAvatarUrl;
   }, [loadConversationAvatarUrl]);
+
+  const loadProfileAvatarUrl = useCallback(async (userId: string, force = false) => {
+    const organizationId = snapshotRef.current?.organizationId;
+    if (!organizationId || profileAvatarInflightRef.current.has(userId)) return;
+    const cached = profileAvatarCacheRef.current.get(userId);
+    if (!force && cached && cached.expiresAt > Date.now()) return;
+    profileAvatarInflightRef.current.add(userId);
+    try {
+      const grant = await repositories.commands.getProfileAvatarReadGrant({ organizationId, userId });
+      if (!mountedRef.current || snapshotRef.current?.organizationId !== organizationId) return;
+      const expiresAt = Date.now() + grant.expiresInSeconds * 1000;
+      profileAvatarCacheRef.current.set(userId, { url: grant.signedUrl, avatarPath: grant.avatarPath, expiresAt });
+      setProfileAvatarUrls((current) => ({ ...current, [userId]: grant.signedUrl }));
+      const previousTimer = profileAvatarTimersRef.current.get(userId);
+      if (previousTimer) clearTimeout(previousTimer);
+      profileAvatarTimersRef.current.set(userId, setTimeout(() => {
+        profileAvatarTimersRef.current.delete(userId);
+        void loadProfileAvatarUrl(userId, true);
+      }, Math.max(1_000, grant.expiresInSeconds * 1000 - 15_000)));
+    } catch (error) {
+      // 404 means the user has no picture; anything else is retried on the
+      // next request after a short pause (initials stay meanwhile).
+      const none = error instanceof RepositoryError && (error.status === 404 || error.code === 'not_found');
+      profileAvatarCacheRef.current.set(userId, {
+        url: null,
+        avatarPath: null,
+        expiresAt: Date.now() + (none ? 10 * 60_000 : 30_000),
+      });
+      setProfileAvatarUrls((current) => {
+        if (!(userId in current)) return current;
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+    } finally {
+      profileAvatarInflightRef.current.delete(userId);
+    }
+  }, [repositories.commands]);
+
+  const requestProfileAvatar = useCallback((userId: string) => {
+    if (!userId) return;
+    const cached = profileAvatarCacheRef.current.get(userId);
+    if (cached && cached.expiresAt > Date.now()) return;
+    void loadProfileAvatarUrl(userId);
+  }, [loadProfileAvatarUrl]);
+
+  const uploadProfileAvatar = useCallback(async (selected: SelectedAttachment) => {
+    if (!snapshot || connectivity === 'offline') return false;
+    const userId = snapshot.currentUser.id;
+    const result = await executeImmediate('profile-avatar-upload', async () => {
+      const optimized = await optimizeImageAttachment({ ...selected, imageMode: 'optimized' });
+      const prepared = await prepareAttachment(optimized);
+      try {
+        if (
+          !CONVERSATION_AVATAR_MIME_TYPES.has(prepared.mimeType) ||
+          prepared.byteSize > CONVERSATION_AVATAR_MAX_BYTES
+        ) {
+          throw new RepositoryError(
+            'Profile photos must be JPEG, PNG, or WebP and no larger than 5 MB.',
+            'profile_avatar_invalid',
+            false,
+          );
+        }
+        // The activation precondition is the current path; fetch it when unknown.
+        let expectedAvatarPath = profileAvatarCacheRef.current.get(userId)?.avatarPath ?? null;
+        if (!profileAvatarCacheRef.current.has(userId)) {
+          try {
+            const current = await repositories.commands.getProfileAvatarReadGrant({ organizationId: snapshot.organizationId, userId });
+            expectedAvatarPath = current.avatarPath;
+          } catch (error) {
+            if (!(error instanceof RepositoryError && (error.status === 404 || error.code === 'not_found'))) throw error;
+            expectedAvatarPath = null;
+          }
+        }
+        const grant = await repositories.commands.createProfileAvatarUploadGrant({
+          organizationId: snapshot.organizationId,
+          fileName: prepared.name,
+          mimeType: prepared.mimeType as 'image/jpeg' | 'image/png' | 'image/webp',
+          byteSize: prepared.byteSize,
+          sha256Hex: prepared.sha256Hex,
+          idempotencyKey: `profile-avatar-grant-${userId}-${prepared.sha256Hex.slice(0, 32)}`,
+        });
+        // The transfer needs only the signed URL; the profile grant has no attachment id.
+        await uploadAttachment(
+          grant as unknown as Parameters<typeof uploadAttachment>[0],
+          { uri: prepared.uri, bytes: prepared.bytes },
+          prepared.mimeType,
+        );
+        const activated = await repositories.commands.activateProfileAvatar({
+          organizationId: snapshot.organizationId,
+          uploadId: grant.uploadId,
+          expectedAvatarPath,
+          idempotencyKey: `profile-avatar-activate-${grant.uploadId}`,
+        });
+        profileAvatarCacheRef.current.set(userId, { url: selected.uri, avatarPath: activated.avatarPath, expiresAt: Date.now() + 60_000 });
+        setProfileAvatarUrls((current) => ({ ...current, [userId]: selected.uri }));
+        void loadProfileAvatarUrl(userId, true);
+        return true;
+      } finally {
+        await cleanupPreparedAttachment(prepared);
+      }
+    });
+    return result === true;
+  }, [connectivity, executeImmediate, loadProfileAvatarUrl, repositories.commands, snapshot]);
+
+  const removeProfileAvatar = useCallback(async () => {
+    if (!snapshot || connectivity === 'offline') return false;
+    const userId = snapshot.currentUser.id;
+    const expectedAvatarPath = profileAvatarCacheRef.current.get(userId)?.avatarPath ?? null;
+    if (!expectedAvatarPath) return false;
+    const result = await executeImmediate('profile-avatar-remove', async () => {
+      await repositories.commands.removeProfileAvatar({
+        organizationId: snapshot.organizationId,
+        expectedAvatarPath,
+        idempotencyKey: `profile-avatar-remove-${userId}-${expectedAvatarPath.split('/')[2]}`,
+      });
+      profileAvatarCacheRef.current.set(userId, { url: null, avatarPath: null, expiresAt: Date.now() + 10 * 60_000 });
+      setProfileAvatarUrls((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      return true;
+    });
+    return result === true;
+  }, [connectivity, executeImmediate, repositories.commands, snapshot]);
 
   const hydrateOutbox = useCallback(async (nextSnapshot: WorkspaceSnapshot) => {
     if (!offlineWorkspaceEntitlement(nextSnapshot.currentUser).eligible) {
@@ -5447,6 +5586,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       currentUser: snapshot?.currentUser ?? null,
       conversations: snapshot?.conversations ?? [],
       conversationAvatarUrls,
+      profileAvatarUrls,
+      requestProfileAvatar,
+      uploadProfileAvatar,
+      removeProfileAvatar,
       discoverableConversations: snapshot?.discoverableConversations ?? [],
       messages: snapshot?.messages ?? {},
       people: snapshot?.people ?? [],
@@ -5605,6 +5748,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       acknowledgeHandoff,
       connectivity,
       conversationAvatarUrls,
+      profileAvatarUrls,
+      requestProfileAvatar,
+      uploadProfileAvatar,
+      removeProfileAvatar,
       createGroupConversation,
       uploadConversationAvatar,
       removeConversationAvatar,

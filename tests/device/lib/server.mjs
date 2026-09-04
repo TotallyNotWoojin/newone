@@ -72,6 +72,11 @@ export async function conversationSummaries(userId) {
     order by c.created_at desc`);
 }
 
+export async function profileAvatar(userId) {
+  return await one(`select p.avatar_path, (select u.status from public.profile_avatar_uploads u where u.user_id = p.user_id order by u.created_at desc limit 1) as upload_status
+    from public.profiles p where p.user_id = ${lit(userId)}::uuid`);
+}
+
 export async function groupByName(name) {
   return await one(`select id, kind, name, is_archived, created_by_user_id from public.conversations
     where organization_id = ${lit(ORG)} and name = ${lit(name)} order by created_at desc limit 1`);

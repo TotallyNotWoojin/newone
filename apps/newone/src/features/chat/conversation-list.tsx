@@ -12,6 +12,7 @@ import type { Conversation, DiscoverableConversation, InboxFilter, Person } from
 import { Avatar, Chip, IconButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 
 const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements'];
@@ -260,6 +261,7 @@ function MessageRequestRow({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  const counterpartAvatarUrl = useProfileAvatar(counterpart.id);
   const { t } = useI18n();
   return (
     <View style={[styles.requestRow, selected && styles.rowSelected]}>
@@ -270,6 +272,7 @@ function MessageRequestRow({
         style={({ pressed }) => [styles.requestRowBody, pressed && styles.rowPressed]}>
         <Avatar
           color={conversation.avatarColor}
+          imageUri={counterpartAvatarUrl}
           initials={conversation.initials}
           presence={conversation.presence}
           size={44}
@@ -316,6 +319,7 @@ function ConversationRow({
   onPress: () => void;
   showPinnedDivider: boolean;
 }) {
+  const directAvatarUrl = useProfileAvatar(conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const official = conversation.kind === 'announcement';
@@ -339,7 +343,7 @@ function ConversationRow({
         <Avatar
           color={conversation.avatarColor}
           icon={official ? 'megaphone' : undefined}
-          imageUri={workspace.conversationAvatarUrls[conversation.id]}
+          imageUri={conversation.kind === 'direct' ? directAvatarUrl : workspace.conversationAvatarUrls[conversation.id]}
           initials={conversation.initials}
           presence={conversation.kind === 'direct' ? conversation.presence : undefined}
           size={48}

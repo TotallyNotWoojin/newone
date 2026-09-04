@@ -23,7 +23,9 @@ import type {
   DeviceNotificationPreferenceOverrides,
 } from '@/data/repositories/device-notification-preferences-dto.mjs';
 import { isPersonalRealm } from '@/constants/personal-realm';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { errorMessageKey } from '@/i18n/errors';
+import * as ImagePicker from 'expo-image-picker';
 import { useI18n } from '@/i18n/provider';
 import { getSupabaseClient } from '@/lib/supabase';
 import {
@@ -80,6 +82,30 @@ export default function SettingsScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [preferenceDraft, setPreferenceDraft] = useState<OrganizationPreferences | null>(null);
+  // Profile picture (owner backlog v2): the current user's photo, chosen from
+  // the library and uploaded through the profile avatar grant.
+  const ownAvatarUrl = useProfileAvatar(currentUser?.id ?? null);
+  const choosePhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.86,
+    });
+    const asset = result.assets?.[0];
+    if (!asset) return;
+    await workspace.uploadProfileAvatar({
+      uri: asset.uri,
+      name: asset.fileName ?? `profile-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      size: asset.fileSize,
+      width: asset.width,
+      height: asset.height,
+      imageMode: 'optimized',
+    });
+  };
   // Consumer settings save themselves (owner backlog, Sep 4 2026): every
   // change to the draft is written after a short pause, no Save button.
   const saveOrganizationPreferences = workspace.saveOrganizationPreferences;
@@ -360,6 +386,7 @@ export default function SettingsScreen() {
         <View style={[styles.profileCard, compact && styles.profileCardCompact, shadow]}>
           <Avatar
             color={currentUser.avatarColor}
+            imageUri={ownAvatarUrl}
             initials={currentUser.initials}
             presence={currentUser.presence}
             size={64}
@@ -387,6 +414,27 @@ export default function SettingsScreen() {
           icon="person-circle-outline"
           title={t('settings.profileTitle')}>
           <View style={styles.preferenceForm}>
+            <View style={styles.photoRow}>
+              <PrimaryButton
+                icon="image-outline"
+                label={t('settings.choosePhoto')}
+                loading={workspace.actionBusy === 'profile-avatar-upload'}
+                onPress={() => void choosePhoto()}
+                tone="light"
+              />
+              {ownAvatarUrl ? (
+                <PrimaryButton
+                  icon="trash-outline"
+                  label={t('settings.removePhoto')}
+                  loading={workspace.actionBusy === 'profile-avatar-remove'}
+                  onPress={() => void workspace.removeProfileAvatar()}
+                  tone="light"
+                />
+              ) : null}
+            </View>
+            <Text style={styles.rowHint}>
+              {workspace.actionBusy === 'profile-avatar-upload' ? t('settings.photoUploading') : t('settings.photoHint')}
+            </Text>
             <FormField
               label={t('settings.displayName')}
               onChangeText={(value) => setProfileDraft((current) => ({ ...current, displayName: value }))}
@@ -1070,6 +1118,12 @@ const styles = StyleSheet.create({
   quietHoursRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   quietField: { flex: 1, minWidth: 180 },
   preferenceSwitch: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  photoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   rowHint: {
     color: colors.inkMuted,
     fontSize: 13,

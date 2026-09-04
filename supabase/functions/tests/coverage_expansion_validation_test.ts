@@ -953,6 +953,39 @@ Deno.test('attachment, session, invite, audit, and remaining optional parsers co
   await rejects(memberRole, { organizationId, expectedRole: 'member', newRole: 'member' });
   parseCommand(memberRole, { organizationId, expectedRole: 'member', newRole: 'admin' });
 
+  // Profile pictures (owner backlog v2): same metadata discipline as group avatars.
+  const profileGrant = direct('profile.avatar.grant');
+  const profileBase = {
+    organizationId,
+    fileName: 'me.png',
+    mimeType: 'image/png',
+    byteSize: 1024,
+    sha256Hex: 'a'.repeat(64),
+  };
+  parseCommand(profileGrant, profileBase);
+  for (
+    const override of [
+      { fileName: 'bad/name.png' },
+      { mimeType: 'image/gif' },
+      { byteSize: 5 * 1024 * 1024 + 1 },
+      { sha256Hex: 'zz' },
+    ]
+  ) await rejects(profileGrant, { ...profileBase, ...override });
+  const profileUser = '11111111-1111-4111-8111-111111111111';
+  const profileUpload = '22222222-2222-4222-8222-222222222222';
+  parseCommand(direct('profile.avatar.query', { userId: profileUser }), { organizationId });
+  await rejects(direct('profile.avatar.query', { userId: profileUser }), { organizationId, extra: true });
+  const activate = direct('profile.avatar.activate', { uploadId: profileUpload });
+  parseCommand(activate, { organizationId, expectedAvatarPath: null });
+  parseCommand(activate, {
+    organizationId,
+    expectedAvatarPath: `${organizationId}/${profileUser}/${profileUpload}/avatar`,
+  });
+  await rejects(activate, { organizationId, expectedAvatarPath: `${organizationId}/${profileUser}/${profileUpload}/upload` });
+  await rejects(activate, { organizationId, expectedAvatarPath: 'not/a/path' });
+  const remove = direct('profile.avatar.remove');
+  parseCommand(remove, { organizationId, expectedAvatarPath: `${organizationId}/${profileUser}/${profileUpload}/avatar` });
+  await rejects(remove, { organizationId, expectedAvatarPath: null });
   const avatarGrant = direct('conversation.avatar.grant', { conversationId });
   const avatarBase = {
     organizationId,

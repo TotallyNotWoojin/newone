@@ -33,6 +33,7 @@ import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen
 import { isPersonalRealm } from '@/constants/personal-realm';
 import type { UserSearchResult } from '@/data/repositories/contracts';
 import type { Person } from '@/domain/types';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
@@ -569,6 +570,7 @@ function PersonCard({
   desktop: boolean;
   usernameResult?: boolean;
 }) {
+  const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
   const connected = person.connectionState === 'connected';
   const pending = person.connectionState === 'pending';
@@ -580,6 +582,7 @@ function PersonCard({
       <View style={styles.personTopline}>
         <Avatar
           color={person.avatarColor}
+          imageUri={personAvatarUrl}
           initials={person.initials}
           presence={person.presence}
           size={52}

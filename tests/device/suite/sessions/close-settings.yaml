@@ -1,0 +1,7 @@
+appId: com.totallynotwoojin.newone
+---
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-chats

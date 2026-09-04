@@ -61,6 +61,12 @@ import type {
   ConversationAvatarRemovalReceipt,
   ConversationAvatarUploadGrant,
 } from '@/data/repositories/conversation-avatar-dto.mjs';
+import type {
+  ProfileAvatarActivationReceipt,
+  ProfileAvatarReadGrant,
+  ProfileAvatarRemovalReceipt,
+  ProfileAvatarUploadGrant,
+} from './profile-avatar-dto.d.mts';
 import type { MessageRequestReceipt } from '@/data/repositories/message-request-dto.mjs';
 import type {
   OrganizationPolicy,
@@ -645,6 +651,26 @@ export interface CommandRepository {
     expectedAvatarPath: string;
     idempotencyKey: string;
   }): Promise<ConversationAvatarRemovalReceipt>;
+  createProfileAvatarUploadGrant(input: {
+    organizationId: string;
+    fileName: string;
+    mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+    byteSize: number;
+    sha256Hex: string;
+    idempotencyKey: string;
+  }): Promise<ProfileAvatarUploadGrant>;
+  getProfileAvatarReadGrant(input: { organizationId: string; userId: string }): Promise<ProfileAvatarReadGrant>;
+  activateProfileAvatar(input: {
+    organizationId: string;
+    uploadId: string;
+    expectedAvatarPath: string | null;
+    idempotencyKey: string;
+  }): Promise<ProfileAvatarActivationReceipt>;
+  removeProfileAvatar(input: {
+    organizationId: string;
+    expectedAvatarPath: string;
+    idempotencyKey: string;
+  }): Promise<ProfileAvatarRemovalReceipt>;
   leaveConversation(input: {
     organizationId: string;
     conversationId: string;

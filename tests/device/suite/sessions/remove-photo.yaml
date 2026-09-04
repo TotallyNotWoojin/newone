@@ -1,0 +1,12 @@
+appId: com.totallynotwoojin.newone
+---
+- scrollUntilVisible:
+    element:
+      text: "Remove photo"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Remove photo"
+- extendedWaitUntil:
+    notVisible: "Remove photo"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-photo-removed

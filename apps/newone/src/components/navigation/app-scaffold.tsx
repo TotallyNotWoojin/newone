@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { Avatar } from '@/components/ui/primitives';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { useI18n } from '@/i18n/provider';
 import type { MessageKey } from '@/i18n/catalog';
@@ -148,6 +149,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
 function DesktopRail({ current }: { current: NavigationKey }) {
   const router = useRouter();
   const workspace = useWorkspace();
+  const ownAvatarUrl = useProfileAvatar(workspace.currentUser?.id ?? null);
   const { currentUser } = workspace;
   const { t } = useI18n();
   const canOpenAdmin = canAccessAdminSurface(workspace.capabilities);
@@ -212,6 +214,7 @@ function DesktopRail({ current }: { current: NavigationKey }) {
           {currentUser ? (
             <Avatar
               color={currentUser.avatarColor}
+              imageUri={ownAvatarUrl}
               initials={currentUser.initials}
               presence={currentUser.presence}
               size={38}

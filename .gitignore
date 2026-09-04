@@ -57,3 +57,8 @@ next-env.d.ts
 .metadata_never_index
 *.nosync
 *.nosync/
+
+# Google Play service-account keys never belong in the repository
+*service-account*.json
+platinum-sorter-*.json
+*.iam.gserviceaccount*.json

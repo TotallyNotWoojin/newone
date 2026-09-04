@@ -88,6 +88,10 @@ export type RouteKind =
   | 'conversation.avatar.query'
   | 'conversation.avatar.activate'
   | 'conversation.avatar.remove'
+  | 'profile.avatar.grant'
+  | 'profile.avatar.query'
+  | 'profile.avatar.activate'
+  | 'profile.avatar.remove'
   | 'conversation.leave'
   | 'message.send'
   | 'message.edit'
@@ -589,6 +593,21 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     recentAuthSeconds: 300,
   },
   { method: 'PATCH', kind: 'profile.update', template: '/v2/profile', status: 200 },
+  { method: 'POST', kind: 'profile.avatar.grant', template: '/v2/profile/avatar/grants', status: 201 },
+  {
+    method: 'POST',
+    kind: 'profile.avatar.query',
+    template: '/v2/profiles/:userId/avatar/query',
+    status: 200,
+    idempotencyRequired: false,
+  },
+  {
+    method: 'POST',
+    kind: 'profile.avatar.activate',
+    template: '/v2/profile/avatar/:uploadId/activate',
+    status: 200,
+  },
+  { method: 'DELETE', kind: 'profile.avatar.remove', template: '/v2/profile/avatar', status: 200 },
   { method: 'POST', kind: 'contact.request', template: '/v2/contacts/connections', status: 201 },
   {
     method: 'POST',
@@ -1752,6 +1771,67 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           newRole,
         },
       };
+    }
+    case 'profile.avatar.grant': {
+      onlyKeys(body, ['organizationId', 'fileName', 'mimeType', 'byteSize', 'sha256Hex']);
+      const fileName = requiredString(body, 'fileName', { min: 1, max: 255, trim: false });
+      const mimeType = requiredString(body, 'mimeType', { min: 3, max: 160 }).toLowerCase();
+      const sha256 = requiredString(body, 'sha256Hex', { min: 64, max: 64 });
+      if (
+        fileName.includes('/') || fileName.includes('\\') ||
+        !CONVERSATION_AVATAR_MIME_TYPES.has(mimeType) ||
+        !SHA256_PATTERN.test(sha256)
+      ) throw new ApiError(400, 'bad_request');
+      return {
+        organizationId: organization(body),
+        values: {
+          fileName,
+          mimeType,
+          byteSize: integer(body.byteSize, 1, PROFILE_AVATAR_MAX_BYTES),
+          sha256Hex: sha256,
+        },
+      };
+    }
+    case 'profile.avatar.query': {
+      onlyKeys(body, ['organizationId']);
+      return {
+        organizationId: organization(body),
+        values: { userId: pathUuid(route, 'userId') },
+      };
+    }
+    case 'profile.avatar.activate': {
+      onlyKeys(body, ['organizationId', 'expectedAvatarPath']);
+      const organizationId = organization(body);
+      const expectedAvatarPath = optionalString(body, 'expectedAvatarPath', {
+        min: 1,
+        max: 1024,
+        trim: false,
+        nullable: true,
+      }) ?? null;
+      if (expectedAvatarPath !== null) {
+        try {
+          const parts = expectedAvatarPath.split('/');
+          validateProfileAvatarStoragePath(expectedAvatarPath, organizationId, uuid(parts[1]), uuid(parts[2]));
+        } catch {
+          throw new ApiError(400, 'bad_request');
+        }
+      }
+      return {
+        organizationId,
+        values: { uploadId: pathUuid(route, 'uploadId'), expectedAvatarPath },
+      };
+    }
+    case 'profile.avatar.remove': {
+      onlyKeys(body, ['organizationId', 'expectedAvatarPath']);
+      const organizationId = organization(body);
+      const expectedAvatarPath = requiredString(body, 'expectedAvatarPath', { min: 1, max: 1024, trim: false });
+      try {
+        const parts = expectedAvatarPath.split('/');
+        validateProfileAvatarStoragePath(expectedAvatarPath, organizationId, uuid(parts[1]), uuid(parts[2]));
+      } catch {
+        throw new ApiError(400, 'bad_request');
+      }
+      return { organizationId, values: { expectedAvatarPath } };
     }
     case 'conversation.avatar.grant': {
       onlyKeys(body, ['organizationId', 'fileName', 'mimeType', 'byteSize', 'sha256Hex']);
@@ -4146,6 +4226,124 @@ function publicConversationMemberRoleReceipt(value: unknown): JsonObject {
   }
 }
 
+const PROFILE_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const PROFILE_AVATAR_READ_SECONDS = 300;
+
+/** `<organizationId>/<userId>/<uploadId>/avatar` in the private profile-avatars bucket. */
+function validateProfileAvatarStoragePath(
+  storagePath: string,
+  organizationId: string,
+  userId: string,
+  uploadId: string,
+): void {
+  const parts = storagePath.split('/');
+  if (
+    parts.length !== 4 || parts[0] !== organizationId || parts[1] !== userId ||
+    parts[2] !== uploadId || parts[3] !== 'avatar' || storagePath.includes('..')
+  ) throw new Error('invalid profile avatar storage path');
+}
+
+function profileAvatarUploadMetadata(
+  value: unknown,
+  organizationId: string,
+  actorUserId: string,
+): { uploadId: string; bucketId: 'profile-avatars'; storagePath: string; maximumByteSize: number } {
+  try {
+    const row = asObject(toPublicJson(value));
+    onlyKeys(row, ['uploadId', 'bucketId', 'storagePath', 'maximumByteSize']);
+    const uploadId = uuid(row.uploadId);
+    const storagePath = normalizedString(row.storagePath, { min: 1, max: 1024, trim: false }) as string;
+    if (row.bucketId !== 'profile-avatars' || row.maximumByteSize !== PROFILE_AVATAR_MAX_BYTES) {
+      throw new Error('invalid profile avatar upload metadata');
+    }
+    validateProfileAvatarStoragePath(storagePath, organizationId, actorUserId, uploadId);
+    return { uploadId, bucketId: 'profile-avatars', storagePath, maximumByteSize: PROFILE_AVATAR_MAX_BYTES };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
+function profileAvatarReadMetadata(
+  value: unknown,
+  organizationId: string,
+  userId: string,
+): { bucketId: 'profile-avatars'; storagePath: string } {
+  let row: JsonObject;
+  try {
+    row = asObject(toPublicJson(value));
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+  if (row.authorized !== true) {
+    try {
+      onlyKeys(row, ['authorized']);
+    } catch {
+      throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+    }
+    throw new ApiError(404, 'not_found');
+  }
+  try {
+    onlyKeys(row, ['authorized', 'userId', 'bucketId', 'storagePath', 'mimeType', 'byteSize']);
+    const storagePath = normalizedString(row.storagePath, { min: 1, max: 1024, trim: false }) as string;
+    if (
+      uuid(row.userId) !== userId || row.bucketId !== 'profile-avatars' ||
+      !CONVERSATION_AVATAR_MIME_TYPES.has(String(row.mimeType)) ||
+      integer(row.byteSize, 1, PROFILE_AVATAR_MAX_BYTES) !== row.byteSize
+    ) throw new Error('invalid profile avatar authorization');
+    const parts = storagePath.split('/');
+    validateProfileAvatarStoragePath(storagePath, organizationId, userId, uuid(parts[2]));
+    return { bucketId: 'profile-avatars', storagePath };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
+function publicProfileAvatarActivationReceipt(
+  value: unknown,
+  organizationId: string,
+  userId: string,
+  uploadId: string,
+  expectedAvatarPath: string | null,
+): JsonObject {
+  try {
+    const row = asObject(toPublicJson(value));
+    onlyKeys(row, ['userId', 'uploadId', 'avatarPath', 'previousAvatarPath', 'activated']);
+    const avatarPath = normalizedString(row.avatarPath, { min: 1, max: 1024, trim: false }) as string;
+    const previousAvatarPath = normalizedString(row.previousAvatarPath, {
+      min: 1,
+      max: 1024,
+      trim: false,
+      nullable: true,
+    });
+    if (
+      uuid(row.userId) !== userId || uuid(row.uploadId) !== uploadId ||
+      previousAvatarPath !== expectedAvatarPath || row.activated !== true
+    ) throw new Error('invalid profile avatar activation receipt');
+    validateProfileAvatarStoragePath(avatarPath, organizationId, userId, uploadId);
+    return { userId, uploadId, avatarPath, previousAvatarPath, activated: true };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
+function publicProfileAvatarRemovalReceipt(
+  value: unknown,
+  userId: string,
+  expectedAvatarPath: string,
+): JsonObject {
+  try {
+    const row = asObject(toPublicJson(value));
+    onlyKeys(row, ['userId', 'previousAvatarPath', 'avatarPath', 'removed']);
+    if (
+      uuid(row.userId) !== userId || row.previousAvatarPath !== expectedAvatarPath ||
+      row.avatarPath !== null || row.removed !== true
+    ) throw new Error('invalid profile avatar removal receipt');
+    return { userId, previousAvatarPath: expectedAvatarPath, avatarPath: null, removed: true };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
 function validateConversationAvatarStoragePath(
   storagePath: string,
   organizationId: string,
@@ -5060,6 +5258,105 @@ export async function executeCommand(
         receipt.role !== values.newRole
       ) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
       return { status: 200, body: receipt };
+    }
+    case 'profile.avatar.grant': {
+      const metadata = profileAvatarUploadMetadata(
+        await businessRpc(
+          actor,
+          org,
+          idempotencyKey,
+          await sha256Hex(`${requestDigest}\nprofile-avatar-grant\n${actor.user.id}`),
+          'bff_create_profile_avatar_upload',
+          {
+            p_file_name: values.fileName,
+            p_mime_type: values.mimeType,
+            p_byte_size: values.byteSize,
+            p_sha256_hex: values.sha256Hex,
+          },
+        ),
+        org,
+        actor.user.id,
+      );
+      const { data, error } = await actor.adminClient.storage.from(metadata.bucketId)
+        .createSignedUploadUrl(metadata.storagePath, { upsert: false });
+      if (error || !data) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      return {
+        status: 201,
+        body: {
+          grant: {
+            action: 'upload',
+            uploadId: metadata.uploadId,
+            bucket: metadata.bucketId,
+            path: metadata.storagePath,
+            maximumByteSize: metadata.maximumByteSize,
+            signedUrl: data.signedUrl,
+            token: data.token,
+            expiresInSeconds: 7200,
+          },
+        },
+      };
+    }
+    case 'profile.avatar.query': {
+      const metadata = profileAvatarReadMetadata(
+        await invokeRpc(
+          asRpcClient(actor.adminClient),
+          'bff_authorize_profile_avatar_download',
+          {
+            p_actor_user_id: actor.user.id,
+            p_organization_id: org,
+            p_session_id: actor.claims.sessionId,
+            p_target_user_id: values.userId,
+          },
+        ),
+        org,
+        values.userId as string,
+      );
+      const { data, error } = await actor.adminClient.storage.from(metadata.bucketId)
+        .createSignedUrl(metadata.storagePath, PROFILE_AVATAR_READ_SECONDS);
+      if (error || !data) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      return {
+        status: 200,
+        body: {
+          userId: values.userId,
+          avatarPath: metadata.storagePath,
+          signedUrl: data.signedUrl,
+          expiresInSeconds: PROFILE_AVATAR_READ_SECONDS,
+        },
+      };
+    }
+    case 'profile.avatar.activate': {
+      const result = await businessRpc(
+        actor,
+        org,
+        idempotencyKey,
+        await sha256Hex(`${requestDigest}\nprofile-avatar-activate\n${values.uploadId}`),
+        'bff_activate_profile_avatar',
+        { p_upload_id: values.uploadId, p_expected_avatar_path: values.expectedAvatarPath },
+      );
+      return {
+        status: 200,
+        body: publicProfileAvatarActivationReceipt(
+          result,
+          org,
+          actor.user.id,
+          values.uploadId as string,
+          values.expectedAvatarPath as string | null,
+        ),
+      };
+    }
+    case 'profile.avatar.remove': {
+      const result = await businessRpc(
+        actor,
+        org,
+        idempotencyKey,
+        await sha256Hex(`${requestDigest}\nprofile-avatar-remove\n${actor.user.id}`),
+        'bff_remove_profile_avatar',
+        { p_expected_avatar_path: values.expectedAvatarPath },
+      );
+      return {
+        status: 200,
+        body: publicProfileAvatarRemovalReceipt(result, actor.user.id, values.expectedAvatarPath as string),
+      };
     }
     case 'conversation.avatar.grant': {
       const metadata = conversationAvatarUploadMetadata(

@@ -14,9 +14,17 @@ appId: com.totallynotwoojin.newone
       text: "Permanently deletes your account, sign-in, and data from Newone."
     direction: DOWN
     timeout: 60000
+    centerElement: true
 - takeScreenshot: ${SHOT}-danger-zone
 # "Delete account" appears three times: the section title, the row label, and
-# the button (same row as the note, so it is on screen once the note is).
+# the button below the note. Centring the note keeps the button on screen
+# (run-2026-09-04T12-04-44: the note sat at the bottom edge and the tap missed).
+- scrollUntilVisible:
+    element:
+      text: "Delete account"
+      index: 2
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: "Delete account"
     index: 2

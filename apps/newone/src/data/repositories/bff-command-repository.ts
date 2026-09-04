@@ -43,6 +43,12 @@ import {
   parseConversationAvatarRemovalReceipt,
   parseConversationAvatarUploadGrant,
 } from '@/data/repositories/conversation-avatar-dto.mjs';
+import {
+  parseProfileAvatarActivationReceipt,
+  parseProfileAvatarReadGrant,
+  parseProfileAvatarRemovalReceipt,
+  parseProfileAvatarUploadGrant,
+} from './profile-avatar-dto.mjs';
 import { parseMessageRequestReceipt } from '@/data/repositories/message-request-dto.mjs';
 import {
   normalizeOrganizationPolicyUpdate,
@@ -1740,6 +1746,88 @@ export class BffCommandRepository implements CommandRepository {
         'invalid_response',
         true,
       );
+    }
+  }
+
+  async createProfileAvatarUploadGrant(
+    input: Parameters<CommandRepository['createProfileAvatarUploadGrant']>[0],
+  ) {
+    const payload = await this.request('/v2/profile/avatar/grants', {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        byteSize: input.byteSize,
+        sha256Hex: input.sha256Hex,
+      },
+    });
+    try {
+      const grant = parseProfileAvatarUploadGrant(dataValue(payload).grant);
+      const path = grant.path.split('/');
+      if (path[0] !== input.organizationId || path[2] !== grant.uploadId) {
+        throw new TypeError('Mismatched profile avatar upload path.');
+      }
+      return { ...grant, signedUrl: requiredStorageSignedUrl(grant.signedUrl, 'upload') };
+    } catch (error) {
+      if (error instanceof RepositoryError) throw error;
+      throw new RepositoryError('The service returned an invalid profile avatar upload grant.', 'invalid_response', true);
+    }
+  }
+
+  async getProfileAvatarReadGrant(input: Parameters<CommandRepository['getProfileAvatarReadGrant']>[0]) {
+    const payload = await this.request(
+      `/v2/profiles/${encodeURIComponent(input.userId)}/avatar/query`,
+      { organizationId: input.organizationId, body: {} },
+    );
+    try {
+      const grant = parseProfileAvatarReadGrant(dataValue(payload));
+      if (grant.userId !== input.userId) throw new TypeError('Mismatched profile avatar read grant.');
+      return { ...grant, signedUrl: requiredStorageSignedUrl(grant.signedUrl, 'download') };
+    } catch (error) {
+      if (error instanceof RepositoryError) throw error;
+      throw new RepositoryError('The service returned an invalid profile avatar read grant.', 'invalid_response', true);
+    }
+  }
+
+  async activateProfileAvatar(input: Parameters<CommandRepository['activateProfileAvatar']>[0]) {
+    const payload = await this.request(
+      `/v2/profile/avatar/${encodeURIComponent(input.uploadId)}/activate`,
+      {
+        organizationId: input.organizationId,
+        idempotencyKey: input.idempotencyKey,
+        body: { expectedAvatarPath: input.expectedAvatarPath },
+      },
+    );
+    try {
+      const receipt = parseProfileAvatarActivationReceipt(dataValue(payload));
+      if (
+        receipt.uploadId !== input.uploadId ||
+        receipt.previousAvatarPath !== input.expectedAvatarPath ||
+        receipt.avatarPath.split('/')[0] !== input.organizationId ||
+        receipt.avatarPath.split('/')[2] !== input.uploadId
+      ) throw new TypeError('Mismatched profile avatar activation receipt.');
+      return receipt;
+    } catch {
+      throw new RepositoryError('The service returned an invalid profile avatar activation receipt.', 'invalid_response', true);
+    }
+  }
+
+  async removeProfileAvatar(input: Parameters<CommandRepository['removeProfileAvatar']>[0]) {
+    const payload = await this.request('/v2/profile/avatar', {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      method: 'DELETE',
+      body: { expectedAvatarPath: input.expectedAvatarPath },
+    });
+    try {
+      const receipt = parseProfileAvatarRemovalReceipt(dataValue(payload));
+      if (receipt.previousAvatarPath !== input.expectedAvatarPath) {
+        throw new TypeError('Mismatched profile avatar removal receipt.');
+      }
+      return receipt;
+    } catch {
+      throw new RepositoryError('The service returned an invalid profile avatar removal receipt.', 'invalid_response', true);
     }
   }
 

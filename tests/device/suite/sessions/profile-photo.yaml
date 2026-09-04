@@ -1,0 +1,43 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → Choose photo → simulator photo library → the profile card shows
+# the picture (the initials are replaced) and the server profile carries a
+# path. Owner backlog v2: profile pictures.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Choose photo"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: ${SHOT}-before
+- tapOn: "Choose photo"
+- tapOn:
+    text: "Allow Full Access"
+    optional: true
+- tapOn:
+    text: "Allow Access to All Photos"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(Photos|Recents|Albums|Photo, ).*"
+    timeout: 30000
+- tapOn:
+    text: "Photo, .*"
+    index: 1
+    optional: true
+- tapOn:
+    text: "Choose"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*(Uploading photo|Your photo is visible).*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Remove photo"
+    timeout: 90000
+- takeScreenshot: ${SHOT}-photo-set
