@@ -401,3 +401,13 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | --- | --- |
 | Finding | Maestro log for run-2026-09-04T15-47-18: "Delete for me" reported at bounds y=817–861 while the centred actions card clips at the safe-area edge (~824); the tap at (201, 839) hit the backdrop `Pressable`, which closes the sheet. No hide request was ever sent — a harness/layout interaction, not an app defect. |
 | Fix | 4d99b1b: the flow swipes inside the card before tapping; `ActionModal` content gains bottom padding so the last action can rest fully inside the card. |
+
+### Final rerun queue on the rebuilt simulator app (Sep 4 2026, afternoon)
+
+| Area | Run | Result | Notes |
+| --- | --- | --- | --- |
+| groups | run-2026-09-04T19-50-41 | PASS 39 · FAIL 0 | Mention selector, group photo, promote/demote all green. |
+| media | run-2026-09-04T20-10-53 | PASS 17 · FAIL 0 · UNREACHABLE 1 | media-05 (Files picker) had nothing to pick: the simulator's Files app is empty. `tests/device/seed-files.sh` now seeds `fixtures/newone-sample.pdf/.txt` into each simulator's local Files storage and the flow browses to "On My iPhone". Rerun queued. |
+| chat | run-2026-09-04T20-24-31 | setup FAIL | Ben's code field was empty when Verify was tapped (client-side six-digit check fired; signup reservation still unconsumed; no verify reached the server). Maestro's typing did not land on simulator 2. The verify flows now assert the typed code and retype once. Rerun queued. |
+| sessions | run-2026-09-04T19-30-03 | PASS 8 · FAIL 1 | sessions-02b polled the mailbox instead of minting the returning code, so steps 03–05 never ran; the area now uses the minting-aware waiter. Rerun queued. |
+| translation-ko | run-2026-09-04T19-11-36 | PASS 24 · FAIL 0 · UNREACHABLE 2 | trans-03/06 → defect Q (bubble accessibility). Rerun queued on the rebuilt app. |
