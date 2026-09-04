@@ -7,8 +7,11 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Your friends"
     timeout: 15000
-- extendedWaitUntil:
-    visible: "Message"
+# The friend card sits below the Requests section; scroll to its Message button.
+- scrollUntilVisible:
+    element:
+      text: "Message"
+    direction: DOWN
     timeout: 45000
 - assertVisible: ${NAME}
 - takeScreenshot: ${SHOT}-friend-visible

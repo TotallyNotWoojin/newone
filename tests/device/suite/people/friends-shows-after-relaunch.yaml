@@ -11,6 +11,11 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Your friends"
     timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Message"
+    direction: DOWN
+    timeout: 30000
 - assertVisible: ${NAME}
 - assertVisible: "Message"
 - takeScreenshot: ${SHOT}-friend-after-relaunch

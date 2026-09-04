@@ -15,9 +15,11 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 60000
 - takeScreenshot: ${SHOT}-danger-zone
+# "Delete account" appears three times: the section title, the row label, and
+# the button (same row as the note, so it is on screen once the note is).
 - tapOn:
     text: "Delete account"
-    index: 1
+    index: 2
 - extendedWaitUntil:
     visible: "Permanently delete this account"
     timeout: 15000
