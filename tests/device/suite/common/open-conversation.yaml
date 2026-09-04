@@ -14,6 +14,15 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*${PEER}.*"
     timeout: 45000
+# The status banner (Reconnecting…/Offline…) shows briefly after launch and the
+# list shifts up when it clears; a tap aimed at a row then lands on the row
+# below it (a request row's Decline button, run-2026-09-04T20-41-40). Let the
+# banner clear and the list settle before touching a row.
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Reconectando y|재연결하고|Offline · |Sin conexión · |오프라인 · |Loading your private|Cargando tu espacio|불러오는 중).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn: ".*${PEER}.*"
 # The list can shift right after launch (the Requests section resolves once the
 # people list arrives), so a tap taken from a just-stale hierarchy lands on
