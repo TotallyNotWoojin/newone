@@ -40,7 +40,7 @@ create temporary table bf_request on commit drop as
 select public.bff_send_message_request(
   'de000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111',
   'de100000-0000-4000-8000-000000000001', 'de000000-0000-4000-8000-000000000002',
-  'Hello Bob, first message.', 'bf-req', repeat('1', 64)
+  'Hello Bob, first message.'
 ) as receipt;
 select public.bff_respond_contact(
   'de000000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111',
