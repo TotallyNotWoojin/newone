@@ -46,6 +46,14 @@
       "android": {
         "credentialsSource": "remote"
       }
+    },
+    "apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
+      }
     }
   },
   "submit": {
