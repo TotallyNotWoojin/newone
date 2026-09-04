@@ -1,9 +1,23 @@
 appId: com.totallynotwoojin.newone
 ---
 # The peer's message TEXT arrives, then its translation card for LANG.
+# Returning from Settings can leave the thread at its top with the keyboard
+# up (trans-11, run-2026-09-04T07-12-12): dismiss and scroll to the message.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - extendedWaitUntil:
     visible: ".*${TEXT}.*"
     timeout: 45000
+- scrollUntilVisible:
+    element:
+      text: ".*${TEXT}.*"
+    direction: DOWN
+    timeout: 20000
 - takeScreenshot: ${SHOT}-original-arrived
 - extendedWaitUntil:
     visible: ".*TRANSLATION · ${LANG}.*"
