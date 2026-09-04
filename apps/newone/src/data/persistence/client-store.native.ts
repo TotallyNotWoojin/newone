@@ -21,6 +21,66 @@ const CRYPTO_VERSION = 1;
 const MAX_SENSITIVE_CACHE_BYTES = 5 * 1024 * 1024;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// expo-crypto's native sealed-data API moves bytes: `fromParts` accepts the tag
+// only as bytes (or a length) and `ciphertext()` honours `outputFormat`, not the
+// `encoding` the typings advertise. Handing it the stored base64 strings made
+// every decrypt throw, so each queued command and cached snapshot was judged
+// corrupt and deleted: messages rendered as pending and were never sent
+// (device suite, run-2026-09-04T02-14-59, chat-01). Encode and decode base64
+// here so only Uint8Arrays cross into the native module.
+function bytesToBase64(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const a = bytes[i];
+    const b = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const c = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    const triple = (a << 16) | (b << 8) | c;
+    out += BASE64[(triple >> 18) & 63] + BASE64[(triple >> 12) & 63]
+      + (i + 1 < bytes.length ? BASE64[(triple >> 6) & 63] : '=')
+      + (i + 2 < bytes.length ? BASE64[triple & 63] : '=');
+  }
+  return out;
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const clean = value.replace(/[^A-Za-z0-9+/]/g, '');
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let buffer = 0;
+  let bits = 0;
+  let index = 0;
+  for (const char of clean) {
+    buffer = (buffer << 6) | BASE64.indexOf(char);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[index++] = (buffer >> bits) & 255;
+    }
+  }
+  return out.subarray(0, index);
+}
+
+async function sealedParts(sealed: Awaited<ReturnType<typeof aesEncryptAsync>>) {
+  const [ciphertext, iv, tag] = await Promise.all([
+    sealed.ciphertext({ includeTag: false }),
+    sealed.iv(),
+    sealed.tag(),
+  ]);
+  return {
+    ciphertext: bytesToBase64(ciphertext as Uint8Array),
+    iv: bytesToBase64(iv as Uint8Array),
+    tag: bytesToBase64(tag as Uint8Array),
+  };
+}
+
+function sealedFromRow(ivBase64: string, ciphertextBase64: string, tagBase64: string) {
+  return AESSealedData.fromParts(
+    base64ToBytes(ivBase64),
+    base64ToBytes(ciphertextBase64),
+    base64ToBytes(tagBase64),
+  );
+}
 
 interface OutboxRow {
   id: string;
@@ -243,12 +303,7 @@ async function sealPayload(command: OutboxCommand) {
       }),
     },
   );
-  const [ciphertext, iv, tag] = await Promise.all([
-    sealed.ciphertext({ encoding: 'base64' }),
-    sealed.iv('base64'),
-    sealed.tag('base64'),
-  ]);
-  return { ciphertext, iv, tag };
+  return sealedParts(sealed);
 }
 
 async function materialize(row: OutboxRow): Promise<OutboxCommand | null> {
@@ -259,11 +314,7 @@ async function materialize(row: OutboxRow): Promise<OutboxCommand | null> {
     || !row.tag_base64
   ) return null;
   try {
-    const sealed = AESSealedData.fromParts(
-      row.iv_base64,
-      row.ciphertext_base64,
-      row.tag_base64,
-    );
+    const sealed = sealedFromRow(row.iv_base64, row.ciphertext_base64, row.tag_base64);
     const payload = await aesDecryptAsync(sealed, await encryptionKey(), {
       additionalData: additionalData({
         id: row.id,
@@ -338,11 +389,7 @@ async function writeSecureCache(key: string, value: string, expiresAt?: string) 
       }),
     },
   );
-  const [ciphertext, iv, tag] = await Promise.all([
-    sealed.ciphertext({ encoding: 'base64' }),
-    sealed.iv('base64'),
-    sealed.tag('base64'),
-  ]);
+  const { ciphertext, iv, tag } = await sealedParts(sealed);
   const db = await database();
   await db.runAsync(
     `INSERT OR REPLACE INTO secure_cache_entries
@@ -384,11 +431,7 @@ async function readSecureCache(key: string) {
     return null;
   }
   try {
-    const sealed = AESSealedData.fromParts(
-      row.iv_base64,
-      row.ciphertext_base64,
-      row.tag_base64,
-    );
+    const sealed = sealedFromRow(row.iv_base64, row.ciphertext_base64, row.tag_base64);
     const plaintext = await aesDecryptAsync(sealed, await encryptionKey(), {
       additionalData: secureCacheAdditionalData({
         cacheKeyHash: row.cache_key_hash,

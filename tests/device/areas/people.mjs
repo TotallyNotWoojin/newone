@@ -142,6 +142,33 @@ export async function run(ctx) {
     expected: 'Text visible on B within 45s', screen: 'chats → conversation',
   });
 
+  // Account-name desync: A renames themself; B must see the new name on the
+  // friend card and in the chat list without relaunching.
+  const renamed = `Sim Renamed ${tag}`;
+  const rename = await ctx.step({
+    id: 'people-12b-a-renames', title: 'A changes their display name in Settings', device: devA,
+    flow: 'profile/edit-profile.yaml', env: { DISPLAY_NAME: renamed, STATUS: `Renamed ${tag}` },
+    expected: 'Save succeeds; server profile row carries the new display name', screen: 'settings / Edit profile',
+    serverTruth: async () => {
+      const wait = await server.waitFor(() => server.profileByUsername(A.username), (row) => row?.display_name === renamed, { timeoutMs: 20_000 });
+      return { ok: wait.ok, detail: wait.row };
+    },
+  });
+  if (rename.serverResult?.ok) {
+    await ctx.step({
+      id: 'people-12c-b-sees-new-name', title: 'B sees A\'s new display name on the friend card (no relaunch)', device: devB,
+      flow: 'people/friends-shows.yaml', env: { NAME: renamed },
+      expected: 'Friend card shows the renamed A within 45s', screen: 'people',
+    });
+    await ctx.step({
+      id: 'people-12d-b-sees-new-name-in-chats', title: 'B\'s Chats list and conversation header use the new name', device: devB,
+      flow: 'common/open-conversation.yaml', env: { PEER: renamed },
+      expected: 'Conversation row and header show the renamed A', screen: 'chats → conversation',
+    });
+    await ctx.observe(devB, { id: 'people-12e-header-after-rename', title: 'Exact header/name rendering on B after A\'s rename', screen: 'conversation' });
+    A.displayName = renamed;
+  }
+
   await ctx.step({
     id: 'people-13-block', title: 'B blocks A from the friend card (Manage contact and privacy)', device: devB,
     flow: 'people/block.yaml', env: { NAME: A.displayName },

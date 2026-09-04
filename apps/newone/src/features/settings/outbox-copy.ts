@@ -26,6 +26,7 @@ const copy: Record<AppLocale, MessageOutboxCopy> = {
     cancelConfirm: 'Cancel message',
     ambiguous: 'Delivery is uncertain. After reconnecting, Newone may restore a server-accepted message during authoritative reconciliation.',
     errorCode: 'Failure code',
+    queueUnavailable: 'Local message queue unavailable on this device; messages are sent directly instead. Reason:',
   },
   ko: {
     title: '전송 대기 중인 메시지',
@@ -51,6 +52,7 @@ const copy: Record<AppLocale, MessageOutboxCopy> = {
     cancelConfirm: '메시지 취소',
     ambiguous: '전송 여부가 불확실합니다. 다시 연결되면 서버에서 수락된 메시지가 권한 기반 동기화 중 복원될 수 있습니다.',
     errorCode: '오류 코드',
+    queueUnavailable: '이 기기에서 로컬 메시지 대기열을 사용할 수 없어 메시지를 바로 전송합니다. 원인:',
   },
   es: {
     title: 'Mensajes pendientes de envío',
@@ -76,6 +78,7 @@ const copy: Record<AppLocale, MessageOutboxCopy> = {
     cancelConfirm: 'Cancelar mensaje',
     ambiguous: 'La entrega es incierta. Al volver a conectarse, Newone puede restaurar un mensaje aceptado por el servidor durante la conciliación autorizada.',
     errorCode: 'Código de fallo',
+    queueUnavailable: 'La cola local de mensajes no está disponible en este dispositivo; los mensajes se envían directamente. Motivo:',
   },
 };
 

@@ -31,11 +31,13 @@ export interface MessageOutboxCopy {
   cancelConfirm: string;
   ambiguous: string;
   errorCode: string;
+  queueUnavailable: string;
 }
 
 interface MessageOutboxSectionProps {
   items: VisibleMessageOutboxItem[];
   copy: MessageOutboxCopy;
+  degradedReason?: string | null;
   actionBusy: string | null;
   actionError: string | null;
   resolveConversationTitle: (conversationId: string) => string | null;
@@ -55,6 +57,7 @@ export function MessageOutboxSection({
   onRetry,
   onCancel,
   onClearError,
+  degradedReason = null,
 }: MessageOutboxSectionProps) {
   const [editing, setEditing] = useState<VisibleMessageOutboxItem | null>(null);
   const [editBody, setEditBody] = useState('');
@@ -84,6 +87,11 @@ export function MessageOutboxSection({
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={styles.title}>{copy.title}</Text>
           <Text style={styles.description}>{copy.description}</Text>
+          {degradedReason ? (
+            <Text accessibilityLabel={`${copy.queueUnavailable} ${degradedReason}`} style={styles.degraded}>
+              {copy.queueUnavailable} {degradedReason}
+            </Text>
+          ) : null}
         </View>
         {sortedItems.length ? (
           <StatusBadge
@@ -272,6 +280,7 @@ const styles = StyleSheet.create({
   metadata: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   metadataText: { color: colors.inkSubtle, fontSize: 9 },
   errorCode: { color: colors.red, fontFamily: type.mono, fontSize: 9 },
+  degraded: { color: colors.red, fontSize: 10, lineHeight: 15, marginTop: 4 },
   warning: {
     flexDirection: 'row',
     alignItems: 'flex-start',

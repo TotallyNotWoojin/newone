@@ -45,6 +45,7 @@ const copy: MessageOutboxCopy = {
   cancelConfirm: 'Confirm cancellation',
   ambiguous: 'Delivery outcome is uncertain.',
   errorCode: 'Error code',
+  queueUnavailable: 'Local message queue unavailable on this device; messages are sent directly instead. Reason:',
 };
 
 function item(overrides: Partial<VisibleMessageOutboxItem>): VisibleMessageOutboxItem {

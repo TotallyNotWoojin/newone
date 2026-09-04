@@ -11,6 +11,9 @@ appId: com.totallynotwoojin.newone
 - eraseText: 8
 - inputText: ${CODE}
 - tapOn: "One-time code"
+# Evidence of what was actually in the field before verifying (the consumed-code
+# check once ended on an empty field with the six-digit hint and no error).
+- takeScreenshot: ${SHOT}-code-typed
 - scrollUntilVisible:
     element:
       text: "Verify and sign in"

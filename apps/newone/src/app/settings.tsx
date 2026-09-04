@@ -544,6 +544,7 @@ export default function SettingsScreen() {
           actionBusy={workspace.actionBusy}
           actionError={workspace.actionError}
           copy={outboxCopy(locale)}
+          degradedReason={workspace.outboxDegradedReason}
           items={workspace.messageOutbox}
           onCancel={workspace.cancelOutboxMessage}
           onClearError={workspace.clearActionError}

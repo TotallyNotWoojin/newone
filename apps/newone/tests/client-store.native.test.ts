@@ -78,6 +78,23 @@ function bytes(value: Uint8Array) {
   return Buffer.from(value).toString('base64');
 }
 
+// The store persists the sealed parts as base64 of the native bytes; recover
+// the controlled cipher identity from a stored column.
+function cipherId(storedBase64: string) {
+  return Buffer.from(storedBase64, 'base64').toString();
+}
+
+// The native module moves bytes: `iv()`, `tag()` and `ciphertext()` return
+// Uint8Arrays unless asked for base64, and `fromParts` accepts the tag only as
+// bytes (or a length). Mirror that so a string leaking across the boundary
+// fails here the way it fails on a device.
+const utf8 = new TextEncoder();
+const utf8Decoder = new TextDecoder();
+function asText(value: unknown, what: string) {
+  if (value instanceof Uint8Array) return utf8Decoder.decode(value);
+  throw new Error(`controlled native boundary: ${what} must be bytes, got ${typeof value}`);
+}
+
 class ControlledSqliteDatabase {
   readonly cacheEntries = new Map<string, NativePlaintextCacheRow>();
   readonly secureCacheEntries = new Map<string, NativeSecureCacheRow>();
@@ -351,9 +368,9 @@ beforeEach(() => {
     return controlledKey(String(encoded), encoded === 'wrong-size-key' ? 128 : 256);
   });
   mockFromParts.mockImplementation((iv: unknown, ciphertext: unknown, tag: unknown) => ({
-    ciphertext: String(ciphertext),
-    iv: String(iv),
-    tag: String(tag),
+    ciphertext: asText(ciphertext, 'ciphertext'),
+    iv: asText(iv, 'iv'),
+    tag: asText(tag, 'tag'),
   }));
   mockEncrypt.mockImplementation(async (...mockArgs: unknown[]) => {
     const [plaintext, key, options] = mockArgs as [
@@ -373,10 +390,12 @@ beforeEach(() => {
       plaintext: new Uint8Array(plaintext),
       tag,
     });
+    const encoded = (value: string, format?: unknown) =>
+      format === 'base64' ? Buffer.from(value).toString('base64') : utf8.encode(value);
     return {
-      ciphertext: async () => ciphertext,
-      iv: async () => iv,
-      tag: async () => tag,
+      ciphertext: async (options?: { outputFormat?: unknown }) => encoded(ciphertext, options?.outputFormat),
+      iv: async (format?: unknown) => encoded(iv, format),
+      tag: async (format?: unknown) => encoded(tag, format),
     };
   });
   mockDecrypt.mockImplementation(async (...mockArgs: unknown[]) => {
@@ -535,7 +554,7 @@ describe('native encrypted client store', () => {
     const raw = mockDatabase.outboxCommands.get(command().id);
     expect(raw?.ciphertext_base64).not.toContain('Controlled durable message');
     expect(raw?.last_error_code).toBeNull();
-    expect(JSON.parse(Buffer.from(mockCiphertexts.get(raw!.ciphertext_base64!)!.additionalData, 'base64').toString())).toMatchObject({
+    expect(JSON.parse(Buffer.from(mockCiphertexts.get(cipherId(raw!.ciphertext_base64!))!.additionalData, 'base64').toString())).toMatchObject({
       cryptoVersion: 1,
       recordType: 'outbox_command',
       id: command().id,
@@ -611,7 +630,7 @@ describe('native encrypted client store', () => {
     const workspaceHash = await sha256('workspace-snapshot.user-a');
     const workspace = mockDatabase.secureCacheEntries.get(workspaceHash)!;
     expect(workspace.owner_hash).toBe(await sha256('user-a'));
-    expect(JSON.parse(Buffer.from(mockCiphertexts.get(workspace.ciphertext_base64!)!.additionalData, 'base64').toString())).toMatchObject({
+    expect(JSON.parse(Buffer.from(mockCiphertexts.get(cipherId(workspace.ciphertext_base64!))!.additionalData, 'base64').toString())).toMatchObject({
       cryptoVersion: 1,
       recordType: 'secure_cache',
       cacheKeyHash: workspaceHash,
@@ -643,13 +662,13 @@ describe('native encrypted client store', () => {
 
     await store.putCache(key, 'controlled-value');
     const mismatch = mockDatabase.secureCacheEntries.get(hash)!;
-    const cipher = mockCiphertexts.get(mismatch.ciphertext_base64!)!;
+    const cipher = mockCiphertexts.get(cipherId(mismatch.ciphertext_base64!))!;
     cipher.plaintext = new TextEncoder().encode(JSON.stringify({ key: 'other-key', value: 'controlled-value' }));
     await expect(store.getCache(key)).resolves.toBeNull();
 
     await store.putCache(key, 'controlled-value');
     const invalidValue = mockDatabase.secureCacheEntries.get(hash)!;
-    mockCiphertexts.get(invalidValue.ciphertext_base64!)!.plaintext = new TextEncoder().encode(JSON.stringify({ key, value: 42 }));
+    mockCiphertexts.get(cipherId(invalidValue.ciphertext_base64!))!.plaintext = new TextEncoder().encode(JSON.stringify({ key, value: 42 }));
     await expect(store.getCache(key)).resolves.toBeNull();
   });
 

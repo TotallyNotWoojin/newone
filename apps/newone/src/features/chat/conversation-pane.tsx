@@ -343,7 +343,8 @@ export function ConversationPane({
 
   const submit = () => {
     if (!draft.trim() || composerDisabled) return;
-    onSend(draft, replyingTo ?? undefined, selectedMentionUserIds);
+    // A rejected send must never become a silent unhandled rejection.
+    void Promise.resolve(onSend(draft, replyingTo ?? undefined, selectedMentionUserIds)).catch(() => undefined);
     notifyStopped();
     setDraft('');
     setReplyingTo(null);

@@ -174,6 +174,7 @@ interface WorkspaceState {
   outboxCount: number;
   failedOutboxCount: number;
   messageOutbox: VisibleMessageOutboxItem[];
+  outboxDegradedReason: string | null;
   organizationPreferences: OrganizationPreferences | null;
   deviceNotificationPreferences: DeviceNotificationPreferences | null;
   accountSessions: AccountSession[];
@@ -646,6 +647,25 @@ interface AttachmentCancellation {
   clientMessageId: string;
 }
 
+// Local persistence must not be able to stall a send: a seal or SQLite write
+// that never settles is treated like a failure.
+const OUTBOX_ENQUEUE_TIMEOUT_MS = 4000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, code: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(code)), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error: unknown) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 300);
+  return String(error).slice(0, 300);
+}
+
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const { locale, t } = useI18n();
@@ -663,6 +683,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [outboxCount, setOutboxCount] = useState(0);
   const [failedOutboxCount, setFailedOutboxCount] = useState(0);
   const [messageOutbox, setMessageOutbox] = useState<VisibleMessageOutboxItem[]>([]);
+  // Why the local encrypted queue could not be used (null while it works).
+  const [outboxDegradedReason, setOutboxDegradedReason] = useState<string | null>(null);
   const [organizationPreferences, setOrganizationPreferences] = useState<OrganizationPreferences | null>(null);
   const [organizationAiPolicy, setOrganizationAiPolicy] = useState<OrganizationAiPolicy | null>(null);
   const [deviceNotificationPreferences, setDeviceNotificationPreferences] =
@@ -2618,9 +2640,38 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         }
         return;
       }
-      await clientStore.enqueue(command);
-      setOutboxCount((current) => current + 1);
-      await flushOutbox();
+      // The encrypted local queue exists so a message survives going offline;
+      // delivery must never depend on it. If sealing or persisting the command
+      // fails or stalls, send online directly and record why, instead of
+      // leaving the bubble on "pending" forever with nothing on the wire
+      // (device suite, run-2026-09-04T02-14-59, chat-01).
+      let enqueued = false;
+      try {
+        await withTimeout(clientStore.enqueue(command), OUTBOX_ENQUEUE_TIMEOUT_MS, 'outbox_enqueue_timeout');
+        enqueued = true;
+      } catch (enqueueError) {
+        setOutboxDegradedReason(describeError(enqueueError));
+      }
+      if (enqueued) {
+        setOutboxCount((current) => current + 1);
+        await flushOutbox();
+        return;
+      }
+      try {
+        const receipt = await repositories.commands.sendMessage(input);
+        markMessage(clientMessageId, {
+          serverId: receipt.messageId,
+          deliveryState: 'sent',
+          failureReason: undefined,
+        });
+        setConnectivity('online');
+        reconcileConversationAfterSend(conversationId);
+      } catch (commandError) {
+        const failure = t(errorMessageKey(commandError));
+        markMessage(clientMessageId, { deliveryState: 'failed', failureReason: failure });
+        setActionError(failure);
+        if (isOfflineError(commandError)) setConnectivity('offline');
+      }
     },
     [flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, snapshot, t],
   );
@@ -5370,6 +5421,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       actionBusy,
       outboxCount,
       failedOutboxCount,
+      outboxDegradedReason,
       messageOutbox,
       organizationPreferences,
       deviceNotificationPreferences,
@@ -5523,6 +5575,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       deviceNotificationPreferences,
       error,
       failedOutboxCount,
+      outboxDegradedReason,
       hasCapability,
       organizationPreferences,
       organizationAiPolicy,
