@@ -527,7 +527,10 @@ export function ConversationPane({
         </View>
       ) : null}
 
+      {/* The workplace disclaimer stays for organizations; consumer threads do
+          not carry it (owner request, Sep 4 2026). */}
       {conversation.translationMode !== 'off'
+        && !isPersonalRealm(workspace.organizationId)
         && (conversation.translationPair || messages.some((message) => message.translationState !== 'not_requested')) ? (
         <View accessibilityRole="alert" style={styles.translationBoundary}>
           <Ionicons name="shield-checkmark-outline" color={colors.amber} size={17} />
