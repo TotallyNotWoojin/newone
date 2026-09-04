@@ -956,13 +956,20 @@ export class OpenRouterLanguageProcessor {
     if (output.sourceFingerprint !== sourceFingerprint(request.sourceSha256)) {
       throw new ApiError(503, 'provider_unavailable', 'provider_detection_fingerprint', 5);
     }
-    if (
-      typeof output.ambiguous !== 'boolean' || (detectedSourceLanguage === 'und') !== output.ambiguous
-    ) throw new ApiError(503, 'provider_unavailable', 'provider_detection_ambiguity', 5);
+    if (typeof output.ambiguous !== 'boolean') {
+      throw new ApiError(503, 'provider_unavailable', 'provider_detection_ambiguity', 5);
+    }
+    // The model may name a language and still flag the text as ambiguous
+    // (short texts with codes: "Unread probe 1cn5"). That is a judgment about
+    // the text, not a provider fault; rejecting it retried the same message
+    // ten times over half an hour and then left it undetected (hosted, Sep 4
+    // 2026, reason provider_detection_ambiguity). Keep the named language and
+    // its confidence; an undetermined language is always ambiguous.
+    const ambiguous = detectedSourceLanguage === 'und' ? true : output.ambiguous;
     return {
       detectedSourceLanguage,
       confidence: confidence(output.confidence),
-      ambiguous: output.ambiguous,
+      ambiguous,
       sourceSha256: request.sourceSha256,
       method: 'openrouter:structured-v1',
       model: policy.model,

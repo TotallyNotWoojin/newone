@@ -362,7 +362,6 @@ Deno.test('OpenRouter translation and detection validate each request and struct
       { ...detectionOutput, detectedSourceLanguage: 'fr' },
       { ...detectionOutput, sourceSha256: '0'.repeat(64) },
       { ...detectionOutput, ambiguous: 'false' },
-      { ...detectionOutput, detectedSourceLanguage: 'und', ambiguous: false },
       { ...detectionOutput, confidence: '0.9' },
       { ...detectionOutput, confidence: Number.NaN },
       { ...detectionOutput, confidence: -0.1 },
@@ -373,6 +372,20 @@ Deno.test('OpenRouter translation and detection validate each request and struct
       processor(async () => completion(output)).detectLanguage(detectionBase)
     );
   }
+  // A named language flagged ambiguous is the model's judgment about a short
+  // text, not a provider fault: the language and its confidence are kept.
+  const flagged = await processor(async () =>
+    completion({ ...detectionOutput, ambiguous: true, confidence: 0.6 })
+  ).detectLanguage(detectionBase);
+  assertEquals(flagged.detectedSourceLanguage, 'en');
+  assertEquals(flagged.ambiguous, true);
+  assertEquals(flagged.confidence, 0.6);
+  // An undetermined language is always ambiguous, whatever the flag says.
+  const undetermined = await processor(async () =>
+    completion({ ...detectionOutput, detectedSourceLanguage: 'und', ambiguous: false })
+  ).detectLanguage(detectionBase);
+  assertEquals(undetermined.detectedSourceLanguage, 'und');
+  assertEquals(undetermined.ambiguous, true);
 });
 
 Deno.test('OpenRouter summary validates source bounds and evidence provenance', async () => {
