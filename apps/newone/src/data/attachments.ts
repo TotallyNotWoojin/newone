@@ -139,7 +139,10 @@ export async function prepareAttachment(selected: SelectedAttachment): Promise<P
       false,
     );
   }
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
+  // Expo modules cast a typed array across the bridge, not a bare
+  // ArrayBuffer; the latter answered ERR_ARGUMENT_CAST and every photo send
+  // failed on device (run-2026-09-04T09-40-33, media-01).
+  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(bytes));
   return {
     uri: selected.uri,
     bytes,

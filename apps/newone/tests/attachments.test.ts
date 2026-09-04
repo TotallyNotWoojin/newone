@@ -173,7 +173,8 @@ describe('attachment byte preparation', () => {
       mimeType: 'text/plain',
       temporary,
     });
-    expect(mockDigest).toHaveBeenCalledWith('SHA-256', bytes);
+    // The native digest takes a typed array, never a bare ArrayBuffer.
+    expect(mockDigest).toHaveBeenCalledWith('SHA-256', new Uint8Array(bytes));
   });
 });
 
