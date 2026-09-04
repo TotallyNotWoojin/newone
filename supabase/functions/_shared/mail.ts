@@ -89,7 +89,18 @@ export async function sendCodeEmail(
         text: copy.body(input.code),
       }),
     });
-    if (!response.ok) throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+    if (!response.ok) {
+      // The provider's status and error name are needed to tell a quota from
+      // a key problem (Sep 4 2026: every code send failed for an hour with no
+      // trace); the recipient and the code never reach the log.
+      const detail = await response.text().catch(() => '');
+      console.error(JSON.stringify({
+        event: 'newone_mail_provider_rejected',
+        status: response.status,
+        detail: detail.replace(/[\r\n]+/g, ' ').slice(0, 240),
+      }));
+      throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+    }
     await response.body?.cancel();
   } catch (error) {
     // Timeouts, network failures, and provider rejections converge on the
