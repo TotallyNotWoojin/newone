@@ -436,3 +436,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | trans-06 | The report button sat below the composer; the flow now scrolls it into view (2529588). |
 | Deno | Full suite 347/347 after updating the mailer logging test to the structured provider-rejection events (eaee180). |
 | Next | sessions and media (post-queue), translation-ko, then a simulator rebuild and a final chat run; translation gets one more run alongside chat. |
+
+### Korean rerun after the resize and defect S (Sep 4 2026, 15:42)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T22-30-16: PASS 24 · FAIL 1 · UNREACHABLE 1, twelve minutes end to end on the micro instance (the user resized from nano at 15:15; the media rerun that overlapped the resize failed at signup with auth timeouts and is queued again). |
+| Defect S (server) | trans-13: B's own "Own English note" had `language_detection_state = completed` on the server a minute before the long-press, but the device still held a pending detection, so the actions sheet did not offer "Translate for me". `bff_complete_language_detection_job_impl` never emitted an invalidation; devices only learned about detection on the periodic reconcile. Migration 20260904260000 emits `('message', 'language_detected')` to the members on completion; worker vocabulary updated and deployed. |
+| trans-06 | The report button's bounds were on screen but under the composer and the "Translation available" bar; the tap hit the bar. The flow now nudges the list up before tapping. |
+| Next | media, chat, translation (running), then translation-ko once more. |
