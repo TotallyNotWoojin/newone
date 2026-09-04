@@ -10,6 +10,19 @@ appId: com.totallynotwoojin.newone
 - eraseText: 8
 - inputText: ${CODE}
 - tapOn: "Código de un solo uso"
+# Typing occasionally lands before the keyboard is up and the field stays empty
+# (chat setup on simulator 2). Check the field holds the code; retype once if not.
+- runFlow:
+    when:
+      notVisible: "${CODE}"
+    commands:
+      - tapOn: "Código de verificación de un solo uso"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 8
+      - inputText: ${CODE}
+      - tapOn: "Código de un solo uso"
+- assertVisible: "${CODE}"
 - takeScreenshot: ${SHOT}-code-entered
 - scrollUntilVisible:
     element:

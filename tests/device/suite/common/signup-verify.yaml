@@ -11,6 +11,19 @@ appId: com.totallynotwoojin.newone
 - eraseText: 8
 - inputText: ${CODE}
 - tapOn: "One-time code"
+# Typing occasionally lands before the keyboard is up and the field stays empty
+# (chat setup on simulator 2). Check the field holds the code; retype once if not.
+- runFlow:
+    when:
+      notVisible: "${CODE}"
+    commands:
+      - tapOn: "One-time verification code"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 8
+      - inputText: ${CODE}
+      - tapOn: "One-time code"
+- assertVisible: "${CODE}"
 - takeScreenshot: ${SHOT}-code-entered
 - scrollUntilVisible:
     element:
