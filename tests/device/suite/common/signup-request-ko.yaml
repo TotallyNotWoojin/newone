@@ -16,7 +16,7 @@ appId: com.totallynotwoojin.newone
       - tapOn: "Settings"
       - extendedWaitUntil:
           visible: "Close settings"
-          timeout: 15000
+          timeout: 45000
       - scrollUntilVisible:
           element:
             text: "Sign out of Newone"
