@@ -1643,11 +1643,16 @@ describe('BFF command transport security and parsing', () => {
       sha256Hex: 'b'.repeat(64),
     })).resolves.toEqual({ attachmentId: 'attachment-a', scanStatus: 'pending', scanJobId: 'scan-a' });
 
+    // The service wraps the row: { found, attachment } (defect N).
     mockFetch.mockImplementationOnce(async () => response({ data: {
-      attachmentId: 'attachment-a', scanStatus: 'clean', reasonCode: null,
+      found: true,
+      attachment: { attachmentId: 'attachment-a', messageId: '101', scanStatus: 'clean', byteSize: 4096, mimeType: 'image/png' },
     } }));
     await expect(repo.getAttachmentState({ ...base, attachmentId: 'attachment-a' }))
       .resolves.toEqual({ attachmentId: 'attachment-a', scanStatus: 'clean', reasonCode: null });
+    mockFetch.mockImplementationOnce(async () => response({ data: { found: false } }));
+    await expect(repo.getAttachmentState({ ...base, attachmentId: 'attachment-a' }))
+      .rejects.toMatchObject({ code: 'attachment_not_found' });
 
     mockFetch.mockImplementationOnce(async () => response({ data: {
       announcementId: 'announcement-a',
@@ -1730,7 +1735,7 @@ describe('BFF command transport security and parsing', () => {
     await expect(repo.updateOrganizationPreferences({ ...base, patch: { soundEnabled: true } }))
       .resolves.toMatchObject({ timeZone: 'America/Denver', soundEnabled: true });
 
-    expect(mockFetch).toHaveBeenCalledTimes(17);
+    expect(mockFetch).toHaveBeenCalledTimes(18);
   });
 
   test('rejects malformed candidate, AI report, and regression response boundaries', async () => {

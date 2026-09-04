@@ -2550,14 +2550,22 @@ export class BffCommandRepository implements CommandRepository {
       },
     );
     const data = dataValue(payload);
-    const scanStatus = data.scanStatus;
+    // The service answers { found, attachment } (defect N, Sep 4 2026: the
+    // parser read a flat shape, so a group photo never reached activation).
+    if (data.found === false) {
+      throw new RepositoryError('That upload is not available.', 'attachment_not_found', false);
+    }
+    const row = data.found === true && data.attachment && typeof data.attachment === 'object'
+      ? (data.attachment as Record<string, unknown>)
+      : data;
+    const scanStatus = row.scanStatus;
     if (!['pending', 'clean', 'blocked', 'failed'].includes(String(scanStatus))) {
       throw new RepositoryError('The service returned an invalid scan state.', 'invalid_response', true);
     }
     return {
-      attachmentId: requiredString(data.attachmentId, 'attachment'),
+      attachmentId: requiredString(row.attachmentId, 'attachment'),
       scanStatus: scanStatus as AttachmentScanState['scanStatus'],
-      reasonCode: typeof data.reasonCode === 'string' ? data.reasonCode : null,
+      reasonCode: typeof row.reasonCode === 'string' ? row.reasonCode : null,
     };
   }
 
