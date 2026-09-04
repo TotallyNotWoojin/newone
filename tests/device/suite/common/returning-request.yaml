@@ -16,6 +16,22 @@ appId: com.totallynotwoojin.newone
 - eraseText: 120
 - inputText: ${EMAIL}
 - tapOn: "Email address"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Email address" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${EMAIL}"
+    commands:
+      - tapOn:
+          text: "Email address"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${EMAIL}
+      - tapOn: "Email address"
+- assertVisible: "${EMAIL}"
 - takeScreenshot: ${SHOT}-returning-form
 - scrollUntilVisible:
     element:

@@ -37,6 +37,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
 - tapOn: "Email address"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Email address" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${EMAIL}"
+    commands:
+      - tapOn:
+          text: "Email address"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${EMAIL}
+      - tapOn: "Email address"
+- assertVisible: "${EMAIL}"
 - scrollUntilVisible:
     element:
       text: "your_username"
@@ -45,6 +61,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "your_username"
 - inputText: ${USERNAME}
 - tapOn: "Username"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Username" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${USERNAME}"
+    commands:
+      - tapOn:
+          text: "Username"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${USERNAME}
+      - tapOn: "Username"
+- assertVisible: "${USERNAME}"
 - scrollUntilVisible:
     element:
       text: "Your name as others will see it"
@@ -53,6 +85,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "Your name as others will see it"
 - inputText: ${DISPLAY_NAME}
 - tapOn: "Display name"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Display name" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${DISPLAY_NAME}"
+    commands:
+      - tapOn:
+          text: "Display name"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${DISPLAY_NAME}
+      - tapOn: "Display name"
+- assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
     element:

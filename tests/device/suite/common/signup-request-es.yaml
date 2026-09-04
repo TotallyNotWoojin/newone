@@ -37,6 +37,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
 - tapOn: "Correo electrónico"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Correo electrónico" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${EMAIL}"
+    commands:
+      - tapOn:
+          text: "Correo electrónico"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${EMAIL}
+      - tapOn: "Correo electrónico"
+- assertVisible: "${EMAIL}"
 - scrollUntilVisible:
     element:
       text: "tu_usuario"
@@ -45,6 +61,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "tu_usuario"
 - inputText: ${USERNAME}
 - tapOn: "Nombre de usuario"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Nombre de usuario" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${USERNAME}"
+    commands:
+      - tapOn:
+          text: "Nombre de usuario"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${USERNAME}
+      - tapOn: "Nombre de usuario"
+- assertVisible: "${USERNAME}"
 - scrollUntilVisible:
     element:
       text: "Tu nombre como lo verán los demás"
@@ -53,6 +85,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "Tu nombre como lo verán los demás"
 - inputText: ${DISPLAY_NAME}
 - tapOn: "Nombre para mostrar"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "Nombre para mostrar" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${DISPLAY_NAME}"
+    commands:
+      - tapOn:
+          text: "Nombre para mostrar"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${DISPLAY_NAME}
+      - tapOn: "Nombre para mostrar"
+- assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
     element:

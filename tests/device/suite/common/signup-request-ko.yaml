@@ -37,6 +37,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
 - tapOn: "이메일 주소"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "이메일 주소" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${EMAIL}"
+    commands:
+      - tapOn:
+          text: "이메일 주소"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${EMAIL}
+      - tapOn: "이메일 주소"
+- assertVisible: "${EMAIL}"
 - scrollUntilVisible:
     element:
       text: "영문 소문자 아이디"
@@ -45,6 +61,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "영문 소문자 아이디"
 - inputText: ${USERNAME}
 - tapOn: "사용자 이름"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "사용자 이름" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${USERNAME}"
+    commands:
+      - tapOn:
+          text: "사용자 이름"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${USERNAME}
+      - tapOn: "사용자 이름"
+- assertVisible: "${USERNAME}"
 - scrollUntilVisible:
     element:
       text: "다른 사람에게 보일 이름"
@@ -53,6 +85,22 @@ appId: com.totallynotwoojin.newone
 - tapOn: "다른 사람에게 보일 이름"
 - inputText: ${DISPLAY_NAME}
 - tapOn: "표시 이름"
+# Simulator typing sometimes drops or reorders characters. Check the field holds
+# the exact value; refocus the input (third "표시 이름" node: two label nodes,
+# then the field) and retype once if not.
+- runFlow:
+    when:
+      notVisible: "${DISPLAY_NAME}"
+    commands:
+      - tapOn:
+          text: "표시 이름"
+          index: 2
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 120
+      - inputText: ${DISPLAY_NAME}
+      - tapOn: "표시 이름"
+- assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
     element:
