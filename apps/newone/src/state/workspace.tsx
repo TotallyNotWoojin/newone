@@ -3709,7 +3709,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const loadAttachmentPreview = useCallback(
     async (message: Message) => {
       const attachment = message.attachment;
-      if (!snapshot || !attachment || attachment.status !== 'clean' || attachment.kind !== 'image') return;
+      // Images get an inline preview; audio gets a playable source (voice notes).
+      const previewable = attachment?.kind === 'image' || attachment?.mimeType?.startsWith('audio/') === true;
+      if (!snapshot || !attachment || attachment.status !== 'clean' || !previewable) return;
       if (previewRequestsRef.current.has(attachment.id)) return;
       previewRequestsRef.current.add(attachment.id);
       try {

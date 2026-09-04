@@ -2107,10 +2107,13 @@ function AiOutputErrorReportModal({
   );
 }
 
+// Consumer attachments carry no download URL of their own (a signed URL is
+// granted on demand, like image previews), so playability depends on the
+// audio type and the clean state only (media-03/04: voice notes rendered as a
+// plain file card with no play button).
 function isPlayableAudioAttachment(attachment: Attachment) {
   return attachment.mimeType?.startsWith('audio/') === true
     && attachment.status === 'clean'
-    && Boolean(attachment.downloadUrl)
     && (!attachment.transfer || attachment.transfer.state === 'uploaded');
 }
 
@@ -2121,8 +2124,14 @@ function formatPlaybackTime(seconds: number) {
 
 function AudioAttachmentBubble({ message }: { message: Message }) {
   const { t } = useI18n();
+  const workspace = useWorkspace();
   const attachment = message.attachment;
-  const player = useAudioPlayer(attachment?.downloadUrl ?? null);
+  const grantedUrl = attachment ? workspace.attachmentPreviewUrls?.[attachment.id] : undefined;
+  const loadPreview = workspace.loadAttachmentPreview;
+  useEffect(() => {
+    if (attachment && !attachment.downloadUrl && !grantedUrl) void loadPreview?.(message);
+  }, [attachment, grantedUrl, loadPreview, message]);
+  const player = useAudioPlayer(attachment?.downloadUrl ?? grantedUrl ?? null);
   const status = useAudioPlayerStatus(player);
   const playing = status?.playing === true;
   const duration = status?.duration ?? 0;
