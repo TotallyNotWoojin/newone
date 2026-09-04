@@ -1,0 +1,2 @@
+Newone device suite sample document.
+Shared through the Files picker on the simulator.

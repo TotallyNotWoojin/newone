@@ -14,8 +14,33 @@ appId: com.totallynotwoojin.newone
     visible: ".*(Recents|Browse|On My iPhone|iCloud Drive|Cancel).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-document-picker
+# The suite seeds newone-sample.pdf/.txt into each simulator's Files storage
+# ("On My iPhone"). The picker opens on Recents, which is empty on a fresh
+# simulator, so browse to the local location first when the file is not listed.
+- runFlow:
+    when:
+      notVisible: ".*newone-sample.*"
+    commands:
+      - runFlow:
+          when:
+            visible: "Browse"
+          commands:
+            - tapOn: "Browse"
+            - waitForAnimationToEnd:
+                timeout: 2000
+      - runFlow:
+          when:
+            visible: ".*On My iPhone.*"
+          commands:
+            - tapOn: ".*On My iPhone.*"
+            - waitForAnimationToEnd:
+                timeout: 2000
+- extendedWaitUntil:
+    visible: ".*newone-sample.*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-document-list
 - tapOn:
-    text: ".*(\\.pdf|\\.txt|\\.png|\\.jpg|\\.md|\\.json).*"
+    text: ".*newone-sample.*"
     index: 0
 - extendedWaitUntil:
     visible: "(Send securely|Send)"
