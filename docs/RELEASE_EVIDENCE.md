@@ -274,3 +274,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Cause | The precondition raised `errcode = '40001'` (serialization_failure). Nothing in the API retries, so the re-execution happens below it; either way 40001 is a retry signal, wrong for a permanent conflict. The conversation avatar activate/remove functions had the same pattern (latent). |
 | Fix (hosted) | `20260904210000_version_conflict_errcode.sql` recreates the four functions with `errcode = 'NO409'`; `_shared/errors.ts` maps NO409 → 409 conflict; API redeployed. |
 | Proof | `tests/hosted/profile-avatar-smoke.mjs` PASS: no picture → 404; grant path `<org>/<user>/<upload>/avatar`; activation refused before upload (403); signed PUT; activate; self and co-member download identical bytes; stale removal refused; removal → 404 and `profiles.avatar_path` null. Shared-module deno tests 6/6. |
+
+### Sep 4 2026, 05:40 — Owner's group photo attempt on build 20 (why it "did not work")
+
+| Item | Evidence |
+| --- | --- |
+| Data | Group "sidebar" created 10:54:31Z from build 20; a `conversation_avatar` attachment (image/png, clean, detected mime set) uploaded 10:54:40Z; `conversations.avatar_path` never set, no activation. |
+| Cause | The first consumer no-scan migration (deployed ~04:09 PDT) changed the finalize response shape; the app rejected it as an invalid response before reaching activation. The shape fix (`20260904170100`) landed 04:14 PDT, after the attempt. The upload pipeline itself (digest fix + no-scan) works: the row is clean with the detected MIME type. |
+| Proof pending | groups area `group-avatar` step in the running queue (v2 build) must show the activated avatar and `avatar_path` set. |
+| Host | Owner asked me to free memory: Safari and the codex extension process closed (swap 9.2 GB → 3.8 GB); passport screenshot removed from the repo root; the five `.ips` files stay untracked. |
