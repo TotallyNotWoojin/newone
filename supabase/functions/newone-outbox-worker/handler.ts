@@ -70,6 +70,8 @@ export const INVALIDATION_REASONS = Object.freeze({
   reaction: ['reaction_added', 'reaction_removed'],
   pin: ['message_pinned', 'message_unpinned'],
   message_visibility: ['message_hidden_for_user'],
+  // Delete-for-everyone and edits (bff_delete_message_impl / bff_edit_message_impl).
+  message: ['message_deleted', 'message_edited'],
   attachment: [
     'attachment_uploaded',
     'attachment_scan_clean',
