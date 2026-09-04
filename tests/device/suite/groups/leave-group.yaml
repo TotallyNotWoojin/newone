@@ -10,7 +10,7 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 30000
 - takeScreenshot: ${SHOT}-leave-section
-- tapOn: "I understand that history is preserved and my future access ends."
+- tapOn: ".*I understand that history is preserved.*"
 - tapOn: "Leave group"
 - extendedWaitUntil:
     notVisible: "Conversation controls"
