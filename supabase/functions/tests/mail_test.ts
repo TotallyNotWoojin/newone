@@ -204,6 +204,20 @@ Deno.test('the mailer never logs the code or the recipient', async () => {
     }
     assertEquals(logged.filter((line) => line.includes(code)), []);
     assertEquals(logged.filter((line) => line.includes(recipient)), []);
-    assertEquals(logged, []);
+    // Provider rejections and transport errors are logged as structured events
+    // carrying only the attempt, status, and error name.
+    const events = logged.map((line) => JSON.parse(line) as Record<string, unknown>);
+    assertEquals(
+      events.map((event) => event.event),
+      [
+        'newone_mail_provider_rejected',
+        'newone_mail_provider_rejected',
+        'newone_mail_send_error',
+        'newone_mail_send_error',
+      ],
+    );
+    for (const event of events) {
+      assertEquals(Object.keys(event).every((key) => ['event', 'attempt', 'status', 'detail', 'name'].includes(key)), true);
+    }
   });
 });
