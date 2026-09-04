@@ -16,7 +16,7 @@ export async function run(ctx) {
     return;
   }
   const intro = `Hey Max, Mia here ${tag}`;
-  await ctx.step({ id: 'media-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName }, expected: 'B on the People screen', screen: 'people' });
+  await ctx.step({ id: 'media-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Send message request' }, expected: 'B card', screen: 'people' });
   const request = await ctx.step({
     id: 'media-00b-message-request', title: 'A sends a message request with a first message', device: devA,
     flow: 'people/send-message-request.yaml', env: { TEXT: intro }, expected: 'Conversation opens with pending banner', screen: 'people → conversation',
