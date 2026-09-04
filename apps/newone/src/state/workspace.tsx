@@ -121,6 +121,7 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { createClientId } from '@/lib/client-id';
 import { activeMutedUntil, isConversationMuted } from '@/data/notification-preferences.mjs';
 import { getSupabaseClient } from '@/lib/supabase';
+import type { MessageKey } from '@/i18n/catalog';
 import { errorIdentifier, errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { isValidMentionSelection } from '@/features/chat/mention-controls.mjs';
@@ -533,7 +534,11 @@ function nameInitials(displayName: string) {
   return displayName.trim().split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toLocaleUpperCase() || 'N';
 }
 
-function messageFromCommand(command: OutboxCommand<SendMessageInput>, currentUser: Person): Message {
+function messageFromCommand(
+  command: OutboxCommand<SendMessageInput>,
+  currentUser: Person,
+  translate: (key: MessageKey) => string,
+): Message {
   return {
     id: `local-${command.payload.clientMessageId}`,
     clientMessageId: command.payload.clientMessageId,
@@ -549,7 +554,11 @@ function messageFromCommand(command: OutboxCommand<SendMessageInput>, currentUse
     sentAt: nowLabel(),
     isOwn: true,
     deliveryState: command.state === 'failed' ? 'failed' : 'pending',
-    failureReason: command.state === 'failed' ? command.lastErrorCode : undefined,
+    // Stored commands keep the stable error code; the bubble shows local copy
+    // for it (a raw "forbidden" reached the device in run 2026-09-04T04-57-19).
+    failureReason: command.state === 'failed'
+      ? translate(errorMessageKey({ code: command.lastErrorCode ?? 'unknown_error' }))
+      : undefined,
     priority: 'normal',
     ...(command.payload.mentionUserIds?.length ? { mentionUserIds: command.payload.mentionUserIds } : {}),
     ...(command.payload.replyPreview ? { replyTo: command.payload.replyPreview } : {}),
@@ -899,7 +908,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const conversationId = command.payload.conversationId;
       nextSnapshot.messages[conversationId] = mergeMessages(
         nextSnapshot.messages[conversationId] ?? [],
-        [messageFromCommand(command, nextSnapshot.currentUser)],
+        [messageFromCommand(command, nextSnapshot.currentUser, t)],
       );
     }
   }, []);
@@ -2594,7 +2603,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         attempts: 0,
         state: 'queued',
       };
-      const optimistic = messageFromCommand(command, snapshot.currentUser);
+      const optimistic = messageFromCommand(command, snapshot.currentUser, t);
       setSnapshot((current) =>
         current
           ? {

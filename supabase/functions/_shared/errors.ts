@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'unsupported_content_encoding'
   | 'unauthorized'
   | 'forbidden'
+  | 'message_request_cap'
   | 'csrf_failed'
   | 'origin_not_allowed'
   | 'not_found'
@@ -37,6 +38,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   unsupported_content_encoding: 'Compressed request bodies are not accepted.',
   unauthorized: 'Authentication is required.',
   forbidden: 'This action is not permitted.',
+  message_request_cap: 'This message request already holds its three messages.',
   csrf_failed: 'The request could not be verified.',
   origin_not_allowed: 'The request origin is not allowed.',
   not_found: 'The requested resource was not found.',
@@ -98,7 +100,11 @@ export function fromDatabaseError(error: unknown): ApiError {
     case '23514':
       return new ApiError(400, 'bad_request');
     case '42501':
-      return new ApiError(403, 'forbidden');
+      // The database names one permission case the client has copy for: a
+      // pending message request that already holds its three messages.
+      return value.message === 'message_request_cap'
+        ? new ApiError(403, 'message_request_cap')
+        : new ApiError(403, 'forbidden');
     case 'P0001':
       return new ApiError(429, 'rate_limited', undefined, 60);
     case 'PGRST116':

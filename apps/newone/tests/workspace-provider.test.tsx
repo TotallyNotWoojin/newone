@@ -2672,7 +2672,7 @@ describe('authoritative workspace provider', () => {
       expect.objectContaining({
         clientMessageId: failedId,
         deliveryState: 'failed',
-        failureReason: 'network_error',
+        failureReason: 'errors.action',
       }),
     ]));
     expect(currentWorkspace().failedOutboxCount).toBe(1);
