@@ -293,13 +293,27 @@ function validateRealtimePayload(
     throw new ApiError(503, 'dependency_unavailable');
   }
   if (raw.event === 'membership.revoked') {
+    // The membership trigger also stamps event_id, occurred_at, and
+    // schema_version; a job carrying them sat in 'processing' for three days
+    // and failed every batch it was claimed with (hosted, Sep 4 2026).
     onlyKeys(raw, [
       'event',
       'control_topic',
       'organization_id',
       'user_id',
       'revocation_generation',
+      'event_id',
+      'occurred_at',
+      'schema_version',
     ]);
+    if (raw.event_id !== undefined) uuid(raw.event_id);
+    if (raw.occurred_at !== undefined) {
+      const occurredAt = normalizedString(raw.occurred_at, { min: 20, max: 64 }) as string;
+      if (Number.isNaN(Date.parse(occurredAt))) throw new ApiError(503, 'dependency_unavailable');
+    }
+    if (raw.schema_version !== undefined && raw.schema_version !== 1) {
+      throw new ApiError(503, 'dependency_unavailable');
+    }
     if (controlTopic !== `org:${organizationId}:user:${userId}:control`) {
       throw new ApiError(503, 'dependency_unavailable');
     }
@@ -406,17 +420,25 @@ function validateModerationPayload(
 
 function validateSessionPayload(organizationId: string, raw: Record<string, unknown>): void {
   onlyKeys(raw, ['session_id', 'user_id', 'organization_id', 'revocation_generation']);
-  const hasSession = raw.session_id !== undefined;
-  const hasUser = raw.user_id !== undefined;
-  if (hasSession === hasUser) throw new ApiError(503, 'dependency_unavailable');
-  if (hasSession) uuid(raw.session_id);
-  if (hasUser) {
-    uuid(raw.user_id);
-    if (uuid(raw.organization_id) !== organizationId) {
+  // Two shapes: a targeted revoke names the session (the revoke route also
+  // records the session's owner), a membership revoke names the user with
+  // the organization and generation. The old rule rejected the targeted
+  // shape whenever user_id rode along, so no device revoke ever ran
+  // (hosted, Sep 4 2026).
+  if (raw.session_id !== undefined) {
+    uuid(raw.session_id);
+    if (raw.user_id !== undefined) uuid(raw.user_id);
+    if (raw.organization_id !== undefined || raw.revocation_generation !== undefined) {
       throw new ApiError(503, 'dependency_unavailable');
     }
-    integer(raw.revocation_generation, 1, 2_147_483_647);
+    return;
   }
+  if (raw.user_id === undefined) throw new ApiError(503, 'dependency_unavailable');
+  uuid(raw.user_id);
+  if (uuid(raw.organization_id) !== organizationId) {
+    throw new ApiError(503, 'dependency_unavailable');
+  }
+  integer(raw.revocation_generation, 1, 2_147_483_647);
 }
 
 function validateDynamicPayload(raw: Record<string, unknown>): DynamicGroupSyncJob['payload'] {
@@ -734,11 +756,35 @@ export function parsePushPage(value: unknown, job: PushJob): PushPage {
   }
 }
 
-export function parseOutboxJobs(
+export interface InvalidOutboxJob {
+  id: string;
+  topic: OutboxTopic;
+  attempts: number;
+}
+
+export interface ClaimedOutboxJobs {
+  jobs: OutboxJob[];
+  invalid: InvalidOutboxJob[];
+}
+
+/**
+ * Splits a claim envelope into dispatchable jobs and jobs whose payload does
+ * not validate. A row that cannot even be identified (no id, unknown topic)
+ * still fails the whole claim, because nothing can be done with it.
+ *
+ * Until Sep 4 2026 one invalid payload threw for the entire batch: every job
+ * claimed alongside it stayed 'processing' until its lease expired, and the
+ * oldest invalid rows were claimed first every time, so real invalidations
+ * and pushes waited five minutes per attempt behind them (hosted: 20 rows,
+ * up to 537 attempts, 26 worker 503s per hour).
+ */
+export function parseClaimedJobs(
   value: unknown,
   allowedTopics: OutboxTopic[],
   limit: number,
-): OutboxJob[] {
+): ClaimedOutboxJobs {
+  const invalid: InvalidOutboxJob[] = [];
+  const jobs: OutboxJob[] = [];
   try {
     const envelope = asObject(value);
     if (!Array.isArray(envelope.jobs) || envelope.jobs.length > limit) throw new Error('invalid');
@@ -748,7 +794,7 @@ export function parseOutboxJobs(
     if (JSON.stringify(returnedTopics) !== JSON.stringify(expectedTopics)) {
       throw new Error('invalid');
     }
-    return envelope.jobs.map((entry): OutboxJob => {
+    for (const entry of envelope.jobs) {
       const row = asObject(entry);
       onlyKeys(row, ['id', 'organization_id', 'topic', 'payload', 'attempts']);
       const topic = oneOf(row.topic, OUTBOX_TOPICS);
@@ -758,7 +804,36 @@ export function parseOutboxJobs(
         organizationId: uuid(row.organization_id),
         attempts: integer(row.attempts, 1, 1000),
       };
-      const payload = asObject(row.payload);
+      try {
+        jobs.push(parseJobPayload(topic, base, asObject(row.payload)));
+      } catch {
+        invalid.push({ id: base.id, topic, attempts: base.attempts });
+      }
+    }
+    return { jobs, invalid };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 503) throw error;
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
+export function parseOutboxJobs(
+  value: unknown,
+  allowedTopics: OutboxTopic[],
+  limit: number,
+): OutboxJob[] {
+  const claimed = parseClaimedJobs(value, allowedTopics, limit);
+  if (claimed.invalid.length > 0) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  return claimed.jobs;
+}
+
+function parseJobPayload(
+  topic: OutboxTopic,
+  base: { id: string; organizationId: string; attempts: number },
+  payload: Record<string, unknown>,
+): OutboxJob {
+  {
+    {
       switch (topic) {
         case 'realtime_control':
           return {
@@ -779,10 +854,7 @@ export function parseOutboxJobs(
           validatePushPayload(base.organizationId, payload);
           return { ...base, topic };
       }
-    });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 503) throw error;
-    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+    }
   }
 }
 
@@ -1357,20 +1429,37 @@ export function createOutboxWorkerHandler(
       onlyKeys(body, ['limit']);
       const limit = body.limit === undefined ? 3 : integer(body.limit, 1, 10);
       const workerId = crypto.randomUUID();
-      const jobs = parseOutboxJobs(
+      const claimed = parseClaimedJobs(
         await dependencies.claim(workerId, dependencies.topics, limit),
         dependencies.topics,
         limit,
       );
       const results: Array<'completed' | 'failed'> = [];
-      for (const job of jobs) {
+      for (const job of claimed.jobs) {
         results.push(await processJob(dependencies, workerId, meta.requestId, job));
+      }
+      for (const job of claimed.invalid) {
+        // An unreadable payload is failed on its own row (dead-lettered by the
+        // database after ten attempts) so it never holds a batch hostage.
+        try {
+          await dependencies.fail(workerId, job as unknown as OutboxJob, 'invalid_payload', 3600);
+        } catch {
+          // The lease expires on its own; never report success for it.
+        }
+        console.error(JSON.stringify({
+          event: 'newone_outbox_job_invalid',
+          correlation_id: meta.requestId,
+          job_id: job.id,
+          topic: job.topic,
+          attempts: job.attempts,
+        }));
+        results.push('failed');
       }
       const completed = results.filter((result) => result === 'completed').length;
       return jsonResponse(meta, 200, {
-        claimed: jobs.length,
+        claimed: results.length,
         completed,
-        failed: jobs.length - completed,
+        failed: results.length - completed,
         topics: dependencies.topics,
       });
     } catch (error) {

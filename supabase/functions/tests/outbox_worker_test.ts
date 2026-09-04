@@ -14,6 +14,7 @@ import {
   type PushDelivery,
   type PushEvent,
   realtimeBroadcast,
+  parseClaimedJobs,
 } from '../newone-outbox-worker/handler.ts';
 import { assert, assertEquals, assertRejects } from './assert.ts';
 
@@ -207,16 +208,30 @@ Deno.test('mismatched or shared offboarding topics fail closed before dispatch',
   if (!job) throw new Error('fixture missing job');
   job.payload.control_topic = `org:${organizationId}:conversation:${conversationId}`;
   let dispatched = false;
+  const failed: string[] = [];
   const handler = createOutboxWorkerHandler(() =>
     dependencies(['realtime_control'], {
       claim: async () => envelope,
       dispatchRealtime: async () => {
         dispatched = true;
       },
+      fail: async (_workerId, failedJob, code) => {
+        failed.push(`${failedJob.id}:${code}`);
+      },
     })
   );
-  assertEquals((await handler(request())).status, 503);
+  // The unreadable job is failed on its own row and never dispatched; the
+  // request itself succeeds so the rest of the batch is not held hostage.
+  const response = await handler(request());
+  assertEquals(response.status, 200);
   assertEquals(dispatched, false);
+  assertEquals(failed, [`${job.id}:invalid_payload`]);
+  assertEquals(await response.json(), {
+    claimed: 1,
+    completed: 0,
+    failed: 1,
+    topics: ['realtime_control'],
+  });
 });
 
 Deno.test('moderation invalidations are exact, per-user, and content-free', async () => {
@@ -863,4 +878,42 @@ Deno.test('push resolver requires Expo project and environment binding', () => {
   assertEquals(parsedIncident.event.eventType, 'conversation.changed');
   assertEquals(parsedIncident.event.state, 'closed');
   assertEquals(parsedIncident.deliveries[0]?.criticalCategory, 'operations');
+});
+
+Deno.test('claimed payload shapes: targeted session revoke with owner, membership revoke with event stamps, invalid rows isolated', () => {
+  const organization = '11111111-1111-4111-8111-111111111111';
+  const user = '6c4cdc29-b1e3-4b99-ae0b-a95dbbe3a697';
+  const envelope = {
+    topics: ['session_revoke', 'realtime_control'],
+    jobs: [
+      {
+        id: 615, organization_id: organization, topic: 'session_revoke', attempts: 18,
+        payload: { session_id: 'd0fd192d-d672-4ddd-b7d3-4a07402c4559', user_id: user },
+      },
+      {
+        id: 12, organization_id: organization, topic: 'session_revoke', attempts: 537,
+        payload: { user_id: user, organization_id: organization, revocation_generation: 1 },
+      },
+      {
+        id: 13, organization_id: organization, topic: 'realtime_control', attempts: 537,
+        payload: {
+          event: 'membership.revoked', user_id: user, event_id: '388510d6-3322-4c5b-a9b0-049bc29e7d6b',
+          occurred_at: '2026-09-01T22:59:08.537885+00:00', schema_version: 1, organization_id: organization,
+          control_topic: `org:${organization}:user:${user}:control`, revocation_generation: 1,
+        },
+      },
+      {
+        id: 99, organization_id: organization, topic: 'session_revoke', attempts: 3,
+        payload: { session_id: 'not-a-uuid' },
+      },
+    ],
+  };
+  const claimed = parseClaimedJobs(envelope, ['session_revoke', 'realtime_control'], 10);
+  assertEquals(claimed.jobs.map((job) => job.id), ['615', '12', '13']);
+  assertEquals(claimed.invalid, [{ id: '99', topic: 'session_revoke', attempts: 3 }]);
+  const revoked = claimed.jobs[2];
+  if (revoked?.topic !== 'realtime_control' || revoked.payload.event !== 'membership.revoked') {
+    throw new Error('expected the membership revoke job');
+  }
+  assertEquals(revoked.payload.revocationGeneration, 1);
 });

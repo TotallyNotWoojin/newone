@@ -441,9 +441,17 @@ Deno.test('outbox claim parsing validates every durable topic and optional paylo
     3,
   );
   await bad(envelope('session_revoke', {}), ['session_revoke']);
-  await bad(envelope('session_revoke', { session_id: requestId, user_id: userId }), [
-    'session_revoke',
-  ]);
+  // A targeted revoke is enqueued with the session and its owner (the shape
+  // the revoke route writes); membership fields on that shape are rejected.
+  parseOutboxJobs(
+    envelope('session_revoke', { session_id: requestId, user_id: userId }),
+    ['session_revoke'],
+    3,
+  );
+  await bad(
+    envelope('session_revoke', { session_id: requestId, organization_id: organizationId }),
+    ['session_revoke'],
+  );
   await bad(
     envelope('session_revoke', {
       user_id: userId,
