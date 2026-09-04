@@ -166,9 +166,7 @@ function countingFetcher(sourceSha256: string, options: { byokDisabled?: boolean
         message: {
           content: JSON.stringify({
             translatedText: 'Mantenga __NEWONE_PROTECTED_0001__ a __NEWONE_PROTECTED_0002__.',
-            sourceLanguage: 'en',
-            targetLanguage: 'es',
-            sourceSha256,
+            sourceFingerprint: sourceSha256.slice(0, 16),
           }),
         },
       }],

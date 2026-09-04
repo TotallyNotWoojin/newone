@@ -219,9 +219,7 @@ Deno.test('employee processor proves controls with synthetic content before send
         message: {
           content: JSON.stringify({
             translatedText: 'Mantenga __NEWONE_PROTECTED_0001__ a __NEWONE_PROTECTED_0002__.',
-            sourceLanguage: 'en',
-            targetLanguage: 'es',
-            sourceSha256,
+            sourceFingerprint: sourceSha256.slice(0, 16),
           }),
         },
       }],

@@ -178,9 +178,7 @@ Deno.test('OpenRouter completion rejects malformed transport envelopes and route
   };
   const validOutput = {
     translatedText: 'Texto de cobertura',
-    sourceLanguage: 'en',
-    targetLanguage: 'es',
-    sourceSha256,
+    sourceFingerprint: sourceSha256.slice(0, 16),
   };
 
   await providerFailure(() =>
@@ -303,9 +301,7 @@ Deno.test('OpenRouter translation and detection validate each request and struct
 
   const validOutput = {
     translatedText: 'Texto de cobertura',
-    sourceLanguage: 'en',
-    targetLanguage: 'es',
-    sourceSha256,
+    sourceFingerprint: sourceSha256.slice(0, 16),
   };
   for (
     const output of [
@@ -345,7 +341,7 @@ Deno.test('OpenRouter translation and detection validate each request and struct
       detectedSourceLanguage: 'und',
       confidence: 0.5,
       ambiguous: true,
-      sourceSha256: mixedSha256,
+      sourceFingerprint: String(mixedSha256).slice(0, 16),
     })
   ).detectLanguage({
     sourceBody: mixed,
@@ -358,7 +354,7 @@ Deno.test('OpenRouter translation and detection validate each request and struct
     detectedSourceLanguage: 'en',
     confidence: 0.9,
     ambiguous: false,
-    sourceSha256: detectionBase.sourceSha256,
+    sourceFingerprint: String(detectionBase.sourceSha256).slice(0, 16),
   };
   for (
     const output of [

@@ -65,9 +65,7 @@ Deno.test('OpenRouter adapter enforces the versioned route, privacy controls, ce
           message: {
             content: JSON.stringify({
               translatedText: `조정 ${placeholders.join(' ')}`,
-              sourceLanguage: 'es',
-              targetLanguage: 'ko',
-              sourceSha256: await sha256Hex('Ajuste MX-1042 a ±0.25 mm a las 14:30.'),
+              sourceFingerprint: String(await sha256Hex('Ajuste MX-1042 a ±0.25 mm a las 14:30.')).slice(0, 16),
             }),
           },
         }],
@@ -126,9 +124,7 @@ Deno.test('OpenRouter adapter rejects selected-provider metadata that does not m
           message: {
             content: JSON.stringify({
               translatedText: 'Revisar __NEWONE_PROTECTED_0000__ a las __NEWONE_PROTECTED_0001__.',
-              sourceLanguage: 'en',
-              targetLanguage: 'es',
-              sourceSha256,
+              sourceFingerprint: sourceSha256.slice(0, 16),
             }),
           },
         }],
@@ -174,9 +170,7 @@ Deno.test('OpenRouter adapter marks altered protected tokens for review', async 
           message: {
             content: JSON.stringify({
               translatedText: '토큰이 제거되었습니다',
-              sourceLanguage: 'es',
-              targetLanguage: 'ko',
-              sourceSha256,
+              sourceFingerprint: sourceSha256.slice(0, 16),
             }),
           },
         }],
@@ -216,9 +210,7 @@ Deno.test('OpenRouter adapter rejects newly invented safety tokens outside sourc
               content: JSON.stringify({
                 translatedText:
                   `${invented} __NEWONE_PROTECTED_0001__ __NEWONE_PROTECTED_0002__ __NEWONE_PROTECTED_0003__`,
-                sourceLanguage: 'en',
-                targetLanguage: 'es',
-                sourceSha256,
+                sourceFingerprint: sourceSha256.slice(0, 16),
               }),
             },
           }],
@@ -258,9 +250,7 @@ Deno.test('OpenRouter adapter rejects cached, fallback, or transformed responses
             message: {
               content: JSON.stringify({
                 translatedText: '안녕하세요',
-                sourceLanguage: 'es',
-                targetLanguage: 'ko',
-                sourceSha256,
+                sourceFingerprint: sourceSha256.slice(0, 16),
               }),
             },
           }],
@@ -384,7 +374,7 @@ Deno.test('language model treats message injection as data and returns only stri
               detectedSourceLanguage: 'en',
               confidence: 0.98,
               ambiguous: false,
-              sourceSha256,
+              sourceFingerprint: sourceSha256.slice(0, 16),
             }),
           },
         }],
