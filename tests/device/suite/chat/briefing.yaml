@@ -7,10 +7,10 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - scrollUntilVisible:
     element:
-      text: "Conversation briefing"
+      text: ".*Conversation briefing.*"
     direction: UP
     timeout: 30000
-- tapOn: "Conversation briefing"
+- tapOn: ".*Conversation briefing.*"
 - extendedWaitUntil:
     visible: ".*(Request summary draft|No summary draft|Queued|Generating|Unapproved draft|Summary unavailable).*"
     timeout: 15000
@@ -26,4 +26,4 @@ appId: com.totallynotwoojin.newone
     visible: ".*(Unapproved draft|Summary unavailable|Human approved|Failure code).*"
     timeout: 120000
 - takeScreenshot: ${SHOT}-final
-- assertVisible: "Unapproved draft"
+- assertVisible: ".*Unapproved draft.*"
