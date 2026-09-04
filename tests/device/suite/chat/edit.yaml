@@ -34,5 +34,5 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*${EDITED}.*"
     timeout: 20000
-- assertVisible: "edited"
+- assertVisible: ".*edited.*"
 - takeScreenshot: ${SHOT}-edited
