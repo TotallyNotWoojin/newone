@@ -5,8 +5,10 @@ appId: com.totallynotwoojin.newone
 - launchApp:
     clearState: true
 - extendedWaitUntil:
+    # A freshly installed build's first cold start took more than 40s under a
+    # load average near 400 (groups, run-2026-09-04T05-52-23).
     visible: ".*(Chats|Create account).*"
-    timeout: 40000
+    timeout: 90000
 - runFlow:
     when:
       visible: "Chats"
