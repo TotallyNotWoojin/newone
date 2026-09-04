@@ -10,7 +10,7 @@ export async function run(ctx) {
     language: 'ko', code: 'KO', label: 'trko', peerName: 'Chaeyoung',
     intro: (tag) => `Hello Chaeyoung, nice to meet you ${tag}`,
     en1: (tag) => `The meeting moved to Monday morning, please bring the report ${tag}`, en1Key: 'report',
-    reply: (tag) => `네, 월요일에 인쇄한 보고서를 가져가겠습니다 ${tag}`, replyKey: '보고서',
+    reply: (tag) => `네, 월요일에 인쇄한 보고서를 가져가겠습니다 ${tag}`, replyKey: '가져가겠습니다',
     en2: (tag) => `Second English message while translation is off ${tag}`,
   });
 }
