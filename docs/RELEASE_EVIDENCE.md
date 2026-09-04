@@ -413,3 +413,16 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | translation-ko | run-2026-09-04T19-11-36 | PASS 24 · FAIL 0 · UNREACHABLE 2 | trans-03/06 → defect Q (bubble accessibility). Rerun queued on the rebuilt app. |
 | translation | run-2026-09-04T20-32-52 | setup FAIL | Maestro typed Avery's email as `zsaajcfz@guerrilamailblock.coml` on simulator 1, so the app registered that address while the harness minted a code for the real one (verify → 401 unauthorized). The form flows now assert each typed value and retype once. Rerun queued. |
 | translation-ko | run-2026-09-04T20-41-40 | setup FAIL | B's tap on the request row landed on its Decline button: the "Reconnecting…" status banner clears a moment after launch and the list shifts up under the tap (server: connection declined 24 s after the request). Nine flows now wait for the banner to clear and the list to settle before tapping a row. Rerun queued. Product follow-up for v3: the banner should not shift the list, and Decline on a message request deserves a confirmation. |
+
+### Chat rerun on the rebuilt app and defect R (Sep 4 2026, 14:39)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T20-49-58: PASS 64 · FAIL 4 · UNREACHABLE 5. chat-12 delete-for-me now passes. |
+| Defect R (server) | chat-15: B kept showing a message A deleted for everyone. `private.outbox_jobs` shows every `realtime_control` invalidation with reason `message_deleted`/`message_edited` failing as `invalid_payload`: the worker's `INVALIDATION_REASONS` vocabulary had no `message` entity, so the invalidations added for defect O never reached the other device. Fixed in fab41b5 (worker + vocabulary test, 24/24 Deno), deployed. |
+| chat-16 typing | Typing hints expire 6 s after the last broadcast, but the harness ran "B types" and "A watches" one after the other. The steps now run concurrently and B types in bursts for ~20 s (3740099). Channel authorization (`realtime_typing_topic_authorized`) checked and correct. |
+| chat-21 unread | The chip showed "Unread" with a "1" pill, but its accessibility label was the bare label, so neither VoiceOver nor the flow saw the count. `Chip` now announces "Unread 1" (3740099); needs the next simulator build. |
+| chat-26 briefing | Summary job failed after 6 attempts with `provider_unavailable` (google-vertex/us-south1, 21:28–21:37); a language detection at 21:34 failed the same way while others succeeded. Transient provider outage. Migration 20260904250000 makes the revive cron retry detection jobs that failed with `provider_unavailable` after 10 minutes. Summaries stay user-retriable. |
+| media-05 | The seeded files landed in the iCloud Drive container, not `group.com.apple.FileProvider.LocalStorage`; `seed-files.sh` now selects the group by identifier and all three simulators are seeded. |
+| Unreachable | Pinned-messages view, outbox section (offline cache disabled in the simulator build), and push tap routing are consumer-UI/simulator limitations, unchanged. |
+| Next | translation → sessions → media → translation-ko reruns (post-queue), then a simulator rebuild and one more chat run. |
