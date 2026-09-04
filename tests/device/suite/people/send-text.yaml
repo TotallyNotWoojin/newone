@@ -16,10 +16,12 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: ".*Write a message….*"
+    visible:
+      id: "composer-input"
     timeout: 20000
 - tapOn:
     id: "composer-input"
+- eraseText: 60
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:

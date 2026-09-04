@@ -3,10 +3,12 @@ appId: com.totallynotwoojin.newone
 # Type, tap send, and immediately force-quit: on relaunch the message must
 # be present (delivered from the outbox) rather than lost.
 - extendedWaitUntil:
-    visible: ".*Write a message….*"
+    visible:
+      id: "composer-input"
     timeout: 20000
 - tapOn:
     id: "composer-input"
+- eraseText: 60
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - stopApp

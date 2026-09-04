@@ -2,10 +2,12 @@ appId: com.totallynotwoojin.newone
 ---
 # Inside an open conversation: type TEXT and send; it renders in the timeline.
 - extendedWaitUntil:
-    visible: ".*Write a message….*"
+    visible:
+      id: "composer-input"
     timeout: 20000
 - tapOn:
     id: "composer-input"
+- eraseText: 60
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:
