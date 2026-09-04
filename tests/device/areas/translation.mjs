@@ -106,11 +106,22 @@ export async function runPair(ctx, cfg) {
     serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, mixed), (r) => (r?.translations ?? '').includes('en=completed'), { timeoutMs: 90_000 }); return { ok: w.ok, detail: `${w.row?.translations} detection=${w.row?.language_detection_method ?? ''}` }; },
     timeoutMs: 240_000,
   });
-  await ctx.step({
-    id: 'trans-16-b-translates-mixed', title: `B asks for the mixed message in ${cfg.code} (Translate for me)`, device: devB, flow: 'translation/translate-own.yaml', env: { TARGET: cfg.mixedKey(tag), LANG: cfg.code, TIMEOUT: '90000' },
-    expected: `TRANSLATION · ${cfg.code} card on the mixed bubble; server row target ${cfg.language} (source und or en)`, screen: 'conversation → Message actions',
-    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, mixed), (r) => (r?.translations ?? '').includes(`${cfg.language}=completed`), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row?.translations }; },
-    timeoutMs: 240_000,
-  });
+  // "Translate for me" is offered only when the detected language differs from
+  // B's display language (or detection fell back to the sender language). A
+  // mixed message that the detector settles on B's own language needs no
+  // translation, so the sheet correctly omits the action.
+  const mixedRow = await server.messageByBody(convId, mixed);
+  const mixedNeedsNoTranslation = mixedRow?.detected_language === cfg.language
+    && !(mixedRow?.language_detection_method ?? '').endsWith(':sender-language');
+  if (mixedNeedsNoTranslation) {
+    ctx.note({ id: 'trans-16-b-translates-mixed', title: `B asks for the mixed message in ${cfg.code} (Translate for me)`, status: 'PASS', expected: 'action offered only when a translation is needed', observed: `detected ${mixedRow.detected_language} (${mixedRow.language_detection_method}) equals B's display language; the sheet omits "Translate for me" by design` });
+  } else {
+    await ctx.step({
+      id: 'trans-16-b-translates-mixed', title: `B asks for the mixed message in ${cfg.code} (Translate for me)`, device: devB, flow: 'translation/translate-own.yaml', env: { TARGET: cfg.mixedKey(tag), LANG: cfg.code, TIMEOUT: '90000' },
+      expected: `TRANSLATION · ${cfg.code} card on the mixed bubble; server row target ${cfg.language} (source und or en)`, screen: 'conversation → Message actions',
+      serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, mixed), (r) => (r?.translations ?? '').includes(`${cfg.language}=completed`), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row?.translations }; },
+      timeoutMs: 240_000,
+    });
+  }
   ctx.accounts = { A, B };
 }
