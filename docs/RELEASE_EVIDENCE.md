@@ -445,3 +445,14 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Defect S (server) | trans-13: B's own "Own English note" had `language_detection_state = completed` on the server a minute before the long-press, but the device still held a pending detection, so the actions sheet did not offer "Translate for me". `bff_complete_language_detection_job_impl` never emitted an invalidation; devices only learned about detection on the periodic reconcile. Migration 20260904260000 emits `('message', 'language_detected')` to the members on completion; worker vocabulary updated and deployed. |
 | trans-06 | The report button's bounds were on screen but under the composer and the "Translation available" bar; the tap hit the bar. The flow now nudges the list up before tapping. |
 | Next | media, chat, translation (running), then translation-ko once more. |
+
+### Chat rerun after defect R and defect T (Sep 4 2026, 16:29)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T22-48-47: PASS 65 · FAIL 3 · UNREACHABLE 5. Typing indicator (chat-16) passes with the concurrent steps; delete-for-me, deletion and edit invalidations all delivered (`realtime_control` jobs completed for both members). |
+| Defect T (client) | chat-15: B still showed a message A deleted for everyone although the invalidation arrived and B reconciled. The bootstrap timeline omits deleted rows (`deleted_at is null`) and `mergeTimelineMessages` only added or updated rows, so B's copy lingered until a cold start. A reconcile page now prunes server rows missing inside the ids it spans (optimistic rows and older history untouched); `tests/message-timeline.test.ts` covers it. |
+| chat-21 | The chip now announces "Unread 1"; the flow's exact tap on "Unread" no longer matched. Flow matches the label with or without the count. |
+| chat-34 | Archive: sheet closed but `is_archived` stayed false — the same clipped-card tap as delete-for-me (Archive is the last row of the controls card). Flow nudges the card first. |
+| Harness | Mid-flow driver deaths ("Device became unreachable", media setup on simulator 2) are now recognised from Maestro's debug log and retried once. |
+| Next | translation (running), media and translation-ko (ko-final waiter), then a rebuild and a final chat run for defect T. |
