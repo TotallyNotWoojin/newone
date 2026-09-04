@@ -1,6 +1,20 @@
 appId: com.totallynotwoojin.newone
 ---
 # Restrict the search to the Messages type chip and re-run.
+# The type chips sit at the top of the search form; after typing, the keyboard
+# is up and the form is scrolled to the results. Dismiss and scroll back up.
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
+- scrollUntilVisible:
+    element:
+      text: "Messages"
+    direction: UP
+    timeout: 20000
 - tapOn: "Messages"
 - tapOn:
     text: "Search"

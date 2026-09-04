@@ -22,5 +22,5 @@ appId: com.totallynotwoojin.newone
       text: ".*Open .*"
     direction: DOWN
     timeout: 30000
-- assertVisible: "Messages"
+- assertVisible: "(?i).*messages.*"
 - takeScreenshot: ${SHOT}-results
