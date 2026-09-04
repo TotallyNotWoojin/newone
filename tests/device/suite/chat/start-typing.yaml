@@ -8,7 +8,18 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     id: "composer-input"
 - eraseText: 60
-- inputText: "typing indicator probe "
+# Type in bursts for ~20 s so the typing broadcast (throttled to one per 3 s)
+# repeats while A's flow starts up and looks for the indicator.
+- inputText: "typing indicator "
+- extendedWaitUntil:
+    visible: ".*typing indicator.*"
+    timeout: 5000
+- repeat:
+    times: 6
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3500
+      - inputText: "probe "
 - extendedWaitUntil:
     visible: ".*typing indicator probe.*"
     timeout: 5000

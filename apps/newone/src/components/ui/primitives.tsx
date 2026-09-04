@@ -179,7 +179,9 @@ export function Chip({
 }) {
   return (
     <Pressable
-      accessibilityLabel={accessibilityLabel ?? label}
+      // The count badge is part of the chip's meaning ("Unread 1"), so it is read
+      // with the label instead of being flattened away.
+      accessibilityLabel={accessibilityLabel ?? (typeof count === 'number' && count > 0 ? `${label} ${count}` : label)}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}

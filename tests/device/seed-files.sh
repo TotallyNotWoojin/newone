@@ -6,7 +6,13 @@
 set -e
 cd "$(dirname "$0")"
 for udid in "$@"; do
-  dir=$(find ~/Library/Developer/CoreSimulator/Devices/"$udid"/data/Containers/Shared/AppGroup -maxdepth 2 -name "File Provider Storage" | head -1)
+  # Several app groups own a "File Provider Storage" folder (iCloud Drive, Photos);
+  # "On My iPhone" is the group.com.apple.FileProvider.LocalStorage container.
+  dir=""
+  for group in ~/Library/Developer/CoreSimulator/Devices/"$udid"/data/Containers/Shared/AppGroup/*/; do
+    id=$(/usr/libexec/PlistBuddy -c "Print :MCMMetadataIdentifier" "$group/.com.apple.mobile_container_manager.metadata.plist" 2>/dev/null)
+    if [ "$id" = "group.com.apple.FileProvider.LocalStorage" ]; then dir="$group/File Provider Storage"; mkdir -p "$dir"; break; fi
+  done
   if [ -z "$dir" ]; then echo "no File Provider Storage on $udid (boot it once and open Files)"; continue; fi
   cp fixtures/newone-sample.pdf fixtures/newone-sample.txt "$dir/"
   echo "seeded $udid"
