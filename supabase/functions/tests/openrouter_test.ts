@@ -396,6 +396,49 @@ Deno.test('language model treats message injection as data and returns only stri
   assertEquals(sent?.plugins, DISABLED_OPENROUTER_PLUGINS);
 });
 
+Deno.test('translation of text with nothing to protect drops an echoed placeholder and never names the format', async () => {
+  let sent: Record<string, unknown> | undefined;
+  const processor = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async (_input, init) => {
+    sent = JSON.parse(String(init?.body));
+    const sourceSha256 = String(sent?.messages ? '' : '');
+    return new Response(
+      JSON.stringify({
+        id: 'gen-erosion',
+        model: policyValue.model,
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              translatedText: '우리 침식 상황의 날씨는 어떤가요? __NEWONE_PROTECTED_0000__ 침식',
+              sourceFingerprint: (sent?.messages as Array<Record<string, string>>)[1].content.match(/Source fingerprint: ([0-9a-f]{16})/)?.[1],
+            }),
+          },
+        }],
+        usage: { prompt_tokens: 40, completion_tokens: 20 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    );
+  });
+  const sourceBody = "what's the weather of our erosion situation?\n\nerosion";
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sourceBody));
+  const sourceSha256 = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  const result = await processor.translate({
+    sourceBody,
+    sourceLanguage: 'en',
+    targetLanguage: 'ko',
+    sourceSha256,
+    correlationId: '00000000-0000-4000-8000-000000000004',
+  });
+  assertEquals(result.translatedText, '우리 침식 상황의 날씨는 어떤가요? 침식');
+  const messages = sent?.messages as Array<Record<string, string>>;
+  assert(!String(messages[0]?.content ?? '').includes('__NEWONE_PROTECTED_'));
+  assert(!String(messages[1]?.content ?? '').includes('Placeholders in the source'));
+});
+
 Deno.test('summary output is evidence-linked and restores only protected source values', async () => {
   const sourceFingerprint = 'a'.repeat(64);
   let sent: Record<string, unknown> | undefined;
