@@ -25,7 +25,7 @@ appId: com.totallynotwoojin.newone
 - tapOn: "GROUP SETUP"
 - runFlow:
     when:
-      visible: ".*(Typing Predictions|Dictate).*"
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
           direction: DOWN

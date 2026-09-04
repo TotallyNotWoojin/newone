@@ -5,7 +5,7 @@ appId: com.totallynotwoojin.newone
 # is up and the form is scrolled to the results. Dismiss and scroll back up.
 - runFlow:
     when:
-      visible: ".*(Typing Predictions|Dictate).*"
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
           direction: DOWN

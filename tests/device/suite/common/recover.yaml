@@ -15,7 +15,7 @@ appId: com.totallynotwoojin.newone
       - tapOn: "Close dialog"
 - runFlow:
     when:
-      visible: ".*(Typing Predictions|Dictate).*"
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
           direction: DOWN

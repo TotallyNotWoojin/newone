@@ -823,7 +823,13 @@ export default function SettingsScreen() {
           icon="log-out-outline"
           label={t('settings.signOut')}
           onPress={async () => {
-            await auth.signOut();
+            // Sign-out revokes this session on the server (owner decision,
+            // Sep 4 2026) so the Devices list and other devices see it end;
+            // if the revoke cannot be sent, the local sign-out still happens.
+            const revoked = auth.sessionId
+              ? await workspace.revokeSession(auth.sessionId, 'sign_out')
+              : false;
+            if (!revoked) await auth.signOut();
             router.replace('/sign-in');
           }}
           tone="light"

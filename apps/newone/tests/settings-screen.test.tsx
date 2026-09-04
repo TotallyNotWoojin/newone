@@ -338,6 +338,23 @@ describe('settings screen', () => {
 
     await fireEvent.press(screen.getByRole('button', { name: 'settings.help' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./help');
+    // Sign-out revokes the current session server-side first; the workspace
+    // performs the local sign-out as part of a successful current-session
+    // revoke, so auth.signOut is only the fallback.
+    mockWorkspace.revokeSession.mockClear();
+    mockAuth.signOut.mockClear();
+    mockRouter.replace.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.signOut' }));
+    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
+      'session-current',
+      'sign_out',
+    ));
+    expect(mockAuth.signOut).not.toHaveBeenCalled();
+    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
+
+    // When the revoke cannot be sent, the device still signs out locally.
+    mockWorkspace.revokeSession.mockResolvedValueOnce(false);
+    mockRouter.replace.mockClear();
     await fireEvent.press(screen.getByRole('button', { name: 'settings.signOut' }));
     await waitFor(() => expect(mockAuth.signOut).toHaveBeenCalled());
     expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');

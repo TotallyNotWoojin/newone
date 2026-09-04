@@ -234,7 +234,15 @@ export default function AdminScreen() {
           {workspace.hasCapability('ai.policy.manage') ? (
             <AiPolicySection
               onSignInAgain={() => {
-                void auth.signOut().then(() => router.replace('/sign-in'));
+                void (async () => {
+                  // Sign-out revokes this session on the server; the local
+                  // sign-out is the fallback when the revoke cannot be sent.
+                  const revoked = auth.sessionId
+                    ? await workspace.revokeSession(auth.sessionId, 'sign_out')
+                    : false;
+                  if (!revoked) await auth.signOut();
+                  router.replace('/sign-in');
+                })();
               }}
               privilegedReady={privilegedReady}
             />

@@ -7,11 +7,16 @@ appId: com.totallynotwoojin.newone
 # (keyboardDismissMode="interactive") before touching the message.
 - runFlow:
     when:
-      visible: ".*(Typing Predictions|Dictate).*"
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
           direction: DOWN
           duration: 400
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
+    timeout: 15000
 - longPressOn:
     text: ".*${TARGET}.*"
 - extendedWaitUntil:

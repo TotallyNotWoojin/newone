@@ -10,6 +10,7 @@ import {
   type OpenRouterEnvironment,
   OpenRouterLanguageProcessor,
   parseOpenRouterPolicy,
+  ROUTE_PROBE_TTL_MS,
 } from '../_shared/openrouter.ts';
 import { type AiWorkerDependencies, createAiWorkerHandler } from '../newone-ai-worker/handler.ts';
 import { assertEquals, assertRejects } from './assert.ts';
@@ -273,8 +274,10 @@ Deno.test('a second AI job inside the five-minute window makes no control-plane 
     const third = await handler(request());
     assertEquals(third.status, 200);
     assertEquals((await third.json()).completed, 1);
-    // Expired: the proofs run again and are cached afresh.
-    assertEquals(fetcher.counts, { management: 8, completions: 6 });
+    // Expired: the management proofs run again and are cached afresh. The
+    // route probe from one millisecond earlier is still within its thirty
+    // seconds, so only the employee completion goes out.
+    assertEquals(fetcher.counts, { management: 8, completions: 5 });
   } finally {
     resetControlPlanePreflightCache();
   }
@@ -320,13 +323,14 @@ Deno.test('a failed control-plane proof is never cached and a clock jump backwar
     await healthyTranslate();
     assertEquals(healthy.counts, { management: 4, completions: 2 });
     await healthyTranslate();
-    assertEquals(healthy.counts, { management: 4, completions: 4 });
+    // Same instant: the route probe is cached too, only the completion went out.
+    assertEquals(healthy.counts, { management: 4, completions: 3 });
 
-    // A clock that moves backwards (skew, restart) invalidates the entry
-    // instead of extending it.
+    // A clock that moves backwards (skew, restart) invalidates both entries
+    // instead of extending them.
     nowMs -= 1;
     await healthyTranslate();
-    assertEquals(healthy.counts, { management: 8, completions: 6 });
+    assertEquals(healthy.counts, { management: 8, completions: 5 });
   } finally {
     resetControlPlanePreflightCache();
   }
@@ -398,9 +402,11 @@ Deno.test('a fresh isolate reuses a persisted control-plane proof and makes no m
   const response = await handler(request());
   assertEquals(response.status, 200);
   assertEquals((await response.json()).completed, 1);
-  // Only the route probe and the real completion touched the provider.
+  // Only the route probe and the real completion touched the provider. The
+  // persisted route probe (exactly thirty seconds old) had expired, so the
+  // probe ran again and its fresh proof was recorded.
   assertEquals(fetcher.counts, { management: 0, completions: 2 });
-  assertEquals(recorded, ['lookup:64']);
+  assertEquals(recorded, ['lookup:64', 'lookup:64', 'record:64']);
 });
 
 Deno.test('an unknown or expired persisted proof re-proves and records the new proof under a hashed key', async () => {
@@ -423,6 +429,30 @@ Deno.test('an unknown or expired persisted proof re-proves and records the new p
   assertEquals(response.status, 200);
   assertEquals((await response.json()).completed, 1);
   assertEquals(fetcher.counts, { management: 4, completions: 2 });
-  assertEquals(recorded.length, 1);
-  assertEquals(/^[0-9a-f]{64}$/.test(recorded[0] ?? ''), true);
+  // The control-plane proof and the route probe each record under a hash.
+  assertEquals(recorded.length, 2);
+  assertEquals(recorded.every((key) => /^[0-9a-f]{64}$/.test(key)), true);
+  assertEquals(new Set(recorded).size, 2);
+});
+
+Deno.test('a second AI job within thirty seconds skips the synthetic route probe; the thirty-first second re-probes', async () => {
+  let nowMs = 1_800_000_000_000;
+  resetControlPlanePreflightCache(() => nowMs);
+  try {
+    const sourceSha256 = await sha256Hex(sourceBody);
+    const fetcher = countingFetcher(sourceSha256);
+    const handler = createAiWorkerHandler(() => dependencies(fetcher.fetch, sourceSha256, [7, 8, 9]));
+    assertEquals((await handler(request())).status, 200);
+    assertEquals(fetcher.counts, { management: 4, completions: 2 });
+    nowMs += ROUTE_PROBE_TTL_MS - 1;
+    assertEquals((await handler(request())).status, 200);
+    // Cached route proof: only the employee completion went out.
+    assertEquals(fetcher.counts, { management: 4, completions: 3 });
+    nowMs += 1;
+    assertEquals((await handler(request())).status, 200);
+    // Expired: the probe precedes the completion again.
+    assertEquals(fetcher.counts, { management: 4, completions: 5 });
+  } finally {
+    resetControlPlanePreflightCache();
+  }
 });

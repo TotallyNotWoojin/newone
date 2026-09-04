@@ -6,6 +6,7 @@ import {
   type OpenRouterEmployeeControlPlane,
   parseOpenRouterEmployeeControlPlane,
   verifyOpenRouterEmployeeControlPlaneCached,
+  registerPreflightResetHook,
 } from './openrouter-control-plane.ts';
 import { ProtectedTokenError, protectTokens, restoreTokens } from './protected-tokens.ts';
 import { asObject, normalizedString, onlyKeys } from './validation.ts';
@@ -573,6 +574,41 @@ async function responseEnvelope(response: Response): Promise<Record<string, unkn
   }
 }
 
+// The synthetic route probe exercises the live completion route before any
+// employee text is sent. It cost ~0.7s per completion, most of the remaining
+// translation latency, so by owner decision (Sep 4 2026) one passing probe
+// now covers the next thirty seconds for the same key, model, and route,
+// in this isolate and, through the proof store, in fresh isolates.
+export const ROUTE_PROBE_TTL_MS = 30_000;
+let routeProbeCache: { key: string; verifiedAt: number } | null = null;
+let routeProbeClock: () => number = Date.now;
+
+/** Drops the cached route probe and installs the clock it reads (tests). */
+export function resetRouteProbeCache(clock: () => number = Date.now): void {
+  routeProbeCache = null;
+  routeProbeClock = clock;
+}
+registerPreflightResetHook(resetRouteProbeCache);
+
+async function routeProbeKey(
+  environment: OpenRouterEnvironment & { dataClassification: 'employee' },
+): Promise<string> {
+  const policy = environment.policy;
+  const controls = environment.employeeControlPlane;
+  const material = [
+    'route-probe',
+    environment.apiKey,
+    controls.apiKeyHash,
+    controls.workspaceId,
+    policy.model,
+    policy.providerTag,
+    policy.providerMetadataName,
+    policy.policyVersion,
+  ].join('\u0000');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 async function verifyEmployeeEgressBeforeContent(
   environment: OpenRouterEnvironment & { dataClassification: 'employee' },
   fetcher: FetchLike,
@@ -582,8 +618,8 @@ async function verifyEmployeeEgressBeforeContent(
   const timeout = setTimeout(() => controller.abort(), environment.policy.timeoutMilliseconds);
   try {
     // Management-API proofs are cached for five minutes (see
-    // openrouter-control-plane.ts); the synthetic route probe below still
-    // runs per completion because it exercises the live completion route.
+    // openrouter-control-plane.ts); the synthetic route probe below is
+    // cached for thirty seconds.
     await verifyOpenRouterEmployeeControlPlaneCached(
       environment.employeeControlPlane,
       environment.policy,
@@ -591,6 +627,30 @@ async function verifyEmployeeEgressBeforeContent(
       controller.signal,
       environment.controlPlaneProofStore,
     );
+
+    const key = await routeProbeKey(environment);
+    const now = routeProbeClock();
+    if (
+      routeProbeCache !== null && routeProbeCache.key === key &&
+      now >= routeProbeCache.verifiedAt && now - routeProbeCache.verifiedAt < ROUTE_PROBE_TTL_MS
+    ) return;
+    routeProbeCache = null;
+    const store = environment.controlPlaneProofStore;
+    if (store) {
+      let verifiedAt: number | null = null;
+      try {
+        verifiedAt = await store.lookup(key);
+      } catch {
+        verifiedAt = null;
+      }
+      if (
+        verifiedAt !== null && Number.isFinite(verifiedAt) && now >= verifiedAt &&
+        now - verifiedAt < ROUTE_PROBE_TTL_MS
+      ) {
+        routeProbeCache = { key, verifiedAt };
+        return;
+      }
+    }
 
     const probe: StructuredCompletionSpec = {
       correlationId,
@@ -636,6 +696,15 @@ async function verifyEmployeeEgressBeforeContent(
       throw new ApiError(503, 'provider_unavailable', undefined, 5);
     }
     if (output.ok !== true) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    const provenAt = routeProbeClock();
+    routeProbeCache = { key, verifiedAt: provenAt };
+    if (store) {
+      try {
+        await store.record(key, provenAt);
+      } catch {
+        // Persistence is an optimisation; the in-memory proof already stands.
+      }
+    }
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(503, 'provider_unavailable', undefined, 5);

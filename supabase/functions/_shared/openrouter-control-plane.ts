@@ -245,10 +245,21 @@ async function persistedProofKey(key: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+const preflightResetHooks: Array<(clock: () => number) => void> = [];
+
+/**
+ * Other proof caches (the route probe in openrouter.ts) register here so one
+ * reset clears every cache and installs the same clock.
+ */
+export function registerPreflightResetHook(hook: (clock: () => number) => void): void {
+  preflightResetHooks.push(hook);
+}
+
 /** Drops the cached proof and installs the clock the cache reads (tests). */
 export function resetControlPlanePreflightCache(clock: () => number = Date.now): void {
   preflightCache = null;
   preflightClock = clock;
+  for (const hook of preflightResetHooks) hook(clock);
 }
 
 function preflightCacheKey(
