@@ -2162,9 +2162,12 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
   const { t } = useI18n();
   const attachment = message.attachment;
   if (!attachment) return null;
+  // Consumer uploads are not scanned (owner request): the card says "Ready"
+  // and "Uploading" instead of the workplace scan wording.
+  const consumer = isPersonalRealm(workspace.organizationId);
   const scanStatus = {
-    clean: { label: t('chat.fileClean'), icon: 'download-outline' as const },
-    scanning: { label: t('chat.fileScanning'), icon: 'hourglass-outline' as const },
+    clean: { label: consumer ? t('chat.fileReady') : t('chat.fileClean'), icon: 'download-outline' as const },
+    scanning: { label: consumer ? t('chat.attachmentUploading') : t('chat.fileScanning'), icon: 'hourglass-outline' as const },
     quarantined: { label: t('chat.fileQuarantined'), icon: 'lock-closed-outline' as const },
     blocked: { label: t('chat.fileBlocked'), icon: 'warning-outline' as const },
   }[attachment.status];
@@ -3678,10 +3681,11 @@ function AttachmentPickerModal({
   imageMode: 'optimized' | 'original';
   onChangeImageMode: (value: 'optimized' | 'original') => void;
 }) {
+  const workspace = useWorkspace();
   const { t } = useI18n();
   return (
     <ActionModal
-      description={t('chat.attachmentDescription')}
+      description={isPersonalRealm(workspace.organizationId) ? undefined : t('chat.attachmentDescription')}
       onClose={onClose}
       title={t('chat.addAttachment')}
       visible={visible}>
@@ -3725,7 +3729,7 @@ function AttachmentPickerModal({
       <PrimaryButton
         disabled={!selected}
         icon="shield-checkmark-outline"
-        label={busy ? t('chat.uploading') : t('chat.sendSecurely')}
+        label={busy ? t('chat.uploading') : isPersonalRealm(workspace.organizationId) ? t('chat.sendAttachment') : t('chat.sendSecurely')}
         loading={busy}
         onPress={onSend}
       />

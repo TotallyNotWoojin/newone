@@ -18,10 +18,10 @@ appId: com.totallynotwoojin.newone
     text: ".*(\\.pdf|\\.txt|\\.png|\\.jpg|\\.md|\\.json).*"
     index: 0
 - extendedWaitUntil:
-    visible: "Send securely"
+    visible: "(Send securely|Send)"
     timeout: 30000
-- tapOn: "Send securely"
+- tapOn: "(Send securely|Send)"
 - extendedWaitUntil:
-    visible: "Scanned and safe"
+    visible: "(Scanned and safe|Ready)"
     timeout: 120000
 - takeScreenshot: ${SHOT}-document-sent

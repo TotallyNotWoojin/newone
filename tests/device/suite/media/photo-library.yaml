@@ -28,18 +28,18 @@ appId: com.totallynotwoojin.newone
     index: 1
     optional: true
 - extendedWaitUntil:
-    visible: "Send securely"
+    visible: "(Send securely|Send)"
     timeout: 30000
 - takeScreenshot: ${SHOT}-staged
-- tapOn: "Send securely"
+- tapOn: "(Send securely|Send)"
 - extendedWaitUntil:
-    notVisible: "Send securely"
+    notVisible: "(Send securely|Send)"
     timeout: 60000
 - extendedWaitUntil:
-    visible: ".*(Scanned and safe|Security scan in progress|Quarantined for scanning|Uploading securely|Preparing secure upload).*"
+    visible: ".*(Scanned and safe|Ready|Security scan in progress|Uploading|Quarantined for scanning|Uploading securely|Preparing secure upload).*"
     timeout: 60000
 - takeScreenshot: ${SHOT}-sending
 - extendedWaitUntil:
-    visible: "Scanned and safe"
+    visible: "(Scanned and safe|Ready)"
     timeout: 120000
 - takeScreenshot: ${SHOT}-clean
