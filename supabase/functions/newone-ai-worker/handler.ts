@@ -627,10 +627,12 @@ async function processJob(
       if (terminal(safe, job.attempts) && (sourceHash || job.topic === 'summary')) {
         await dependencies.terminalFailure(workerId, job, sourceHash, safe.code.slice(0, 120));
       } else {
+        // Keep the worker's own rule label (never provider or message text) next
+        // to the code so operators can see which policy check tripped.
         await dependencies.retryFailure(
           workerId,
           job,
-          safe.code.slice(0, 120),
+          `${safe.code}${/^(summary|provider|translation|detection)_[a-z0-9_]+$/.test(safe.message) ? `:${safe.message}` : ''}`.slice(0, 120),
           retryDelay(job, safe),
         );
       }
