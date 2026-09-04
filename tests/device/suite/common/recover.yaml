@@ -5,6 +5,11 @@ appId: com.totallynotwoojin.newone
 # bubbles behind the keys. Close what is open; do nothing otherwise.
 - runFlow:
     when:
+      visible: ".*Open in .*"
+    commands:
+      - tapOn: "Cancel"
+- runFlow:
+    when:
       visible: "Close dialog"
     commands:
       - tapOn: "Close dialog"

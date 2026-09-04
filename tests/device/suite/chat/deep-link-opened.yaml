@@ -1,5 +1,10 @@
 appId: com.totallynotwoojin.newone
 ---
+# iOS asks "Open in “Newone”?" for a custom-scheme link opened from outside the
+# app (run-2026-09-04T09-40-33); confirm it when it appears.
+- tapOn:
+    text: "Open"
+    optional: true
 # After `simctl openurl newone://conversation/<id>` the conversation with
 # PEER must be open.
 - extendedWaitUntil:
