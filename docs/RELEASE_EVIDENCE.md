@@ -291,3 +291,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Run | `run-2026-09-04T12-44-46` chat (pool 2): PASS 50 · FAIL 18 · UNREACHABLE 5. During this run I was building the simulator app and running deno/jest locally; taps and 20–45 s waits timed out (row tap on the Chats list registered on the merged row node but no navigation within 20 s; sheet taps closed the sheet without reaching the server). Chat is queued for a clean rerun on three simulators with no local work in parallel. |
 | Defect M | chat-26 briefing: summary job 1508 failed 8× with `bad_request`, row stuck `processing`. Sources included attachment messages (photo, voice note) whose body is null; the worker required a non-empty body for every source, threw 400 before any provider call, and the terminal-failure path needed a source hash it never had, so the summary row was never marked failed. |
 | Fix | Worker: bodiless sources are dropped from the prompt (the fingerprint still covers them); `summary_no_text_sources` when nothing is left; summary jobs are failed terminally without a source hash. Tests: worker 14/14 (two new), shared 6/6. Deployed; job 1508 re-queued. |
+
+### Sep 4 2026, 06:40–07:30 — queue-sep4-v2 on the v2 build (pool 2), areas 4–7
+
+| Area | Result | Notes |
+| --- | --- | --- |
+| translation (es) | PASS 20 · FAIL 2 · UNREACHABLE 2 | trans-03/06 are the known optional merged-node selectors. trans-11 waited 45 s for a message below the fold (flow now scrolls first). trans-14 crashed the runner: the Spanish config lacked the mixed-message text (fixed). Server: the "off" message's ES translation completed. |
+| translation-ko | PASS 22 · FAIL 3 · UNREACHABLE 2 | trans-01: Maestro typed into the composer, but the field was empty and the keyboard gone when "Send message" was sought (screenshot 07:05); the send never happened, so trans-02/02b cascaded. Same flow passed in chat and in the Spanish pair. send-text now screenshots right after typing; area queued for the clean rerun. |
+| sessions | PASS 13 · FAIL 0 · UNREACHABLE 1 | Auto-save copy found and scrolled to; the read-receipt chip had no accessibility label ("Read receipt visibility: Nobody"), so the tap could not target it. Labels added to the preview and read-receipt chips; sessions queued for the rerun on the rebuilt app. |
+| Follow-up queue | armed | After "QUEUE FINISHED": tsc, settings Jest, simulator rebuild, then groups (pool 3), profile, chat, translation, translation-ko, sessions with no local work in parallel. |
