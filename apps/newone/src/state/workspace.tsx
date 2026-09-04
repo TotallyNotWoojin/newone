@@ -775,8 +775,17 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       getSession: async () => {
         const currentClient = getSupabaseClient();
         if (!currentClient) return null;
-        const { data } = await currentClient.auth.getSession();
-        return data.session;
+        // The persisted session is re-read from the keychain on every call
+        // and rewritten on every token refresh; a momentary miss must not be
+        // mistaken for a sign-out (that ended access mid-conversation on the
+        // device suite). The storage now commits atomically; this retry is
+        // the second line of defence.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const { data } = await currentClient.auth.getSession();
+          if (data.session || attempt === 2) return data.session;
+          await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+        }
+        return null;
       },
     };
     return {

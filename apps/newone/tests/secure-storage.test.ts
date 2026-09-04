@@ -77,38 +77,95 @@ describe('native secure storage adapter', () => {
     expect(mockDeleteItemAsync).not.toHaveBeenCalled();
   });
 
-  test('removes the prior commit, writes bounded chunks, and commits metadata last', async () => {
-    mockGetItemAsync.mockResolvedValue('2');
+  test('writes the replacement under the next generation and switches the marker last', async () => {
+    mockGetItemAsync.mockResolvedValue('2:4');
     const value = `${'a'.repeat(1_800)}${'b'.repeat(1_800)}tail`;
 
     await secureStorage.setItem('session.token', value);
 
-    expect(mockDeleteItemAsync.mock.calls.map(([key]) => key)).toEqual([
-      'session.token__0',
-      'session.token__1',
-      'session.token__count',
-    ]);
     expect(mockSetItemAsync).toHaveBeenNthCalledWith(
       1,
-      'session.token__0',
+      'session.token__g5__0',
       'a'.repeat(1_800),
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
     expect(mockSetItemAsync).toHaveBeenNthCalledWith(
       2,
-      'session.token__1',
+      'session.token__g5__1',
       'b'.repeat(1_800),
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
     expect(mockSetItemAsync).toHaveBeenNthCalledWith(
       3,
-      'session.token__2',
+      'session.token__g5__2',
       'tail',
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
     expect(mockSetItemAsync).toHaveBeenLastCalledWith(
       'session.token__count',
-      '3',
+      '3:5',
+      { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
+    );
+    // The generation being replaced (4) stays for in-flight readers; the one
+    // before it (3) is swept.
+    const deleted = mockDeleteItemAsync.mock.calls.map(([key]) => key);
+    expect(deleted).toHaveLength(64);
+    expect(deleted[0]).toBe('session.token__g3__0');
+    expect(deleted.some((key) => key.startsWith('session.token__g4__'))).toBe(false);
+    expect(deleted).not.toContain('session.token__count');
+  });
+
+  test('a read that overlaps a rewrite sees the previous or the new session, never nothing', async () => {
+    // A small in-memory keychain with a slow chunk write so the read can land
+    // in the middle of the rewrite, the window that signed a device out.
+    const keychain = new Map<string, string>();
+    let releaseSlowWrite: () => void = () => undefined;
+    const slowWrite = new Promise<void>((resolve) => {
+      releaseSlowWrite = resolve;
+    });
+    mockGetItemAsync.mockImplementation(async (key) => keychain.get(key) ?? null);
+    mockSetItemAsync.mockImplementation(async (key, value) => {
+      if (key === 'session.token__count' && value === '1:2') await slowWrite;
+      keychain.set(key, value);
+    });
+    mockDeleteItemAsync.mockImplementation(async (key) => {
+      keychain.delete(key);
+    });
+
+    await secureStorage.setItem('session.token', 'old-session');
+    const rewrite = secureStorage.setItem('session.token', 'new-session');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The new chunk exists but the marker has not switched: the old value is
+    // still what a reader gets.
+    await expect(secureStorage.getItem('session.token')).resolves.toBe('old-session');
+    releaseSlowWrite();
+    await rewrite;
+    await expect(secureStorage.getItem('session.token')).resolves.toBe('new-session');
+    expect(keychain.has('session.token__g1__0')).toBe(true);
+
+    await secureStorage.setItem('session.token', 'third-session');
+    await expect(secureStorage.getItem('session.token')).resolves.toBe('third-session');
+    expect(keychain.has('session.token__g1__0')).toBe(false);
+  });
+
+  test('reads the original single-generation layout and migrates it on the next write', async () => {
+    mockGetItemAsync.mockImplementation(async (key) => ({
+      'session.token__count': '2',
+      'session.token__0': 'legacy-',
+      'session.token__1': 'value',
+    })[key] ?? null);
+    await expect(secureStorage.getItem('session.token')).resolves.toBe('legacy-value');
+
+    await secureStorage.setItem('session.token', 'fresh');
+    expect(mockSetItemAsync).toHaveBeenNthCalledWith(
+      1,
+      'session.token__g1__0',
+      'fresh',
+      { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
+    );
+    expect(mockSetItemAsync).toHaveBeenLastCalledWith(
+      'session.token__count',
+      '1:1',
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
   });
@@ -118,18 +175,18 @@ describe('native secure storage adapter', () => {
     await secureStorage.setItem('empty.value', '');
 
     expect(mockSetItemAsync).toHaveBeenCalledWith(
-      'empty.value__0',
+      'empty.value__g1__0',
       '',
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
     expect(mockSetItemAsync).toHaveBeenLastCalledWith(
       'empty.value__count',
-      '1',
+      '1:1',
       { keychainAccessible: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY' },
     );
   });
 
-  test('rejects an oversized replacement before removing a previously committed session', async () => {
+  test('rejects an oversized replacement before touching a previously committed session', async () => {
     const oversized = 'x'.repeat((1_800 * 64) + 1);
 
     await expect(secureStorage.setItem('session.token', oversized)).rejects.toThrow(
@@ -140,27 +197,21 @@ describe('native secure storage adapter', () => {
     expect(mockDeleteItemAsync).not.toHaveBeenCalled();
   });
 
-  test('clears the exact committed namespace and sweeps the bound for missing or corrupt metadata', async () => {
-    mockGetItemAsync.mockResolvedValueOnce('3');
+  test('removal drops the marker first, then sweeps the live, neighbouring, and original generations', async () => {
+    mockGetItemAsync.mockResolvedValueOnce('3:4');
     await secureStorage.removeItem('session.token');
-    expect(mockDeleteItemAsync.mock.calls.map(([key]) => key)).toEqual([
-      'session.token__0',
-      'session.token__1',
-      'session.token__2',
-      'session.token__count',
-    ]);
-
-    mockDeleteItemAsync.mockClear();
-    mockGetItemAsync.mockResolvedValueOnce('65');
-    await secureStorage.removeItem('session.token');
-    expect(mockDeleteItemAsync).toHaveBeenCalledTimes(65);
-    expect(mockDeleteItemAsync).toHaveBeenCalledWith('session.token__63');
-    expect(mockDeleteItemAsync).toHaveBeenLastCalledWith('session.token__count');
+    const deleted = mockDeleteItemAsync.mock.calls.map(([key]) => key);
+    expect(deleted[0]).toBe('session.token__count');
+    for (const generation of ['__0', '__g3__0', '__g4__0', '__g5__0']) {
+      expect(deleted).toContain(`session.token${generation}`);
+    }
+    expect(deleted).toHaveLength(1 + 64 * 4);
 
     mockDeleteItemAsync.mockClear();
     mockGetItemAsync.mockResolvedValueOnce(null);
     await secureStorage.removeItem('session.token');
-    expect(mockDeleteItemAsync).toHaveBeenCalledTimes(65);
+    expect(mockDeleteItemAsync).toHaveBeenCalledTimes(1 + 64);
+    expect(mockDeleteItemAsync).toHaveBeenCalledWith('session.token__63');
   });
 });
 
