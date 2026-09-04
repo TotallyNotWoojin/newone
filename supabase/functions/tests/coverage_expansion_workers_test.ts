@@ -656,7 +656,9 @@ Deno.test('AI worker rejects malformed claim envelopes and exhausts a bounded wo
     })
   )(aiRequest({ limit: 1 }));
   assertEquals(bounded.status, 200);
-  assertEquals(calls, ['language_detection']);
+  // Round one stops at the limit after the first workload; the drain round
+  // then finds nothing new in any workload and ends the pass.
+  assertEquals(calls, ['language_detection', 'language_detection', 'translation', 'summary']);
 });
 
 Deno.test('AI worker skips denied translation and summary and survives failed failure recording', async () => {

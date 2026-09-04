@@ -608,6 +608,12 @@ function fallbackMeta(request: Request): RequestMeta {
   return { requestId: requestId(request), origin: null, corsHeaders: new Headers() };
 }
 
+// Drain budget per invocation: well inside the wake/cron HTTP timeout so the
+// caller never drops a working pass, and bounded rounds so a pathological
+// queue cannot pin a single isolate.
+const AI_WORKER_DRAIN_BUDGET_MS = 6_000;
+const AI_WORKER_MAX_ROUNDS = 8;
+
 export function createAiWorkerHandler(
   dependencyFactory: () => AiWorkerDependencies = defaultAiWorkerDependencies,
 ): (request: Request) => Promise<Response> {
@@ -629,25 +635,43 @@ export function createAiWorkerHandler(
       onlyKeys(body, ['limit']);
       const limit = body.limit === undefined ? 3 : integer(body.limit, 1, 10);
       const workerId = crypto.randomUUID();
-      const jobs: AiJob[] = [];
-      for (const workload of dependencies.workloads) {
-        const remaining = limit - jobs.length;
-        if (remaining <= 0) break;
-        jobs.push(
-          ...parseClaim(
-            await dependencies.claim(workerId, workload, remaining),
-            workload,
-            remaining,
-          ),
-        );
-      }
       const processor = dependencies.processorFactory(dependencies.openRouterEnvironment);
       const results: Array<'completed' | 'skipped' | 'failed'> = [];
-      for (const job of jobs) {
-        results.push(await processJob(dependencies, processor, workerId, meta.requestId, job));
+      // Completing a detection enqueues the translation for the same message.
+      // Claiming a single batch and returning left that follow-up job waiting
+      // for the next wake or the 10-second cron (measured: ~4s detection then
+      // ~7s translation). Keep claiming until the AI queue is empty or the
+      // time budget is spent, so a message is translated in one pass.
+      const startedAt = Date.now();
+      // A claim leases a job, so the database never hands the same id back
+      // within this pass; treat a repeat as "nothing new" and stop rather than
+      // process it twice.
+      const seen = new Set<string>();
+      let claimed = 0;
+      let rounds = 0;
+      while (rounds < AI_WORKER_MAX_ROUNDS && Date.now() - startedAt < AI_WORKER_DRAIN_BUDGET_MS) {
+        const jobs: AiJob[] = [];
+        for (const workload of dependencies.workloads) {
+          const remaining = limit - jobs.length;
+          if (remaining <= 0) break;
+          jobs.push(
+            ...parseClaim(
+              await dependencies.claim(workerId, workload, remaining),
+              workload,
+              remaining,
+            ).filter((job) => !seen.has(job.id)),
+          );
+        }
+        rounds += 1;
+        if (jobs.length === 0) break;
+        for (const job of jobs) seen.add(job.id);
+        claimed += jobs.length;
+        for (const job of jobs) {
+          results.push(await processJob(dependencies, processor, workerId, meta.requestId, job));
+        }
       }
       return jsonResponse(meta, 200, {
-        claimed: jobs.length,
+        claimed,
         completed: results.filter((result) => result === 'completed').length,
         skipped: results.filter((result) => result === 'skipped').length,
         failed: results.filter((result) => result === 'failed').length,

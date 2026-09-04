@@ -8,6 +8,11 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*${QUERY}.*"
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: ".*Open .*"
+    direction: DOWN
+    timeout: 30000
 - takeScreenshot: ${SHOT}-filtered
 - tapOn: ".*Open .*"
 - extendedWaitUntil:

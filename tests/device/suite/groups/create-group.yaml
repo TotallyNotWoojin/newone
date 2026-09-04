@@ -19,6 +19,16 @@ appId: com.totallynotwoojin.newone
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
+# Typing the name leaves the keyboard up and the member rows underneath it; tap
+# the MEMBERS eyebrow inside the scroll view to dismiss it before choosing.
+- tapOn: "MEMBERS"
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - takeScreenshot: ${SHOT}-details
 - scrollUntilVisible:
     element:

@@ -29,6 +29,13 @@ appId: com.totallynotwoojin.newone
 - tapOn: "Search company directory"
 - inputText: ${STRANGER}
 - tapOn: "MEMBERS"
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - extendedWaitUntil:
     visible: ".*(No authorized candidates match this search|Add ${STRANGER}).*"
     timeout: 30000

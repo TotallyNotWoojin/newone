@@ -12,14 +12,22 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-favorited
 - tapOn: "Close dialog"
 - tapOn: "Back to chats"
-- extendedWaitUntil:
-    visible: "Favorites"
+# The filter chips scroll horizontally; "Favorites" sits past "Official".
+- scrollUntilVisible:
+    element:
+      text: "Favorites"
+    direction: RIGHT
     timeout: 15000
 - tapOn: "Favorites"
 - extendedWaitUntil:
     visible: ".*${PEER}.*"
     timeout: 15000
 - takeScreenshot: ${SHOT}-favorites-filter
+- scrollUntilVisible:
+    element:
+      text: "All"
+    direction: LEFT
+    timeout: 15000
 - tapOn: "All"
 - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:

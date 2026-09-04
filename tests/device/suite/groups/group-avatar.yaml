@@ -16,9 +16,11 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*(Photos|Recents|Albums|Photo, ).*"
     timeout: 30000
+# The first sample photo in the simulator library is HEIC, which the simulator
+# cannot decode (expo-image-manipulator fails closed); the next ones are JPEG.
 - tapOn:
     text: "Photo, .*"
-    index: 0
+    index: 1
     optional: true
 - extendedWaitUntil:
     visible: "Upload and use photo"

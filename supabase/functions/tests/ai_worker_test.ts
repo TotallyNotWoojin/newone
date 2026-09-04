@@ -106,6 +106,23 @@ function fakeProcessor(overrides: Partial<OpenRouterLanguageProcessor> = {}) {
   } as unknown as OpenRouterLanguageProcessor;
 }
 
+function onceClaim(topics: AiWorkerDependencies['workloads'] = ['language_detection', 'translation', 'summary']) {
+  const pending = new Set(topics);
+  return async (_workerId: string, workload: AiWorkerDependencies['workloads'][number]) => {
+    if (!pending.has(workload)) return { jobs: [] };
+    pending.delete(workload);
+    return {
+      jobs: [{
+        id: workload === 'language_detection' ? 1 : workload === 'translation' ? 2 : 3,
+        organization_id: organizationId,
+        topic: workload,
+        payload: {},
+        attempts: 1,
+      }],
+    };
+  };
+}
+
 function dependencies(
   overrides: Partial<AiWorkerDependencies> = {},
 ): AiWorkerDependencies {
@@ -119,15 +136,9 @@ function dependencies(
     openRouterEnvironment,
     workerToken,
     workloads: ['language_detection', 'translation', 'summary'],
-    claim: async (_workerId, workload) => ({
-      jobs: [{
-        id: workload === 'language_detection' ? 1 : workload === 'translation' ? 2 : 3,
-        organization_id: organizationId,
-        topic: workload,
-        payload: {},
-        attempts: 1,
-      }],
-    }),
+    // Like the database, a claim hands a job out once; the worker now keeps
+    // claiming until the queue is empty, so the mock must run dry.
+    claim: onceClaim(),
     resolveDetection: async () => ({
       authorized: true,
       source: {
@@ -295,6 +306,43 @@ Deno.test('AI worker accepts opaque service key only in apikey and rejects a fak
   const response = await handler(request({ Authorization: `Bearer ${secretKey}` }));
   assertEquals(response.status, 401);
   assertEquals(claimed, false);
+});
+
+Deno.test('a detection completion enqueues the translation and the same pass drains it', async () => {
+  const events: string[] = [];
+  let translationReady = false;
+  const handler = createAiWorkerHandler(() =>
+    dependencies({
+      workloads: ['language_detection', 'translation'],
+      claim: async (_workerId, workload) => {
+        if (workload === 'language_detection' && !events.length) {
+          return { jobs: [{ id: 1, organization_id: organizationId, topic: workload, payload: {}, attempts: 1 }] };
+        }
+        if (workload === 'translation' && translationReady) {
+          translationReady = false;
+          return { jobs: [{ id: 2, organization_id: organizationId, topic: workload, payload: {}, attempts: 1 }] };
+        }
+        return { jobs: [] };
+      },
+      completeDetection: async (_workerId, job) => {
+        events.push(job.topic);
+        translationReady = true;
+      },
+      completeTranslation: async (_workerId, job) => {
+        events.push(job.topic);
+      },
+    })
+  );
+  const response = await handler(request());
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), {
+    claimed: 2,
+    completed: 2,
+    skipped: 0,
+    failed: 0,
+    workloads: ['language_detection', 'translation'],
+  });
+  assertEquals(events, ['language_detection', 'translation']);
 });
 
 Deno.test('summary persistence keeps source evidence and remains within database limits', () => {

@@ -438,12 +438,13 @@ select is(
   'enqueueing an AI job without Vault secrets posts nothing and does not error'
 );
 
--- 25: the debounce is per topic.
+-- 25: since 20260904040000 nothing is debounced: every AI job wakes the worker
+-- (the worker drains its queue in one pass and claims are atomic).
 select ok(
   not private.ai_worker_wake_debounced('language_detection', (select job_id from detection_job))
   and not private.ai_worker_wake_debounced('translation', (select job_id from detection_job) + 1)
-  and private.ai_worker_wake_debounced('language_detection', (select job_id from detection_job) + 1),
-  'a second job of the same AI topic within two seconds is debounced while another topic is not'
+  and not private.ai_worker_wake_debounced('language_detection', (select job_id from detection_job) + 1),
+  'no AI job is debounced: a second job of the same topic within two seconds still wakes the worker'
 );
 
 -- 26-28: with the named Vault secrets present, the first translation job
@@ -514,8 +515,8 @@ select private.enqueue_outbox_job_internal(
 select is(
   (select count(*) from net.http_request_queue)
     - (select requests from net_baseline),
-  1::bigint,
-  'a second translation job inside the debounce window does not post another wake'
+  2::bigint,
+  'a second translation job a moment later posts its own wake (no debounce)'
 );
 
 -- 29-30: jobs that are not claimable now never wake the worker.
@@ -535,7 +536,7 @@ insert into private.outbox_jobs (
 select is(
   (select count(*) from net.http_request_queue)
     - (select requests from net_baseline),
-  1::bigint,
+  2::bigint,
   'completed or deferred AI jobs do not post a wake'
 );
 

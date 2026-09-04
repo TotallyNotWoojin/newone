@@ -185,6 +185,9 @@ function dependencies(
   jobIds: number[],
 ): AiWorkerDependencies {
   let claimed = 0;
+  // The worker drains its queue within one request, so hand out at most one
+  // job per worker id: the test measures preflight calls across requests.
+  let lastWorker: string | null = null;
   return {
     runtimeConfig,
     clientEnvironment: {
@@ -195,8 +198,10 @@ function dependencies(
     openRouterEnvironment: employeeEnvironment,
     workerToken,
     workloads: ['translation'],
-    claim: async () => {
+    claim: async (workerId) => {
       // Each worker request claims the next job id; nothing beyond the list.
+      if (workerId === lastWorker) return { jobs: [] };
+      lastWorker = workerId;
       const id = jobIds[claimed];
       claimed += 1;
       return {
