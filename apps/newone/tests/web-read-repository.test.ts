@@ -642,6 +642,10 @@ function alternateBootstrapPayload() {
   }];
   const createdSystemMessage = systemMessage('207') as any;
   createdSystemMessage.systemEvent = { eventType: 'conversation.created', targetUserId: null };
+  // Defect P: the service strips null fields, so a target-less event arrives
+  // without the targetUserId key; it must parse as null, not sink the bootstrap.
+  const avatarSystemMessage = systemMessage('208') as any;
+  avatarSystemMessage.systemEvent = { eventType: 'conversation.avatar.changed' };
   payload.timeline = {
     messages: [
       pendingMessage,
@@ -651,6 +655,7 @@ function alternateBootstrapPayload() {
       failedTranslationMessage,
       blockedTranslationMessage,
       createdSystemMessage,
+      avatarSystemMessage,
     ],
     nextBeforeMessageId: 201,
   };
@@ -916,9 +921,11 @@ describe('authoritative web read repository', () => {
     expect(workspace.conversations[1]).toMatchObject({
       kind: 'group', archived: true, title: 'Company conversation',
     });
-    expect(workspace.messages['conversation-managed']).toHaveLength(7);
+    expect(workspace.messages['conversation-managed']).toHaveLength(8);
     expect(workspace.messages['conversation-managed']!.map((message) => message.translationState))
-      .toEqual(['queued', 'translating', 'needs_review', 'human_reviewed', 'failed', 'blocked', 'not_requested']);
+      .toEqual(['queued', 'translating', 'needs_review', 'human_reviewed', 'failed', 'blocked', 'not_requested', 'not_requested']);
+    expect(workspace.messages['conversation-managed']![7].systemEvent)
+      .toEqual({ eventType: 'conversation.avatar.changed', targetUserId: null });
     expect(workspace.messages['conversation-managed']![5]).toMatchObject({
       attachment: { kind: 'voice', status: 'blocked', sizeLabel: '2.0 MB' },
     });

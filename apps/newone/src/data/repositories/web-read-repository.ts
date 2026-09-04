@@ -601,6 +601,12 @@ function messageFromDto(
   const targetRequired = targetRequiredSystemEvents.includes(
     systemEventType as typeof targetRequiredSystemEvents[number],
   );
+  // Events without a target (avatar changed/removed, posting policy, created)
+  // may arrive without the targetUserId key at all (defect P, Sep 4 2026: the
+  // avatar-changed event sank the whole bootstrap and the app never loaded).
+  if (row.kind === 'system' && !('targetUserId' in systemEventRow)) {
+    (systemEventRow as Record<string, unknown>).targetUserId = null;
+  }
   if (row.kind === 'system' && (
     !hasExactKeys(systemEventRow, ['eventType', 'targetUserId']) ||
     !allowedSystemEvents.includes(systemEventType as typeof allowedSystemEvents[number]) ||
