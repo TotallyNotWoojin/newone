@@ -2,6 +2,13 @@ appId: com.totallynotwoojin.newone
 ---
 # The requester's People tab must show the new friend (no relaunch first —
 # the app should learn of the acceptance on its own).
+# The device may still be inside a conversation from the previous step
+# (people-12c, run-2026-09-04T07-43-xx): leave it before using the tabs.
+- runFlow:
+    when:
+      visible: "(Back to chats|Volver a chats)"
+    commands:
+      - tapOn: "(Back to chats|Volver a chats)"
 - tapOn: "Chats"
 - tapOn: "People"
 - extendedWaitUntil:
