@@ -22,6 +22,11 @@ appId: com.totallynotwoojin.newone
     text: "Photo, .*"
     index: 1
     optional: true
+# The picker opens with editing enabled: iOS shows a preview with Choose
+# before returning the image (groups-20, run-2026-09-04T06-44-28).
+- tapOn:
+    text: "Choose"
+    optional: true
 - extendedWaitUntil:
     visible: "Upload and use photo"
     timeout: 30000
