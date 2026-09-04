@@ -45,7 +45,7 @@ const DATABASE_VOCABULARY: Record<string, string[]> = {
   reaction: ['reaction_added', 'reaction_removed'],
   pin: ['message_pinned', 'message_unpinned'],
   message_visibility: ['message_hidden_for_user'],
-  message: ['message_deleted', 'message_edited'],
+  message: ['message_deleted', 'message_edited', 'language_detected'],
   attachment: [
     'attachment_uploaded',
     'attachment_scan_clean',

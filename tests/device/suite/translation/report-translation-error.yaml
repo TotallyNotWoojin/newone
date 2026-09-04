@@ -9,6 +9,15 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 2000
+# Maestro measures visibility against the screen, but the composer and the
+# "Translation available" bar overlay the bottom of the list; nudge the list up
+# so the button clears them (run-2026-09-04T22-30-16 tapped the bar instead).
+- swipe:
+    start: "50%, 70%"
+    end: "50%, 40%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     text: "Report translation error"
     index: 0
