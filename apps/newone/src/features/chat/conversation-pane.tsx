@@ -1791,7 +1791,7 @@ function MessageBubble({
                 </View>
               ) : null}
             </View>
-          ) : (
+          ) : message.isOwn && (visibleTranslationState === 'not_requested' || visibleTranslationState === 'queued' || visibleTranslationState === 'translating') ? null : (
             <View style={[styles.translationStateCard, message.isOwn && styles.translationStateCardOwn]}>
               <View style={styles.translationTitleRow}>
                 <Ionicons
@@ -2173,11 +2173,27 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
   const progressPercent = Math.round(progress * 100);
   const isTransferring = transfer?.state === 'preparing' || transfer?.state === 'uploading';
   const canDownload = attachment.status === 'clean' && (!transfer || transfer.state === 'uploaded');
+  // A scanned image shows inline (owner report: "images upload but there's
+  // no preview"); the preview is a short-lived signed URL fetched once per
+  // attachment and cached in the workspace.
+  const previewUrl = attachment.kind === 'image' && canDownload
+    ? workspace.attachmentPreviewUrls?.[attachment.id]
+    : undefined;
+  const loadPreview = workspace.loadAttachmentPreview;
+  const wantsPreview = attachment.kind === 'image' && canDownload && !previewUrl && Boolean(loadPreview);
+  useEffect(() => {
+    if (wantsPreview) void loadPreview?.(message);
+  }, [loadPreview, message, wantsPreview]);
   const clientMessageId = message.clientMessageId ?? '';
   const retryBusy = workspace.actionBusy === `attachment-retry:${clientMessageId}`;
   const cancelBusy = workspace.actionBusy === `attachment-cancel:${clientMessageId}`;
   return (
     <View style={[styles.attachment, message.isOwn && styles.attachmentOwn]}>
+      {previewUrl ? (
+        <Pressable accessibilityLabel={t('chat.imagePreview')} accessibilityRole="imagebutton" onPress={onDownload}>
+          <Image resizeMode="cover" source={{ uri: previewUrl }} style={styles.attachmentImagePreview} />
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityHint={canDownload ? t('chat.fileDownloadHint') : transferStatus.label}
         accessibilityLabel={`${attachment.name}, ${transferStatus.label}`}
@@ -4383,6 +4399,13 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
     fontSize: 10,
     fontWeight: '800',
+  },
+  attachmentImagePreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 14,
+    marginBottom: 8,
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
   attachment: {
     minWidth: 230,

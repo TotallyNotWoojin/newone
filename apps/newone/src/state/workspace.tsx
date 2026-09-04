@@ -352,6 +352,8 @@ interface WorkspaceState {
     note?: string,
   ) => Promise<boolean>;
   downloadAttachment: (message: Message) => Promise<boolean>;
+  attachmentPreviewUrls: Record<string, string>;
+  loadAttachmentPreview: (message: Message) => Promise<void>;
   updateConversation: (
     conversationId: string,
     patch: { name?: string | null; description?: string | null; isArchived?: boolean },
@@ -3561,6 +3563,30 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return true;
   }, [executeImmediate, repositories.commands, snapshot]);
 
+  const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({});
+  const previewRequestsRef = useRef<Set<string>>(new Set());
+  const loadAttachmentPreview = useCallback(
+    async (message: Message) => {
+      const attachment = message.attachment;
+      if (!snapshot || !attachment || attachment.status !== 'clean' || attachment.kind !== 'image') return;
+      if (previewRequestsRef.current.has(attachment.id)) return;
+      previewRequestsRef.current.add(attachment.id);
+      try {
+        const grant = await repositories.commands.createAttachmentDownloadGrant({
+          organizationId: snapshot.organizationId,
+          conversationId: message.conversationId,
+          attachmentId: attachment.id,
+          idempotencyKey: createClientId(),
+        });
+        setAttachmentPreviewUrls((current) => ({ ...current, [attachment.id]: grant.signedUrl }));
+      } catch {
+        // A preview is a convenience; the file stays reachable through the card.
+        previewRequestsRef.current.delete(attachment.id);
+      }
+    },
+    [repositories.commands, snapshot],
+  );
+
   const downloadAttachment = useCallback(
     async (message: Message) => {
       if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return false;
@@ -5513,6 +5539,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       confirmAction,
       transitionAction,
       downloadAttachment,
+      attachmentPreviewUrls,
+      loadAttachmentPreview,
       updateConversation,
       updateConversationPreferences,
       updateConversationControls,
@@ -5592,6 +5620,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       placeMessagePreservationHold,
       releaseMessagePreservationHold,
       downloadAttachment,
+      attachmentPreviewUrls,
+      loadAttachmentPreview,
       editMessage,
       editOutboxMessage,
       ensureMessageLoaded,
