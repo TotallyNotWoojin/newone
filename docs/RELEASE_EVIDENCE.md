@@ -344,3 +344,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Where | `newone-auth` `deliverOtp` → `_shared/mail.ts` → Resend `POST /emails`; any non-2xx becomes 503 without the provider's status, and the analytics log endpoint answers "Backend error" right now, so the provider's reason is not visible from here. Supabase auth OTP/verify limits were raised (10 → 120) at 10:00 as a precaution; not the cause. |
 | Effect | Every device area signs up fresh accounts, so the second queue's translation-ko and sessions and the third queue cannot run until delivery works. Third-queue waiter paused. |
 | Next | Resend dashboard (owner): daily quota or key state. Mail helper now logs the provider status and error body for the next failure. |
+
+### Sep 4 2026, 10:05–10:20 — delivery outage handling, Android build
+
+| Item | Evidence |
+| --- | --- |
+| Resend | Owner: dashboard healthy, a few delayed deliveries and bounces ("recipient's inbox is full"). Our side still gets 503 on every code send (probes 10:01–10:14). Auth function log at 17:03:46Z: `signup_mail_failed` → `code_delivery_failed` with no provider detail (old helper). Mail helper now: 30 s timeout, one retry on timeout/429/5xx, provider status and error name logged (`newone_mail_provider_rejected`, `newone_mail_send_error`); deployed 10:13. A background poll reads the first logged provider status; a watcher probes signups every 5 min and arms the final rerun queue when delivery recovers. |
+| Second queue | translation-ko and sessions failed at signup (code delivery); QUEUE FINISHED 10:18:47. Final queue (groups, media, profile, chat, translation, translation-ko, sessions on a rebuilt app with the group-photo and voice fixes) armed behind delivery recovery. |
+| Android | run-queue's `pkill -9 -f "maestro|java"` killed the first local Gradle build (exit 137, 10:10). Rebuild started 10:19:15 with version code 11, release signing on the EAS upload keystore; `scratchpad/builds/play-upload.mjs` uploads to the internal track through the Play API. |
