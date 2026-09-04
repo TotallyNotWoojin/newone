@@ -25,6 +25,9 @@ appId: com.totallynotwoojin.newone
 # search field then lands on the keys and the stranger's name is appended to
 # the group name. Dismiss it first (see groups/create-group.yaml).
 - tapOn: "GROUP SETUP"
+# iOS 26.5 keyboards without the prediction bar defeat the text guard
+# (neg-06, run-2026-09-04T14-27-52); ask iOS to hide it first.
+- hideKeyboard
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -35,10 +38,10 @@ appId: com.totallynotwoojin.newone
           duration: 600
 - scrollUntilVisible:
     element:
-      text: "Search company directory"
+      text: "(Search company directory|Search your friends)"
     direction: DOWN
     timeout: 30000
-- tapOn: "Search company directory"
+- tapOn: "(Search company directory|Search your friends)"
 - inputText: ${STRANGER}
 - tapOn: "MEMBERS"
 - runFlow:

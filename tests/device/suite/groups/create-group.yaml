@@ -23,6 +23,9 @@ appId: com.totallynotwoojin.newone
 # the GROUP SETUP eyebrow (top of the scroll view, always on screen next to the
 # name field) to dismiss it before choosing members.
 - tapOn: "GROUP SETUP"
+# iOS 26.5 keyboards without the prediction bar defeat the text guard
+# (neg-06, run-2026-09-04T14-27-52); ask iOS to hide it first.
+- hideKeyboard
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"

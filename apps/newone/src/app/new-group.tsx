@@ -209,7 +209,7 @@ export default function NewGroupScreen() {
         />
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={styles.headerTitle}>{t('group.title')}</Text>
-          <Text numberOfLines={wide ? 2 : 1} style={styles.headerSubtitle}>{t('group.subtitle')}</Text>
+          <Text numberOfLines={wide ? 2 : 1} style={styles.headerSubtitle}>{t(personalRealm ? 'group.subtitleConsumer' : 'group.subtitle')}</Text>
         </View>
         <PrimaryButton
           disabled={
@@ -255,7 +255,7 @@ export default function NewGroupScreen() {
               <View style={styles.avatarField}>
                 <View style={styles.avatarCopy}>
                   <Text style={styles.label}>{t('group.avatarTitle')}</Text>
-                  <Text style={styles.helperText}>{t('group.avatarDescription')}</Text>
+                  <Text style={styles.helperText}>{t(personalRealm ? 'group.avatarDescriptionConsumer' : 'group.avatarDescription')}</Text>
                   <Text style={styles.avatarRequirements}>{t('group.avatarRequirements')}</Text>
                 </View>
                 {avatar ? (
@@ -467,7 +467,7 @@ export default function NewGroupScreen() {
               <StatusBadge icon="shield-checkmark" label={joinPolicyLabel} tone="success" />
             </View>
             <Text style={styles.candidatePrivacy}>{t('group.candidatePrivacy')}</Text>
-            <SearchField onChangeText={setSearch} placeholder={t('group.search')} value={search} />
+            <SearchField onChangeText={setSearch} placeholder={t(personalRealm ? 'group.searchConsumer' : 'group.search')} value={search} />
 
             {selectedGuests.length ? (
               <View style={styles.guestDisclosure}>

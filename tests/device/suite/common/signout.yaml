@@ -1,20 +1,25 @@
 appId: com.totallynotwoojin.newone
 ---
-# Sign out from Settings like a human.
+# Sign out from Settings like a human. A device already at the sign-in screen
+# (setup-neg-x-signout-2, run-2026-09-04T14-27-52) just passes through.
 - launchApp
 - extendedWaitUntil:
-    visible: "Chats"
+    visible: "(Chats|Create account)"
     timeout: 30000
-- tapOn: "Settings"
-- extendedWaitUntil:
-    visible: "Close settings"
-    timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Sign out of Newone"
-    direction: DOWN
-    timeout: 45000
-- tapOn: "Sign out of Newone"
+- runFlow:
+    when:
+      visible: "Chats"
+    commands:
+      - tapOn: "Settings"
+      - extendedWaitUntil:
+          visible: "Close settings"
+          timeout: 15000
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of Newone"
+          direction: DOWN
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
 - extendedWaitUntil:
     visible: "Create account"
     timeout: 20000
