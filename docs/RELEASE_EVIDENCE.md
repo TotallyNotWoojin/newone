@@ -335,3 +335,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Open: chat-12 delete-for-me | Has failed in every run today: the tap lands on the "Delete for me" button, the sheet closes, no `/v2/messages/:id/hide` row reaches the idempotency ledger, `message_user_visibility` stays empty. A minted admin session cannot reach BFF routes (403 on every route), so the server side is unproven; next chat rerun carries the evidence screenshots. |
 | Open: chat-16 typing | Passed at 06:02 and 08:10, failed since 08:47; typing is a private broadcast channel between the two apps, timing-sensitive. Tracked, not blocking. |
 | Flows | chat-24 expected a Favorites chip that the consumer filter row does not have (server had `is_favorite = true`); chat-33 typed the description into the name field (keyboard over the field); chat-27 recovered message sat below the unread divider; chat-21 launch wait; media-02 "Ready" card tap. All adjusted. Chat added to the final rerun. |
+
+### Sep 4 2026, 09:59–10:05 — signup codes stop being delivered (blocks every remaining device area)
+
+| Item | Evidence |
+| --- | --- |
+| Symptom | translation rerun setup: "Newone could not complete that action. (code_delivery_failed · 75045333)". Hosted `signupUser` also gets 503 `code_delivery_failed` on three attempts (10:01–10:03). Only 4 accounts were created in the last hour; 198 in the last 24 h. |
+| Where | `newone-auth` `deliverOtp` → `_shared/mail.ts` → Resend `POST /emails`; any non-2xx becomes 503 without the provider's status, and the analytics log endpoint answers "Backend error" right now, so the provider's reason is not visible from here. Supabase auth OTP/verify limits were raised (10 → 120) at 10:00 as a precaution; not the cause. |
+| Effect | Every device area signs up fresh accounts, so the second queue's translation-ko and sessions and the third queue cannot run until delivery works. Third-queue waiter paused. |
+| Next | Resend dashboard (owner): daily quota or key state. Mail helper now logs the provider status and error body for the next failure. |
