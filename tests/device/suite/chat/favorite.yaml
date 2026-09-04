@@ -12,6 +12,16 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-favorited
 - tapOn: "Close dialog"
 - tapOn: "Back to chats"
+# The tap right after the sheet closes can be swallowed by the dismiss
+# animation (run 2026-09-04T04-57-19); tap again if the composer is still up.
+- runFlow:
+    when:
+      visible: ".*Write a message….*"
+    commands:
+      - tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Start a conversation"
+    timeout: 20000
 # The filter chips scroll horizontally; "Favorites" sits past "Official".
 - scrollUntilVisible:
     element:
