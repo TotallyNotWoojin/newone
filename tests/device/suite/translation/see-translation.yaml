@@ -11,14 +11,14 @@ appId: com.totallynotwoojin.newone
           start: "50%, 30%"
           end: "50%, 88%"
           duration: 600
-- extendedWaitUntil:
-    visible: ".*${TEXT}.*"
-    timeout: 45000
+# Scroll first: after Settings the thread can sit at its top (trans-11,
+# run-2026-09-04T13-40-24 waited 45 s for a message that was below the fold).
+# Scrolling down also ends at the bottom, where a message still in flight lands.
 - scrollUntilVisible:
     element:
       text: ".*${TEXT}.*"
     direction: DOWN
-    timeout: 20000
+    timeout: 45000
 - takeScreenshot: ${SHOT}-original-arrived
 - extendedWaitUntil:
     visible: ".*TRANSLATION · ${LANG}.*"
