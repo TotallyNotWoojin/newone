@@ -1605,7 +1605,7 @@ function MessageBubble({
             <View style={styles.translationQueued}>
               <Ionicons name="alert-circle-outline" size={12} color={message.isOwn ? '#FFD4C7' : colors.red} />
               <Text style={[styles.queuedText, message.isOwn && styles.queuedTextOwn]}>
-                {t('chat.failed')}
+                {message.failureReason ? `${t('chat.failed')} · ${message.failureReason}` : t('chat.failed')}
               </Text>
             </View>
           ) : null}

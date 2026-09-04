@@ -2513,4 +2513,30 @@ describe('personal realm group member management', () => {
     expect(screen.queryByLabelText(/^chat\.removeMember /)).toBeNull();
     expect(screen.queryByText('chat.addMember')).toBeNull();
   });
+  test('shows why an own text message was not sent, next to the Not sent label', async () => {
+    const unsent = incomingMessage({
+      id: 'message-unsent',
+      serverId: null,
+      senderId: self.id,
+      senderName: self.displayName,
+      isOwn: true,
+      originalText: 'Unsent controlled text',
+      sourceLanguage: 'en',
+      translationState: 'queued',
+      translation: undefined,
+      languageDetection: undefined,
+      attachment: undefined,
+      deliveryState: 'failed',
+      failureReason: 'This request already holds its 3 messages.',
+      priority: 'normal',
+      mentionUserIds: [],
+    });
+    await render(<ConversationPane
+      conversation={conversation({ lastReadMessageId: null })}
+      messages={[unsent]}
+      onSend={noopSend}
+    />);
+    expect(screen.getByText('Unsent controlled text')).toBeTruthy();
+    expect(screen.getByText('chat.failed · This request already holds its 3 messages.')).toBeTruthy();
+  });
 });

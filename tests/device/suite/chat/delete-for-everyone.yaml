@@ -1,6 +1,16 @@
 appId: com.totallynotwoojin.newone
 ---
 # Long-press own TARGET → Delete for everyone; it disappears here.
+# The composer keeps the keyboard up after a send; a long-press on a bubble that
+# sits behind the keyboard lands on the keys instead. Drag the list to dismiss it
+# (keyboardDismissMode="interactive") before touching the message.
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - longPressOn:
     text: ".*${TARGET}.*"
 - extendedWaitUntil:

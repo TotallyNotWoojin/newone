@@ -2,6 +2,16 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press TARGET → Reply → type REPLY → send. The sent bubble carries a
 # quoted preview of TARGET.
+# The composer keeps the keyboard up after a send; a long-press on a bubble that
+# sits behind the keyboard lands on the keys instead. Drag the list to dismiss it
+# (keyboardDismissMode="interactive") before touching the message.
+- runFlow:
+    when:
+      visible: ".*(Typing Predictions|Dictate).*"
+    commands:
+      - swipe:
+          direction: DOWN
+          duration: 400
 - longPressOn:
     text: ".*${TARGET}.*"
 - extendedWaitUntil:
@@ -9,7 +19,7 @@ appId: com.totallynotwoojin.newone
     timeout: 10000
 - tapOn: "Reply"
 - extendedWaitUntil:
-    visible: "Replying to"
+    visible: ".*Replying to.*"
     timeout: 10000
 - takeScreenshot: ${SHOT}-replying
 - tapOn: ".*Write a message….*"

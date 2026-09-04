@@ -90,6 +90,11 @@ export async function messageByBody(conversationId, bodyLike) {
     order by created_at desc limit 1`);
 }
 
+export async function messageById(messageId) {
+  return await one(`select id::text as id, sender_user_id, kind, body, edited_at, deleted_at, created_at
+    from public.messages where id = ${lit(messageId)}::bigint`);
+}
+
 export async function attachments(conversationId) {
   return await sql(`select id, message_id::text as message_id, file_name, mime_type, byte_size, scan_status, detected_mime_type, created_by_user_id, created_at
     from public.message_attachments where organization_id = ${lit(ORG)} and conversation_id = ${lit(conversationId)} order by created_at asc`);

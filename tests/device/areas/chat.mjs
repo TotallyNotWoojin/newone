@@ -108,12 +108,22 @@ export async function run(ctx) {
   const t2 = `Delete me everywhere ${tag}`;
   await ctx.step({ id: 'chat-14a-send-t2', title: 'A sends a second text', device: devA, flow: 'chat/send-text.yaml', env: { TEXT: t2 }, expected: 'bubble', screen: 'conversation' });
   await ctx.step({ id: 'chat-14b-b-sees-t2', title: 'B sees the second text', device: devB, flow: 'chat/see-text.yaml', env: { TEXT: t2, TIMEOUT: '30000' }, expected: 'visible', screen: 'conversation' });
+  const t2Id = (await server.waitFor(() => server.messageByBody(convId, t2), (r) => Boolean(r), { timeoutMs: 20_000 })).row?.id ?? null;
   await ctx.step({
     id: 'chat-14-delete-for-everyone', title: 'A deletes the second text for everyone', device: devA, flow: 'chat/delete-for-everyone.yaml', env: { TARGET: t2 },
     expected: 'Gone on A; server deleted_at set', screen: 'conversation → Message actions',
-    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, t2), (r) => Boolean(r?.deleted_at), { timeoutMs: 20_000 }); return { ok: w.ok, detail: { deleted_at: w.row?.deleted_at } }; },
+    serverTruth: async () => {
+      // Delete-for-everyone keeps the row but scrubs the body, so look it up by the id captured before the delete.
+      if (!t2Id) return { ok: false, detail: 'second text never reached the server' };
+      const w = await server.waitFor(() => server.messageById(t2Id), (r) => Boolean(r?.deleted_at), { timeoutMs: 20_000 });
+      return { ok: w.ok && w.row?.body === null, detail: { id: t2Id, deleted_at: w.row?.deleted_at, body_scrubbed: w.row?.body === null } };
+    },
   });
   await ctx.step({ id: 'chat-15-b-sees-deleted', title: 'Deleted-for-everyone text disappears on B', device: devB, flow: 'chat/expect-gone.yaml', env: { TEXT: t2, TIMEOUT: '45000' }, expected: 'Text gone on B within 45s', screen: 'conversation' });
+  // Propagation latency evidence: if the open thread still shows the text after
+  // 45s, keep waiting so the report says "slow" or "never" rather than guessing.
+  const deletedAt = Date.now();
+  await ctx.step({ id: 'chat-15b-b-sees-deleted-late', title: 'Deleted-for-everyone text gone on B within a further 120s (latency evidence)', device: devB, flow: 'chat/expect-gone.yaml', env: { TEXT: t2, TIMEOUT: '120000' }, expected: 'Gone by 165s at the latest', screen: 'conversation', optional: true, latencyFrom: deletedAt });
 
   // Typing indicator: B types, A watches.
   await ctx.step({ id: 'chat-16a-b-types', title: 'B starts typing', device: devB, flow: 'chat/start-typing.yaml', expected: 'draft in composer', screen: 'conversation' });
