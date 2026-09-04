@@ -1,13 +1,14 @@
 appId: com.totallynotwoojin.newone
 ---
 # From the Chats list (not inside the conversation), the peer row shows an
-# unread count and the header shows "N unread" after the peer sent TEXT.
+# unread count: the Unread filter chip carries the count ("Unread 1") after the
+# peer sent TEXT (run-2026-09-04T09-40-33 screenshot).
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
 - extendedWaitUntil:
-    visible: ".*[0-9]+ unread.*"
+    visible: "(.*[0-9]+ unread.*|Unread.*[0-9]+.*)"
     timeout: 45000
 - takeScreenshot: ${SHOT}-unread
 - tapOn: "Unread"
@@ -21,6 +22,6 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - tapOn: "Back to chats"
 - extendedWaitUntil:
-    notVisible: ".*[0-9]+ unread.*"
+    notVisible: "(.*[0-9]+ unread.*|Unread.*[0-9]+.*)"
     timeout: 20000
 - takeScreenshot: ${SHOT}-read
