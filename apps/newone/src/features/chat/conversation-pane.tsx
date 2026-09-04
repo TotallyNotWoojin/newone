@@ -1581,7 +1581,9 @@ function MessageBubble({
       <View style={[styles.messageStack, message.isOwn && styles.messageStackOwn]}>
         {showSender ? <Text style={styles.senderName}>{message.senderName}</Text> : null}
         <Pressable
-          accessibilityHint={t('chat.longPressActions')}
+          // Not an accessibility element itself: iOS would otherwise flatten the whole
+          // bubble into one node and hide the translation actions from VoiceOver.
+          accessible={false}
           onLongPress={onOpenActions}
           style={[
             styles.bubble,
@@ -1665,7 +1667,9 @@ function MessageBubble({
               {t('chat.originalUpper')} · {message.sourceLanguage.toUpperCase()}
             </Text>
           </View>
-          <Text style={[styles.messageText, message.isOwn && styles.messageTextOwn]}>
+          <Text
+            accessibilityHint={t('chat.longPressActions')}
+            style={[styles.messageText, message.isOwn && styles.messageTextOwn]}>
             {message.originalText}
           </Text>
 

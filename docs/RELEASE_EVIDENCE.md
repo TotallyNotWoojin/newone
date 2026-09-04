@@ -386,3 +386,18 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Cause | `bff_bootstrap_messaging_state_impl` built `system_event` inside `jsonb_strip_nulls`, so `conversation.avatar.changed` (no target) arrived as `{"eventType":"conversation.avatar.changed"}`. The client's exact-key check rejected the event and threw away the whole bootstrap. Reproduced by parsing the live pdm1 payload through `WebReadRepository`: "The service returned an invalid conversation system event". |
 | Client fix | 6925386: `web-read-repository.ts` defaults a missing `targetUserId` to null before validation; test `web-read-repository.test.ts` covers an avatar system message (11/11). Shipped in the next TestFlight/Play build. |
 | Server fix | 653d9c0: migration `20260904240000_system_event_target_key.sql` appends `system_event` outside the stripped object (first push placed the concatenation inside `jsonb_strip_nulls`; repaired and re-pushed). Verified via the public wrapper for pdm1: message 411 now returns `{"event_type":"conversation.avatar.changed","target_user_id":null}`. The read Edge function's `camelize` keeps nulls, so build 21 users are unblocked without an app update. |
+
+### Defect Q — translation actions hidden from VoiceOver (Sep 4 2026)
+
+| Item | Evidence |
+| --- | --- |
+| Symptom | trans-03 (Show details) and trans-06 (Report translation error) were UNREACHABLE in every Spanish and Korean run even though the buttons are on screen (run-2026-09-04T19-11-36 screenshot 002-trans-03-details-FAIL.png). |
+| Cause | The message bubble is a `Pressable` (accessible by default), so iOS flattens the whole bubble into one accessibility node and its children (Show details, Propose correction, Report translation error) are not exposed — to Maestro or to VoiceOver users. |
+| Fix | `conversation-pane.tsx`: the bubble `Pressable` is `accessible={false}`; the long-press hint moves to the body text. Long press still opens the actions sheet. Reruns of chat, media, groups, translation, translation-ko on the rebuilt simulator app validate the selectors against the new hierarchy. |
+
+### chat-12 delete-for-me root cause (Sep 4 2026)
+
+| Item | Evidence |
+| --- | --- |
+| Finding | Maestro log for run-2026-09-04T15-47-18: "Delete for me" reported at bounds y=817–861 while the centred actions card clips at the safe-area edge (~824); the tap at (201, 839) hit the backdrop `Pressable`, which closes the sheet. No hide request was ever sent — a harness/layout interaction, not an app defect. |
+| Fix | 4d99b1b: the flow swipes inside the card before tapping; `ActionModal` content gains bottom padding so the last action can rest fully inside the card. |
