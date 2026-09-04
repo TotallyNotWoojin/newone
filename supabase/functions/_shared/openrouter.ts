@@ -1115,9 +1115,17 @@ export class OpenRouterLanguageProcessor {
         due: row.due === null ? null : restoreSummaryString(row.due, 1, 240, tokens),
       };
     });
+    const summary = restoreSummaryString(output.summary, 1, 12000, tokens);
+    let primaryTopic = restoreSummaryString(output.primaryTopic, 1, 240, tokens);
+    // A topic left with no letter or digit (the model wrote only placeholders
+    // or punctuation there; a device draft persisted "," on Sep 4 2026) takes
+    // the summary's first sentence instead of failing the whole draft.
+    if (!/[\p{L}\p{N}]/u.test(primaryTopic)) {
+      primaryTopic = summary.split(/(?<=[.!?。])\s+/)[0].slice(0, 240).trim() || 'Conversation summary';
+    }
     return {
-      primaryTopic: restoreSummaryString(output.primaryTopic, 1, 240, tokens),
-      summary: restoreSummaryString(output.summary, 1, 12000, tokens),
+      primaryTopic,
+      summary,
       keyTopics: boundedArray(output.keyTopics, 50).map((entry) => evidence(entry, 180)),
       decisions: boundedArray(output.decisions, 50).map((entry) => evidence(entry, 2000)),
       actionItems,

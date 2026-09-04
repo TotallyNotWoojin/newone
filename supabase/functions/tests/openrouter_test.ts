@@ -501,9 +501,46 @@ Deno.test('summary without protected sources drops an echoed placeholder and nev
   });
   assertEquals(result.summary, 'The print run moves to Monday morning and starts early.');
   assertEquals(result.keyTopics[0]?.text, 'Monday start');
+  assertEquals(result.primaryTopic, 'Print run timing');
   const messages = sent?.messages as Array<Record<string, string>>;
   assert(!String(messages[0]?.content ?? '').includes('__NEWONE_PROTECTED_'));
   assert(!String(messages[1]?.content ?? '').includes('Placeholders in the sources'));
+});
+
+Deno.test('summary topic made only of placeholders takes the first sentence of the summary', async () => {
+  const processor = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async () =>
+    new Response(
+      JSON.stringify({
+        id: 'gen-summary-topic',
+        model: policyValue.model,
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              primaryTopic: '__NEWONE_PROTECTED_0000__, __NEWONE_PROTECTED_0001__',
+              summary: 'Ana greeted Ben and asked about Monday. Nothing else was decided.',
+              keyTopics: [],
+              decisions: [],
+              actionItems: [],
+              ambiguities: [],
+            }),
+          },
+        }],
+        usage: { prompt_tokens: 50, completion_tokens: 20 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    ));
+  const result = await processor.summarize({
+    sources: [{ messageId: '9007199254740997', body: 'Hey Ben, Ana here. Monday?' }],
+    sourceFingerprint: 'c'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000003',
+  });
+  assertEquals(result.primaryTopic, 'Ana greeted Ben and asked about Monday.');
 });
 
 Deno.test('summary rejects invented protected identifiers and numbers', async () => {
