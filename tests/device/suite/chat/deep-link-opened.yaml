@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.newone
 # After `simctl openurl newone://conversation/<id>` the conversation with
 # PEER must be open.
 - extendedWaitUntil:
-    visible: ".*Write a message….*"
+    visible: ".*(Write a message…|Escribe un mensaje…).*"
     timeout: 30000
 - assertVisible: ".*${PEER}.*"
 - takeScreenshot: ${SHOT}-deep-link
