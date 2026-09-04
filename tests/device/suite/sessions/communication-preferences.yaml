@@ -16,13 +16,13 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-preferences
-- tapOn: "Read receipt visibility: Nobody"
-- tapOn: "Notification preview: Hidden and silent"
+- tapOn: ".*Read receipt visibility: Nobody.*"
+- tapOn: ".*Notification preview: Hidden and silent.*"
 - tapOn: "Save communication preferences"
 - extendedWaitUntil:
     notVisible: ".*(could not|cannot|failed).*"
     timeout: 10000
 - takeScreenshot: ${SHOT}-saved
-- tapOn: "Read receipt visibility: Everyone"
+- tapOn: ".*Read receipt visibility: Everyone.*"
 - tapOn: "Save communication preferences"
 - tapOn: "Close settings"
