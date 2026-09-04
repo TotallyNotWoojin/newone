@@ -796,7 +796,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         setConnectivity('online');
         return result;
       } catch (commandError) {
-        setActionError(t(errorMessageKey(commandError)));
+        // Generic failures quote the stable code so a member can report them
+        // and a device-suite screenshot names the failing step (a photo send
+        // showed only the generic copy in run 2026-09-04T04-57-19).
+        const localized = t(errorMessageKey(commandError));
+        const identifier = errorIdentifier(commandError);
+        setActionError(identifier ? `${localized} (${identifier})` : localized);
         if (isOfflineError(commandError)) setConnectivity('offline');
         return null;
       } finally {

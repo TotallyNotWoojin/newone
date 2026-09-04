@@ -3006,7 +3006,7 @@ describe('authoritative workspace provider', () => {
         { uri: 'file://blocked.jpg', name: 'blocked.jpg', mimeType: 'image/jpeg' },
       )).toBe(false);
     });
-    expect(currentWorkspace().actionError).toBe('errors.action');
+    expect(currentWorkspace().actionError).toBe('errors.action (conversation_avatar_blocked)');
     await view.unmount();
   });
 
