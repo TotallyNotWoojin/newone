@@ -529,6 +529,7 @@ export default function SettingsScreen() {
                   ['hidden', t('settings.previewHidden')],
                 ] as [OrganizationPreferences['notificationPreview'], string][]).map(([id, label]) => (
                   <Pressable
+                    accessibilityLabel={`${t('settings.notificationPreview')}: ${label}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: preferenceDraft.notificationPreview === id }}
                     key={id}
@@ -546,6 +547,7 @@ export default function SettingsScreen() {
                   ['nobody', t('settings.readNobody')],
                 ] as [OrganizationPreferences['readVisibility'], string][]).map(([id, label]) => (
                   <Pressable
+                    accessibilityLabel={`${t('settings.readVisibility')}: ${label}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: preferenceDraft.readVisibility === id }}
                     key={id}
