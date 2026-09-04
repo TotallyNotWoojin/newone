@@ -1,0 +1,12 @@
+# Keep the EAS project archive small: evidence, logs, simulator artifacts, and
+# local build products are never needed on the build worker.
+tests/device/.artifacts
+tests/hosted/.artifacts
+*.ips
+.expo
+apps/newone/.expo
+apps/newone/ios/build
+apps/newone/ios/build.nosync
+apps/newone/ios/Pods
+docs/RELEASE_EVIDENCE.md
+scratchpad
