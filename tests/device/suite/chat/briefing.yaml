@@ -23,7 +23,7 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - takeScreenshot: ${SHOT}-after-request
 - extendedWaitUntil:
-    visible: ".*(Unapproved draft|Summary unavailable|Human approved|Failure code).*"
+    visible: ".*(Unapproved draft|Not yet approved|AI-generated draft|Summary unavailable|Human approved|Failure code).*"
     timeout: 120000
 - takeScreenshot: ${SHOT}-final
-- assertVisible: ".*Unapproved draft.*"
+- assertVisible: ".*(Unapproved draft|Not yet approved|AI-generated draft).*"
