@@ -42,6 +42,11 @@ const WAVES = [
   ['translation', 'sessions'],
   ['translation-ko'],
 ];
+// An area requested by id that no wave lists (e.g. `media`, a quick proof
+// carved out of chat) runs in its own wave at the end; before this, such a
+// request booted the simulators and ran nothing (run-2026-09-04T10-41-13).
+const EXTRA_WAVE = AREA_FILTER.filter((id) => !WAVES.some((wave) => wave.includes(id)));
+const RUN_WAVES = EXTRA_WAVE.length ? [...WAVES, EXTRA_WAVE] : WAVES;
 
 async function loadArea(id) {
   const path = join(HERE, 'areas', `${id}.mjs`);
@@ -74,7 +79,7 @@ for (const udid of pool) {
 }
 
 const areaModules = {};
-for (const wave of WAVES) {
+for (const wave of RUN_WAVES) {
   for (const id of wave) {
     if (AREA_FILTER.length && !AREA_FILTER.includes(id)) continue;
     areaModules[id] = await loadArea(id);
@@ -107,7 +112,7 @@ function batches(wave) {
 }
 
 const suiteStarted = Date.now();
-for (const [waveIndex, wave] of WAVES.entries()) {
+for (const [waveIndex, wave] of RUN_WAVES.entries()) {
   for (const batch of batches(wave)) {
     if (!batch.length) continue;
     let cursor = 0;
