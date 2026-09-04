@@ -10,7 +10,8 @@ appId: com.totallynotwoojin.newone
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
-          direction: DOWN
+          start: "50%, 24%"
+          end: "50%, 44%"
           duration: 400
 - scrollUntilVisible:
     element:
@@ -27,7 +28,8 @@ appId: com.totallynotwoojin.newone
     visible: ".*Replying to.*"
     timeout: 10000
 - takeScreenshot: ${SHOT}-replying
-- tapOn: ".*Write a message….*"
+- tapOn:
+    id: "composer-input"
 - inputText: ${REPLY}
 - tapOn: "Send message"
 - extendedWaitUntil:

@@ -5,7 +5,8 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*Request pending.*"
     timeout: 20000
-- tapOn: ".*Write a message….*"
+- tapOn:
+    id: "composer-input"
 - inputText: ${TEXT2}
 - tapOn: "Send message"
 - extendedWaitUntil:
@@ -14,7 +15,8 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*${TEXT2}.*"
     timeout: 20000
-- tapOn: ".*Write a message….*"
+- tapOn:
+    id: "composer-input"
 - inputText: ${TEXT3}
 - tapOn: "Send message"
 - extendedWaitUntil:
@@ -24,7 +26,8 @@ appId: com.totallynotwoojin.newone
     visible: ".*${TEXT3}.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-three-messages
-- tapOn: ".*Write a message….*"
+- tapOn:
+    id: "composer-input"
 - inputText: ${TEXT4}
 - tapOn: "Send message"
 - extendedWaitUntil:

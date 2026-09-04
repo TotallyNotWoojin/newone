@@ -2400,6 +2400,7 @@ function Composer({
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={38} />
         <TextInput
           accessibilityLabel={t('chat.message')}
+          testID="composer-input"
           blurOnSubmit={false}
           multiline
           onBlur={onComposerBlur}

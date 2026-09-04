@@ -17,7 +17,8 @@ appId: com.totallynotwoojin.newone
     visible: ".*Selected: ${NAME}.*"
     timeout: 15000
 - tapOn: ".*Close mentions.*"
-- tapOn: ".*Write a message….*"
+- tapOn:
+    id: "composer-input"
 - inputText: ${TEXT}
 - tapOn: "Send message"
 - extendedWaitUntil:

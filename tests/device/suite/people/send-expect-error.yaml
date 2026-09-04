@@ -25,7 +25,8 @@ appId: com.totallynotwoojin.newone
     when:
       visible: ".*Write a message….*"
     commands:
-      - tapOn: ".*Write a message….*"
+      - tapOn:
+          id: "composer-input"
       - inputText: ${TEXT}
       - tapOn: "Send message"
       - extendedWaitUntil:

@@ -8,7 +8,8 @@ appId: com.totallynotwoojin.newone
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
-          direction: DOWN
+          start: "50%, 24%"
+          end: "50%, 44%"
           duration: 400
 - extendedWaitUntil:
     visible: ".*${TEXT}.*"
