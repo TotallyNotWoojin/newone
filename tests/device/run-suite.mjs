@@ -41,6 +41,8 @@ const WAVES = [
   ['groups'],
   ['translation', 'sessions'],
   ['translation-ko'],
+  // Media (two devices) and profile pictures (one device) share a wave.
+  ['media', 'profile'],
 ];
 // An area requested by id that no wave lists (e.g. `media`, a quick proof
 // carved out of chat) runs in its own wave at the end; before this, such a
