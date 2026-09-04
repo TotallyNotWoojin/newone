@@ -32,6 +32,12 @@ appId: com.totallynotwoojin.newone
           end: "50%, 88%"
           duration: 600
 - takeScreenshot: ${SHOT}-details
+# Consumer groups are private and invite-only (owner backlog v2): no group
+# type, unit scope, or join policy controls on the form.
+- assertNotVisible: "Organization-wide"
+- assertNotVisible: "Organization unit scope"
+- assertNotVisible: "Use company default"
+- assertNotVisible: "Request approval"
 - scrollUntilVisible:
     element:
       text: "Add ${MEMBER1}"
