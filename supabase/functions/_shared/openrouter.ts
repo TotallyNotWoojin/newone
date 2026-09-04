@@ -846,22 +846,25 @@ export class OpenRouterLanguageProcessor {
     // those placeholders was introduced by the model and must never be
     // persisted as a completed workplace translation.
     const introducedText = protectedTranslation.replace(PROTECTED_PLACEHOLDER_PATTERN, '');
+    // Each rejection names its rule (never the content) in the worker log.
     try {
       if (protectTokens(introducedText).tokens.length > 0) {
         throw new ProtectedTokenError();
       }
     } catch {
-      throw new ApiError(422, 'ai_output_needs_review');
+      throw new ApiError(422, 'ai_output_needs_review', 'translation_output_introduced_token');
     }
     let translatedText: string;
     try {
       translatedText = restoreTokens(protectedTranslation, protectedSource.tokens).normalize('NFC');
     } catch (error) {
-      if (error instanceof ProtectedTokenError) throw new ApiError(422, 'ai_output_needs_review');
+      if (error instanceof ProtectedTokenError) {
+        throw new ApiError(422, 'ai_output_needs_review', 'translation_placeholders_altered');
+      }
       throw error;
     }
     if (Array.from(translatedText).length > 20000) {
-      throw new ApiError(422, 'ai_output_needs_review');
+      throw new ApiError(422, 'ai_output_needs_review', 'translation_output_too_long');
     }
     return {
       translatedText,
