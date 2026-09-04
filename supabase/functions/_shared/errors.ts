@@ -94,6 +94,7 @@ export function fromDatabaseError(error: unknown): ApiError {
   switch (value.code) {
     case '40001':
     case '23505':
+    case 'NO409':
       return new ApiError(409, 'conflict');
     case '22000':
     case '22023':
