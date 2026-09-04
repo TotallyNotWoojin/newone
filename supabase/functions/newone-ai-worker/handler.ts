@@ -378,10 +378,26 @@ export function defaultAiWorkerDependencies(): AiWorkerDependencies {
   const workloads = configuredWorkloads();
   let admin = createAdminClient(clientEnvironment);
   const provider = openRouterEnvironment.policy.providerTag;
+  // Control-plane proofs survive isolate recycling through the database.
+  const controlPlaneProofStore = {
+    async lookup(cacheKey: string) {
+      const value = await invokeRpc(asRpcClient(admin), 'bff_ai_control_plane_proof_lookup', {
+        p_cache_key: cacheKey,
+      });
+      if (value === null || value === undefined) return null;
+      const parsed = Date.parse(String(value));
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+    async record(cacheKey: string) {
+      await invokeVoidRpc(asRpcClient(admin), 'bff_ai_control_plane_proof_record', {
+        p_cache_key: cacheKey,
+      });
+    },
+  };
   return {
     runtimeConfig,
     clientEnvironment,
-    openRouterEnvironment,
+    openRouterEnvironment: { ...openRouterEnvironment, controlPlaneProofStore },
     workerToken,
     workloads,
     setCorrelationId(correlationId) {
@@ -514,6 +530,26 @@ export function defaultAiWorkerDependencies(): AiWorkerDependencies {
   };
 }
 
+// Stage timings per job (resolve RPC, provider round trip, completion RPC)
+// so latency can be read from the function log instead of guessed.
+function logJobTiming(
+  correlationId: string,
+  job: AiJob,
+  startedAt: number,
+  resolvedAt: number,
+  providedAt: number,
+): void {
+  console.log(JSON.stringify({
+    event: 'newone_ai_job_timing',
+    correlation_id: correlationId,
+    job_id: String(job.id),
+    workload: job.topic,
+    resolve_ms: resolvedAt - startedAt,
+    provider_ms: providedAt - resolvedAt,
+    complete_ms: Date.now() - providedAt,
+  }));
+}
+
 async function processJob(
   dependencies: AiWorkerDependencies,
   processor: OpenRouterLanguageProcessor,
@@ -523,22 +559,27 @@ async function processJob(
 ): Promise<'completed' | 'skipped' | 'failed'> {
   let sourceHash: string | null = null;
   try {
+    const startedAt = Date.now();
     if (job.topic === 'language_detection') {
       const resolution = await dependencies.resolveDetection(workerId, job);
       if (!resolution.authorized) return 'skipped';
       sourceHash = resolution.source.sourceSha256;
+      const resolvedAt = Date.now();
       const result = await processor.detectLanguage({
         sourceBody: resolution.source.sourceBody,
         sourceSha256: resolution.source.sourceSha256,
         correlationId,
       });
+      const providedAt = Date.now();
       await dependencies.completeDetection(workerId, job, resolution.source, result);
+      logJobTiming(correlationId, job, startedAt, resolvedAt, providedAt);
       return 'completed';
     }
     if (job.topic === 'translation') {
       const resolution = await dependencies.resolveTranslation(workerId, job);
       if (!resolution.authorized) return 'skipped';
       sourceHash = resolution.source.sourceSha256;
+      const resolvedAt = Date.now();
       const result = await processor.translate({
         sourceBody: resolution.source.sourceBody,
         sourceLanguage: resolution.source.sourceLanguage,
@@ -546,7 +587,9 @@ async function processJob(
         sourceSha256: resolution.source.sourceSha256,
         correlationId,
       });
+      const providedAt = Date.now();
       await dependencies.completeTranslation(workerId, job, resolution.source, result);
+      logJobTiming(correlationId, job, startedAt, resolvedAt, providedAt);
       return 'completed';
     }
     const resolution = await dependencies.resolveSummary(workerId, job);

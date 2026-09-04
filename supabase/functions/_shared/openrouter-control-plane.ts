@@ -225,6 +225,26 @@ interface PreflightCacheEntry {
 let preflightClock: () => number = Date.now;
 let preflightCache: PreflightCacheEntry | null = null;
 
+/**
+ * Optional persistence for the proof: the Edge isolate is recycled between
+ * most invocations, so the module-scope cache alone rarely survives long
+ * enough to be hit. `lookup` returns the verified time for a key (null when
+ * unknown or expired) and `record` stores a fresh success. A lookup failure is
+ * a miss and a record failure is ignored: persistence only ever removes work,
+ * never authorizes egress on its own, and the five-minute window applies to
+ * whatever it returns.
+ */
+export interface ControlPlaneProofStore {
+  lookup(cacheKey: string): Promise<number | null>;
+  record(cacheKey: string, verifiedAt: number): Promise<void>;
+}
+
+/** SHA-256 over the tuple so the persisted key carries no material at all. */
+async function persistedProofKey(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 /** Drops the cached proof and installs the clock the cache reads (tests). */
 export function resetControlPlanePreflightCache(clock: () => number = Date.now): void {
   preflightCache = null;
@@ -256,7 +276,8 @@ export async function verifyOpenRouterEmployeeControlPlaneCached(
   policy: OpenRouterControlPlanePolicy,
   fetcher: ControlPlaneFetch,
   signal?: AbortSignal,
-): Promise<{ cached: boolean }> {
+  store?: ControlPlaneProofStore,
+): Promise<{ cached: boolean; persisted?: boolean }> {
   const key = preflightCacheKey(controls, policy);
   const now = preflightClock();
   if (
@@ -269,6 +290,31 @@ export async function verifyOpenRouterEmployeeControlPlaneCached(
   // Anything stale, skewed, or for another tuple is forgotten before the
   // proof runs, so a failure below leaves nothing that could authorize egress.
   preflightCache = null;
+  if (store) {
+    const persistedKey = await persistedProofKey(key);
+    let verifiedAt: number | null = null;
+    try {
+      verifiedAt = await store.lookup(persistedKey);
+    } catch {
+      verifiedAt = null;
+    }
+    if (
+      verifiedAt !== null && Number.isFinite(verifiedAt) && now >= verifiedAt &&
+      now - verifiedAt < CONTROL_PLANE_PREFLIGHT_TTL_MS
+    ) {
+      preflightCache = { key, verifiedAt };
+      return { cached: true, persisted: true };
+    }
+    await verifyOpenRouterEmployeeControlPlane(controls, policy, fetcher, signal);
+    const provenAt = preflightClock();
+    preflightCache = { key, verifiedAt: provenAt };
+    try {
+      await store.record(persistedKey, provenAt);
+    } catch {
+      // Persistence is an optimisation; the in-memory proof already stands.
+    }
+    return { cached: false, persisted: false };
+  }
   await verifyOpenRouterEmployeeControlPlane(controls, policy, fetcher, signal);
   preflightCache = { key, verifiedAt: preflightClock() };
   return { cached: false };

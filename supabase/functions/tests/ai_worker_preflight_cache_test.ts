@@ -377,3 +377,54 @@ Deno.test('a cached proof for one workspace never satisfies another key, workspa
     resetControlPlanePreflightCache();
   }
 });
+
+Deno.test('a fresh isolate reuses a persisted control-plane proof and makes no management calls', async () => {
+  resetControlPlanePreflightCache();
+  const sourceSha256 = await sha256Hex(sourceBody);
+  const fetcher = countingFetcher(sourceSha256);
+  const recorded: string[] = [];
+  const store = {
+    lookup: async (cacheKey: string) => {
+      recorded.push(`lookup:${cacheKey.length}`);
+      return Date.now() - 30_000;
+    },
+    record: async (cacheKey: string) => {
+      recorded.push(`record:${cacheKey.length}`);
+    },
+  };
+  const base = dependencies(fetcher.fetch, sourceSha256, [41]);
+  const handler = createAiWorkerHandler(() => ({
+    ...base,
+    openRouterEnvironment: { ...employeeEnvironment, controlPlaneProofStore: store },
+  }));
+  const response = await handler(request());
+  assertEquals(response.status, 200);
+  assertEquals((await response.json()).completed, 1);
+  // Only the route probe and the real completion touched the provider.
+  assertEquals(fetcher.counts, { management: 0, completions: 2 });
+  assertEquals(recorded, ['lookup:64']);
+});
+
+Deno.test('an unknown or expired persisted proof re-proves and records the new proof under a hashed key', async () => {
+  resetControlPlanePreflightCache();
+  const sourceSha256 = await sha256Hex(sourceBody);
+  const fetcher = countingFetcher(sourceSha256);
+  const recorded: string[] = [];
+  const store = {
+    lookup: async () => Date.now() - 6 * 60_000,
+    record: async (cacheKey: string) => {
+      recorded.push(cacheKey);
+    },
+  };
+  const base = dependencies(fetcher.fetch, sourceSha256, [42]);
+  const handler = createAiWorkerHandler(() => ({
+    ...base,
+    openRouterEnvironment: { ...employeeEnvironment, controlPlaneProofStore: store },
+  }));
+  const response = await handler(request());
+  assertEquals(response.status, 200);
+  assertEquals((await response.json()).completed, 1);
+  assertEquals(fetcher.counts, { management: 4, completions: 2 });
+  assertEquals(recorded.length, 1);
+  assertEquals(/^[0-9a-f]{64}$/.test(recorded[0] ?? ''), true);
+});

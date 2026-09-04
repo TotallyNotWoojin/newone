@@ -1,6 +1,7 @@
 import { sha256Hex } from './crypto.ts';
 import { ApiError } from './errors.ts';
 import {
+  type ControlPlaneProofStore,
   DISABLED_OPENROUTER_PLUGINS,
   type OpenRouterEmployeeControlPlane,
   parseOpenRouterEmployeeControlPlane,
@@ -122,6 +123,8 @@ interface OpenRouterEnvironmentBase {
   policy: OpenRouterPolicy;
   siteUrl?: string;
   siteName?: string;
+  /** Persists the control-plane proof across worker isolates (see control plane). */
+  controlPlaneProofStore?: ControlPlaneProofStore;
 }
 
 export type OpenRouterEnvironment =
@@ -568,6 +571,7 @@ async function verifyEmployeeEgressBeforeContent(
       environment.policy,
       fetcher,
       controller.signal,
+      environment.controlPlaneProofStore,
     );
 
     const probe: StructuredCompletionSpec = {
