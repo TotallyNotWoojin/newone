@@ -211,8 +211,15 @@ export function ConversationPane({
     initialPositionedRef.current = false;
   }, [conversationId, unreadDividerId]);
 
-  const positionAtUnreadDivider = (event: LayoutChangeEvent) => {
-    const y = event.nativeEvent.layout.y;
+  // The divider sits inside its message's wrapper, so its own layout y is
+  // relative to that wrapper (about zero). Positioning on it scrolled every
+  // thread with unread messages to the top (device suite, chat-29: a message
+  // that arrived while the app was in the background sat below the fold).
+  // The wrapper's y is content-relative and is what the scroll needs.
+  const positionAtUnreadDivider = (dividerMessage: Message, event: LayoutChangeEvent) => {
+    const wrapperY = messageYRef.current.get(dividerMessage.serverId ?? dividerMessage.id);
+    if (wrapperY === undefined) return;
+    const y = wrapperY + event.nativeEvent.layout.y;
     unreadDividerYRef.current = y;
     if (!initialPositionedRef.current) {
       initialPositionedRef.current = true;
@@ -311,6 +318,13 @@ export function ConversationPane({
     const messageId = message.serverId ?? message.id;
     const y = event.nativeEvent.layout.y;
     messageYRef.current.set(messageId, y);
+    if (message.id === unreadDividerId && !initialPositionedRef.current) {
+      // The wrapper of the first unread message is the anchor; its layout can
+      // arrive after the divider's own, so position from here as well.
+      unreadDividerYRef.current = y;
+      initialPositionedRef.current = true;
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: false }));
+    }
     if (pendingSourceRef.current === messageId) {
       pendingSourceRef.current = null;
       requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 88), animated: true }));
@@ -549,7 +563,7 @@ export function ConversationPane({
               onLayout={(event) => recordMessagePosition(message, event)}
               style={(message.serverId ?? message.id) === focusMessageId ? styles.searchTarget : undefined}>
               {message.id === unreadDividerId ? (
-                <View onLayout={positionAtUnreadDivider} style={styles.unreadDivider}>
+                <View onLayout={(event) => positionAtUnreadDivider(message, event)} style={styles.unreadDivider}>
                   <View style={styles.unreadDividerLine} />
                   <Text style={styles.unreadDividerText}>{t('chat.unreadMessages')}</Text>
                   <View style={styles.unreadDividerLine} />
