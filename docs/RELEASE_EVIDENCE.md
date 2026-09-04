@@ -370,3 +370,10 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Mail sink | `_shared/mail.ts` `mailSinkDomain`: recipients on `NEWONE_TEST_MAIL_SINK_DOMAINS` (set to `guerrillamailblock.com,example.test`) never reach Resend; unit-tested; `newone-auth` deployed 10:48. Hosted `signupUser` succeeded again at 10:50 (3.9 s). Real addresses are unaffected. |
 | Minted codes | Device harness: `NEWONE_DEVICE_MINT_CODES=1` makes signup and returning codes come from the auth admin API (`mintCode`) instead of the guerrillamail inbox; the app verifies them exactly like emailed codes. The inbox path stays the default. |
 | Final rerun | Simulator app rebuilt 10:53 (contains voice playback, attachment-state parser, consumer group copy, preference chip labels). Queue: groups, media, profile, chat, translation, translation-ko, sessions (pool 3, minted codes). |
+
+### Sep 4 2026, 10:53–11:27 — groups rerun on the rebuilt app (minted codes)
+
+| Item | Evidence |
+| --- | --- |
+| Result | `run-2026-09-04T17-53-11`: PASS 37 · FAIL 2. groups-20 group photo PASS with `avatar_path` set on the server (defect N closed on device). Promote/demote system messages PASS. |
+| Remaining 2 | groups-10 mention: the chip's accessibility label is "Remove mention: NAME", not "@NAME"; flow updated. groups-11 cascaded. Groups queued once more after the final queue to close them. |
