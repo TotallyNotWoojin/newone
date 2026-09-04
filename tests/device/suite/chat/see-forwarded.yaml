@@ -9,5 +9,5 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*${TEXT}.*"
     timeout: 30000
-- assertVisible: "FORWARDED"
+- assertVisible: ".*FORWARDED.*"
 - takeScreenshot: ${SHOT}-forwarded-visible

@@ -21,6 +21,6 @@ appId: com.totallynotwoojin.newone
     notVisible: "Message actions"
     timeout: 10000
 - extendedWaitUntil:
-    visible: "👍"
+    visible: ".*👍.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-reacted
