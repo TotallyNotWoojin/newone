@@ -80,5 +80,36 @@ export async function runPair(ctx, cfg) {
     serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, B.userId), (r) => r?.translation_mode === 'automatic', { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
   await ctx.step({ id: 'trans-11-translations-return', title: 'Translation cards return after switching back on', device: devB, flow: 'translation/see-translation.yaml', env: { TEXT: en2, LANG: cfg.code, TIMEOUT: '90000' }, expected: `TRANSLATION · ${cfg.code} card visible again`, screen: 'conversation', timeoutMs: 240_000 });
+
+  // Owner backlog (Sep 4 2026): a sender can translate their own message from
+  // the actions sheet. B (display language cfg.code) writes English, then
+  // asks for it in their own language.
+  const own = `Own English note for me ${tag}`;
+  await ctx.step({ id: 'trans-12-b-sends-english', title: `B (${cfg.code} display) sends an English message`, device: devB, flow: 'chat/send-text.yaml', env: { TEXT: own }, expected: 'bubble', screen: 'conversation' });
+  await ctx.step({
+    id: 'trans-13-b-translates-own', title: `B long-presses the own message → "Translate for me" → TRANSLATION · ${cfg.code} card`, device: devB, flow: 'translation/translate-own.yaml', env: { TARGET: `note for me ${tag}`, LANG: cfg.code, TIMEOUT: '90000' },
+    expected: `Own bubble gains a TRANSLATION · ${cfg.code} card; server translation row target ${cfg.language}`, screen: 'conversation → Message actions',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, own), (r) => (r?.translations ?? '').includes(`${cfg.language}=completed`), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row?.translations }; },
+    timeoutMs: 240_000,
+  });
+
+  // Mixed-language message (owner question): B writes in cfg.language and
+  // English in one message. A (English) gets it automatically; B can ask for
+  // the whole thing in cfg.language from the actions sheet.
+  const mixed = `${cfg.mixed(tag)}`;
+  const sentMixed = Date.now();
+  await ctx.step({ id: 'trans-14-b-sends-mixed', title: `B sends a mixed ${cfg.code}+EN message`, device: devB, flow: 'chat/send-text.yaml', env: { TEXT: mixed }, expected: 'bubble', screen: 'conversation' });
+  await ctx.step({
+    id: 'trans-15-a-sees-mixed-english', title: 'A sees the English translation of the mixed message', device: devA, flow: 'translation/see-translation.yaml', env: { TEXT: cfg.mixedKey(tag), LANG: 'EN', TIMEOUT: '90000' },
+    expected: 'TRANSLATION · EN card on A', screen: 'conversation', latencyFrom: sentMixed,
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, mixed), (r) => (r?.translations ?? '').includes('en=completed'), { timeoutMs: 90_000 }); return { ok: w.ok, detail: `${w.row?.translations} detection=${w.row?.language_detection_method ?? ''}` }; },
+    timeoutMs: 240_000,
+  });
+  await ctx.step({
+    id: 'trans-16-b-translates-mixed', title: `B asks for the mixed message in ${cfg.code} (Translate for me)`, device: devB, flow: 'translation/translate-own.yaml', env: { TARGET: cfg.mixedKey(tag), LANG: cfg.code, TIMEOUT: '90000' },
+    expected: `TRANSLATION · ${cfg.code} card on the mixed bubble; server row target ${cfg.language} (source und or en)`, screen: 'conversation → Message actions',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, mixed), (r) => (r?.translations ?? '').includes(`${cfg.language}=completed`), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row?.translations }; },
+    timeoutMs: 240_000,
+  });
   ctx.accounts = { A, B };
 }

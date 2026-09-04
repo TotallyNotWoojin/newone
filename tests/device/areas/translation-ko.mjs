@@ -12,5 +12,6 @@ export async function run(ctx) {
     en1: (tag) => `The meeting moved to Monday morning, please bring the report ${tag}`, en1Key: 'report',
     reply: (tag) => `네, 월요일에 인쇄한 보고서를 가져가겠습니다 ${tag}`, replyKey: '가져가겠습니다',
     en2: (tag) => `Second English message while translation is off ${tag}`,
+    mixed: (tag) => `회의는 월요일입니다 but bring the printed report please ${tag}`, mixedKey: (tag) => `printed report please ${tag}`,
   });
 }

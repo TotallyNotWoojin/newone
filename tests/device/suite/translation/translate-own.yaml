@@ -1,0 +1,41 @@
+appId: com.totallynotwoojin.newone
+---
+# Long-press one's own message TARGET → "Translate for me" (owner backlog:
+# a sender can ask for their own message in their display language). The
+# translation card for LANG then appears on the bubble.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
+    timeout: 15000
+- longPressOn:
+    text: ".*${TARGET}.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- scrollUntilVisible:
+    element:
+      text: "Translate for me"
+    direction: DOWN
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-translate-for-me
+- tapOn: "Translate for me"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*TRANSLATION · ${LANG}.*"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-own-translated

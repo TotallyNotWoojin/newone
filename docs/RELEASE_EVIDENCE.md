@@ -240,3 +240,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Mitigation shipped in build 21 | `ScreenErrorBoundary` around both conversation screens (render failure → card with `Error: message` and Retry) and `installCrashGuard()` in the root layout (production fatal handler shows the identifier in an alert instead of aborting; development keeps the red box). Either way the next failure is legible and the app survives. |
 | Side finding | An unsigned simulator build (`CODE_SIGNING_ALLOWED=NO`) cannot use the keychain: sign-in shows `ERR_KEY_CHAIN`. Simulator builds need the default ad-hoc signing. Simulator keychains also survive app uninstall, so a stale session must be signed out before another account can sign in. |
 | Owner data | Message 292 (group "eh") still `language_detection_state = pending` at 04:45: detection did not run for it; to check with the worker logs. |
+
+### Sep 4 2026, 04:45–04:55 — TestFlight build 21 (crash guard) and consumer v2 in tree
+
+| Item | Evidence |
+| --- | --- |
+| Build 21 | Local archive 04:45:53, export 04:48, `UPLOAD SUCCEEDED` 04:50:08, processed VALID and added to Team + Public Testers by 04:54. Bundle differs from build 20 (sha 4dbf4e7a… vs ab52e455…) and contains the crash-guard copy. Contents: crash guard + screen error boundary, own-message "Translate for me", voice card label, consumer no-scan copy. |
+| Consumer v2 (commit cb20054) | Chats list starts under the filter chips (horizontal ScrollView no longer flex-grows); sign-in shows only Create account / Returning member; personal-realm group creation hides type, unit scope, join policy (invite-only forced); personal-realm communication preferences auto-save after 500 ms with "Changes are saved automatically."; sign-out in danger tone; "Uploading photo…" for consumer group photos. Jest 757/757, tsc clean. |
+| Device suite additions | `chat-35-list-matches-server-{a,b}` (Chats list vs server conversations, owner's no-desync ask); `trans-12…16` own-message translate and mixed-language message (B sends KO+EN, A gets EN automatically, B asks for KO via Translate for me); `sessions/communication-preferences` waits for the auto-save copy. Full queue started 04:54:59 on the v2 simulator build (`queue-sep4-v2/`). |
+| Owner data | Message 292 (group "eh", 10:49:39Z) has no `language_detection` outbox job at all while 288–291 and 293 have one; state stuck `pending`. Under investigation. |
