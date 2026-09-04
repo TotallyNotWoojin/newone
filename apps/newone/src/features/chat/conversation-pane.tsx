@@ -208,6 +208,11 @@ export function ConversationPane({
 
   useEffect(() => {
     if (!unreadDividerId || !conversationId) return;
+    // Re-anchor at a new divider only when the reader is not already at the
+    // bottom; when they are, the tail effect keeps them there. Re-anchoring
+    // from the bottom made the thread jump on every send, receipt, and
+    // translation update (owner report, TestFlight 19).
+    if (nearBottomRef.current) return;
     initialPositionedRef.current = false;
   }, [conversationId, unreadDividerId]);
 
