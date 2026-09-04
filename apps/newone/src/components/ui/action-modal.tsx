@@ -160,7 +160,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.paperMuted,
   },
-  content: { gap: spacing.md, padding: spacing.lg },
+  // Extra bottom room so the last action can scroll fully inside the clipped card.
+  content: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.xxl },
   field: { gap: 6 },
   fieldLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   input: {

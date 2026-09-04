@@ -29,6 +29,13 @@ appId: com.totallynotwoojin.newone
       text: "Delete for me"
     direction: DOWN
     timeout: 20000
+# The card clips at the safe-area edge while Maestro measures against the screen:
+# the last action can sit half outside the card, and a tap on its centre hits
+# the backdrop (closes the sheet, no request). Nudge the content up first.
+- swipe:
+    start: "50%, 72%"
+    end: "50%, 40%"
+    duration: 400
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: ${SHOT}-sheet
@@ -62,6 +69,13 @@ appId: com.totallynotwoojin.newone
                   text: "Delete for me"
                 direction: DOWN
                 timeout: 20000
+            # The card clips at the safe-area edge while Maestro measures against the screen:
+            # the last action can sit half outside the card, and a tap on its centre hits
+            # the backdrop (closes the sheet, no request). Nudge the content up first.
+            - swipe:
+                start: "50%, 72%"
+                end: "50%, 40%"
+                duration: 400
             - waitForAnimationToEnd:
                 timeout: 3000
             - takeScreenshot: ${SHOT}-sheet-retry
