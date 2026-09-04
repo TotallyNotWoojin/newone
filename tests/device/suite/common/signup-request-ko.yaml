@@ -1,0 +1,64 @@
+appId: com.totallynotwoojin.newone
+---
+# Same as common/signup-request.yaml, but the human picks 한국어 as their
+# language before filling the form; the server stores preferred_language=ko.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: ".*(Chats|Create account).*"
+    timeout: 40000
+- runFlow:
+    when:
+      visible: "Chats"
+    commands:
+      - tapOn: "Settings"
+      - extendedWaitUntil:
+          visible: "Close settings"
+          timeout: 15000
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of Newone"
+          direction: DOWN
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
+- extendedWaitUntil:
+    visible: "Create account"
+    timeout: 30000
+- tapOn: "한국어"
+# From here the whole screen is in Korean, so every target is the Korean copy.
+- tapOn: "계정 만들기"
+- scrollUntilVisible:
+    element:
+      text: "you@example.com"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "you@example.com"
+- inputText: ${EMAIL}
+- tapOn: "이메일 주소"
+- scrollUntilVisible:
+    element:
+      text: "영문 소문자 아이디"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "영문 소문자 아이디"
+- inputText: ${USERNAME}
+- tapOn: "사용자 이름"
+- scrollUntilVisible:
+    element:
+      text: "다른 사람에게 보일 이름"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "다른 사람에게 보일 이름"
+- inputText: ${DISPLAY_NAME}
+- tapOn: "표시 이름"
+- takeScreenshot: ${SHOT}-form
+- scrollUntilVisible:
+    element:
+      text: "안전하게 계속"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "안전하게 계속"
+- extendedWaitUntil:
+    visible: "일회용 코드"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-code-screen

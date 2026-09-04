@@ -20,8 +20,9 @@ appId: com.totallynotwoojin.newone
 - inputText: ${NAME}
 - tapOn: "Create a group"
 # Typing the name leaves the keyboard up and the member rows underneath it; tap
-# the MEMBERS eyebrow inside the scroll view to dismiss it before choosing.
-- tapOn: "MEMBERS"
+# the GROUP SETUP eyebrow (top of the scroll view, always on screen next to the
+# name field) to dismiss it before choosing members.
+- tapOn: "GROUP SETUP"
 - runFlow:
     when:
       visible: ".*(Typing Predictions|Dictate).*"

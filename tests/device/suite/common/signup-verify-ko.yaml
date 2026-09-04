@@ -1,0 +1,23 @@
+appId: com.totallynotwoojin.newone
+---
+- assertVisible: "일회용 코드"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- eraseText: 8
+- inputText: ${CODE}
+- tapOn: "일회용 코드"
+- takeScreenshot: ${SHOT}-code-entered
+- scrollUntilVisible:
+    element:
+      text: "인증하고 계정 만들기"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "인증하고 계정 만들기"
+- extendedWaitUntil:
+    visible: "채팅"
+    timeout: 40000
+- takeScreenshot: ${SHOT}-signed-in

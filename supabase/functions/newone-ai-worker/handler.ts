@@ -297,11 +297,21 @@ function parseSummaryResolution(
   };
 }
 
+// A provider blip must heal on its own: retries back off from 15s to 5min
+// so ten attempts span about half an hour instead of the ~1 minute the
+// provider's 5-second hint produced (a two-minute outage then failed every
+// message in it for good). Each job retries independently, so one message's
+// failure never delays the next.
+const PROVIDER_RETRY_FLOOR_SECONDS = 15;
+const PROVIDER_RETRY_CEILING_SECONDS = 300;
+
 function retryDelay(job: AiJob, error: ApiError): number {
-  return Math.max(
-    5,
-    Math.min(3600, error.retryAfterSeconds ?? Math.min(3600, 15 * 2 ** job.attempts)),
+  const backoff = Math.min(
+    PROVIDER_RETRY_CEILING_SECONDS,
+    PROVIDER_RETRY_FLOOR_SECONDS * 2 ** Math.max(0, job.attempts - 1),
   );
+  const hinted = error.retryAfterSeconds ?? 0;
+  return Math.max(5, Math.min(3600, Math.max(backoff, hinted)));
 }
 
 function terminal(error: ApiError, attempts: number): boolean {

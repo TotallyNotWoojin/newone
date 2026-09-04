@@ -117,7 +117,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
       id: `setup-${label}-signup-form`,
       title: `Setup: sign up ${displayName} (${language}) — form`,
       device,
-      flow: language === 'es' ? 'common/signup-request-es.yaml' : 'common/signup-request.yaml',
+      flow: language === 'en' ? 'common/signup-request.yaml' : `common/signup-request-${language}.yaml`,
       env: { EMAIL: mailbox.email, USERNAME: username, DISPLAY_NAME: displayName },
       expected: 'Sign-up form accepts email/username/display name and shows the one-time code screen',
       screen: 'sign-in (Create account)',
@@ -135,7 +135,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
       id: `setup-${label}-signup-verify`,
       title: `Setup: verify code for ${displayName}`,
       device,
-      flow: language === 'es' ? 'common/signup-verify-es.yaml' : 'common/signup-verify.yaml',
+      flow: language === 'en' ? 'common/signup-verify.yaml' : `common/signup-verify-${language}.yaml`,
       env: { CODE: code.code },
       expected: 'Code accepted; app lands on Chats',
       screen: 'sign-in (One-time code)',
@@ -151,17 +151,17 @@ export function createAreaContext({ area, devices, report, runDir }) {
       account.userId = row?.user_id ?? null;
     }
     account.signedIn = verify.uiOk;
-    if (language === 'es' && verify.uiOk) {
+    if (language !== 'en' && verify.uiOk) {
       await step({
         id: `setup-${label}-ui-english`,
         title: `Setup: switch ${displayName}'s display language back to English (server language stays es)`,
         device,
-        flow: 'common/ui-language-es-to-en.yaml',
-        expected: 'Settings chrome returns to English; profile.preferred_language stays es',
+        flow: `common/ui-language-${language}-to-en.yaml`,
+        expected: `Settings chrome returns to English; profile.preferred_language stays ${language}`,
         screen: 'settings',
         serverTruth: async () => {
           const row = await server.profileByUsername(username);
-          return { ok: row?.preferred_language === 'es', detail: row };
+          return { ok: row?.preferred_language === language, detail: row };
         },
       });
     }

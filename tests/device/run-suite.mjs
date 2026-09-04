@@ -40,6 +40,7 @@ const WAVES = [
   ['chat', 'negative'],
   ['groups'],
   ['translation', 'sessions'],
+  ['translation-ko'],
 ];
 
 async function loadArea(id) {

@@ -695,7 +695,7 @@ Deno.test('AI worker skips denied translation and summary and survives failed fa
   )(aiRequest());
   assertEquals(failed.status, 200);
   assertEquals((await failed.json()).failed, 1);
-  assertEquals(failureEvents, ['bad_request:30']);
+  assertEquals(failureEvents, ['bad_request:15']);
 });
 
 Deno.test('AI worker covers method, browser-context, and terminal-attempt guards', async () => {

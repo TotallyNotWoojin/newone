@@ -1,0 +1,26 @@
+appId: com.totallynotwoojin.newone
+---
+# A Korean-UI user switches the display language back to English from
+# Settings. Only the interface language changes; the account language on the
+# server stays ko.
+- extendedWaitUntil:
+    visible: "채팅"
+    timeout: 30000
+- tapOn: "설정"
+- extendedWaitUntil:
+    visible: "설정 닫기"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "표시 언어: English"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "표시 언어: English"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-english-ui
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
