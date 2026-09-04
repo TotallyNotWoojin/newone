@@ -48,7 +48,14 @@ export function createAreaContext({ area, devices, report, runDir }) {
         return readFileSync(join(tests, latest, 'maestro.log'), 'utf8').split('\n').filter((line) => /\[ERROR\]|Exception/.test(line)).slice(-40).join('\n');
       } catch { return ''; }
     };
-    const driverCrash = (r, dir) => !r.ok && (r.timedOut === true || /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver|driver not ready in time|IOSDriverTimeoutException|DeviceUnreachable|Device unreachable|became unreachable/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}\n${debugLogErrors(dir)}`));
+    // The debug log also records ordinary assertion failures (and every
+    // failure ends with an XCUITest status-check line), so only unambiguous
+    // driver-death markers count from it.
+    const driverCrash = (r, dir) => !r.ok && (
+      r.timedOut === true
+      || /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver|driver not ready in time|IOSDriverTimeoutException|DeviceUnreachable|Device unreachable|became unreachable/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}`)
+      || /DeviceUnreachableException|Device unreachable|became unreachable|Failed to connect to \/127\.0\.0\.1/.test(debugLogErrors(dir))
+    );
     let result = await runFlow({
       device,
       flow: flowPath,
