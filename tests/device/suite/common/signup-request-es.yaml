@@ -25,7 +25,8 @@ appId: com.totallynotwoojin.newone
     visible: "Create account"
     timeout: 30000
 - tapOn: "Español"
-- tapOn: "Create account"
+# From here the whole screen is in Spanish, so every target is the Spanish copy.
+- tapOn: "Crear cuenta"
 - scrollUntilVisible:
     element:
       text: "you@example.com"
@@ -33,30 +34,30 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
-- tapOn: "Email address"
+- tapOn: "Correo electrónico"
 - scrollUntilVisible:
     element:
-      text: "your_username"
+      text: "tu_usuario"
     direction: DOWN
     timeout: 15000
-- tapOn: "your_username"
+- tapOn: "tu_usuario"
 - inputText: ${USERNAME}
-- tapOn: "Username"
+- tapOn: "Nombre de usuario"
 - scrollUntilVisible:
     element:
-      text: "Your name as others will see it"
+      text: "Tu nombre como lo verán los demás"
     direction: DOWN
     timeout: 15000
-- tapOn: "Your name as others will see it"
+- tapOn: "Tu nombre como lo verán los demás"
 - inputText: ${DISPLAY_NAME}
-- tapOn: "Display name"
+- tapOn: "Nombre para mostrar"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
     element:
-      text: "Continue securely"
+      text: "Continuar de forma segura"
     direction: DOWN
     timeout: 15000
-- tapOn: "Continue securely"
+- tapOn: "Continuar de forma segura"
 - extendedWaitUntil:
     visible: "Código de un solo uso"
     timeout: 30000
