@@ -228,3 +228,15 @@ Artifacts and reviewer:
 ```
 
 See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification contract and [DELIVERY_AND_ACCEPTANCE_CHECKLIST.md](DELIVERY_AND_ACCEPTANCE_CHECKLIST.md) for the human delivery record.
+
+### Sep 4 2026, 04:15–04:55 — TestFlight 20 crash on opening any conversation (owner report)
+
+| Item | Evidence |
+| --- | --- |
+| Report | Owner: build 20 "crashes whenever I try to go into chats with echo or anyone". Five `.ips` logs (04:14:32, 04:14:39, 04:15:06, 04:15:36, 04:22:45), all build 20, iPhone OS 26.5.2. |
+| Crash shape | `EXC_CRASH SIGABRT`, `lastExceptionBacktrace`: `RCTExceptionsManager reportFatal` → `RCTGetFatalHandler` → `objc_exception_throw` on `com.meta.react.turbomodulemanager.queue`. That is React Native's fatal path for an uncaught JavaScript error; Apple's log carries no message. Main thread at abort: `RCTMountingManager performTransaction` (unmount) in one log, `UIKeyboardInputMode dictationInputMode` in another, i.e. the conversation screen mounting. |
+| Not reproducible on simulator | Signed in as the owner's account on Newone Test 3 (code minted through the auth admin API) with the current tree: the Echo conversation renders fully (briefing, EN original with KO translation, own KO messages, composer). Bundle diff build 20 vs simulator: 692 bytes (push env string + the 7-line mixed-language client change, both null-safe). |
+| Environment delta | Build 20 is the first device build with `EXPO_PUBLIC_PUSH_ENVIRONMENT=production` and a session created fresh on it (storage generation change signed the owner out at 04:04). Simulators cannot obtain a push token, so push-active paths only ever ran on the phone. |
+| Mitigation shipped in build 21 | `ScreenErrorBoundary` around both conversation screens (render failure → card with `Error: message` and Retry) and `installCrashGuard()` in the root layout (production fatal handler shows the identifier in an alert instead of aborting; development keeps the red box). Either way the next failure is legible and the app survives. |
+| Side finding | An unsigned simulator build (`CODE_SIGNING_ALLOWED=NO`) cannot use the keychain: sign-in shows `ERR_KEY_CHAIN`. Simulator builds need the default ad-hoc signing. Simulator keychains also survive app uninstall, so a stale session must be signed out before another account can sign in. |
+| Owner data | Message 292 (group "eh") still `language_detection_state = pending` at 04:45: detection did not run for it; to check with the worker logs. |
