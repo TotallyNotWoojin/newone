@@ -13,8 +13,11 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     text: ".*${NAME}.*"
     below: "Available members"
+# The picked member shows as a chip "@NAME" above the picker (and the row is
+# checked); the older "Selected: NAME" label no longer exists (groups-10,
+# run-2026-09-04T14-58-38).
 - extendedWaitUntil:
-    visible: ".*Selected: ${NAME}.*"
+    visible: ".*(Selected: ${NAME}|@${NAME}).*"
     timeout: 15000
 - tapOn: ".*Close mentions.*"
 - tapOn:

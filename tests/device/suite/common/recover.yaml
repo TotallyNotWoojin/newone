@@ -26,3 +26,8 @@ appId: com.totallynotwoojin.newone
           start: "50%, 30%"
           end: "50%, 88%"
           duration: 600
+- runFlow:
+    when:
+      visible: ".*Close mentions.*"
+    commands:
+      - tapOn: ".*Close mentions.*"
