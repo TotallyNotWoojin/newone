@@ -326,14 +326,14 @@ function failureCode(error: unknown): string {
 function evidenceText(text: string, refs: string[], maximum: number): string {
   const suffix = ` [sources:${refs.join(',')}]`;
   const value = `${text}${suffix}`;
-  if (value.length > maximum) throw new ApiError(422, 'ai_output_needs_review');
+  if (value.length > maximum) throw new ApiError(422, 'ai_output_needs_review', 'summary_evidence_too_long');
   return value;
 }
 
 function sourceMessageIds(result: SummaryResult, refs: string[]): string[] {
   return refs.map((reference) => {
     const messageId = result.sourceMap[reference];
-    if (!messageId) throw new ApiError(422, 'ai_output_needs_review');
+    if (!messageId) throw new ApiError(422, 'ai_output_needs_review', 'summary_unknown_source_ref');
     return messageId;
   });
 }
@@ -362,7 +362,7 @@ export function summaryPersistence(result: SummaryResult, source: SummarySourceR
     due: entry.due,
   }));
   if (jsonBytes(decisions) > 32_768 || jsonBytes(actionItems) > 32_768) {
-    throw new ApiError(422, 'ai_output_needs_review');
+    throw new ApiError(422, 'ai_output_needs_review', 'summary_evidence_json_too_large');
   }
   const provenance = {
     contractVersion: 1,
@@ -376,7 +376,7 @@ export function summaryPersistence(result: SummaryResult, source: SummarySourceR
     evidenceEncoding: 'inline-source-refs-v1',
     humanReviewRequired: true,
   };
-  if (jsonBytes(provenance) > 16_384) throw new ApiError(422, 'ai_output_needs_review');
+  if (jsonBytes(provenance) > 16_384) throw new ApiError(422, 'ai_output_needs_review', 'summary_provenance_too_large');
   return { keyTopics, decisions, actionItems, ambiguities, provenance };
 }
 
@@ -636,6 +636,11 @@ async function processJob(
       job_id: job.id,
       workload: job.topic,
       code: failureCode(error),
+      // The review reason is one of the worker's own rule labels, never text
+      // from a message or from the provider.
+      reason: safe.code === 'ai_output_needs_review' && /^summary_[a-z_]+$/.test(safe.message)
+        ? safe.message
+        : undefined,
     }));
     return 'failed';
   }

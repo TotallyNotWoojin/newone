@@ -460,6 +460,52 @@ Deno.test('summary output is evidence-linked and restores only protected source 
   assertEquals(jsonSchema.strict, true);
 });
 
+Deno.test('summary without protected sources drops an echoed placeholder and never names the format', async () => {
+  let sent: Record<string, unknown> | undefined;
+  const processor = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async (_input, init) => {
+    sent = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({
+        id: 'gen-summary-plain',
+        model: policyValue.model,
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              primaryTopic: 'Print run timing',
+              summary: 'The print run moves to Monday morning __NEWONE_PROTECTED_0000__ and starts early.',
+              keyTopics: [{ text: 'Monday __NEWONE_PROTECTED_0000__ start', sourceRefs: ['s0001'] }],
+              decisions: [],
+              actionItems: [],
+              ambiguities: [],
+            }),
+          },
+        }],
+        usage: { prompt_tokens: 120, completion_tokens: 40 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    );
+  });
+  const result = await processor.summarize({
+    sources: [
+      { messageId: '9007199254740995', body: 'Can we move the print run to Monday morning?' },
+      { messageId: '9007199254740996', body: 'Monday morning works, we can start early.' },
+    ],
+    sourceFingerprint: 'b'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000002',
+  });
+  assertEquals(result.summary, 'The print run moves to Monday morning and starts early.');
+  assertEquals(result.keyTopics[0]?.text, 'Monday start');
+  const messages = sent?.messages as Array<Record<string, string>>;
+  assert(!String(messages[0]?.content ?? '').includes('__NEWONE_PROTECTED_'));
+  assert(!String(messages[1]?.content ?? '').includes('Placeholders in the sources'));
+});
+
 Deno.test('summary rejects invented protected identifiers and numbers', async () => {
   const processor = new OpenRouterLanguageProcessor({
     apiKey: 'test-openrouter-key-that-is-long-enough',
