@@ -11,7 +11,8 @@ appId: com.totallynotwoojin.newone
     visible: "(.*[0-9]+ unread.*|Unread.*[0-9]+.*)"
     timeout: 45000
 - takeScreenshot: ${SHOT}-unread
-- tapOn: "Unread"
+# The chip announces its count ("Unread 1"), so match the label with or without it.
+- tapOn: "Unread( [0-9]+)?"
 - extendedWaitUntil:
     visible: ".*${PEER}.*"
     timeout: 15000

@@ -10,6 +10,16 @@ appId: com.totallynotwoojin.newone
       text: "Archive conversation"
     direction: DOWN
     timeout: 30000
+# The controls card clips at the safe-area edge while Maestro measures against
+# the screen; a tap on a half-clipped last row hits the backdrop and just closes
+# the sheet (run-2026-09-04T22-48-47: sheet closed, server is_archived false).
+- swipe:
+    start: "50%, 72%"
+    end: "50%, 40%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-controls
 - tapOn: "Archive conversation"
 - extendedWaitUntil:
     notVisible: "Conversation controls"
