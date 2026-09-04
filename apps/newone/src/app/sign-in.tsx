@@ -414,8 +414,6 @@ export default function SignInScreen() {
               <Chip label={t('auth.returning')} onPress={() => {
                 chooseAccessMode('returning');
               }} selected={accessMode === 'returning'} />
-              <Chip label={t('auth.firstUse')} onPress={() => chooseAccessMode('enrollment')} selected={enrollmentMode} />
-              <Chip label={t('auth.recovery')} onPress={() => chooseAccessMode('recovery')} selected={recoveryMode} />
             </View>
           ) : null}
 

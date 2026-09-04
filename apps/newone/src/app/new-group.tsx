@@ -139,7 +139,7 @@ export default function NewGroupScreen() {
       unitId,
       historyPolicy,
       postingMode,
-      joinPolicy: lockedInviteOnly ? 'invite_only' : joinPolicy,
+      joinPolicy: lockedInviteOnly || personalRealm ? 'invite_only' : joinPolicy,
       incidentSeverity: kind === 'incident' ? incidentSeverity : undefined,
       incidentClassification: kind === 'incident' ? incidentClassification : undefined,
       members: Object.entries(selected).map(([membershipId, role]) => ({ membershipId, role })),
@@ -296,7 +296,7 @@ export default function NewGroupScreen() {
                   />
                 )}
                 {workspace.actionBusy === 'conversation-avatar-upload' ? (
-                  <Text style={styles.avatarStatus}>{t('group.avatarUploading')}</Text>
+                  <Text style={styles.avatarStatus}>{t(personalRealm ? 'group.avatarUploadingPlain' : 'group.avatarUploading')}</Text>
                 ) : null}
                 {avatarUploadFailed && createdConversationId ? (
                   <View style={styles.avatarRecovery}>
@@ -313,6 +313,7 @@ export default function NewGroupScreen() {
                 ) : null}
               </View>
 
+              {personalRealm ? null : (
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>{t('group.type')}</Text>
                 <ScrollView horizontal contentContainerStyle={styles.chips} showsHorizontalScrollIndicator={false}>
@@ -321,7 +322,9 @@ export default function NewGroupScreen() {
                   ))}
                 </ScrollView>
               </View>
+              )}
 
+              {personalRealm ? null : (
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>{t('group.unitScope')}</Text>
                 <ScrollView horizontal contentContainerStyle={styles.chips} showsHorizontalScrollIndicator={false}>
@@ -341,6 +344,7 @@ export default function NewGroupScreen() {
                 </ScrollView>
                 <Text style={styles.helperText}>{t('group.unitScopeDisclosure')}</Text>
               </View>
+              )}
 
               <View style={styles.policyGrid}>
                 <View style={styles.policyField}>
@@ -358,6 +362,7 @@ export default function NewGroupScreen() {
                     />
                   </View>
                 </View>
+                {personalRealm ? null : (
                 <View style={styles.policyField}>
                   <Text style={styles.label}>{t('group.joinPolicy')}</Text>
                   {lockedInviteOnly ? (
@@ -385,6 +390,7 @@ export default function NewGroupScreen() {
                     {lockedInviteOnly ? t('group.joinLockedDisclosure') : t('group.joinPolicyDisclosure')}
                   </Text>
                 </View>
+                )}
               </View>
 
               <View style={styles.fieldGroup}>

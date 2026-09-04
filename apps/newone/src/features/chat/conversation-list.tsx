@@ -140,7 +140,8 @@ export function ConversationList({
       <ScrollView
         horizontal
         contentContainerStyle={styles.filterRow}
-        showsHorizontalScrollIndicator={false}>
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}>
         {filters.map((item) => (
           <Chip
             count={
@@ -528,6 +529,13 @@ const styles = StyleSheet.create({
   searchWrapMobile: {
     paddingTop: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  // A horizontal ScrollView grows like any ScrollView; without this the chip
+  // row took half the screen and the conversations started mid-screen
+  // (owner report, Sep 4 2026).
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
   },
   filterRow: {
     minHeight: 48,

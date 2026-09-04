@@ -111,8 +111,6 @@ describe('sign-in and account recovery screen', () => {
     const view = await render(<SignInScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
     await fireEvent.press(screen.getByRole('button', { name: 'auth.emailChannel' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.firstUse' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
     const emailInput = screen.getByLabelText('auth.emailLabel');
     await fireEvent(emailInput, 'focus');
     await fireEvent(emailInput, 'blur');
@@ -145,79 +143,6 @@ describe('sign-in and account recovery screen', () => {
       destinationType: 'email', destination: 'person@example.com', code: '123456',
     }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
-    await view.unmount();
-  });
-
-  test('normalizes phone enrollment credentials and safely returns to another identity', async () => {
-    const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.firstUse' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
-    await fireEvent.changeText(screen.getByLabelText('auth.invitationTokenLabel'), 'bad-token');
-    await fireEvent.changeText(screen.getByLabelText('auth.employeeCodeLabel'), ' EMP-42 ');
-    await fireEvent.changeText(screen.getByLabelText('auth.phoneLabel'), '+1 (555) 555-0100');
-    await solveCaptcha();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    expect(screen.getByText('auth.invitationTokenInvalid')).toBeTruthy();
-
-    const invitation = 'A'.repeat(64);
-    await fireEvent.changeText(screen.getByLabelText('auth.invitationTokenLabel'), invitation);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(mockAuth.requestOtp).toHaveBeenCalledWith({
-      destinationType: 'phone',
-      destination: '+15555550100',
-      captchaToken: 'controlled-captcha-token-value',
-      invitationToken: invitation.toLowerCase(),
-      employeeCode: 'EMP-42',
-    }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.differentIdentity' }));
-    expect(screen.getByLabelText('auth.phoneLabel')).toBeTruthy();
-
-    await solveCaptcha();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '654321');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
-    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
-      destinationType: 'phone',
-      destination: '+15555550100',
-      invitationToken: invitation.toLowerCase(),
-      employeeCode: 'EMP-42',
-      code: '654321',
-    }));
-    await view.unmount();
-  });
-
-  test('executes recovery only through the recovery methods and localizes transport failures', async () => {
-    mockAuth = authState({
-      requestRecoveryOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
-        .mockRejectedValueOnce(new RepositoryError('upstream secret', 'network_unavailable', true))
-        .mockResolvedValueOnce({ channelConfigured: true }),
-      verifyRecoveryOtp: jest.fn<(..._args: unknown[]) => Promise<{ otherSessionsRevoked: boolean }>>()
-        .mockRejectedValueOnce(new RepositoryError('wrong code detail', 'invalid_query', false))
-        .mockResolvedValueOnce({ otherSessionsRevoked: true }),
-    });
-    const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
-    expect(screen.getByText('auth.recoveryWarning')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'recover@example.com');
-    await solveCaptcha();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('errors.network')).toBeTruthy());
-    expect(screen.queryByText('upstream secret')).toBeNull();
-    expect(mockAuth.requestOtp).not.toHaveBeenCalled();
-
-    await solveCaptcha();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.recoveryOtpSent')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '111111');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifyRecovery' }));
-    await waitFor(() => expect(screen.getByText('errors.invalidRequest')).toBeTruthy());
-    expect(screen.queryByText('wrong code detail')).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifyRecovery' }));
-    await waitFor(() => expect(mockAuth.verifyRecoveryOtp).toHaveBeenCalledTimes(2));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
-
-    await fireEvent.press(screen.getByRole('link', { name: 'auth.help' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('./help');
     await view.unmount();
   });
 
@@ -374,7 +299,6 @@ describe('sign-in and account recovery screen', () => {
     ));
 
     await fireEvent.press(screen.getByRole('button', { name: 'auth.differentIdentity' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
     expect(screen.getByRole('button', { name: 'auth.languageKorean' })).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.languageKorean' }));
     expect(mockSetLocale).toHaveBeenCalledWith('ko');
@@ -432,23 +356,6 @@ describe('sign-in and account recovery screen', () => {
       destination: 'new.person@example.com',
       code: '246810',
     }));
-    await view.unmount();
-  });
-
-  test('requests account recovery without a captcha token when Turnstile is not configured', async () => {
-    mockTurnstileSiteKey = null;
-    const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
-    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
-
-    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'recover@example.com');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.recoveryOtpSent')).toBeTruthy());
-    expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledWith({
-      destinationType: 'email',
-      destination: 'recover@example.com',
-    });
-    expect(mockAuth.requestRecoveryOtp.mock.calls[0][0]).not.toHaveProperty('captchaToken');
     await view.unmount();
   });
 
@@ -545,71 +452,6 @@ describe('sign-in and account recovery screen', () => {
     }
   });
 
-  test('resends the recovery code through the recovery request and reports unconfigured channels', async () => {
-    jest.useFakeTimers();
-    mockAuth = authState({
-      requestRecoveryOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
-        .mockResolvedValueOnce({ channelConfigured: true })
-        .mockResolvedValueOnce({ channelConfigured: false })
-        .mockResolvedValueOnce({ channelConfigured: true }),
-    });
-    try {
-      const view = await render(<SignInScreen />);
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.recovery' }));
-      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'recover@example.com');
-      await solveCaptcha();
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-      await waitFor(() => expect(screen.getByText('auth.recoveryOtpSent')).toBeTruthy());
-
-      await act(async () => { jest.advanceTimersByTime(60_000); });
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
-      await waitFor(() => expect(screen.getByText('auth.channelUnavailable')).toBeTruthy());
-      expect(mockAuth.requestRecoveryOtp).toHaveBeenLastCalledWith({
-        destinationType: 'email',
-        destination: 'recover@example.com',
-      });
-      expect(screen.getByText('(60s)')).toBeTruthy();
-
-      await act(async () => { jest.advanceTimersByTime(60_000); });
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
-      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
-      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledTimes(3);
-      expect(mockAuth.requestOtp).not.toHaveBeenCalled();
-      await view.unmount();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  test('resends the enrollment code with the invitation credentials intact', async () => {
-    jest.useFakeTimers();
-    const invitation = 'a'.repeat(64);
-    try {
-      const view = await render(<SignInScreen />);
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.firstUse' }));
-      await fireEvent.changeText(screen.getByLabelText('auth.invitationTokenLabel'), invitation);
-      await fireEvent.changeText(screen.getByLabelText('auth.employeeCodeLabel'), ' EMP-42 ');
-      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'invitee@example.com');
-      await solveCaptcha();
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-      await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
-
-      await act(async () => { jest.advanceTimersByTime(60_000); });
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
-      await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
-      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(2);
-      expect(mockAuth.requestOtp).toHaveBeenLastCalledWith({
-        destinationType: 'email',
-        destination: 'invitee@example.com',
-        invitationToken: invitation,
-        employeeCode: 'EMP-42',
-      });
-      await view.unmount();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   test('appends the error code and short correlation id only to generic fallback failures', async () => {
     const correlationId = '1a2b3c4d-9999-4000-8000-000000000000';
     mockAuth = authState({
@@ -686,7 +528,11 @@ describe('consumer-neutral sign-in copy', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'auth.emailChannel' }));
     expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
 
-    for (const mode of ['auth.firstUse', 'auth.recovery', 'auth.modeSignup']) {
+    // Consumer sign-in offers only "Create account" and "Returning member"
+    // (owner backlog, Sep 4 2026): no enrollment or recovery modes.
+    expect(screen.queryByRole('button', { name: 'auth.firstUse' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'auth.recovery' })).toBeNull();
+    for (const mode of ['auth.modeSignup']) {
       await fireEvent.press(screen.getByRole('button', { name: mode }));
       expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
       expect(screen.queryByPlaceholderText('you@company.com')).toBeNull();

@@ -518,7 +518,11 @@ describe('group creation workflow screen', () => {
     expect(screen.queryByText('Stranger Candidate')).toBeNull();
 
     // Only the consumer group kind is offered; every workplace kind is gone.
-    expect(screen.getByRole('button', { name: 'group.private' })).toBeTruthy();
+    // Consumer groups are private and invite-only: no type, unit scope, or join policy controls.
+    expect(screen.queryByRole('button', { name: 'group.private' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.organizationWide' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.joinInherit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.joinApproval' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'group.team' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'group.shift' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'group.incident' })).toBeNull();
@@ -539,7 +543,7 @@ describe('group creation workflow screen', () => {
       unitId: null,
       historyPolicy: 'since_join',
       postingMode: 'all_members',
-      joinPolicy: 'inherit',
+      joinPolicy: 'invite_only',
       incidentSeverity: undefined,
       incidentClassification: undefined,
       members: [{ membershipId: 'membership-friend', role: 'member' }],

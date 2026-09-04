@@ -80,6 +80,22 @@ export default function SettingsScreen() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [preferenceDraft, setPreferenceDraft] = useState<OrganizationPreferences | null>(null);
+  // Consumer settings save themselves (owner backlog, Sep 4 2026): every
+  // change to the draft is written after a short pause, no Save button.
+  const saveOrganizationPreferences = workspace.saveOrganizationPreferences;
+  const savedPreferences = workspace.organizationPreferences;
+  useEffect(() => {
+    if (!personalRealm || !preferenceDraft || !savedPreferences) return;
+    if (JSON.stringify(preferenceDraft) === JSON.stringify(savedPreferences)) return;
+    const hasStart = Boolean(preferenceDraft.quietHoursStart);
+    const hasEnd = Boolean(preferenceDraft.quietHoursEnd);
+    const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (hasStart !== hasEnd || (hasStart && (!time.test(preferenceDraft.quietHoursStart as string) || !time.test(preferenceDraft.quietHoursEnd as string)))) return;
+    const timer = setTimeout(() => {
+      void saveOrganizationPreferences({ ...preferenceDraft, uiLanguage: locale });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [locale, personalRealm, preferenceDraft, saveOrganizationPreferences, savedPreferences]);
   const [devicePreferenceDraft, setDevicePreferenceDraft] =
     useState<DeviceNotificationPreferenceOverrides | null>(null);
   const [profileDraft, setProfileDraft] =
@@ -524,6 +540,11 @@ export default function SettingsScreen() {
                 onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, vibrationEnabled: value } : current)}
                 value={preferenceDraft.vibrationEnabled}
               />
+              {personalRealm ? (
+                <Text style={styles.rowHint}>
+                  {workspace.actionBusy === 'organization-preferences-save' ? t('settings.preferencesSaving') : t('settings.preferencesAutoSaved')}
+                </Text>
+              ) : (
               <PrimaryButton
                 label={t('settings.savePreferences')}
                 loading={workspace.actionBusy === 'organization-preferences-save'}
@@ -535,6 +556,7 @@ export default function SettingsScreen() {
                 }}
                 tone="dark"
               />
+              )}
             </View>
           ) : null}
           <ActionError message={workspace.actionError} />
@@ -832,7 +854,7 @@ export default function SettingsScreen() {
             if (!revoked) await auth.signOut();
             router.replace('/sign-in');
           }}
-          tone="light"
+          tone="danger"
         />
 
         <View style={[styles.dangerSection, shadow]}>
@@ -1048,6 +1070,10 @@ const styles = StyleSheet.create({
   quietHoursRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   quietField: { flex: 1, minWidth: 180 },
   preferenceSwitch: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  rowHint: {
+    color: colors.inkMuted,
+    fontSize: 13,
+  },
   rowLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   rowNote: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: 3 },
   securityRow: { minHeight: 62, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
