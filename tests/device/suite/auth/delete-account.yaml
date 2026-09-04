@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Delete account → type username → confirm → back at sign-in.
+
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -24,10 +24,11 @@ appId: com.totallynotwoojin.newone
     visible: "Permanently delete this account"
     timeout: 15000
 - takeScreenshot: ${SHOT}-delete-dialog
-- tapOn: ${USERNAME}
-- inputText: ${USERNAME}
-- tapOn: "Type your username to enable deletion"
-- takeScreenshot: ${SHOT}-username-typed
+# The dialog asks for the literal word DELETE (placeholder "DELETE").
+- tapOn: "DELETE"
+- inputText: "DELETE"
+- tapOn: "Type DELETE to enable deletion"
+- takeScreenshot: ${SHOT}-confirmation-typed
 - tapOn: "Delete account permanently"
 - extendedWaitUntil:
     visible: "Create account"
