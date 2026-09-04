@@ -456,3 +456,13 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | chat-34 | Archive: sheet closed but `is_archived` stayed false — the same clipped-card tap as delete-for-me (Archive is the last row of the controls card). Flow nudges the card first. |
 | Harness | Mid-flow driver deaths ("Device became unreachable", media setup on simulator 2) are now recognised from Maestro's debug log and retried once. |
 | Next | translation (running), media and translation-ko (ko-final waiter), then a rebuild and a final chat run for defect T. |
+
+### Translation rerun (Sep 4 2026, 16:50)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T23-29-08: PASS 24 · FAIL 1 · UNREACHABLE 1; detection and translation completed first try for every message on the micro instance. |
+| trans-06 | The report sheet opened, but tapping a label does not dismiss the keyboard and the Submit button sat behind it. The flow now hides the keyboard and reveals Submit. |
+| trans-16 | B's mixed message "La reunión es el lunes but bring…" was detected as `es` with a real detector method, which equals B's display language, so the app correctly omits "Translate for me" (a translation is not needed). The step now checks the detected language first and records that outcome; the Korean variant still exercises the action because its mixed message falls back to the sender language. |
+| Harness | The broadened driver-crash detection also matched ordinary assertion failures in the debug log (each was retried and mislabelled ENVIRONMENT); narrowed to unambiguous driver-death markers. |
+| Next | media and translation-ko (running), then a rebuild and final chat + translation runs. |
