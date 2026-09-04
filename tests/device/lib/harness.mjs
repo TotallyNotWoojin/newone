@@ -3,7 +3,7 @@
 // evaluates server truth for every durable effect, and records everything
 // in the shared report. Areas never work around app bugs; they record them.
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runFlow, screenTexts, findErrorTexts, screenshotsIn } from './maestro.mjs';
 import { screenshot as simShot } from './devices.mjs';
@@ -37,7 +37,18 @@ export function createAreaContext({ area, devices, report, runDir }) {
     // run the flow once more before recording a failure.
     // A flow that hangs until the harness limit (e.g. inputText never
     // returning while the keyboard is up) is the driver stalling, too.
-    const driverCrash = (r) => !r.ok && (r.timedOut === true || /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver|driver not ready in time|IOSDriverTimeoutException/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}`));
+    // Maestro reports a mid-flow driver death ("Device became unreachable")
+    // only in its debug log: stdout ends at the last command and stderr is
+    // empty. Fold that log's error lines into the crash check.
+    const debugLogErrors = (dir) => {
+      try {
+        const tests = join(dir, '.maestro', 'tests');
+        const latest = readdirSync(tests).sort().at(-1);
+        if (!latest) return '';
+        return readFileSync(join(tests, latest, 'maestro.log'), 'utf8').split('\n').filter((line) => /\[ERROR\]|Exception/.test(line)).slice(-40).join('\n');
+      } catch { return ''; }
+    };
+    const driverCrash = (r, dir) => !r.ok && (r.timedOut === true || /kotlinx\.coroutines|hierarchy unavailable|XCUITest|Connection refused|Unable to launch the driver|MaestroDriver|driver not ready in time|IOSDriverTimeoutException|DeviceUnreachable|Device unreachable|became unreachable/i.test(`${r.failure ?? ''}\n${r.stderr ?? ''}\n${debugLogErrors(dir)}`));
     let result = await runFlow({
       device,
       flow: flowPath,
@@ -46,7 +57,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
       timeoutMs,
       debugDir: join(areaDir, 'maestro-debug', id),
     });
-    if (driverCrash(result)) {
+    if (driverCrash(result, join(areaDir, 'maestro-debug', id))) {
       log(`driver crash during ${id} on ${device}; retrying once`);
       await new Promise((resolve) => setTimeout(resolve, 10_000));
       result = await runFlow({
@@ -57,7 +68,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
         timeoutMs,
         debugDir: join(areaDir, 'maestro-debug', `${id}-retry`),
       });
-      if (driverCrash(result)) result = { ...result, failure: `ENVIRONMENT (Maestro driver crashed twice): ${result.failure ?? ''}` };
+      if (driverCrash(result, join(areaDir, 'maestro-debug', `${id}-retry`))) result = { ...result, failure: `ENVIRONMENT (Maestro driver crashed twice): ${result.failure ?? ''}` };
     }
     writeFileSync(join(areaDir, `${id}.maestro.txt`), `${result.stdout ?? ''}\n--- stderr ---\n${result.stderr ?? ''}`);
     const screenshots = screenshotsIn(areaDir, shotPrefix);
