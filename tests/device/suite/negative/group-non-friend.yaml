@@ -30,9 +30,9 @@ appId: com.totallynotwoojin.newone
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
-          start: "50%, 24%"
-          end: "50%, 44%"
-          duration: 400
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
 - scrollUntilVisible:
     element:
       text: "Search company directory"
@@ -46,9 +46,9 @@ appId: com.totallynotwoojin.newone
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
-          start: "50%, 24%"
-          end: "50%, 44%"
-          duration: 400
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
 - extendedWaitUntil:
     visible: ".*(No authorized candidates match this search|Add ${STRANGER}).*"
     timeout: 30000

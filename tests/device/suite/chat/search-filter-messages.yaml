@@ -8,9 +8,9 @@ appId: com.totallynotwoojin.newone
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
       - swipe:
-          start: "50%, 24%"
-          end: "50%, 44%"
-          duration: 400
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
 # The type chips row is on screen after the keyboard goes; the chip can be
 # partially clipped in the horizontal row, so tap it rather than scroll for
 # full visibility (run-2026-09-04T08-10-25).
