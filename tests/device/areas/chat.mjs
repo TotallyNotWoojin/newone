@@ -143,7 +143,9 @@ export async function run(ctx) {
     await ctx.step({
       id: 'chat-17-forward', title: 'A forwards the edited text to the group', device: devA, flow: 'chat/forward.yaml', env: { TARGET: t1e, DEST: groupName },
       expected: 'Sheet closes; server message_forward_provenance row in the group', screen: 'conversation → Message actions',
-      serverTruth: async () => { const w = groupRow ? await server.waitFor(() => server.messageByBody(groupRow.id, `edited ${tag}`), (r) => r?.forwarded === true, { timeoutMs: 20_000 }) : { ok: false }; return { ok: w.ok, detail: w.row ? { id: w.row.id, forwarded: w.row.forwarded } : 'no forwarded row' }; },
+      // Defect K (Sep 4 2026): the forwarded copy must also get language
+      // detection like a typed message; the row's detection state proves it.
+      serverTruth: async () => { const w = groupRow ? await server.waitFor(() => server.messageByBody(groupRow.id, `edited ${tag}`), (r) => r?.forwarded === true && r?.language_detection_state === 'completed', { timeoutMs: 90_000 }) : { ok: false }; return { ok: w.ok, detail: w.row ? { id: w.row.id, forwarded: w.row.forwarded, detection: w.row.language_detection_state } : 'no forwarded row' }; },
     });
     await ctx.step({ id: 'chat-18-see-forwarded', title: 'Forwarded copy shows the FORWARDED label in the group', device: devA, flow: 'chat/see-forwarded.yaml', env: { DEST: groupName, TEXT: t1e }, expected: 'FORWARDED label + text', screen: 'group conversation' });
   }

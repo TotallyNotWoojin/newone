@@ -92,7 +92,7 @@ export async function messages(conversationId) {
 }
 
 export async function messageByBody(conversationId, bodyLike) {
-  return await one(`select id::text as id, sender_user_id, kind, body, edited_at, deleted_at, reply_to_message_id::text as reply_to, created_at,
+  return await one(`select id::text as id, sender_user_id, kind, body, edited_at, deleted_at, reply_to_message_id::text as reply_to, created_at, language_detection_state, language_detection_method,
       (select string_agg(emoji || ':' || user_id::text, ',') from public.message_reactions r where r.message_id = m.id) as reaction_detail,
       exists (select 1 from public.message_pins p where p.message_id = m.id) as pinned,
       (select string_agg(user_id::text, ',') from public.message_user_visibility v where v.message_id = m.id) as hidden_for,
@@ -165,7 +165,9 @@ export async function outboxFailures(sinceIso) {
 
 // Poll a query until predicate passes or the deadline expires. Returns the
 // last row plus the elapsed time so latencies can be reported.
-export async function waitFor(queryFn, predicate, { timeoutMs = 60_000, intervalMs = 4_000 } = {}) {
+// 6 s between polls (was 4 s): the hosted database is on a burst-IO tier and the
+// suite's polling was a visible share of its disk budget (owner warning, Sep 4).
+export async function waitFor(queryFn, predicate, { timeoutMs = 60_000, intervalMs = 6_000 } = {}) {
   const started = Date.now();
   let last = null;
   while (Date.now() - started < timeoutMs) {
