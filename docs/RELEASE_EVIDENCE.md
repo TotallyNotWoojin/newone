@@ -556,3 +556,10 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | --- | --- |
 | Image viewer | `image-viewer.tsx`: tapping a photo preview opens a full-screen modal fed by the same signed preview URL (no download), pinch-to-zoom via the platform scroll view on iOS, download from the top bar, tap to hide the bar. Unit-tested; device check via `viewercheck` area. |
 | Defect X (server) | A plain Spanish line ("¿Nos vemos a las 10 en la sala grande?") failed with `ai_output_needs_review`: the workplace rule rejects any output containing a time/measurement/ID the source did not carry, so a faithful "at 10:00" reformatting was refused. The AI worker now passes `introducedTokenPolicy: 'allow'` for the personal (consumer) realm; workplace organizations keep the strict rule. Deployed; the failed translation was re-enqueued and completed. |
+
+### v2.5 (Sep 5 2026, 03:00)
+
+| Item | Evidence |
+| --- | --- |
+| Device check | run-2026-09-05T09-56-16 (`viewercheck` on the 6.9" simulator): open conversation, photo present, tap preview → full-screen viewer with Close/Download → close → composer back. 3/3. Two earlier attempts failed on harness mechanics only (tap under the composer overlay; Send tap during the sheet animation). |
+| Release | `release-v2.5.sh` started 02:59: tsc, Jest, iOS build 25 → TestFlight (+ groups via `wait-build-25.mjs`, attached to the App Store version by `attach-build.mjs`), Android version code 15 → Play internal, sideload APK. Contents: full-screen image viewer, consumer translation policy (server, already live), plus everything in v2.4. |
