@@ -5,7 +5,27 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn: "People"
+# A tab tap right after navigation settled elsewhere once on a 6.9-inch
+# simulator (Settings opened instead). Recover and tap People again.
+- runFlow:
+    when:
+      notVisible: "Search by username"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            visible: "Close settings"
+          commands:
+            - tapOn: "Close settings"
+      - runFlow:
+          when:
+            notVisible: "Search by username"
+          commands:
+            - tapOn: "People"
 - extendedWaitUntil:
     visible: "Search by username"
     timeout: 15000
