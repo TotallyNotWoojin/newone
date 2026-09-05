@@ -19,6 +19,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/state/auth';
 import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 import { I18nProvider } from '@/i18n/provider';
+import { DevicePreferencesProvider } from '@/state/device-preferences';
 import { colors, spacing, type } from '@/theme/tokens';
 // Metro selects the native notification bridge or the web no-op.
 // eslint-disable-next-line import/no-unresolved
@@ -44,6 +45,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <I18nProvider>
+          <DevicePreferencesProvider>
           <Head>
             <title>Newone · Workplace communication</title>
             <meta
@@ -55,6 +57,7 @@ export default function RootLayout() {
             <StatusBar style="dark" />
             <ProtectedNavigator />
           </AuthProvider>
+          </DevicePreferencesProvider>
         </I18nProvider>
       </SafeAreaProvider>
       {privacyShielded ? (
