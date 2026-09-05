@@ -522,3 +522,13 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Symptom | Owner's phone on TestFlight 22: Settings showed "Push notifications are not set up in this build of the app." (repeated in every section). |
 | Cause | `pushBinding()` needs an EAS project id, which `runtime.ts` read only from `EXPO_PUBLIC_EAS_PROJECT_ID`. EAS builds carry the id natively; the local archive and Gradle scripts never exported that variable (the Supabase URL was inlined, the project id literal was absent from the archived bundle). Same gap in the v2.2 APK and Play bundle. |
 | Fix | Runtime falls back to app.json's `extra.eas.projectId` (loaded lazily, keeping the isolated runtime-config tests intact); the local build scripts also export the variable. Settings renders the action error once under the header. Build 23 / version code 13 cut as v2.3 via `release-v2.3.sh`. |
+
+### Push confirmed on the owner's phone; defect W; send-first (Sep 4 2026, 19:40)
+
+| Item | Evidence |
+| --- | --- |
+| Push end to end | Build 23: `device_registrations` holds the owner's iOS device ("woojintest", production, 02:08Z); `push_delivery_attempts` shows the first real push accepted by Expo (ticket issued 02:38:51Z). The owner saw the notification. |
+| Defect W (client) | Tapping the notification produced "too many requests": `rate_limit_buckets` recorded 6,252 `device.register` calls from the owner's session in one two-minute window. expo-notifications emits a push-token event for every `getExpoPushTokenAsync()` call, and the refresh listener re-fetched the token, re-triggering itself. The listener now uses the event's token and ignores an already-registered one; the device fetch never runs inside the listener. The 120-requests-per-minute limit itself is unchanged and was doing its job. |
+| Send path | Owner feedback: "it should just send the message". Online sends now go straight to the service (bubble → sent on the receipt); the encrypted queue is reached only offline or after a network failure, and a permanently failed send still appears in the outbox list for retry/cancel. Workspace provider tests updated (84/84 across the affected suites). |
+| Reconnecting banner | The "Reconnecting…" banner is the realtime socket only. Pushes are sent by the service through Expo/APNs regardless of the app's socket state, and while degraded the app polls every 10 s, so messages still arrive in-app. |
+| Release | v2.4: build 24 / version code 14 started 19:40 via `release-v2.4.sh`. |
