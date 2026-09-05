@@ -57,3 +57,27 @@ Done through the API:
 8. Store settings: app category Communication; contact email (required) and website.
 9. Production access: a personal developer account created after Nov 13, 2023 must first run a closed test with at least 12 opted-in testers for 14 continuous days, then apply for production. If the account is an organization account, production is available immediately. Closed testing needs the Google Group from the owner.
 10. Production release: promote version code 14 (or newer) to Production with a phased rollout.
+
+## Website and domain (Sep 5 2026)
+
+The site lives in the public GitHub repo `TotallyNotWoojin/newone-legal` (GitHub Pages, branch `main`, root): landing page, privacy, terms, support. Live now at https://totallynotwoojin.github.io/newone-legal/ and both stores point there.
+
+To serve it at newonechat.com, add these records at the domain registrar, then tell the assistant (or set the custom domain in the repo's Pages settings and commit a `CNAME` file containing `newonechat.com`):
+
+| Type | Host | Value |
+| --- | --- | --- |
+| A | @ | 185.199.108.153 |
+| A | @ | 185.199.109.153 |
+| A | @ | 185.199.110.153 |
+| A | @ | 185.199.111.153 |
+| CNAME | www | totallynotwoojin.github.io |
+
+After DNS resolves, enable "Enforce HTTPS" in the Pages settings and switch the store URLs to https://newonechat.com/….
+
+## Google Play production for a personal account
+
+Google requires a closed test with at least 12 testers opted in for 14 continuous days before a personal account (created after Nov 13, 2023) can apply for production. There is no API or policy exception. Fastest path:
+1. Play Console → Testing → Closed testing → create a track (or use "alpha"), add an email list with 12+ Google accounts (friends, family, classmates), and roll out version code 14 to it.
+2. Send testers the opt-in link https://play.google.com/apps/testing/com.totallynotwoojin.newone; they must accept and install once and stay opted in for 14 days.
+3. On day 14, Dashboard → "Apply for production access", answer the short questionnaire, then promote the release to Production.
+Meanwhile the sideload APK and the internal track (up to 100 emailed testers) keep working.
