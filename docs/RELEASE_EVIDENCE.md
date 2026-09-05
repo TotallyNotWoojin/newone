@@ -572,3 +572,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Y — a phone stops receiving notifications after sign-out or account switch, forever | `bff_register_device_impl` upsert guarded with `where revoked_at is null` and then raised "revoked installation cannot be restored"; the client's registration effect swallows the error. Live check: the owner's iPhone had live sessions from 19:31 and 20:51 but a registration revoked at 08:57 (query "revoked registrations with a newer live session": 1). | Migration 20260906050200: the upsert restores `revoked_at = null` (a live session binding for the installation is verified first). Pushed. Registration heals on the next app launch. |
 | Z — notifications say only "Open Newone to view new activity" and never wait for translation | Payload built content-free (`GENERIC_NOTIFICATION_COPY`), dispatched on the next 5-second tick, before the translation job runs; preview modes were only generic/hidden. | Migration 20260906050100 + worker deploy: personal-realm deliveries get `content_title`/`content_body` (translated when a fresh completed translation exists), `translation_pending` holds a delivery ≤ 25 s while the rest go out; `translation_pending` retry code added. Verified: Spanish test message 553 translated in ~1 s; fan-out was 0 because the target phone was in state Y. |
 | Chats preview in the viewer's language | Preview built from the raw last message in the base bootstrap impl. | Migration 20260906050000 (`bff_bootstrap_messaging_state_v12_impl`) rewrites `conversations[].preview.body` from a fresh completed translation; adds `original_body`, `translated_to`. |
+
+### v3 integration log (Sep 5 2026)
+
+| Time | Event |
+| --- | --- |
+| 14:20 | Six parallel streams started in isolated worktrees (chat UI, summaries, settings/notifications, social, auth, web); shared device-preferences contract committed first (36bd038). |
+| 15:05 | Summary stream merged (996712a): prose summaries, `[sources:…]` tokens out of text into provenance, header sheet with Copy/Share, since-last-request scope. Deno 351/351. |
+| 15:12 | Settings stream merged (7ed3320): compact settings, first-launch notification card, Allow-notifications switch, Enter-sends and translated-only toggles. tsc clean, Jest 806/806. |
+| 15:20 | Android 15 emulator profile "Newone Pixel" created (3-button navigation) for the composer-inset check. |
