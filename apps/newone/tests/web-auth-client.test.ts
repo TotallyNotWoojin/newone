@@ -14,9 +14,11 @@ import {
   requestNativeRecoveryOtp,
   requestNativeSignup,
   requestWebSignup,
+  setNativePassword,
   signOutWebSession,
   validateNativeMembership,
   verifyNativeOtp,
+  verifyNativePassword,
   verifyNativeRecoveryOtp,
   verifyNativeSignup,
   verifyWebMfa,
@@ -229,7 +231,21 @@ describe('native identity gateway client', () => {
     await expect(validateNativeMembership({
       accessToken: 'revoked-token',
       userId: 'user-a',
+    })).rejects.toMatchObject({ code: 'session_revoked' });
+
+    jsonResponse({ error: { code: 'forbidden' } }, 403);
+    await expect(validateNativeMembership({
+      accessToken: 'foreign-token',
+      userId: 'user-a',
     })).rejects.toMatchObject({ code: 'membership_required' });
+
+    // A bare 401 is a refused token, not a membership verdict: the provider
+    // refreshes and retries instead of signing out.
+    jsonResponse({ error: { code: 'unauthorized' } }, 401);
+    await expect(validateNativeMembership({
+      accessToken: 'expired-token',
+      userId: 'user-a',
+    })).rejects.toMatchObject({ code: 'http_401' });
 
     jsonResponse({ data: { userId: 'other-user', organizationId: 'org-a', currentUser: { membershipRole: 'member' } } });
     await expect(validateNativeMembership({
@@ -639,5 +655,85 @@ describe('same-origin web identity client', () => {
     } finally {
       platform.restore();
     }
+  });
+});
+
+describe('password gateway client', () => {
+  test('signs in with a password over the device-bound native path and demands a complete session', async () => {
+    jsonResponse({
+      data: {
+        authenticated: true,
+        user: { id: 'user-a', email: 'employee@example.test', hasPassword: true },
+        memberships: [{ organizationId: 'org-a' }],
+        sessionId: 'session-a',
+        aal: 'aal1',
+        session: { accessToken: 'access', refreshToken: 'refresh', expiresIn: 600 },
+      },
+    });
+    await expect(verifyNativePassword({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      password: 'correct horse battery',
+    })).resolves.toMatchObject({
+      user: { id: 'user-a', hasPassword: true },
+      sessionId: 'session-a',
+      session: { accessToken: 'access', refreshToken: 'refresh', expiresIn: 600 },
+    });
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/native/password/verify');
+    expect(init.headers).toMatchObject({
+      'X-Newone-Client-Platform': 'ios',
+      'X-Newone-Installation-Id': '20000000-0000-4000-8000-000000000002',
+      apikey: 'sb_publishable_controlled_test_key',
+    });
+    expect(JSON.parse(String(init.body))).toEqual({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      password: 'correct horse battery',
+      installationId: '20000000-0000-4000-8000-000000000002',
+    });
+
+    jsonResponse({ error: { code: 'unauthorized' } }, 401);
+    await expect(verifyNativePassword({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      password: 'wrong password',
+    })).rejects.toMatchObject({ code: 'unauthorized' });
+
+    jsonResponse({ data: { authenticated: true, user: { id: 'user-a' }, memberships: [] } });
+    await expect(verifyNativePassword({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      password: 'correct horse battery',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  test('sets a password with the bearer session and accepts only an explicit receipt', async () => {
+    jsonResponse({ data: { passwordSet: true } });
+    await expect(setNativePassword({
+      accessToken: 'controlled-access-token',
+      password: 'correct horse battery',
+    })).resolves.toEqual({ passwordSet: true });
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/password/set');
+    expect(init.headers).toMatchObject({
+      Authorization: 'Bearer controlled-access-token',
+      apikey: 'sb_publishable_controlled_test_key',
+    });
+    expect(JSON.parse(String(init.body))).toEqual({ password: 'correct horse battery' });
+
+    jsonResponse({ error: { code: 'weak_password' } }, 400);
+    await expect(setNativePassword({ accessToken: 'controlled-access-token', password: 'short' }))
+      .rejects.toMatchObject({ code: 'weak_password' });
+
+    jsonResponse({ data: { passwordSet: false } });
+    await expect(setNativePassword({ accessToken: 'controlled-access-token', password: 'correct horse battery' }))
+      .rejects.toMatchObject({ code: 'invalid_response' });
+
+    controlledFetch.mockImplementationOnce(async () => {
+      throw new Error('offline');
+    });
+    await expect(setNativePassword({ accessToken: 'controlled-access-token', password: 'correct horse battery' }))
+      .rejects.toMatchObject({ code: 'network_unavailable' });
   });
 });

@@ -72,11 +72,16 @@ function authState(overrides: Record<string, unknown> = {}) {
   return {
     error: null,
     requestOtp: successfulAction({ channelConfigured: true }),
-    verifyOtp: successfulAction(),
+    verifyOtp: successfulAction({ hasPassword: true }),
     requestSignup: successfulAction(),
-    verifySignup: successfulAction(),
+    verifySignup: successfulAction({ hasPassword: true }),
     requestRecoveryOtp: successfulAction({ channelConfigured: true }),
-    verifyRecoveryOtp: successfulAction({ otherSessionsRevoked: true }),
+    verifyRecoveryOtp: successfulAction({ otherSessionsRevoked: 1, hasPassword: true }),
+    signInWithPassword: successfulAction(),
+    setPassword: successfulAction(),
+    dismissPasswordPrompt: jest.fn(),
+    hasPassword: false,
+    passwordPromptPending: false,
     ...overrides,
   };
 }
@@ -509,6 +514,147 @@ describe('sign-in and account recovery screen', () => {
     );
     await view.unmount();
     platform.restore();
+  });
+});
+
+describe('password sign-in', () => {
+  test('signs a returning member in with email and password, maps a rejected credential, and keeps codes one tap away', async () => {
+    mockAuth = authState({
+      signInWithPassword: jest.fn<(..._args: unknown[]) => Promise<void>>()
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'unauthorized', false))
+        .mockRejectedValueOnce(new RepositoryError('upstream throttle detail', 'rate_limited', true))
+        .mockResolvedValueOnce(undefined),
+    });
+    const view = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.methodPassword' }));
+
+    // A password pairs with the account email: the phone channel and the
+    // challenge (a code-delivery guard) both step aside.
+    expect(screen.queryByRole('button', { name: 'auth.phoneChannel' })).toBeNull();
+    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
+    expect(screen.getByRole('button', { name: 'auth.signIn' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
+    expect(screen.getByText('auth.emailInvalid')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), ' Person@Example.COM ');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
+    expect(screen.getByText('auth.passwordTooShort')).toBeTruthy();
+    expect(mockAuth.signInWithPassword).not.toHaveBeenCalled();
+
+    const passwordInput = screen.getByLabelText('auth.passwordLabel');
+    expect(passwordInput.props.secureTextEntry).toBe(true);
+    await fireEvent.press(screen.getByLabelText('auth.showPassword'));
+    expect(screen.getByLabelText('auth.passwordLabel').props.secureTextEntry).toBe(false);
+    await fireEvent.press(screen.getByLabelText('auth.hidePassword'));
+    expect(screen.getByLabelText('auth.passwordLabel').props.secureTextEntry).toBe(true);
+
+    await fireEvent.changeText(screen.getByLabelText('auth.passwordLabel'), 'wrong password');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
+    await waitFor(() => expect(screen.getByText('auth.passwordIncorrect')).toBeTruthy());
+    expect(screen.queryByText('upstream detail')).toBeNull();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
+    await waitFor(() => expect(screen.getByText('errors.rateLimit')).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByLabelText('auth.passwordLabel'), 'correct horse battery');
+    await fireEvent(screen.getByLabelText('auth.passwordLabel'), 'submitEditing');
+    await waitFor(() => expect(mockAuth.signInWithPassword).toHaveBeenLastCalledWith({
+      destinationType: 'email',
+      destination: 'person@example.com',
+      password: 'correct horse battery',
+    }));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    expect(mockAuth.requestOtp).not.toHaveBeenCalled();
+
+    // Forgot password: codes remain the recovery route.
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.forgotPassword' }));
+    expect(screen.queryByLabelText('auth.passwordLabel')).toBeNull();
+    expect(screen.getByRole('button', { name: 'auth.emailChannel' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'auth.continue' })).toBeTruthy();
+    expect(screen.getByLabelText('auth.emailLabel').props.value).toBe(' Person@Example.COM ');
+    await view.unmount();
+  });
+
+  test('offers a password once after a code sign-in for an account without one, and saves it', async () => {
+    mockTurnstileSiteKey = null;
+    mockAuth = authState({
+      verifyOtp: jest.fn(async (..._args: unknown[]) => {
+        mockAuth.passwordPromptPending = true;
+        return { hasPassword: false };
+      }),
+      setPassword: jest.fn<(..._args: unknown[]) => Promise<void>>()
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'weak_password', false))
+        .mockImplementationOnce(async () => {
+          mockAuth.passwordPromptPending = false;
+        }),
+    });
+    const view = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
+
+    await waitFor(() => expect(screen.getByText('auth.passwordPromptTitle')).toBeTruthy());
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
+    expect(screen.getByText('auth.passwordTooShort')).toBeTruthy();
+    expect(mockAuth.setPassword).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
+    await waitFor(() => expect(screen.getByText('auth.passwordTooShort')).toBeTruthy());
+    expect(mockAuth.setPassword).toHaveBeenCalledTimes(1);
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    expect(mockAuth.setPassword).toHaveBeenLastCalledWith('correct horse battery');
+    await view.unmount();
+  });
+
+  test('the password offer can be skipped and a returning member with a password never sees it', async () => {
+    mockTurnstileSiteKey = null;
+    mockAuth = authState({
+      verifySignup: jest.fn(async (..._args: unknown[]) => {
+        mockAuth.passwordPromptPending = true;
+        return { hasPassword: false };
+      }),
+      dismissPasswordPrompt: jest.fn(() => {
+        mockAuth.passwordPromptPending = false;
+      }),
+    });
+    const view = await render(<SignInScreen />);
+    await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
+    await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
+    await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '246810');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignup' }));
+    await waitFor(() => expect(screen.getByText('auth.passwordPromptTitle')).toBeTruthy());
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.skipPassword' }));
+    expect(mockAuth.dismissPasswordPrompt).toHaveBeenCalledTimes(1);
+    expect(mockAuth.setPassword).not.toHaveBeenCalled();
+    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    await view.unmount();
+
+    mockAuth = authState();
+    const returning = await render(<SignInScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    expect(screen.queryByText('auth.passwordPromptTitle')).toBeNull();
+    await returning.unmount();
   });
 });
 

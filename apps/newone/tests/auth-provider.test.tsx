@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { AuthRetryableFetchError } from '@supabase/supabase-js';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { useEffect } from 'react';
 import { Platform, Text } from 'react-native';
@@ -18,6 +19,8 @@ const mockRequestNativeOtp = jest.fn();
 const mockVerifyNativeOtp = jest.fn();
 const mockRequestNativeRecoveryOtp = jest.fn();
 const mockVerifyNativeRecoveryOtp = jest.fn();
+const mockVerifyNativePassword = jest.fn();
+const mockSetNativePassword = jest.fn();
 const mockRequestNativeSignup = jest.fn();
 const mockVerifyNativeSignup = jest.fn();
 const mockDeleteNativeAccount = jest.fn();
@@ -83,12 +86,16 @@ jest.mock('@/lib/web-auth', () => {
     requestWebOtp: jest.fn(),
     requestWebRecoveryOtp: jest.fn(),
     requestWebSignup: jest.fn(),
+    setNativePassword: (mockInput: unknown) => mockSetNativePassword(mockInput),
+    setWebPassword: jest.fn(),
     signOutWebSession: jest.fn(),
     validateNativeMembership: (mockInput: unknown) => mockValidateNativeMembership(mockInput),
     verifyNativeOtp: (mockInput: unknown) => mockVerifyNativeOtp(mockInput),
+    verifyNativePassword: (mockInput: unknown) => mockVerifyNativePassword(mockInput),
     verifyNativeRecoveryOtp: (mockInput: unknown) => mockVerifyNativeRecoveryOtp(mockInput),
     verifyNativeSignup: (mockInput: unknown) => mockVerifyNativeSignup(mockInput),
     verifyWebOtp: jest.fn(),
+    verifyWebPassword: jest.fn(),
     verifyWebRecoveryOtp: jest.fn(),
     verifyWebSignup: jest.fn(),
     WebAuthError: ControlledWebAuthError,
@@ -195,7 +202,285 @@ beforeEach(() => {
     },
   }));
   mockDeleteNativeAccount.mockImplementation(async () => ({ status: 'deleted' }));
+  mockVerifyNativePassword.mockImplementation(async () => ({
+    authenticated: true,
+    user: { id: userId, hasPassword: true },
+    memberships: [{ organizationId: 'org-a' }],
+    session: {
+      accessToken: accessToken('aal1'),
+      refreshToken: 'controlled-refresh-token',
+      expiresIn: 3600,
+    },
+  }));
+  mockSetNativePassword.mockImplementation(async () => ({ passwordSet: true }));
   mockPurgeUser.mockImplementation(async () => undefined);
+});
+
+describe('sessions that last', () => {
+  test('a refused token is refreshed and checked once more; the session stays and nothing signs out', async () => {
+    mockValidateNativeMembership
+      .mockImplementationOnce(async () => {
+        throw { code: 'http_401' };
+      })
+      .mockImplementationOnce(async () => ({ organizationId: 'org-a' }));
+    mockRefreshSession.mockImplementationOnce(async () => ({
+      data: { session: { ...nativeSession('aal1'), access_token: accessToken('aal1', 'session-refreshed') } },
+      error: null,
+    }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(mockValidateNativeMembership).toHaveBeenCalledTimes(2);
+    expect(mockValidateNativeMembership).toHaveBeenLastCalledWith({
+      accessToken: accessToken('aal1', 'session-refreshed'),
+      userId,
+    });
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(currentAuth().sessionId).toBe('session-refreshed');
+    expect(currentAuth().error).toBeNull();
+  });
+
+  test('a refused token whose refresh has no network keeps the stored session', async () => {
+    mockValidateNativeMembership.mockImplementationOnce(async () => {
+      throw { code: 'http_401' };
+    });
+    mockRefreshSession.mockImplementationOnce(async () => ({
+      data: { session: null },
+      error: new AuthRetryableFetchError('offline', 0),
+    }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(currentAuth().sessionId).toBe('session-native');
+  });
+
+  test('a token still refused after a fresh one is a verdict and signs out with a plain message', async () => {
+    mockValidateNativeMembership
+      .mockImplementationOnce(async () => {
+        throw { code: 'http_401' };
+      })
+      .mockImplementationOnce(async () => {
+        throw { code: 'membership_required' };
+      });
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('signed-out:errors.membership')).toBeTruthy());
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  test('a launch without network keeps the launch screen and signs in once the refresh goes through', async () => {
+    mockGetSession
+      .mockImplementationOnce(async () => ({
+        data: { session: null },
+        error: new AuthRetryableFetchError('offline', 0),
+      }))
+      .mockImplementationOnce(async () => ({ data: { session: nativeSession() }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    expect(screen.getByText('loading')).toBeTruthy();
+    await waitFor(() => expect(mockGetSession).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('loading')).toBeTruthy();
+    expect(screen.queryByText(/signed-out/)).toBeNull();
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy(), { timeout: 4000 });
+    expect(mockGetSession).toHaveBeenCalledTimes(2);
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  test('a stored session the client itself has given up on shows the plain signed-out message', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({
+      data: { session: null },
+      error: Object.assign(new Error('Invalid Refresh Token'), { name: 'AuthApiError' }),
+    }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('signed-out:errors.session')).toBeTruthy());
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+  });
+
+  test('refreshSession forces a refresh and only reports a lost session for a real rejection', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+
+    let outcome: boolean | undefined;
+    await act(async () => {
+      outcome = await currentAuth().refreshSession();
+    });
+    expect(outcome).toBe(true);
+
+    mockRefreshSession.mockImplementationOnce(async () => ({
+      data: { session: null },
+      error: new AuthRetryableFetchError('offline', 0),
+    }));
+    await act(async () => {
+      outcome = await currentAuth().refreshSession();
+    });
+    expect(outcome).toBe(true);
+    expect(screen.getByText('signed-in')).toBeTruthy();
+
+    mockRefreshSession.mockImplementationOnce(async () => ({
+      data: { session: null },
+      error: Object.assign(new Error('Invalid Refresh Token'), { name: 'AuthApiError' }),
+    }));
+    await act(async () => {
+      outcome = await currentAuth().refreshSession();
+    });
+    expect(outcome).toBe(false);
+  });
+});
+
+describe('passwords', () => {
+  test('a code sign-in for an account without a password raises the one-time offer until it is dismissed', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+    expect(currentAuth().passwordPromptPending).toBe(false);
+
+    let outcome: { hasPassword: boolean } | undefined;
+    await act(async () => {
+      outcome = await currentAuth().verifyOtp({
+        destinationType: 'email',
+        destination: 'employee@example.test',
+        code: '123456',
+      });
+    });
+    expect(outcome).toEqual({ hasPassword: false });
+    expect(screen.getByText('signed-in')).toBeTruthy();
+    expect(currentAuth().passwordPromptPending).toBe(true);
+    expect(currentAuth().hasPassword).toBe(false);
+
+    await act(async () => {
+      currentAuth().dismissPasswordPrompt();
+    });
+    expect(currentAuth().passwordPromptPending).toBe(false);
+  });
+
+  test('setPassword uses the live bearer, marks the account, and pulls the stamped session', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    expect(currentAuth().hasPassword).toBe(false);
+    mockRefreshSession.mockImplementationOnce(async () => ({
+      data: {
+        session: {
+          ...nativeSession('aal2'),
+          user: { id: userId, app_metadata: { newone_password_set_at: '2026-09-05T00:00:00Z' } },
+        },
+      },
+      error: null,
+    }));
+
+    await act(async () => {
+      await currentAuth().setPassword('correct horse battery');
+    });
+    expect(mockSetNativePassword).toHaveBeenCalledWith({
+      accessToken: accessToken('aal2'),
+      password: 'correct horse battery',
+    });
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(currentAuth().hasPassword).toBe(true);
+    expect(currentAuth().passwordPromptPending).toBe(false);
+    expect(screen.getByText('signed-in')).toBeTruthy();
+  });
+
+  test('a rejected setPassword changes nothing locally', async () => {
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
+    mockSetNativePassword.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('too short'), { code: 'weak_password' });
+    });
+
+    await act(async () => {
+      await expect(currentAuth().setPassword('short')).rejects.toMatchObject({ code: 'weak_password' });
+    });
+    expect(currentAuth().hasPassword).toBe(false);
+    expect(mockRefreshSession).not.toHaveBeenCalled();
+  });
+
+  test('signInWithPassword activates the gateway session through the same native contract and never raises the offer', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    const input = {
+      destinationType: 'email' as const,
+      destination: 'employee@example.test',
+      password: 'correct horse battery',
+    };
+    await act(async () => {
+      await currentAuth().signInWithPassword(input);
+    });
+    expect(mockVerifyNativePassword).toHaveBeenCalledWith(input);
+    expect(mockSetSession).toHaveBeenCalledWith({
+      access_token: accessToken('aal1'),
+      refresh_token: 'controlled-refresh-token',
+    });
+    expect(screen.getByText('signed-in')).toBeTruthy();
+    expect(currentAuth().passwordPromptPending).toBe(false);
+  });
+
+  test('a password activation whose local session does not match the gateway user is refused', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    mockSetSession.mockImplementationOnce(async () => ({
+      data: { session: { ...nativeSession(), user: { id: 'intruder-user' } } },
+      error: null,
+    }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    await expect(currentAuth().signInWithPassword({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      password: 'correct horse battery',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(screen.getByText('signed-out')).toBeTruthy();
+  });
 });
 
 describe('native authentication state machine', () => {
@@ -282,7 +567,7 @@ describe('native authentication state machine', () => {
         code: '654321',
       });
     });
-    expect(recoveryResult).toEqual({ otherSessionsRevoked: 4 });
+    expect(recoveryResult).toEqual({ otherSessionsRevoked: 4, hasPassword: false });
   });
 
   test('activates a consumer signup session through the same native activation contract', async () => {
