@@ -541,3 +541,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | iOS | Build 24 archived and uploaded ("UPLOAD SUCCEEDED with no errors" 20:40); `wait-build-24.mjs` adds it to both beta groups once App Store Connect reports it VALID. |
 | Android | Bundle version code 14 (sha256 887db1ec…) on the Play internal track as "newone v2.4"; APK `~/Downloads/newone-v2.4-build14.apk`, versionCode 14. |
 | Contents | Defect W (push-token registration loop), send-first messaging (queue only offline), single settings error banner, push project id fallback (from v2.3). |
+
+### Store submission work (Sep 5 2026)
+
+| Item | Evidence |
+| --- | --- |
+| App Store Connect | Version 1.0.0 with build 24; content rights, categories, age rating 4+, subtitle/description/keywords/promo text, privacy/support/marketing URLs (GitHub Pages), review contact and demo account (six-digit code verified on a simulator after relaxing the server rule), price Free, all territories, 6.9" screenshots ×5. Console-only: App Privacy questionnaire. |
+| Google Play | Listing texts, icon, feature graphic, contact email/website, phone screenshots ×5 (framed 1242×2484), internal track code 14, closed-testing draft release of code 14. Console-only: content rating, data safety, app access, target audience, ads; production gated by the 12-tester/14-day rule for a personal account. |
+| Website | `TotallyNotWoojin/newone-legal` on GitHub Pages: landing, privacy, terms, support. DNS records for newonechat.com listed in docs/STORE_SUBMISSION.md. |
