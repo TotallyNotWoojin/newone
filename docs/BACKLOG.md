@@ -5,10 +5,11 @@ Paused until the owner says go. Items are in rough priority order.
 ## Product
 
 1. **Full-screen image viewer.** Done Sep 5 2026 (v2.5): tapping a photo opens it full screen from the preview URL with pinch-to-zoom on iOS and a download action; tap the image to hide the bar. Still open: pinch-to-zoom on Android (needs a gesture-handler zoom), swipe-to-dismiss, and inline video playback (no video player library is installed yet).
-2. Password recovery / alternate sign-in path beyond the emailed code.
-3. Snappier animations (screen transitions, sheet presentation).
-4. Confirmation before declining a message request (a mis-tap currently declines immediately).
-5. The "Reconnecting…" status banner should overlay instead of pushing the list down (a tap aimed at a row can land on the row below when it clears).
+2. **People search only matches a username prefix.** `bff_search_users_by_username` matches `lower(username) LIKE '<query>%'`, and any query that isn't `^[a-z0-9][a-z0-9_]{1,29}$` returns an empty list silently — so uppercase, spaces, and Korean input find nobody with no explanation. Two real users (display names "DDONG" and "Kyle LEE", usernames `dongai77` and `leeiy0712`) could not find each other at all. Fix: also match display name, case-insensitively and across scripts; failing that, show "search by username, e.g. dongai77" and stop silently swallowing non-matching input. Consider an invite/share link so nobody has to know a username.
+3. Password recovery / alternate sign-in path beyond the emailed code.
+4. Snappier animations (screen transitions, sheet presentation).
+5. Confirmation before declining a message request (a mis-tap currently declines immediately).
+6. The "Reconnecting…" status banner should overlay instead of pushing the list down (a tap aimed at a row can land on the row below when it clears).
 
 ## Engineering
 
