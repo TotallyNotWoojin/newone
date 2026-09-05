@@ -1,6 +1,6 @@
 // IPAD SHOTS: sign the showcase account (Maya Chen) in on the iPad simulator
 // given by NEWONE_SHOT_DEVICE and capture the Chats list and a conversation.
-import { bootAndInstall } from '../lib/devices.mjs';
+import { bootAndInstall, launchApp } from '../lib/devices.mjs';
 export const meta = { id: 'ipadshots', devices: 1, title: 'iPad screenshots (showcase account)' };
 
 export async function run(ctx) {
@@ -9,6 +9,9 @@ export async function run(ctx) {
   const peer = process.env.NEWONE_SHOT_PEER ?? 'Diego Ruiz';
   if (!dev || !email) { ctx.note({ id: 'ipadshots-blocked', title: 'NEWONE_SHOT_DEVICE / NEWONE_SHOT_EMAIL not set', status: 'FAIL' }); return; }
   bootAndInstall(dev, (message) => ctx.log(`[ipad] ${message}`));
+  // The pool warm-up launches only pool devices; this one needs an explicit launch.
+  launchApp(dev);
+  await new Promise((resolve) => setTimeout(resolve, 8000));
   const request = await ctx.step({ id: 'ipad-01-request', title: 'Returning sign-in request', device: dev, flow: 'common/returning-request.yaml', env: { EMAIL: email }, expected: 'code screen', screen: 'sign-in' });
   if (!request.uiOk) return;
   const code = await ctx.waitForCode({ email });
