@@ -81,3 +81,7 @@ Google requires a closed test with at least 12 testers opted in for 14 continuou
 2. Send testers the opt-in link https://play.google.com/apps/testing/com.totallynotwoojin.newone; they must accept and install once and stay opted in for 14 days.
 3. On day 14, Dashboard → "Apply for production access", answer the short questionnaire, then promote the release to Production.
 Meanwhile the sideload APK and the internal track (up to 100 emailed testers) keep working.
+
+## Android sideload distribution (Sep 5 2026)
+
+The APK is published as a GitHub Release asset on `TotallyNotWoojin/newone-legal` (GitHub Pages cannot host files over 100 MB). Stable link used on the site: https://github.com/TotallyNotWoojin/newone-legal/releases/latest/download/newone.apk — upload each new build as `newone.apk` on a new release tag (plus the versioned file name) so the link never changes. Sideloaded installs do not auto-update; if Play App Signing later signs the app with a different key, sideload users must uninstall before installing from Play.
