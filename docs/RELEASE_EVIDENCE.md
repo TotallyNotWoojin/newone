@@ -549,3 +549,10 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | App Store Connect | Version 1.0.0 with build 24; content rights, categories, age rating 4+, subtitle/description/keywords/promo text, privacy/support/marketing URLs (GitHub Pages), review contact and demo account (six-digit code verified on a simulator after relaxing the server rule), price Free, all territories, 6.9" screenshots ×5. Console-only: App Privacy questionnaire. |
 | Google Play | Listing texts, icon, feature graphic, contact email/website, phone screenshots ×5 (framed 1242×2484), internal track code 14, closed-testing draft release of code 14. Console-only: content rating, data safety, app access, target audience, ads; production gated by the 12-tester/14-day rule for a personal account. |
 | Website | `TotallyNotWoojin/newone-legal` on GitHub Pages: landing, privacy, terms, support. DNS records for newonechat.com listed in docs/STORE_SUBMISSION.md. |
+
+### Image viewer and defect X (Sep 5 2026, 02:45)
+
+| Item | Evidence |
+| --- | --- |
+| Image viewer | `image-viewer.tsx`: tapping a photo preview opens a full-screen modal fed by the same signed preview URL (no download), pinch-to-zoom via the platform scroll view on iOS, download from the top bar, tap to hide the bar. Unit-tested; device check via `viewercheck` area. |
+| Defect X (server) | A plain Spanish line ("¿Nos vemos a las 10 en la sala grande?") failed with `ai_output_needs_review`: the workplace rule rejects any output containing a time/measurement/ID the source did not carry, so a faithful "at 10:00" reformatting was refused. The AI worker now passes `introducedTokenPolicy: 'allow'` for the personal (consumer) realm; workplace organizations keep the strict rule. Deployed; the failed translation was re-enqueued and completed. |

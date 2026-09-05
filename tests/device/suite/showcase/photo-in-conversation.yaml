@@ -1,0 +1,7 @@
+appId: com.totallynotwoojin.newone
+---
+# Relaunch, open the conversation, then send a photo from the library.
+- runFlow:
+    file: ../common/open-conversation.yaml
+- runFlow:
+    file: ../media/photo-library.yaml
