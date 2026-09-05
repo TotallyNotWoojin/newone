@@ -672,15 +672,26 @@ describe('native identity response and security contracts', () => {
   });
 
   test.each([
-    [401, { error: { code: 'anything' } }],
     [403, { error: { code: 'anything' } }],
     [409, { error: { code: 'forbidden' } }],
-    [409, { error: { code: 'SESSION_REVOKED' } }],
     [409, { code: 'membership_required' }],
+    [401, { error: { code: 'membership_required' } }],
   ])('maps status %s membership denials to membership_required', async (status, payload) => {
     queueJson(payload, status);
     await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
       .rejects.toMatchObject({ code: 'membership_required' });
+  });
+
+  test('a revoked session is reported as such, not as a missing membership', async () => {
+    queueJson({ error: { code: 'SESSION_REVOKED' } }, 409);
+    await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
+      .rejects.toMatchObject({ code: 'session_revoked' });
+  });
+
+  test('a bare 401 is a refused token, so the caller refreshes and retries instead of signing out', async () => {
+    queueJson({ error: { code: 'anything' } }, 401);
+    await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
+      .rejects.toMatchObject({ code: 'http_401' });
   });
 
   test.each([
