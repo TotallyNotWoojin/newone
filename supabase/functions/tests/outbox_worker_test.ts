@@ -724,6 +724,9 @@ Deno.test('shift-aware suppression uses authoritative state and only server crit
     criticalCategory: null,
     quietHoursOverride: false,
     overrideReason: null,
+    contentTitle: null,
+    contentBody: null,
+    translationPending: false,
     preferences: {
       notificationPreview: 'generic',
       soundEnabled: true,
@@ -846,6 +849,24 @@ Deno.test('push resolver requires Expo project and environment binding', () => {
   const parsed = parsePushPage(page, job);
   assertEquals(parsed.deliveries[0]?.pushTokenType, 'expo');
   assertEquals(parsed.deliveries[0]?.pushEnvironment, 'production');
+  // Deliveries without message content parse as content-free (legacy rows).
+  assertEquals(parsed.deliveries[0]?.contentTitle, null);
+  assertEquals(parsed.deliveries[0]?.contentBody, null);
+  assertEquals(parsed.deliveries[0]?.translationPending, false);
+  // Consumer rows carry the message text (translated when ready) and a hold flag.
+  const withContent = structuredClone(page);
+  Object.assign(withContent.deliveries[0] as Record<string, unknown>, {
+    content_title: 'Kyle LEE',
+    content_body: '¿Nos vemos a las 10?',
+    translation_pending: true,
+  });
+  (withContent.deliveries[0] as { preferences: Record<string, unknown> }).preferences
+    .notification_preview = 'content';
+  const parsedContent = parsePushPage(withContent, job);
+  assertEquals(parsedContent.deliveries[0]?.contentTitle, 'Kyle LEE');
+  assertEquals(parsedContent.deliveries[0]?.contentBody, '¿Nos vemos a las 10?');
+  assertEquals(parsedContent.deliveries[0]?.translationPending, true);
+  assertEquals(parsedContent.deliveries[0]?.preferences.notificationPreview, 'content');
   let rejected = false;
   try {
     const withoutProject = structuredClone(page);

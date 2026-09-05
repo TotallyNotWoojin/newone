@@ -214,8 +214,17 @@ export interface PushDelivery {
     | null;
   quietHoursOverride: boolean;
   overrideReason: string | null;
+  /**
+   * Message text for the recipient (translated to their message language when a
+   * fresh translation exists, otherwise the original). Present only for message
+   * events; null for announcements/handoffs.
+   */
+  contentTitle: string | null;
+  contentBody: string | null;
+  /** The recipient reads another language and its translation is still queued. */
+  translationPending: boolean;
   preferences: {
-    notificationPreview: 'generic' | 'hidden';
+    notificationPreview: 'generic' | 'hidden' | 'content';
     soundEnabled: boolean;
     vibrationEnabled: boolean;
     shiftAwareSuppression: boolean;
@@ -640,6 +649,9 @@ function pushDelivery(value: unknown): PushDelivery {
     'quiet_hours_override',
     'quiet_hours_override_reason',
     'preferences',
+    'content_title',
+    'content_body',
+    'translation_pending',
   ]);
   oneOf(row.dispatch_status, ['pending', 'retry_wait'] as const);
   if (row.dispatchable !== true) throw new ApiError(503, 'dependency_unavailable');
@@ -719,10 +731,17 @@ function pushDelivery(value: unknown): PushDelivery {
     criticalCategory,
     quietHoursOverride,
     overrideReason,
+    contentTitle: row.content_title === null || row.content_title === undefined
+      ? null
+      : normalizedString(row.content_title, { min: 1, max: 200 }) as string,
+    contentBody: row.content_body === null || row.content_body === undefined
+      ? null
+      : normalizedString(row.content_body, { min: 1, max: 4000, trim: false }) as string,
+    translationPending: row.translation_pending === true,
     preferences: {
       notificationPreview: oneOf(
         preferences.notification_preview,
-        ['generic', 'hidden'] as const,
+        ['generic', 'hidden', 'content'] as const,
       ),
       soundEnabled: bool(preferences.sound_enabled),
       vibrationEnabled: bool(preferences.vibration_enabled),
@@ -1093,7 +1112,11 @@ async function expoMessage(
   }
   const silent = notificationSuppressed(delivery, event) ||
     delivery.preferences.notificationPreview === 'hidden';
-  const visible = genericNotification(delivery.locale);
+  // Consumer recipients see the message itself (in their language when the
+  // translation is ready); other modes keep the content-free copy.
+  const visible = delivery.preferences.notificationPreview === 'content' && delivery.contentBody
+    ? { title: delivery.contentTitle ?? 'Newone', body: delivery.contentBody.slice(0, 240) }
+    : genericNotification(delivery.locale);
   return {
     attemptId: delivery.attemptId,
     to: token,
@@ -1182,7 +1205,19 @@ export function defaultOutboxWorkerDependencies(): OutboxWorkerDependencies {
         );
         const messages: ExpoPushMessage[] = [];
         const localResults: ExpoSubmissionResult[] = [];
+        // A recipient whose translation is still queued keeps their attempt
+        // unrecorded; everyone else is sent now, and the job retries shortly so
+        // the held deliveries are re-resolved with the translation (the SQL
+        // stops holding after 25 seconds and falls back to the original text).
+        let heldForTranslation = 0;
         for (const delivery of page.deliveries) {
+          if (
+            delivery.translationPending &&
+            delivery.preferences.notificationPreview === 'content'
+          ) {
+            heldForTranslation += 1;
+            continue;
+          }
           const message = await expoMessage(
             job,
             page.event,
@@ -1199,6 +1234,9 @@ export function defaultOutboxWorkerDependencies(): OutboxWorkerDependencies {
         }
         for (const result of localResults) {
           await recordSubmission(admin, workerId, job, result);
+        }
+        if (heldForTranslation > 0) {
+          throw new ApiError(503, 'translation_pending', undefined, 5);
         }
         if (!page.hasMore) {
           const completed = asObject(

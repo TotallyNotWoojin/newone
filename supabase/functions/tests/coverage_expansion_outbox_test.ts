@@ -198,6 +198,9 @@ const delivery: PushDelivery = {
   criticalCategory: null,
   quietHoursOverride: false,
   overrideReason: null,
+  contentTitle: null,
+  contentBody: null,
+  translationPending: false,
   preferences: {
     notificationPreview: 'generic',
     soundEnabled: true,

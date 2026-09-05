@@ -28,6 +28,7 @@ export type ErrorCode =
   | 'ai_processing_disabled'
   | 'ai_output_needs_review'
   | 'provider_unavailable'
+  | 'translation_pending'
   | 'method_not_allowed'
   | 'internal_error';
 
@@ -61,6 +62,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   ai_processing_disabled: 'Language processing is not enabled.',
   ai_output_needs_review: 'The generated language output requires review.',
   provider_unavailable: 'Language processing is temporarily unavailable.',
+  translation_pending: 'A translation for this notification is still in progress.',
   method_not_allowed: 'This method is not allowed.',
   internal_error: 'The request could not be completed.',
 };
