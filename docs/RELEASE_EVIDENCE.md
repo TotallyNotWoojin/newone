@@ -514,3 +514,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Checks | tsc clean, Jest 763/763 (branch coverage 89.97% vs the 91% gate — follow-up), Deno 347/347. |
 | Device evidence on this build | groups 39/0, media 17/0 (+1 seeded-document step), profile 6/6, sessions 14/0, translation-ko 26/0, translation 24/1 (harness), chat 66/2 → focused 17/0 (defects T and U proven). |
 | Next | Paused at the owner's request: no v3 work until asked. Open notes: branch-coverage gate, media-05 thumbnail tap unverified, closed-track testers, v3 list (password recovery, snappier animations, reconnect banner layout, decline confirmation, profile cascade on manual auth deletion). |
+
+### Defect V — push reported as unconfigured on locally built binaries (Sep 4 2026, 19:00)
+
+| Item | Evidence |
+| --- | --- |
+| Symptom | Owner's phone on TestFlight 22: Settings showed "Push notifications are not set up in this build of the app." (repeated in every section). |
+| Cause | `pushBinding()` needs an EAS project id, which `runtime.ts` read only from `EXPO_PUBLIC_EAS_PROJECT_ID`. EAS builds carry the id natively; the local archive and Gradle scripts never exported that variable (the Supabase URL was inlined, the project id literal was absent from the archived bundle). Same gap in the v2.2 APK and Play bundle. |
+| Fix | Runtime falls back to app.json's `extra.eas.projectId` (loaded lazily, keeping the isolated runtime-config tests intact); the local build scripts also export the variable. Settings renders the action error once under the header. Build 23 / version code 13 cut as v2.3 via `release-v2.3.sh`. |
