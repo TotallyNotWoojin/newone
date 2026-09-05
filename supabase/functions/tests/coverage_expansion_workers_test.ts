@@ -747,7 +747,7 @@ Deno.test('summary persistence rejects unbound and oversized evidence payloads',
   await assertRejects(
     () =>
       summaryPersistence(
-        summaryResult({ keyTopics: [{ text: 'x'.repeat(500), sourceRefs: [] }] }),
+        summaryResult({ keyTopics: [{ text: 'x'.repeat(501), sourceRefs: [] }] }),
         summarySource,
       ),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',
@@ -755,7 +755,7 @@ Deno.test('summary persistence rejects unbound and oversized evidence payloads',
   await assertRejects(
     () =>
       summaryPersistence(
-        summaryResult({ ambiguities: [{ text: 'x'.repeat(2000), sourceRefs: [] }] }),
+        summaryResult({ ambiguities: [{ text: 'x'.repeat(2001), sourceRefs: [] }] }),
         summarySource,
       ),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',
@@ -764,6 +764,14 @@ Deno.test('summary persistence rejects unbound and oversized evidence payloads',
     () =>
       summaryPersistence(
         summaryResult({ decisions: [{ text: 'missing', sourceRefs: ['unknown'] }] }),
+        summarySource,
+      ),
+    (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',
+  );
+  await assertRejects(
+    () =>
+      summaryPersistence(
+        summaryResult({ keyTopics: [{ text: 'Unbound topic', sourceRefs: ['s0404'] }] }),
         summarySource,
       ),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',

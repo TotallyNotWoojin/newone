@@ -29,10 +29,11 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments';
 import { useConversationTyping } from '@/data/realtime/use-conversation-typing';
 import { ImageViewerModal } from '@/features/chat/image-viewer';
+import { SummarySheet } from '@/features/chat/summary-sheet';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
 import { firstUnreadMessageId } from '@/data/reconciliation/message-timeline.mjs';
 import type { ConversationMemberCandidate } from '@/data/repositories/contracts';
-import type { AiOutputErrorCategory, Attachment, Conversation, Message, OperationalAction, Person } from '@/domain/types';
+import type { AiOutputErrorCategory, Attachment, Conversation, Message, Person } from '@/domain/types';
 import { Avatar, Chip, EmptyState, IconButton, PrimaryButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
@@ -86,6 +87,8 @@ export function ConversationPane({
   const [selectedMentionUserIds, setSelectedMentionUserIds] = useState<string[]>([]);
   const [showMentionPicker, setShowMentionPicker] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [reportingSummaryId, setReportingSummaryId] = useState<string | null>(null);
   const [conversationName, setConversationName] = useState('');
   const [conversationDescription, setConversationDescription] = useState('');
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
@@ -490,6 +493,10 @@ export function ConversationPane({
           setConversationDescription(conversation.description ?? '');
           setShowControls(true);
         }}
+        onOpenSummary={() => {
+          workspace.clearActionError();
+          setShowSummary(true);
+        }}
       />
 
       {typingPeers.length ? (
@@ -575,11 +582,6 @@ export function ConversationPane({
             </Text>
           </Pressable>
         ) : null}
-        <ConversationBriefing
-          conversation={conversation}
-          messages={messages}
-          onOpenSource={scrollToSourceMessage}
-        />
         {messages.length ? (
           messages.map((message, index) => (
             <View
@@ -814,6 +816,10 @@ export function ConversationPane({
         onChangeDescription={setConversationDescription}
         onChangeName={setConversationName}
         onClose={() => setShowControls(false)}
+        onOpenSummary={() => {
+          setShowControls(false);
+          setShowSummary(true);
+        }}
         onCloseIncident={async (reason) => {
           if (await workspace.closeIncident(conversation.id, reason)) setShowControls(false);
         }}
@@ -838,6 +844,26 @@ export function ConversationPane({
           workspace.updateConversationPreferences(conversation.id, { translationMode })}
         visible={showControls}
       />
+      <SummarySheet
+        key={`${conversation.id}:${showSummary ? 'open' : 'closed'}`}
+        conversation={conversation}
+        messages={messages}
+        onClose={() => setShowSummary(false)}
+        onReportError={(summaryId) => {
+          // One system modal at a time: the sheet yields to the report form.
+          setShowSummary(false);
+          setReportingSummaryId(summaryId);
+        }}
+        visible={showSummary}
+      />
+      {reportingSummaryId ? (
+        <AiOutputErrorReportModal
+          onClose={() => setReportingSummaryId(null)}
+          outputKind="summary"
+          targetId={reportingSummaryId}
+          visible
+        />
+      ) : null}
       <AttachmentPickerModal
         busy={workspace.actionBusy === 'attachment-upload'}
         caption={attachmentCaption}
@@ -907,473 +933,17 @@ export function ConversationPane({
   );
 }
 
-function ConversationBriefing({
-  conversation,
-  messages,
-  onOpenSource,
-}: {
-  conversation: Conversation;
-  messages: Message[];
-  onOpenSource: (messageId: string) => Promise<boolean>;
-}) {
-  const workspace = useWorkspace();
-  const router = useRouter();
-  const { t } = useI18n();
-  const currentUserId = workspace.currentUser?.id ?? null;
-  const [expanded, setExpanded] = useState(false);
-  const [confirming, setConfirming] = useState<OperationalAction | null>(null);
-  const [assigneeId, setAssigneeId] = useState('');
-  const [dueAt, setDueAt] = useState('');
-  const [correcting, setCorrecting] = useState(false);
-  const [correctionTopic, setCorrectionTopic] = useState('');
-  const [correctionBody, setCorrectionBody] = useState('');
-  const [reviewing, setReviewing] = useState(false);
-  const [reportingSummary, setReportingSummary] = useState(false);
-  const [reviewNote, setReviewNote] = useState('');
-  const [policyOpen, setPolicyOpen] = useState(false);
-  const [policyMode, setPolicyMode] = useState<'manual' | 'message_count' | 'shift_close'>('manual');
-  const [policyThreshold, setPolicyThreshold] = useState('50');
-  const [sourceError, setSourceError] = useState(false);
-  const summary = workspace.summaries
-    .filter((item) => item.conversationId === conversation.id)
-    .sort((left, right) => right.versionNumber - left.versionNumber)[0];
-  const summaryErrorReport = summary
-    ? workspace.aiOutputErrorReports.find((report) => report.summaryId === summary.id)
-    : undefined;
-  const actions = workspace.actions.filter((item) => item.conversationId === conversation.id);
-  const sourceMessageIds = messages.flatMap((message) => message.serverId ? [message.serverId] : []).slice(-500);
-  const hasNewSummarySources = Boolean(
-    summary && sourceMessageIds.length && sourceMessageIds.at(-1) !== summary.sourceLastMessageId,
-  );
-  const canManageSummary = conversation.canManage === true;
-  const summaryStatus = summary ? ({
-    queued: t('chat.summaryQueued'),
-    generating: t('chat.summaryGenerating'),
-    ready_for_review: t('chat.summaryReadyReview'),
-    approved: t('chat.summaryApproved'),
-    corrected: t('chat.summaryCorrected'),
-    failed: t('chat.summaryFailed'),
-    superseded: t('chat.summarySuperseded'),
-  })[summary.status] : t('chat.summaryNotRequested');
-  const summaryTone = !summary
-    ? 'neutral' as const
-    : summary.status === 'approved'
-      ? 'success' as const
-      : summary.status === 'failed' || summary.status === 'superseded'
-        ? 'danger' as const
-        : summary.status === 'ready_for_review' || summary.status === 'corrected'
-          ? 'warning' as const
-          : 'info' as const;
-  const actionStatus = (status: OperationalAction['status']) => ({
-    proposed: t('chat.actionProposed'),
-    confirmed: t('chat.actionConfirmed'),
-    in_progress: t('chat.actionInProgress'),
-    completed: t('chat.actionCompleted'),
-    cancelled: t('chat.actionCancelled'),
-  })[status];
-  const openSource = async (messageId: string) => {
-    setSourceError(false);
-    if (!await onOpenSource(messageId)) setSourceError(true);
-  };
-  return (
-    <View style={styles.briefingCard}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        onPress={() => setExpanded((value) => !value)}
-        style={({ pressed }) => [styles.briefingHeader, pressed && styles.pressed]}>
-        <View style={styles.briefingIcon}>
-          <Ionicons name="sparkles" size={16} color={colors.plum} />
-        </View>
-        <View style={styles.briefingHeaderCopy}>
-          <View style={styles.briefingTitleRow}>
-            <Text style={styles.briefingTitle}>{t('chat.briefing')}</Text>
-            <StatusBadge label={summaryStatus} tone={summaryTone} />
-          </View>
-          <Text numberOfLines={expanded ? undefined : 1} style={styles.briefingPreview}>
-            {summary?.primaryTopic || summary?.summary || (actions.length
-              ? `${actions.length} ${t('chat.operationalActions')}`
-              : t('chat.summaryDerivedDraft'))}
-          </Text>
-        </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.inkSubtle} />
-      </Pressable>
-      {expanded ? (
-        <View style={styles.briefingBody}>
-          <View style={styles.summaryBoundary}>
-            <Ionicons name="git-compare-outline" size={15} color={colors.plum} />
-            <Text style={styles.summaryBoundaryText}>{t('chat.summaryBoundary')}</Text>
-          </View>
-          {!summary ? (
-            <View style={styles.summaryUnavailable}>
-              <Text style={styles.summaryUnavailableTitle}>{t('chat.summaryNotRequested')}</Text>
-              <Text style={styles.summaryUnavailableText}>{t('chat.summaryRequestDescription')}</Text>
-              <PrimaryButton
-                disabled={!sourceMessageIds.length}
-                icon="sparkles-outline"
-                label={t('chat.requestSummary')}
-                loading={workspace.actionBusy === `summary-request:${conversation.id}`}
-                onPress={() => void workspace.requestConversationSummary(conversation.id, sourceMessageIds)}
-                tone="light"
-              />
-            </View>
-          ) : summary.status === 'failed' || summary.status === 'superseded' ? (
-            <View accessibilityLiveRegion="polite" style={styles.summaryUnavailable}>
-              <Text style={styles.summaryUnavailableTitle}>{summaryStatus}</Text>
-              <Text style={styles.summaryUnavailableText}>
-                {summary.status === 'superseded' ? t('chat.summaryStaleBody') : t('chat.summaryFailureBody')}
-              </Text>
-              {summary.failureCode ? (
-                <Text selectable style={styles.provenanceValue}>{t('chat.failureCode')} · {summary.failureCode}</Text>
-              ) : null}
-              <PrimaryButton
-                icon="document-text-outline"
-                label={t('chat.createManualHandoff')}
-                onPress={() => router.push('/handoffs')}
-                tone="light"
-              />
-            </View>
-          ) : summary.status === 'queued' || summary.status === 'generating' ? (
-            <View accessibilityLiveRegion="polite" style={styles.summaryUnavailable}>
-              <Text style={styles.summaryUnavailableTitle}>{summaryStatus}</Text>
-              <Text style={styles.summaryUnavailableText}>{t('chat.summaryProcessingBody')}</Text>
-              <PrimaryButton
-                icon="document-text-outline"
-                label={t('chat.createManualHandoff')}
-                onPress={() => router.push('/handoffs')}
-                tone="light"
-              />
-            </View>
-          ) : (
-            <>
-              {summary.sourceState === 'stale' || summary.policyState === 'stale' ? (
-                <View accessibilityRole="alert" style={styles.summaryStaleWarning}>
-                  <Ionicons name="warning-outline" size={16} color={colors.red} />
-                  <Text style={styles.summaryStaleWarningText}>
-                    {summary.sourceState === 'stale' ? t('chat.summarySourceStale') : t('chat.summaryPolicyStale')}
-                  </Text>
-                </View>
-              ) : null}
-              {summary.primaryTopic ? (
-                <BriefingSection
-                  label={t('chat.primaryTopic')}
-                  items={[{ text: summary.primaryTopic, sourceMessageIds: [] }]}
-                  onOpenSource={openSource}
-                />
-              ) : null}
-              {summary.summary ? <Text style={styles.briefingSummary}>{summary.summary}</Text> : null}
-              <BriefingSection label={t('chat.keyTopics')} items={summary.keyTopics} onOpenSource={openSource} />
-              <BriefingSection label={t('chat.decisions')} items={summary.decisions} onOpenSource={openSource} />
-              <BriefingSection
-                label={t('chat.actionItems')}
-                items={summary.actionItems.map((item) => ({
-                  text: [item.title, item.owner, item.dueAt].filter(Boolean).join(' · '),
-                  sourceMessageIds: item.sourceMessageIds,
-                }))}
-                onOpenSource={openSource}
-              />
-              <BriefingSection label={t('chat.ambiguities')} items={summary.ambiguities} onOpenSource={openSource} />
-              <View style={styles.summarySourceSection}>
-                <Text style={styles.briefingLabel}>{t('chat.sourceMessages')} · {summary.sourceMessageIds.length}</Text>
-                <View style={styles.sourceLinks}>
-                  {summary.sourceMessageIds.map((messageId) => (
-                    <SourceMessageLink key={messageId} messageId={messageId} onOpen={openSource} />
-                  ))}
-                </View>
-                {sourceError ? <Text accessibilityLiveRegion="assertive" style={styles.sourceError}>{t('chat.sourceUnavailable')}</Text> : null}
-              </View>
-              <View style={styles.provenanceCard}>
-                <Text style={styles.briefingLabel}>{t('chat.provenance')}</Text>
-                <Text style={styles.provenanceValue}>
-                  {summary.provenance.processorType === 'ai' ? t('chat.machineDraft') : t('chat.manualCorrection')}
-                  {summary.provenance.provider ? ` · ${summary.provenance.provider}` : ''}
-                  {summary.provenance.model ? ` / ${summary.provenance.model}` : ''}
-                </Text>
-                <Text style={styles.provenanceValue}>
-                  {t('chat.requestMode')} · {summary.requestMode} · v{summary.versionNumber}
-                </Text>
-                <Text selectable style={styles.provenanceHash}>
-                  {t('chat.sourceFingerprint')} · {summary.sourceFingerprint}
-                </Text>
-                {summary.outputFingerprint ? (
-                  <Text selectable style={styles.provenanceHash}>
-                    {t('chat.outputFingerprint')} · {summary.outputFingerprint}
-                  </Text>
-                ) : null}
-                <Text style={styles.provenanceValue}>
-                  {summary.reviewedAt
-                    ? `${t('chat.humanReviewed')} · ${summary.reviewedByUserId ?? t('chat.notAvailable')} · ${summary.reviewedAt}`
-                    : t('chat.unapprovedDraft')}
-                </Text>
-                {summary.reviewNote ? <Text style={styles.provenanceValue}>{summary.reviewNote}</Text> : null}
-              </View>
-              {summary.outputFingerprint ? (
-                summaryErrorReport ? (
-                  <StatusBadge label={t('quality.reportSubmitted')} tone="info" />
-                ) : (
-                  <PrimaryButton
-                    icon="flag-outline"
-                    label={t('chat.reportSummaryError')}
-                    onPress={() => {
-                      workspace.clearActionError();
-                      setReportingSummary(true);
-                    }}
-                    tone="light"
-                  />
-                )
-              ) : null}
-              {canManageSummary && summary.sourceState === 'current' ? (
-                <View style={styles.summaryControls}>
-                  <PrimaryButton
-                    icon="create-outline"
-                    label={t('chat.correctSummary')}
-                    onPress={() => {
-                      workspace.clearActionError();
-                      setCorrectionTopic(summary.primaryTopic);
-                      setCorrectionBody(summary.summary);
-                      setCorrecting(true);
-                    }}
-                    tone="light"
-                  />
-                  {(summary.status === 'ready_for_review' || summary.status === 'corrected') ? (
-                    <PrimaryButton
-                      icon="shield-checkmark-outline"
-                      label={t('chat.reviewSummary')}
-                      onPress={() => {
-                        workspace.clearActionError();
-                        setReviewNote('');
-                        setReviewing(true);
-                      }}
-                      tone="dark"
-                    />
-                  ) : null}
-                </View>
-              ) : null}
-            </>
-          )}
-          {canManageSummary ? (
-            <PrimaryButton
-              icon="options-outline"
-              label={t('chat.summarySchedule')}
-              onPress={() => {
-                workspace.clearActionError();
-                setPolicyOpen(true);
-              }}
-              tone="light"
-            />
-          ) : null}
-          {hasNewSummarySources && summary?.status !== 'queued' && summary?.status !== 'generating' ? (
-            <PrimaryButton
-              icon="sparkles-outline"
-              label={t('chat.requestSummary')}
-              loading={workspace.actionBusy === `summary-request:${conversation.id}`}
-              onPress={() => void workspace.requestConversationSummary(conversation.id, sourceMessageIds)}
-              tone="light"
-            />
-          ) : null}
-          {actions.length ? (
-            <View style={styles.actionList}>
-              <Text style={styles.briefingLabel}>{t('chat.operationalActions')}</Text>
-              {actions.map((action) => (
-                <View key={action.id} style={styles.actionRow}>
-                  <View style={styles.actionCopy}>
-                    <Text style={styles.actionTitle}>{action.title}</Text>
-                    <Text style={styles.actionMeta}>
-                      {actionStatus(action.status)}
-                      {action.assigneeName ? ` · ${action.assigneeName}` : ''}
-                    </Text>
-                  </View>
-                  {action.status === 'proposed' && workspace.hasCapability('actions.confirm') ? (
-                    <PrimaryButton
-                      label={t('chat.confirmAction')}
-                      onPress={() => {
-                        workspace.clearActionError();
-                        setAssigneeId('');
-                        setDueAt('');
-                        setConfirming(action);
-                      }}
-                      tone="light"
-                    />
-                  ) : action.status === 'confirmed' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
-                    <PrimaryButton label={t('chat.startAction')} onPress={() => void workspace.transitionAction(action.id, 'in_progress')} tone="light" />
-                  ) : action.status === 'in_progress' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
-                    <View style={styles.modalRow}>
-                      <PrimaryButton label={t('chat.completeAction')} onPress={() => void workspace.transitionAction(action.id, 'completed')} tone="dark" />
-                      <PrimaryButton label={t('chat.cancelAction')} onPress={() => void workspace.transitionAction(action.id, 'cancelled')} tone="danger" />
-                    </View>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          ) : null}
-          <ActionError message={workspace.actionError} />
-        </View>
-      ) : null}
-      <ActionModal
-        description={confirming?.title ?? ''}
-        onClose={() => setConfirming(null)}
-        title={t('chat.confirmAction')}
-        visible={Boolean(confirming)}>
-        <Text style={styles.modalLabel}>{t('chat.assignTo')}</Text>
-        <View style={styles.modalRow}>
-          {workspace.people.filter((person) => !person.suspended).slice(0, 30).map((person) => (
-            <Chip key={person.id} label={person.displayName} onPress={() => setAssigneeId(person.id)} selected={assigneeId === person.id} />
-          ))}
-        </View>
-        <FormField label={t('chat.dueAt')} onChangeText={setDueAt} value={dueAt} />
-        <ActionError message={workspace.actionError} />
-        <PrimaryButton
-          disabled={!assigneeId}
-          label={t('chat.confirmAction')}
-          loading={workspace.actionBusy === 'action-confirm'}
-          onPress={async () => {
-            if (confirming && await workspace.confirmAction(confirming.id, assigneeId, dueAt)) setConfirming(null);
-          }}
-          tone="dark"
-        />
-      </ActionModal>
-      <ActionModal
-        description={t('chat.summaryCorrectionDescription')}
-        onClose={() => setCorrecting(false)}
-        title={t('chat.correctSummary')}
-        visible={correcting}>
-        <FormField label={t('chat.primaryTopic')} onChangeText={setCorrectionTopic} value={correctionTopic} />
-        <FormField label={t('chat.summaryBody')} multiline onChangeText={setCorrectionBody} value={correctionBody} />
-        <ActionError message={workspace.actionError} />
-        <PrimaryButton
-          disabled={!correctionTopic.trim() || !correctionBody.trim()}
-          label={t('chat.saveCorrection')}
-          loading={summary ? workspace.actionBusy === `summary-correct:${summary.id}` : false}
-          onPress={async () => {
-            if (summary && await workspace.correctConversationSummary(summary, correctionTopic, correctionBody)) setCorrecting(false);
-          }}
-          tone="dark"
-        />
-      </ActionModal>
-      <ActionModal
-        description={t('chat.summaryReviewDescription')}
-        onClose={() => setReviewing(false)}
-        title={t('chat.reviewSummary')}
-        visible={reviewing}>
-        <FormField label={t('chat.reviewNote')} multiline onChangeText={setReviewNote} value={reviewNote} />
-        <ActionError message={workspace.actionError} />
-        <View style={styles.modalRow}>
-          <PrimaryButton
-            label={t('chat.approveExactVersion')}
-            loading={summary ? workspace.actionBusy === `summary-review:${summary.id}` : false}
-            onPress={async () => {
-              if (summary && await workspace.reviewConversationSummary(summary.id, 'approve', reviewNote)) setReviewing(false);
-            }}
-            tone="dark"
-          />
-          <PrimaryButton
-            disabled={reviewNote.trim().length < 3}
-            label={t('chat.rejectSummary')}
-            loading={summary ? workspace.actionBusy === `summary-review:${summary.id}` : false}
-            onPress={async () => {
-              if (summary && await workspace.reviewConversationSummary(summary.id, 'reject', reviewNote)) setReviewing(false);
-            }}
-            tone="danger"
-          />
-        </View>
-      </ActionModal>
-      <ActionModal
-        description={t('chat.summaryScheduleDescription')}
-        onClose={() => setPolicyOpen(false)}
-        title={t('chat.summarySchedule')}
-        visible={policyOpen}>
-        <View style={styles.modalRow}>
-          <Chip label={t('chat.summaryManual')} onPress={() => setPolicyMode('manual')} selected={policyMode === 'manual'} />
-          <Chip label={t('chat.summaryMessageCount')} onPress={() => setPolicyMode('message_count')} selected={policyMode === 'message_count'} />
-          <Chip label={t('chat.summaryShiftClose')} onPress={() => setPolicyMode('shift_close')} selected={policyMode === 'shift_close'} />
-        </View>
-        {policyMode === 'message_count' ? (
-          <FormField
-            keyboardType="number-pad"
-            label={t('chat.summaryThreshold')}
-            onChangeText={setPolicyThreshold}
-            value={policyThreshold}
-          />
-        ) : null}
-        <Text style={styles.modalNote}>{t('chat.summaryHumanReviewRequired')}</Text>
-        <ActionError message={workspace.actionError} />
-        <PrimaryButton
-          disabled={policyMode === 'message_count' && (
-            !Number.isInteger(Number(policyThreshold)) || Number(policyThreshold) < 10 || Number(policyThreshold) > 500
-          )}
-          label={t('chat.saveSummarySchedule')}
-          loading={workspace.actionBusy === `summary-policy:${conversation.id}`}
-          onPress={async () => {
-            const threshold = policyMode === 'message_count' ? Number(policyThreshold) : null;
-            if (await workspace.setConversationSummaryPolicy(conversation.id, policyMode, threshold)) setPolicyOpen(false);
-          }}
-          tone="dark"
-        />
-      </ActionModal>
-      {summary ? (
-        <AiOutputErrorReportModal
-          onClose={() => setReportingSummary(false)}
-          outputKind="summary"
-          targetId={summary.id}
-          visible={reportingSummary}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function BriefingSection({
-  label,
-  items,
-  onOpenSource,
-}: {
-  label: string;
-  items: { text: string; sourceMessageIds: string[] }[];
-  onOpenSource: (messageId: string) => void;
-}) {
-  if (!items.length) return null;
-  return (
-    <View style={styles.briefingSection}>
-      <Text style={styles.briefingLabel}>{label}</Text>
-      {items.map((item, index) => (
-        <View key={`${label}-${index}`} style={styles.evidenceItem}>
-          <Text style={styles.briefingItem}>• {item.text}</Text>
-          {item.sourceMessageIds.length ? (
-            <View style={styles.sourceLinks}>
-              {item.sourceMessageIds.map((messageId) => (
-                <SourceMessageLink key={messageId} messageId={messageId} onOpen={onOpenSource} />
-              ))}
-            </View>
-          ) : null}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function SourceMessageLink({ messageId, onOpen }: { messageId: string; onOpen: (messageId: string) => void }) {
-  const { t } = useI18n();
-  return (
-    <Pressable
-      accessibilityLabel={`${t('chat.openSource')} ${messageId}`}
-      accessibilityRole="link"
-      onPress={() => onOpen(messageId)}
-      style={({ pressed }) => [styles.sourceLink, pressed && styles.pressed]}>
-      <Ionicons name="arrow-up-circle-outline" size={12} color={colors.plum} />
-      <Text style={styles.sourceLinkText}>#{messageId}</Text>
-    </Pressable>
-  );
-}
-
 function ConversationHeader({
   conversation,
   onBack,
   onOpenControls,
+  onOpenSummary,
   mobile,
 }: {
   conversation: Conversation;
   onBack?: () => void;
   onOpenControls: () => void;
+  onOpenSummary?: () => void;
   mobile: boolean;
 }) {
   const { t } = useI18n();
@@ -1414,6 +984,9 @@ function ConversationHeader({
         </View>
       </View>
       <View style={styles.headerActions}>
+        {onOpenSummary ? (
+          <IconButton name="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} />
+        ) : null}
         <IconButton
           name="ellipsis-horizontal"
           label={t('chat.conversationSettings')}
@@ -2982,6 +2555,7 @@ function ConversationControlsModal({
   onUpdateMemberRole,
   onLeave,
   onToggleFavorite,
+  onOpenSummary,
   onUpdateNotificationSettings,
   onUpdateTranslationMode,
   onCloseIncident,
@@ -3009,6 +2583,7 @@ function ConversationControlsModal({
   ) => Promise<boolean>;
   onLeave: (replacementOwnerPersonId?: string) => Promise<void>;
   onToggleFavorite: () => void;
+  onOpenSummary?: () => void;
   onUpdateNotificationSettings: (
     notificationLevel: NonNullable<Conversation['notificationLevel']>,
     mutedUntil: string | null,
@@ -3168,6 +2743,9 @@ function ConversationControlsModal({
       {!conversation.managementOnly ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon={conversation.favorite ? 'star' : 'star-outline'} label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')} onPress={onToggleFavorite} tone="light" />
+          {onOpenSummary ? (
+            <PrimaryButton icon="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} tone="light" />
+          ) : null}
         </View>
       ) : null}
       {conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
@@ -4019,114 +3597,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
     gap: 5,
   },
-  briefingCard: {
-    marginBottom: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: '#DED0F0',
-    backgroundColor: colors.plumSoft,
-    overflow: 'hidden',
-  },
-  briefingHeader: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  briefingIcon: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.md,
-    backgroundColor: colors.paper,
-  },
-  briefingHeaderCopy: { flex: 1, minWidth: 0 },
-  briefingTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
-  briefingTitle: { color: colors.plum, fontSize: 11, fontWeight: '900' },
-  briefingPreview: { color: colors.inkMuted, fontSize: 11, marginTop: 2 },
-  briefingBody: {
-    gap: spacing.sm,
-    padding: spacing.md,
-    paddingTop: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#DED0F0',
-  },
-  briefingSummary: { color: colors.ink, fontSize: 12, lineHeight: 18, marginTop: spacing.sm },
-  briefingSection: { gap: 3 },
-  briefingLabel: { color: colors.plum, fontSize: 9, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
-  briefingItem: { color: colors.inkMuted, fontSize: 11, lineHeight: 17 },
-  briefingSources: { color: colors.inkSubtle, fontSize: 9 },
-  summaryBoundary: {
-    marginTop: spacing.sm,
-    padding: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    borderRadius: radii.md,
-    backgroundColor: colors.paper,
-  },
-  summaryBoundaryText: { flex: 1, color: colors.inkMuted, fontSize: 10, lineHeight: 15 },
-  summaryUnavailable: {
-    gap: spacing.xs,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.paper,
-  },
-  summaryUnavailableTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
-  summaryUnavailableText: { color: colors.inkMuted, fontSize: 11, lineHeight: 17 },
-  summaryStaleWarning: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.redSoft,
-  },
-  summaryStaleWarningText: { flex: 1, color: colors.red, fontSize: 11, lineHeight: 16, fontWeight: '700' },
-  summarySourceSection: { gap: spacing.xs },
-  sourceLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  sourceLink: {
-    minHeight: 30,
-    maxWidth: '100%',
-    paddingHorizontal: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: '#DED0F0',
-    backgroundColor: colors.paper,
-  },
-  sourceLinkText: { flexShrink: 1, color: colors.plum, fontFamily: type.mono, fontSize: 9, fontWeight: '700' },
-  sourceError: { color: colors.red, fontSize: 10, fontWeight: '700' },
-  evidenceItem: { gap: 4 },
-  provenanceCard: {
-    gap: 4,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: '#DED0F0',
-    backgroundColor: colors.paper,
-  },
-  provenanceValue: { color: colors.inkMuted, fontSize: 10, lineHeight: 15 },
-  provenanceHash: { color: colors.inkSubtle, fontFamily: type.mono, fontSize: 8, lineHeight: 13 },
-  summaryControls: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  actionList: { gap: spacing.xs, paddingTop: spacing.xs },
-  actionRow: {
-    minHeight: 52,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderRadius: radii.md,
-    backgroundColor: colors.paper,
-  },
-  actionCopy: { flex: 1, minWidth: 180 },
-  actionTitle: { color: colors.ink, fontSize: 12, fontWeight: '900' },
-  actionMeta: { color: colors.inkSubtle, fontSize: 9, marginTop: 2 },
   messageListMobile: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.lg,

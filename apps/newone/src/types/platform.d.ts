@@ -71,3 +71,13 @@ declare module '@/components/security/captcha-challenge' {
     onToken: (token: string | null) => void;
   }): React.ReactNode;
 }
+
+declare module '@/features/chat/summary-export' {
+  export interface SummaryShareInput {
+    fileName: string;
+    title: string;
+    text: string;
+  }
+  export type SummaryShareOutcome = 'shared' | 'dismissed' | 'copied';
+  export function shareSummary(input: SummaryShareInput): Promise<SummaryShareOutcome>;
+}

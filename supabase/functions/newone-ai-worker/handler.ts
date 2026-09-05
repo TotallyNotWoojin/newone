@@ -21,6 +21,7 @@ import {
   type OpenRouterEnvironment,
   OpenRouterLanguageProcessor,
   type SummaryResult,
+  type SummarySource,
 } from '../_shared/openrouter.ts';
 import { asRpcClient, invokeRpc, invokeVoidRpc } from '../_shared/rpc.ts';
 import {
@@ -62,7 +63,7 @@ interface TranslationSource extends PolicyResolution {
 export interface SummarySourceResolution extends PolicyResolution {
   sourceFingerprint: string;
   language: string;
-  sources: Array<{ messageId: string; body: string }>;
+  sources: SummarySource[];
 }
 
 type Resolution<T> = { authorized: false } | { authorized: true; source: T };
@@ -271,7 +272,7 @@ export function parseSummaryResolution(
   const row = resolved.row;
   uuid(row.summary_id);
   uuid(row.conversation_id);
-  uuid(row.requested_by_user_id);
+  const requesterId = uuid(row.requested_by_user_id);
   if (!Array.isArray(row.messages) || row.messages.length < 1 || row.messages.length > 200) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
   }
@@ -279,13 +280,26 @@ export function parseSummaryResolution(
   // fingerprint but carry nothing to summarize, so they are left out of the
   // prompt (defect M, Sep 4 2026: a thread with a photo and a voice note made
   // the whole summary fail with bad_request and stay "processing").
+  // Speaker labels give the model enough context for coherent prose ("you
+  // asked…, they replied…") without sending names or user ids.
+  const speakers = new Map<string, string>();
   const sources = row.messages.flatMap((entry) => {
     const message = asObject(entry);
     const messageId = positiveBigint(message.message_id);
     if (message.body === null || message.body === undefined || message.body === '') return [];
+    const senderId = typeof message.sender_user_id === 'string'
+      ? message.sender_user_id.toLowerCase()
+      : null;
+    let speaker: string | undefined;
+    if (senderId === requesterId) speaker = 'you';
+    else if (senderId) {
+      speaker = speakers.get(senderId) ?? `participant ${speakers.size + 1}`;
+      speakers.set(senderId, speaker);
+    }
     return [{
       messageId,
       body: normalizedString(message.body, { min: 1, max: 20_000, trim: false }) as string,
+      ...(speaker ? { speaker } : {}),
     }];
   });
   if (new Set(sources.map((source) => source.messageId)).size !== sources.length) {
@@ -331,11 +345,9 @@ function failureCode(error: unknown): string {
   return asApiError(error).code.slice(0, 120);
 }
 
-function evidenceText(text: string, refs: string[], maximum: number): string {
-  const suffix = ` [sources:${refs.join(',')}]`;
-  const value = `${text}${suffix}`;
-  if (value.length > maximum) throw new ApiError(422, 'ai_output_needs_review', 'summary_evidence_too_long');
-  return value;
+function boundedEvidenceText(text: string, maximum: number): string {
+  if (text.length > maximum) throw new ApiError(422, 'ai_output_needs_review', 'summary_evidence_too_long');
+  return text;
 }
 
 function sourceMessageIds(result: SummaryResult, refs: string[]): string[] {
@@ -351,12 +363,20 @@ function jsonBytes(value: unknown): number {
 }
 
 export function summaryPersistence(result: SummaryResult, source: SummarySourceResolution) {
-  const keyTopics = result.keyTopics.map((entry) =>
-    evidenceText(entry.text, entry.sourceRefs, 500)
-  );
-  const ambiguities = result.ambiguities.map((entry) =>
-    evidenceText(entry.text, entry.sourceRefs, 2000)
-  );
+  // Key topics and ambiguities are stored as the clean text people read; their
+  // citations live in provenance.evidence (resolved through provenance.sourceMap)
+  // so nothing like "[sources:s0002]" ever reaches a screen.
+  const keyTopics = result.keyTopics.map((entry) => boundedEvidenceText(entry.text, 500));
+  const ambiguities = result.ambiguities.map((entry) => boundedEvidenceText(entry.text, 2000));
+  const citations = (entries: Array<{ sourceRefs: string[] }>) =>
+    entries.map((entry) => {
+      sourceMessageIds(result, entry.sourceRefs);
+      return { sourceRefs: entry.sourceRefs };
+    });
+  const evidence = {
+    keyTopics: citations(result.keyTopics),
+    ambiguities: citations(result.ambiguities),
+  };
   const decisions = result.decisions.map((entry) => ({
     text: entry.text,
     sourceRefs: entry.sourceRefs,
@@ -381,7 +401,8 @@ export function summaryPersistence(result: SummaryResult, source: SummarySourceR
     promptTokens: result.promptTokens,
     completionTokens: result.completionTokens,
     sourceMap: result.sourceMap,
-    evidenceEncoding: 'inline-source-refs-v1',
+    evidence,
+    evidenceEncoding: 'provenance-evidence-v2',
     humanReviewRequired: true,
   };
   if (jsonBytes(provenance) > 16_384) throw new ApiError(422, 'ai_output_needs_review', 'summary_provenance_too_large');

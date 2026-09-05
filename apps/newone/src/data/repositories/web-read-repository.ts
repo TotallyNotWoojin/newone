@@ -41,6 +41,7 @@ import { compareMessageIds } from '@/data/reconciliation/message-timeline.mjs';
 import { parseMentionDto } from '@/features/chat/mention-controls.mjs';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import { parseWorkspaceCapabilities } from '@/data/repositories/capability-dto.mjs';
+import { stripSummarySourceTokens } from '@/data/summary-text';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -1011,7 +1012,10 @@ function strictSummaryTextArray(value: unknown, label: string, maximum = 50) {
   if (!Array.isArray(value) || value.length > maximum) {
     throw new RepositoryError(`The service returned invalid ${label}.`, 'invalid_response', true);
   }
-  return value.map((entry) => ({ text: requiredString(entry, label), sourceMessageIds: [] }));
+  // Older rows carry "[sources:s0002]" suffixes; the text people read never does.
+  return value
+    .map((entry) => ({ text: stripSummarySourceTokens(requiredString(entry, label)), sourceMessageIds: [] }))
+    .filter((item) => item.text.length > 0);
 }
 
 function strictSummarySourceIds(value: unknown, label: string, maximum = 500) {
@@ -1035,7 +1039,7 @@ function summaryEvidenceFromDto(
   if (evidenceIds.some((id) => !sourceIds.has(id))) {
     throw new RepositoryError(`The service returned unauthorized ${label} evidence.`, 'invalid_response', false);
   }
-  return { text: requiredString(row.text, label), sourceMessageIds: evidenceIds };
+  return { text: stripSummarySourceTokens(requiredString(row.text, label)), sourceMessageIds: evidenceIds };
 }
 
 function parseSummaryAction(
@@ -1146,8 +1150,8 @@ function summaryFromDto(row: JsonRecord): ConversationSummary {
     versionNumber,
     language: supportedLanguage(row.languageCode, 'summary language'),
     status,
-    primaryTopic: primaryTopic ?? '',
-    summary: summary ?? '',
+    primaryTopic: stripSummarySourceTokens(primaryTopic ?? ''),
+    summary: stripSummarySourceTokens(summary ?? ''),
     keyTopics,
     decisions,
     actionItems,
