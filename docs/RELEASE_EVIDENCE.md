@@ -532,3 +532,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Send path | Owner feedback: "it should just send the message". Online sends now go straight to the service (bubble → sent on the receipt); the encrypted queue is reached only offline or after a network failure, and a permanently failed send still appears in the outbox list for retry/cancel. Workspace provider tests updated (84/84 across the affected suites). |
 | Reconnecting banner | The "Reconnecting…" banner is the realtime socket only. Pushes are sent by the service through Expo/APNs regardless of the app's socket state, and while degraded the app polls every 10 s, so messages still arrive in-app. |
 | Release | v2.4: build 24 / version code 14 started 19:40 via `release-v2.4.sh`. |
+
+### v2.4 built (Sep 4 2026, 20:44)
+
+| Item | Evidence |
+| --- | --- |
+| Pipeline | First attempt at 19:45 stopped on one flaky settings-screen test under the parallel Jest run (passes alone and in a second full run, 763/763). Relaunched 20:37: tsc clean, Jest 763/763. |
+| iOS | Build 24 archived and uploaded ("UPLOAD SUCCEEDED with no errors" 20:40); `wait-build-24.mjs` adds it to both beta groups once App Store Connect reports it VALID. |
+| Android | Bundle version code 14 (sha256 887db1ec…) on the Play internal track as "newone v2.4"; APK `~/Downloads/newone-v2.4-build14.apk`, versionCode 14. |
+| Contents | Defect W (push-token registration loop), send-first messaging (queue only offline), single settings error banner, push project id fallback (from v2.3). |
