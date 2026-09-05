@@ -45,7 +45,9 @@ export function createAreaContext({ area, devices, report, runDir }) {
         const tests = join(dir, '.maestro', 'tests');
         const latest = readdirSync(tests).sort().at(-1);
         if (!latest) return '';
-        return readFileSync(join(tests, latest, 'maestro.log'), 'utf8').split('\n').filter((line) => /\[ERROR\]|Exception/.test(line)).slice(-40).join('\n');
+        // Only [ERROR] lines: the INFO-level driver status check at every flow
+        // start also mentions a refused connection while the driver boots.
+        return readFileSync(join(tests, latest, 'maestro.log'), 'utf8').split('\n').filter((line) => /\[ERROR\]/.test(line)).slice(-40).join('\n');
       } catch { return ''; }
     };
     // The debug log also records ordinary assertion failures (and every
