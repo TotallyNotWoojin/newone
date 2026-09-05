@@ -381,6 +381,12 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.headerSpacer} />
       </View>
+      {/* One banner for the current action's error, visible at any scroll position. */}
+      {workspace.actionError ? (
+        <View style={styles.errorBanner}>
+          <ActionError message={workspace.actionError} />
+        </View>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         <View style={[styles.profileCard, compact && styles.profileCardCompact, shadow]}>
@@ -462,7 +468,6 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
-          <ActionError message={workspace.actionError} />
         </SettingsSection>
 
         <SettingsSection
@@ -609,7 +614,6 @@ export default function SettingsScreen() {
               )}
             </View>
           ) : null}
-          <ActionError message={workspace.actionError} />
         </SettingsSection>
 
         <MessageOutboxSection
@@ -766,7 +770,6 @@ export default function SettingsScreen() {
               <Text style={styles.rowNote}>{t('settings.devicePreferencesUnavailable')}</Text>
             ) : null}
           </View>
-          <ActionError message={workspace.actionError} />
         </SettingsSection>
 
         {!personalRealm ? (
@@ -1083,6 +1086,7 @@ function PreferenceSwitch({
 }
 
 const styles = StyleSheet.create({
+  errorBanner: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   root: { flex: 1, backgroundColor: colors.canvas },
   loadingScreen: { flex: 1 },
   header: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, backgroundColor: colors.paper },

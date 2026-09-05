@@ -53,7 +53,25 @@ const supportUrlResult = z.string().trim().max(500).refine((value) => {
     return false;
   }
 }).safeParse(process.env.EXPO_PUBLIC_SUPPORT_CONTACT_URL);
-const easProjectIdResult = z.string().uuid().safeParse(process.env.EXPO_PUBLIC_EAS_PROJECT_ID);
+// EAS builds carry the project id natively; a local archive or Gradle build
+// only has app.json's extra.eas.projectId, so fall back to it (TestFlight 22
+// reported push as unconfigured because the env var was never exported).
+function embeddedEasProjectId(): string | undefined {
+  // Loaded lazily: expo-constants touches native modules at import time, which
+  // the isolated runtime-config tests (and the web bundle) do not provide.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const constants = (require('expo-constants') as {
+      default?: { expoConfig?: { extra?: { eas?: { projectId?: string } } } | null; easConfig?: { projectId?: string } | null };
+    }).default;
+    return constants?.expoConfig?.extra?.eas?.projectId ?? constants?.easConfig?.projectId ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+const easProjectIdResult = z.string().uuid().safeParse(
+  process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? embeddedEasProjectId(),
+);
 const pushEnvironmentResult = z.enum(['development', 'preview', 'production']).safeParse(
   process.env.EXPO_PUBLIC_PUSH_ENVIRONMENT,
 );
