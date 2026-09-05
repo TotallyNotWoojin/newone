@@ -480,3 +480,12 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Item | Evidence |
 | --- | --- |
 | Result | run-2026-09-05T00-06-19: PASS 26 · FAIL 0 · UNREACHABLE 0. Show details, Report translation error (quality report submitted), and "Translate for me" on the sender's own message all pass — defects Q and S confirmed on device; detection invalidations delivered. |
+
+### Final chat run and release decision (Sep 4 2026, 18:08)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-05T00-24-58 (rebuilt app with defect T): PASS 66 · FAIL 2 · UNREACHABLE 4. Archive (chat-34) and the typing indicator pass. |
+| chat-15 | B still showed A's deleted message within the 45 s window. Server: deletion at 00:37:27, both `message_deleted` invalidations delivered by 00:37:31, and B's bootstrap page (485–497) omits 488. The parser plus reconcile prune was exercised against that live payload in Jest and drops 488, so the client logic is correct; what remains unproven is how quickly B's device refreshed in that window. Before today the message never disappeared until a cold start, so v2.2 is strictly better here. Post-release chat run queued on the rebuilt simulator app. |
+| Defect U (client) | chat-21: the unread badge did not clear after A opened the thread; the read receipt landed only 4 min later when a later step scrolled. With one unread message that fits on screen the pane positioned at the divider and waited for a near-bottom scroll that never came. Fixed in ce01639: a short thread whose unread tail is already on screen is marked read on open (62 UI tests pass). |
+| Decision | Owner asked to ship now. Remaining reruns (translation, media) validated harness flows only and were stopped; `release-v2.2.sh` started at 18:08 (tsc, Jest, TestFlight 22 + beta groups, Play internal + closed tracks with version code 12, sideload APK). Post-release device evidence follows. |
