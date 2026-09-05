@@ -31,7 +31,7 @@ Data is not sold, not used for advertising, not used for tracking across apps. U
 ## App Store Connect
 
 Done through the API:
-- Version 1.0.0 with build 24 attached; content rights declared (no third-party content); categories; age rating (4+); subtitle, promotional text, description, keywords.
+- Version 1.0.0 with build 25 attached (v2.5: image viewer); content rights declared (no third-party content); categories; age rating (4+); subtitle, promotional text, description, keywords.
 
 **console** items remaining (App Store Connect → app → App Privacy / version page):
 1. App Privacy → Data Types: enter the table above. Choose "Data Linked to You" for everything except diagnostics. No tracking.
@@ -44,7 +44,7 @@ Done through the API:
 ## Google Play Console
 
 Done through the API:
-- Listing title, short and full description; icon (512) and feature graphic (1024×500); internal-track releases up to version code 14.
+- Listing title, short and full description; icon (512) and feature graphic (1024×500); internal-track releases up to version code 15 (v2.5); closed-testing draft release of code 15.
 
 **console** items remaining (Play Console → app → Policy and programs / App content, and Dashboard):
 1. Privacy policy URL.
@@ -56,7 +56,7 @@ Done through the API:
 7. Data safety: enter the table above; data is encrypted in transit; users can request deletion; collection required except photos/audio which are optional.
 8. Store settings: app category Communication; contact email and website are set via API (totallynotwoojin@gmail.com, GitHub Pages site).
 9. Production access: a personal developer account created after Nov 13, 2023 must first run a closed test with at least 12 opted-in testers for 14 continuous days, then apply for production. If the account is an organization account, production is available immediately. Closed testing needs the Google Group from the owner.
-10. Production release: promote version code 14 (or newer) to Production with a phased rollout.
+10. Production release: promote version code 15 (or newer) to Production with a phased rollout.
 
 ## Website and domain (Sep 5 2026)
 
