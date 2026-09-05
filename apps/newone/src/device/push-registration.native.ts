@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 import { publicRuntimeConfig } from '@/config/runtime';
 import { RepositoryError, type RegisterDeviceInput } from '@/data/repositories/contracts';
@@ -156,4 +156,24 @@ export async function requestDeviceRegistration(
     throw new RepositoryError('The push service did not issue a token for this device.', 'push_token_unavailable', true);
   }
   return registration;
+}
+
+export type NotificationPermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
+
+/**
+ * The operating-system permission as it stands, without prompting. 'denied'
+ * means the OS will not show its prompt again, so the only way back on is the
+ * system settings page.
+ */
+export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'unavailable';
+  const permissions = await Notifications.getPermissionsAsync();
+  if (permissions.granted) return 'granted';
+  if (permissions.status === 'denied' || permissions.canAskAgain === false) return 'denied';
+  return 'undetermined';
+}
+
+/** Opens this app's page in the system settings, where the OS-level notification switch lives. */
+export async function openNotificationSettings(): Promise<void> {
+  await Linking.openSettings();
 }

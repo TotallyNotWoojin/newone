@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { Children, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Image,
   Platform,
   Pressable,
@@ -16,13 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { MessageOutboxSection } from '@/components/settings/message-outbox-section';
-import { Avatar, IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
+import { Avatar, IconButton, PrimaryButton } from '@/components/ui/primitives';
 import type { AppLocale } from '@/i18n/catalog';
 import type { OrganizationPreferences } from '@/domain/types';
-import type {
-  DeviceNotificationPreferenceOverrides,
-} from '@/data/repositories/device-notification-preferences-dto.mjs';
 import { isPersonalRealm } from '@/constants/personal-realm';
+// Metro selects the native notification bridge or the web no-op.
+// eslint-disable-next-line import/no-unresolved
+import { getNotificationPermissionState, openNotificationSettings, type NotificationPermissionState } from '@/device/push-registration';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { errorMessageKey } from '@/i18n/errors';
 import * as ImagePicker from 'expo-image-picker';
@@ -37,9 +38,9 @@ import {
 import { SelfRecoveryRequest } from '@/features/security/self-recovery-request';
 import { outboxCopy } from '@/features/settings/outbox-copy';
 import { useAuth } from '@/state/auth';
+import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
-import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
+import { colors, radii, spacing, type } from '@/theme/tokens';
 
 interface MfaFactor {
   id: string;
@@ -53,18 +54,27 @@ interface MfaEnrollment {
   secret: string;
 }
 
+type Picker = 'language' | 'messageLanguage' | 'readVisibility' | 'quietHours';
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+// Quiet hours arrive from the server as HH:MM:SS and are typed as HH:MM.
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const { width } = useHydrationSafeWindowDimensions();
-  const compact = width < 520;
   const workspace = useWorkspace();
   // Consumer accounts have no authenticator, recovery-case, or shift tooling;
   // those sections stay exclusively on workspace organizations.
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const loadAccountSettings = workspace.loadAccountSettings;
+  const enableNotifications = workspace.enableNotifications;
   const { currentUser } = workspace;
   const auth = useAuth();
   const { locale, setLocale, t } = useI18n();
+  const devicePreferencesState = useDevicePreferences();
+  const localPreferences = devicePreferencesState.preferences;
+  const setLocalPreference = devicePreferencesState.setPreference;
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaError, setMfaError] = useState('');
   const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
@@ -81,10 +91,20 @@ export default function SettingsScreen() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [profileVisible, setProfileVisible] = useState(false);
+  const [picker, setPicker] = useState<Picker | null>(null);
   const [preferenceDraft, setPreferenceDraft] = useState<OrganizationPreferences | null>(null);
+  const [profileDraft, setProfileDraft] =
+    useState<{ displayName?: string; statusMessage?: string }>({});
+  // The operating-system permission, refreshed whenever the app returns to the
+  // foreground (the user may have just flipped it in the system settings).
+  const [permission, setPermission] = useState<NotificationPermissionState | null>(null);
+  const previousPermissionRef = useRef<NotificationPermissionState | null>(null);
+  const devicePreferences = workspace.deviceNotificationPreferences;
   // Profile picture (owner backlog v2): the current user's photo, chosen from
   // the library and uploaded through the profile avatar grant.
   const ownAvatarUrl = useProfileAvatar(currentUser?.id ?? null);
+
   const choosePhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
@@ -106,27 +126,71 @@ export default function SettingsScreen() {
       imageMode: 'optimized',
     });
   };
-  // Consumer settings save themselves (owner backlog, Sep 4 2026): every
-  // change to the draft is written after a short pause, no Save button.
+
+  // Account settings save themselves: every change to the draft is written
+  // after a short pause, no Save button.
   const saveOrganizationPreferences = workspace.saveOrganizationPreferences;
   const savedPreferences = workspace.organizationPreferences;
   useEffect(() => {
-    if (!personalRealm || !preferenceDraft || !savedPreferences) return;
+    if (!preferenceDraft || !savedPreferences) return;
     if (JSON.stringify(preferenceDraft) === JSON.stringify(savedPreferences)) return;
     const hasStart = Boolean(preferenceDraft.quietHoursStart);
     const hasEnd = Boolean(preferenceDraft.quietHoursEnd);
-    const time = /^([01]\d|2[0-3]):[0-5]\d$/;
-    if (hasStart !== hasEnd || (hasStart && (!time.test(preferenceDraft.quietHoursStart as string) || !time.test(preferenceDraft.quietHoursEnd as string)))) return;
+    if (hasStart !== hasEnd) return;
+    if (hasStart && (
+      !TIME_PATTERN.test(preferenceDraft.quietHoursStart as string)
+      || !TIME_PATTERN.test(preferenceDraft.quietHoursEnd as string)
+    )) return;
     const timer = setTimeout(() => {
       void saveOrganizationPreferences({ ...preferenceDraft, uiLanguage: locale });
     }, 500);
     return () => clearTimeout(timer);
-  }, [locale, personalRealm, preferenceDraft, saveOrganizationPreferences, savedPreferences]);
-  const [devicePreferenceDraft, setDevicePreferenceDraft] =
-    useState<DeviceNotificationPreferenceOverrides | null>(null);
-  const [profileDraft, setProfileDraft] =
-    useState<{ displayName?: string; statusMessage?: string }>({});
-  const devicePreferences = workspace.deviceNotificationPreferences;
+  }, [locale, preferenceDraft, saveOrganizationPreferences, savedPreferences]);
+
+  const refreshPermission = useCallback(async () => {
+    try {
+      setPermission(await getNotificationPermissionState());
+    } catch {
+      setPermission('unavailable');
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const read = () => {
+      void getNotificationPermissionState()
+        .then((state) => {
+          if (active) setPermission(state);
+        })
+        .catch(() => {
+          if (active) setPermission('unavailable');
+        });
+    };
+    read();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read();
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  // Coming back from the system settings with permission newly granted: bind
+  // the device without another tap. The initial read never triggers this.
+  useEffect(() => {
+    const previous = previousPermissionRef.current;
+    previousPermissionRef.current = permission;
+    if (
+      permission === 'granted'
+      && previous !== null
+      && previous !== 'granted'
+      && !devicePreferences
+      && workspace.actionBusy !== 'device-register'
+    ) {
+      void enableNotifications();
+    }
+  }, [devicePreferences, enableNotifications, permission, workspace.actionBusy]);
 
   const loadMfa = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -188,15 +252,6 @@ export default function SettingsScreen() {
     const timeout = setTimeout(() => setPreferenceDraft(workspace.organizationPreferences), 0);
     return () => clearTimeout(timeout);
   }, [workspace.organizationPreferences]);
-
-  useEffect(() => {
-    const current = workspace.deviceNotificationPreferences;
-    const timeout = setTimeout(
-      () => setDevicePreferenceDraft(current ? { ...current.overrides } : null),
-      0,
-    );
-    return () => clearTimeout(timeout);
-  }, [workspace.deviceNotificationPreferences]);
 
   const openMfa = async () => {
     if (Platform.OS === 'web') {
@@ -336,6 +391,7 @@ export default function SettingsScreen() {
       statusMessage: draftStatusMessage,
     })) {
       setProfileDraft({});
+      setProfileVisible(false);
     }
   };
 
@@ -357,11 +413,54 @@ export default function SettingsScreen() {
     }
   };
 
+  // The switch is the real state: the OS allows notifications and this device
+  // is bound to the account. Turning it off (or on after an OS-level denial)
+  // goes to the system settings, which is where the OS-level switch lives.
+  const notificationsOn = permission === 'granted' && Boolean(devicePreferences);
+  const notificationsBusy = permission === null || workspace.actionBusy === 'device-register';
+  const toggleNotifications = async (next: boolean) => {
+    if (!next || permission === 'denied') {
+      await openNotificationSettings();
+      return;
+    }
+    await enableNotifications();
+    await refreshPermission();
+  };
+
+  const openRevoke = (sessionId: string) => {
+    workspace.clearActionError();
+    setRevokeReason('');
+    setRevokeTargetSessionId(sessionId);
+    setRevokeVisible(true);
+  };
+
+  const localeLabel = (value: AppLocale) => (
+    value === 'ko' ? t('settings.korean') : value === 'es' ? t('settings.spanish') : t('settings.english')
+  );
+  const readVisibilityLabel = (value: OrganizationPreferences['readVisibility']) => (
+    value === 'everyone'
+      ? t('settings.readEveryone')
+      : value === 'contacts' ? t('settings.readContacts') : t('settings.readNobody')
+  );
+  const quietHoursValue = preferenceDraft?.quietHoursStart && preferenceDraft.quietHoursEnd
+    ? `${preferenceDraft.quietHoursStart.slice(0, 5)}–${preferenceDraft.quietHoursEnd.slice(0, 5)}`
+    : t('settings.disabled');
+  const pickerTitle = picker === 'language'
+    ? t('settings.displayLanguage')
+    : picker === 'messageLanguage'
+      ? t('settings.messageLanguage')
+      : picker === 'readVisibility' ? t('settings.readVisibility') : t('settings.quietHours');
+
   const verifiedFactor = mfaFactors.find((factor) => factor.status === 'verified');
   const privileged = workspace.capabilities.some((capability) => [
     'members.security', 'sessions.revoke', 'roles.manage', 'invites.manage',
     'communications.publish', 'reports.investigate', 'reports.assign', 'audit.read',
   ].includes(capability));
+  const mfaStatus = verifiedFactor
+    ? mfaLevel === 'aal2' ? t('settings.mfaAal2') : t('settings.mfaEnrolled')
+    : t('settings.mfaNotEnrolled');
+  const otherSessions = workspace.accountSessions.filter((session) => !session.current && !session.revoked);
+  const showOutbox = workspace.messageOutbox.length > 0 || Boolean(workspace.outboxDegradedReason);
 
   if (!currentUser) {
     return (
@@ -374,11 +473,8 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
-        <IconButton label={t('settings.close')} name="close" onPress={() => router.back()} />
-        <View style={styles.headerCopy}>
-          <Text accessibilityRole="header" style={styles.headerTitle}>{t('settings.title')}</Text>
-          <Text style={styles.headerSubtitle}>{t('settings.subtitle')}</Text>
-        </View>
+        <IconButton label={t('settings.close')} name="close" onPress={() => router.back()} size={36} />
+        <Text accessibilityRole="header" style={styles.headerTitle}>{t('settings.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
       {/* One banner for the current action's error, visible at any scroll position. */}
@@ -389,563 +485,344 @@ export default function SettingsScreen() {
       ) : null}
 
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-        <View style={[styles.profileCard, compact && styles.profileCardCompact, shadow]}>
+        <Pressable
+          accessibilityLabel={t('settings.profileTitle')}
+          accessibilityRole="button"
+          onPress={() => {
+            setProfileDraft({});
+            setProfileVisible(true);
+          }}
+          style={({ pressed }) => [styles.profileRow, pressed && styles.pressed]}>
           <Avatar
             color={currentUser.avatarColor}
             imageUri={ownAvatarUrl}
             initials={currentUser.initials}
             presence={currentUser.presence}
-            size={64}
+            size={48}
           />
           <View style={styles.profileCopy}>
-            <Text style={styles.profileName}>{currentUser.displayName}</Text>
-            {/* The @handle is what other people search for, so it belongs next
-                to your name rather than buried in the sign-up flow. */}
-            <Text selectable style={styles.profileHandle}>
-              {currentUser.username ? `@${currentUser.username}` : currentUser.roleLabel}
+            <Text numberOfLines={1} style={styles.profileName}>{currentUser.displayName}</Text>
+            {/* The @handle is what other people search for, so it sits next to the name. */}
+            <Text numberOfLines={1} style={styles.profileMeta}>
+              {[
+                currentUser.username ? `@${currentUser.username}` : currentUser.roleLabel,
+                currentUser.statusMessage?.trim() || null,
+              ].filter(Boolean).join(' · ')}
             </Text>
-            <View style={styles.profileBadges}>
-              <StatusBadge
-                icon="checkmark-circle"
-                label={t(personalRealm ? 'settings.accountVerified' : 'settings.companyVerified')}
-                tone="success"
-              />
-              <StatusBadge
-                icon="language"
-                label={locale === 'ko' ? '한국어' : locale === 'es' ? 'Español' : 'English'}
-                tone="purple"
-              />
-            </View>
           </View>
-        </View>
+          <Ionicons color={colors.inkSubtle} name="chevron-forward" size={18} />
+        </Pressable>
+        {/* AUTH: password section */}
 
-        <SettingsSection
-          description={t('settings.profileDescription')}
-          icon="person-circle-outline"
-          title={t('settings.profileTitle')}>
-          <View style={styles.preferenceForm}>
-            <View style={styles.photoRow}>
-              <PrimaryButton
-                icon="image-outline"
-                label={t('settings.choosePhoto')}
-                loading={workspace.actionBusy === 'profile-avatar-upload'}
-                onPress={() => void choosePhoto()}
-                tone="light"
-              />
-              {ownAvatarUrl ? (
-                <PrimaryButton
-                  icon="trash-outline"
-                  label={t('settings.removePhoto')}
-                  loading={workspace.actionBusy === 'profile-avatar-remove'}
-                  onPress={() => void workspace.removeProfileAvatar()}
-                  tone="light"
-                />
-              ) : null}
-            </View>
-            <Text style={styles.rowHint}>
-              {workspace.actionBusy === 'profile-avatar-upload' ? t('settings.photoUploading') : t('settings.photoHint')}
-            </Text>
-            <FormField
-              label={t('settings.displayName')}
-              onChangeText={(value) => setProfileDraft((current) => ({ ...current, displayName: value }))}
-              value={draftDisplayName}
+        <Group title={t('settings.generalTitle')}>
+          <Row
+            disabled={false}
+            icon="language-outline"
+            label={t('settings.displayLanguage')}
+            onPress={() => setPicker('language')}
+            value={localeLabel(locale)}
+          />
+          <Row
+            disabled={!preferenceDraft}
+            icon="swap-horizontal-outline"
+            label={t('settings.messageLanguage')}
+            onPress={() => setPicker('messageLanguage')}
+            value={preferenceDraft
+              ? preferenceDraft.messageLanguage
+                ? localeLabel(preferenceDraft.messageLanguage)
+                : t('settings.messageLanguageAuto')
+              : ''}
+          />
+          <Row
+            disabled={!preferenceDraft}
+            icon="checkmark-done-outline"
+            label={t('settings.readVisibility')}
+            onPress={() => setPicker('readVisibility')}
+            value={preferenceDraft ? readVisibilityLabel(preferenceDraft.readVisibility) : ''}
+          />
+        </Group>
+
+        <Group title={t('settings.chatsTitle')}>
+          <SwitchRow
+            hint={t('settings.translatedOnlyHint')}
+            icon="text-outline"
+            label={t('settings.translatedOnly')}
+            onValueChange={(value) => setLocalPreference('translatedOnly', value)}
+            value={localPreferences.translatedOnly}
+          />
+          <SwitchRow
+            icon="return-down-back-outline"
+            label={t('settings.enterSends')}
+            onValueChange={(value) => setLocalPreference('enterSends', value)}
+            value={localPreferences.enterSends}
+          />
+        </Group>
+
+        <Group title={t('settings.notificationsTitle')}>
+          {permission !== 'unavailable' ? (
+            <SwitchRow
+              disabled={notificationsBusy}
+              icon="notifications-outline"
+              label={t('settings.allowNotifications')}
+              onValueChange={(value) => void toggleNotifications(value)}
+              value={notificationsOn}
             />
-            <FormField
-              label={t('settings.statusMessage')}
-              multiline
-              onChangeText={(value) => setProfileDraft((current) => ({ ...current, statusMessage: value }))}
-              placeholder={t('settings.statusMessagePlaceholder')}
-              value={draftStatusMessage}
-            />
-            <Text style={styles.rowNote}>{t('settings.profileLimits')}</Text>
-            {currentUser.username ? (
-              <Text style={styles.rowNote}>{t('settings.usernameNote')} @{currentUser.username}</Text>
-            ) : null}
-            <View style={styles.notificationActions}>
-              <PrimaryButton
-                disabled={!profileDirty || !profileValid}
-                icon="save-outline"
-                label={t('settings.saveProfile')}
-                loading={workspace.actionBusy === 'profile-update'}
-                onPress={() => void saveProfile()}
-                tone="dark"
-              />
-            </View>
-          </View>
-        </SettingsSection>
-
-        <SettingsSection
-          description={t('settings.languageDescription')}
-          icon="language-outline"
-          title={t('settings.languageTitle')}>
-          <View style={styles.languageRow}>
-            <Text style={styles.rowLabel}>{t('settings.displayLanguage')}</Text>
-            <View style={styles.languageOptions}>
-              {([
-                ['en', t('settings.english')],
-                ['ko', t('settings.korean')],
-                ['es', t('settings.spanish')],
-              ] as [AppLocale, string][]).map(([id, label]) => (
-                <Pressable
-                  accessibilityLabel={`${t('settings.displayLanguage')}: ${label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: locale === id }}
-                  key={id}
-                  onPress={() => setLocale(id)}
-                  style={({ pressed }) => [
-                    styles.languageOption,
-                    locale === id && styles.languageOptionSelected,
-                    pressed && styles.pressed,
-                  ]}>
-                  <Text style={[styles.languageOptionText, locale === id && styles.languageOptionTextSelected]}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </SettingsSection>
-
-        <SettingsSection
-          description={t(personalRealm ? 'settings.preferencesDescriptionConsumer' : 'settings.preferencesDescription')}
-          icon="options-outline"
-          title={t('settings.preferencesTitle')}>
-          {workspace.actionBusy === 'account-settings-load' && !preferenceDraft ? (
-            <ActivityIndicator color={colors.mintDark} />
-          ) : preferenceDraft ? (
-            <View style={styles.preferenceForm}>
-              <Text style={styles.rowLabel}>{t('settings.messageLanguage')}</Text>
-              <View style={styles.languageOptions}>
-                {([
-                  [null, t('settings.messageLanguageAuto')],
-                  ['en', t('settings.english')],
-                  ['ko', t('settings.korean')],
-                  ['es', t('settings.spanish')],
-                ] as [OrganizationPreferences['messageLanguage'], string][]).map(([id, label]) => (
-                  <Pressable
-                    accessibilityLabel={`${t('settings.messageLanguage')}: ${label}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: preferenceDraft.messageLanguage === id }}
-                    key={id ?? 'auto'}
-                    onPress={() => setPreferenceDraft((current) => current ? { ...current, messageLanguage: id } : current)}
-                    style={({ pressed }) => [styles.languageOption, preferenceDraft.messageLanguage === id && styles.languageOptionSelected, pressed && styles.pressed]}>
-                    <Text style={[styles.languageOptionText, preferenceDraft.messageLanguage === id && styles.languageOptionTextSelected]}>{label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.rowLabel}>{t('settings.notificationPreview')}</Text>
-              <View style={styles.languageOptions}>
-                {([
-                  ['generic', t('settings.previewGeneric')],
-                  ['hidden', t('settings.previewHidden')],
-                ] as [OrganizationPreferences['notificationPreview'], string][]).map(([id, label]) => (
-                  <Pressable
-                    accessibilityLabel={`${t('settings.notificationPreview')}: ${label}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: preferenceDraft.notificationPreview === id }}
-                    key={id}
-                    onPress={() => setPreferenceDraft((current) => current ? { ...current, notificationPreview: id } : current)}
-                    style={({ pressed }) => [styles.languageOption, preferenceDraft.notificationPreview === id && styles.languageOptionSelected, pressed && styles.pressed]}>
-                    <Text style={[styles.languageOptionText, preferenceDraft.notificationPreview === id && styles.languageOptionTextSelected]}>{label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.rowLabel}>{t('settings.readVisibility')}</Text>
-              <View style={styles.languageOptions}>
-                {([
-                  ['everyone', t('settings.readEveryone')],
-                  ['contacts', t('settings.readContacts')],
-                  ['nobody', t('settings.readNobody')],
-                ] as [OrganizationPreferences['readVisibility'], string][]).map(([id, label]) => (
-                  <Pressable
-                    accessibilityLabel={`${t('settings.readVisibility')}: ${label}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: preferenceDraft.readVisibility === id }}
-                    key={id}
-                    onPress={() => setPreferenceDraft((current) => current ? { ...current, readVisibility: id } : current)}
-                    style={({ pressed }) => [styles.languageOption, preferenceDraft.readVisibility === id && styles.languageOptionSelected, pressed && styles.pressed]}>
-                    <Text style={[styles.languageOptionText, preferenceDraft.readVisibility === id && styles.languageOptionTextSelected]}>{label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <View style={styles.quietHoursRow}>
-                <View style={styles.quietField}>
-                  <FormField
-                    label={t('settings.quietStart')}
-                    onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursStart: value || null } : current)}
-                    value={preferenceDraft.quietHoursStart?.slice(0, 5) ?? ''}
-                  />
-                </View>
-                <View style={styles.quietField}>
-                  <FormField
-                    label={t('settings.quietEnd')}
-                    onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursEnd: value || null } : current)}
-                    value={preferenceDraft.quietHoursEnd?.slice(0, 5) ?? ''}
-                  />
-                </View>
-              </View>
-              {!personalRealm ? (
-                <PreferenceSwitch
-                  label={t('settings.shiftSuppression')}
-                  onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, shiftAwareSuppression: value } : current)}
-                  value={preferenceDraft.shiftAwareSuppression}
-                />
-              ) : null}
-              <PreferenceSwitch
-                label={t('settings.sound')}
-                onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, soundEnabled: value } : current)}
-                value={preferenceDraft.soundEnabled}
-              />
-              <PreferenceSwitch
-                label={t('settings.vibration')}
-                onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, vibrationEnabled: value } : current)}
-                value={preferenceDraft.vibrationEnabled}
-              />
-              {personalRealm ? (
-                <Text style={styles.rowHint}>
-                  {workspace.actionBusy === 'organization-preferences-save' ? t('settings.preferencesSaving') : t('settings.preferencesAutoSaved')}
-                </Text>
-              ) : (
-              <PrimaryButton
-                label={t('settings.savePreferences')}
-                loading={workspace.actionBusy === 'organization-preferences-save'}
-                onPress={async () => {
-                  const hasStart = Boolean(preferenceDraft.quietHoursStart);
-                  const hasEnd = Boolean(preferenceDraft.quietHoursEnd);
-                  if (hasStart !== hasEnd || (hasStart && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(preferenceDraft.quietHoursStart as string) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferenceDraft.quietHoursEnd as string)))) return;
-                  if (await workspace.saveOrganizationPreferences({ ...preferenceDraft, uiLanguage: locale })) setLocale(locale);
-                }}
-                tone="dark"
-              />
-              )}
-            </View>
           ) : null}
-        </SettingsSection>
+          <SwitchRow
+            disabled={!preferenceDraft}
+            icon="volume-medium-outline"
+            label={t('settings.sound')}
+            onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, soundEnabled: value } : current)}
+            value={preferenceDraft?.soundEnabled ?? true}
+          />
+          <SwitchRow
+            disabled={!preferenceDraft}
+            icon="phone-portrait-outline"
+            label={t('settings.vibration')}
+            onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, vibrationEnabled: value } : current)}
+            value={preferenceDraft?.vibrationEnabled ?? true}
+          />
+          <Row
+            disabled={!preferenceDraft}
+            icon="moon-outline"
+            label={t('settings.quietHours')}
+            onPress={() => setPicker('quietHours')}
+            value={preferenceDraft ? quietHoursValue : ''}
+          />
+          {!personalRealm ? (
+            <SwitchRow
+              disabled={!preferenceDraft}
+              icon="time-outline"
+              label={t('settings.shiftSuppression')}
+              onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, shiftAwareSuppression: value } : current)}
+              value={preferenceDraft?.shiftAwareSuppression ?? false}
+            />
+          ) : null}
+        </Group>
 
-        <MessageOutboxSection
-          actionBusy={workspace.actionBusy}
-          actionError={workspace.actionError}
-          copy={outboxCopy(locale)}
-          degradedReason={workspace.outboxDegradedReason}
-          items={workspace.messageOutbox}
-          onCancel={workspace.cancelOutboxMessage}
-          onClearError={workspace.clearActionError}
-          onEdit={workspace.editOutboxMessage}
-          onRetry={workspace.retryOutboxMessage}
-          resolveConversationTitle={(conversationId) =>
-            workspace.conversations.find((conversation) => conversation.id === conversationId)?.title ?? null}
-        />
-
-        <SettingsSection
-          description={t('settings.notificationsDescription')}
-          icon="notifications-outline"
-          title={t('settings.notificationsTitle')}>
-          <View style={styles.preferenceForm}>
-            <View style={styles.securityRow}>
-              <View style={styles.securityCopy}>
-                <Text style={styles.rowLabel}>{t('settings.deviceNotifications')}</Text>
-                <Text style={styles.rowNote}>
-                  {t(personalRealm ? 'settings.deviceNotificationsNoteConsumer' : 'settings.deviceNotificationsNote')}
-                </Text>
-              </View>
-              {Platform.OS === 'web' ? (
-                <StatusBadge label={t('settings.nativeOnly')} />
-              ) : devicePreferences ? (
-                <StatusBadge
-                  icon="phone-portrait-outline"
-                  label={`${t('settings.currentDevice')} · ${devicePreferences.platform.toUpperCase()}`}
-                  tone="success"
-                />
-              ) : (
-                <PrimaryButton
-                  icon="notifications-outline"
-                  label={t('settings.enableNotifications')}
-                  loading={workspace.actionBusy === 'device-register'}
-                  onPress={() => void workspace.enableNotifications()}
-                />
-              )}
-            </View>
-            {devicePreferences && devicePreferenceDraft ? (
-              <>
-                <View style={styles.devicePreferenceBoundary}>
-                  <Ionicons name="shield-checkmark-outline" color={colors.mintDark} size={18} />
-                  <View style={styles.securityCopy}>
-                    <Text style={styles.rowLabel}>{t('settings.currentDevicePreferences')}</Text>
-                    <Text style={styles.rowNote}>
-                      {t(personalRealm ? 'settings.devicePreferencesBoundaryConsumer' : 'settings.devicePreferencesBoundary')}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.rowLabel}>{t('settings.notificationPreview')}</Text>
-                <View style={styles.languageOptions}>
-                  {([
-                    [null, t('settings.inheritAccount')],
-                    ['generic', t('settings.previewGeneric')],
-                    ['hidden', t('settings.previewHiddenDevice')],
-                  ] as [DeviceNotificationPreferenceOverrides['notificationPreview'], string][])
-                    .map(([value, label]) => (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: devicePreferenceDraft.notificationPreview === value }}
-                        key={`device-preview-${value ?? 'inherit'}`}
-                        onPress={() => setDevicePreferenceDraft((current) => current
-                          ? { ...current, notificationPreview: value }
-                          : current)}
-                        style={({ pressed }) => [
-                          styles.languageOption,
-                          devicePreferenceDraft.notificationPreview === value && styles.languageOptionSelected,
-                          pressed && styles.pressed,
-                        ]}>
-                        <Text style={[
-                          styles.languageOptionText,
-                          devicePreferenceDraft.notificationPreview === value && styles.languageOptionTextSelected,
-                        ]}>{label}</Text>
-                      </Pressable>
-                    ))}
-                </View>
-                <Text style={styles.effectivePreference}>
-                  {t('settings.effectiveValue')} · {devicePreferences.effective.notificationPreview === 'generic'
-                    ? t('settings.previewGeneric')
-                    : t('settings.previewHiddenDevice')}
-                </Text>
-                {([
-                  ['soundEnabled', t('settings.sound')],
-                  ['vibrationEnabled', t('settings.vibration')],
-                ] as const).map(([field, label]) => (
-                  <View key={field} style={styles.devicePreferenceField}>
-                    <Text style={styles.rowLabel}>{label}</Text>
-                    <View style={styles.languageOptions}>
-                      {([
-                        [null, t('settings.inheritAccount')],
-                        [true, t('settings.enabled')],
-                        [false, t('settings.disabled')],
-                      ] as [boolean | null, string][]).map(([value, optionLabel]) => (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: devicePreferenceDraft[field] === value }}
-                          key={`${field}-${String(value)}`}
-                          onPress={() => setDevicePreferenceDraft((current) => current
-                            ? { ...current, [field]: value }
-                            : current)}
-                          style={({ pressed }) => [
-                            styles.languageOption,
-                            devicePreferenceDraft[field] === value && styles.languageOptionSelected,
-                            pressed && styles.pressed,
-                          ]}>
-                          <Text style={[
-                            styles.languageOptionText,
-                            devicePreferenceDraft[field] === value && styles.languageOptionTextSelected,
-                          ]}>{optionLabel}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <Text style={styles.effectivePreference}>
-                      {t('settings.effectiveValue')} · {devicePreferences.effective[field]
-                        ? t('settings.enabled') : t('settings.disabled')}
-                    </Text>
-                  </View>
-                ))}
-                <Text style={styles.rowNote}>
-                  {t('settings.devicePreferencesUpdated')} · {new Date(
-                    devicePreferences.updatedAt,
-                  ).toLocaleString()}
-                </Text>
-                <View style={styles.notificationActions}>
-                  <PrimaryButton
-                    icon="refresh-outline"
-                    label={t('settings.refreshDevicePreferences')}
-                    loading={workspace.actionBusy === 'device-preferences-load'}
-                    onPress={() => void workspace.loadDeviceNotificationPreferences()}
-                    tone="light"
-                  />
-                  <PrimaryButton
-                    disabled={JSON.stringify(devicePreferenceDraft) === JSON.stringify(
-                      devicePreferences.overrides,
-                    )}
-                    icon="save-outline"
-                    label={t('settings.saveDevicePreferences')}
-                    loading={workspace.actionBusy === 'device-preferences-save'}
-                    onPress={() => void workspace.saveDeviceNotificationPreferences(
-                      devicePreferenceDraft,
-                    )}
-                    tone="dark"
-                  />
-                </View>
-              </>
-            ) : Platform.OS !== 'web' ? (
-              <Text style={styles.rowNote}>{t('settings.devicePreferencesUnavailable')}</Text>
-            ) : null}
-          </View>
-        </SettingsSection>
+        {showOutbox ? (
+          <MessageOutboxSection
+            actionBusy={workspace.actionBusy}
+            actionError={workspace.actionError}
+            copy={outboxCopy(locale)}
+            degradedReason={workspace.outboxDegradedReason}
+            items={workspace.messageOutbox}
+            onCancel={workspace.cancelOutboxMessage}
+            onClearError={workspace.clearActionError}
+            onEdit={workspace.editOutboxMessage}
+            onRetry={workspace.retryOutboxMessage}
+            resolveConversationTitle={(conversationId) =>
+              workspace.conversations.find((conversation) => conversation.id === conversationId)?.title ?? null}
+          />
+        ) : null}
 
         {!personalRealm ? (
           <>
-          <SettingsSection
-            description={t('settings.mfaDescription')}
-            icon="shield-checkmark-outline"
-            title={t('settings.securityTitle')}>
-            {mfaLoading && !mfaVisible ? <ActivityIndicator color={colors.mintDark} /> : null}
-            <View style={styles.securityRow}>
-              <View style={styles.securityCopy}>
-                <Text style={styles.rowLabel}>{t('settings.mfaTitle')}</Text>
-                <Text style={styles.rowNote}>
-                  {Platform.OS === 'web'
-                    ? verifiedFactor
-                      ? mfaLevel === 'aal2'
-                        ? t('settings.mfaAal2')
-                        : t('settings.mfaEnrolled')
-                      : t('settings.mfaNotEnrolled')
-                    : verifiedFactor
-                      ? mfaLevel === 'aal2'
-                        ? t('settings.mfaAal2')
-                        : t('settings.mfaEnrolled')
-                      : t('settings.mfaNotEnrolled')}
-                </Text>
-              </View>
-              <PrimaryButton
-                icon={verifiedFactor ? 'key-outline' : 'add-circle-outline'}
-                label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
-                loading={mfaLoading}
-                onPress={() => void openMfa()}
-                tone={verifiedFactor ? 'dark' : privileged ? 'danger' : 'light'}
+            <Group title={t('settings.securityTitle')}>
+              <Row
+                hint={mfaStatus}
+                icon="shield-checkmark-outline"
+                label={t('settings.mfaTitle')}
+                right={(
+                  <RowAction
+                    label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
+                    loading={mfaLoading && !mfaVisible}
+                    onPress={() => void openMfa()}
+                    tone={!verifiedFactor && privileged ? 'danger' : 'accent'}
+                  />
+                )}
               />
-            </View>
-            {privileged && !verifiedFactor ? (
-              <View style={styles.warningRow}>
-                <Ionicons name="warning" size={16} color={colors.amber} />
+              {privileged && !verifiedFactor ? (
                 <Text style={styles.warningText}>{t('settings.mfaPrivilegedWarning')}</Text>
-              </View>
-            ) : null}
-            <ActionError message={mfaError} />
-          </SettingsSection>
-
-          <SelfRecoveryRequest
-            accessToken={auth.session?.access_token ?? null}
-            organizationId={workspace.organizationId}
-          />
+              ) : null}
+              {mfaError ? <View style={styles.inlineError}><ActionError message={mfaError} /></View> : null}
+            </Group>
+            <SelfRecoveryRequest
+              accessToken={auth.session?.access_token ?? null}
+              organizationId={workspace.organizationId}
+            />
           </>
         ) : null}
 
-        <SettingsSection
-          description={t('settings.sessionsDescription')}
-          icon="phone-portrait-outline"
-          title={t('settings.sessionsTitle')}>
-          <View style={styles.deviceRow}>
-            <View style={styles.deviceIcon}>
-              <Ionicons
-                name={Platform.OS === 'web' ? 'globe-outline' : 'phone-portrait-outline'}
-                size={20}
-                color={colors.mintDark}
+        <Group title={t('settings.sessionsTitle')}>
+          <Row
+            icon={Platform.OS === 'web' ? 'globe-outline' : 'phone-portrait-outline'}
+            label={t('settings.currentSession')}
+            right={!personalRealm && auth.sessionId ? (
+              <RowAction
+                label={t('settings.revokeCurrent')}
+                onPress={() => openRevoke(auth.sessionId as string)}
+                tone="danger"
               />
-            </View>
-            <View style={styles.deviceCopy}>
-              <Text style={styles.rowLabel}>{t('settings.currentSession')}</Text>
-              <Text style={styles.rowNote}>
-                {Platform.OS === 'web' ? t('settings.httpOnlySession') : `${Platform.OS.toUpperCase()} · ${auth.assuranceLevel ?? 'aal1'}`}
-              </Text>
-            </View>
-            <StatusBadge label={t('settings.activeNow')} tone="success" />
-          </View>
-          {auth.sessionId ? (
+            ) : undefined}
+            value={t('settings.activeNow')}
+          />
+          {otherSessions.map((session) => (
+            <Row
+              hint={`${t('settings.lastUsed')} ${new Date(session.lastUsedAt).toLocaleString()}`}
+              icon={session.platform === 'web' ? 'globe-outline' : 'phone-portrait-outline'}
+              key={session.sessionId}
+              label={session.device?.appVersion
+                ? `${session.platform?.toUpperCase()} · ${session.device.appVersion}`
+                : session.signal.clientFamily}
+              right={(
+                <RowAction
+                  label={t('settings.revokeSession')}
+                  onPress={() => openRevoke(session.sessionId)}
+                  tone="danger"
+                />
+              )}
+            />
+          ))}
+          {otherSessions.length === 0 ? (
+            <Row icon="phone-portrait-outline" label={t('settings.noOtherSessions')} muted />
+          ) : null}
+        </Group>
+
+        <Group>
+          <Row
+            icon="help-circle-outline"
+            label={t('settings.help')}
+            onPress={() => router.push('./help')}
+          />
+          <Row
+            icon="log-out-outline"
+            label={t('settings.signOut')}
+            onPress={async () => {
+              // Sign-out revokes this session on the server (owner decision,
+              // Sep 4 2026) so the Devices list and other devices see it end;
+              // if the revoke cannot be sent, the local sign-out still happens.
+              const revoked = auth.sessionId
+                ? await workspace.revokeSession(auth.sessionId, 'sign_out')
+                : false;
+              if (!revoked) await auth.signOut();
+              router.replace('/sign-in');
+            }}
+          />
+        </Group>
+
+        <Group title={t('settings.dangerTitle')}>
+          <Row
+            icon="trash-outline"
+            label={t('settings.deleteAccount')}
+            onPress={() => {
+              setDeleteError('');
+              setDeleteConfirmation('');
+              setDeleteVisible(true);
+            }}
+            tone="danger"
+          />
+        </Group>
+      </ScrollView>
+
+      <ActionModal
+        onClose={() => setProfileVisible(false)}
+        title={t('settings.profileTitle')}
+        visible={profileVisible}>
+        <View style={styles.photoRow}>
+          <Avatar
+            color={currentUser.avatarColor}
+            imageUri={ownAvatarUrl}
+            initials={currentUser.initials}
+            size={56}
+          />
+          <PrimaryButton
+            icon="image-outline"
+            label={t('settings.choosePhoto')}
+            loading={workspace.actionBusy === 'profile-avatar-upload'}
+            onPress={() => void choosePhoto()}
+            tone="light"
+          />
+          {ownAvatarUrl ? (
             <PrimaryButton
-              icon="log-out-outline"
-              label={t('settings.revokeCurrent')}
-              onPress={() => {
-                workspace.clearActionError();
-                setRevokeReason('');
-                setRevokeTargetSessionId(auth.sessionId as string);
-                setRevokeVisible(true);
-              }}
-              tone="danger"
+              icon="trash-outline"
+              label={t('settings.removePhoto')}
+              loading={workspace.actionBusy === 'profile-avatar-remove'}
+              onPress={() => void workspace.removeProfileAvatar()}
+              tone="light"
             />
           ) : null}
-          {workspace.accountSessions.filter((session) => !session.current && !session.revoked).map((session) => (
-            <View key={session.sessionId} style={styles.deviceRow}>
-              <View style={styles.deviceIcon}>
-                <Ionicons name={session.platform === 'web' ? 'globe-outline' : 'phone-portrait-outline'} size={20} color={colors.mintDark} />
-              </View>
-              <View style={styles.deviceCopy}>
-                <Text style={styles.rowLabel}>{session.device?.appVersion ? `${session.platform?.toUpperCase()} · ${session.device.appVersion}` : session.signal.clientFamily}</Text>
-                <Text style={styles.rowNote}>{t('settings.lastUsed')} {new Date(session.lastUsedAt).toLocaleString()}</Text>
-              </View>
-              <PrimaryButton
-                label={t('settings.revokeSession')}
-                onPress={() => {
-                  workspace.clearActionError();
-                  setRevokeReason('');
-                  setRevokeTargetSessionId(session.sessionId);
-                  setRevokeVisible(true);
-                }}
-                tone="danger"
+        </View>
+        <FormField
+          label={t('settings.displayName')}
+          onChangeText={(value) => setProfileDraft((current) => ({ ...current, displayName: value }))}
+          value={draftDisplayName}
+        />
+        <FormField
+          label={t('settings.statusMessage')}
+          multiline
+          onChangeText={(value) => setProfileDraft((current) => ({ ...current, statusMessage: value }))}
+          placeholder={t('settings.statusMessagePlaceholder')}
+          value={draftStatusMessage}
+        />
+        <ActionError message={workspace.actionError} />
+        <PrimaryButton
+          disabled={!profileDirty || !profileValid}
+          icon="save-outline"
+          label={t('settings.saveProfile')}
+          loading={workspace.actionBusy === 'profile-update'}
+          onPress={() => void saveProfile()}
+          tone="dark"
+        />
+      </ActionModal>
+
+      <ActionModal onClose={() => setPicker(null)} title={pickerTitle} visible={picker !== null}>
+        {picker === 'language' ? (
+          <OptionList
+            onSelect={(value) => {
+              setLocale(value);
+              setPicker(null);
+            }}
+            options={(['en', 'ko', 'es'] as AppLocale[]).map((value) => [value, localeLabel(value)])}
+            selected={locale}
+            title={pickerTitle}
+          />
+        ) : null}
+        {picker === 'messageLanguage' && preferenceDraft ? (
+          <OptionList
+            onSelect={(value) => {
+              setPreferenceDraft((current) => current ? { ...current, messageLanguage: value } : current);
+              setPicker(null);
+            }}
+            options={([null, 'en', 'ko', 'es'] as OrganizationPreferences['messageLanguage'][])
+              .map((value) => [value, value ? localeLabel(value) : t('settings.messageLanguageAuto')])}
+            selected={preferenceDraft.messageLanguage}
+            title={pickerTitle}
+          />
+        ) : null}
+        {picker === 'readVisibility' && preferenceDraft ? (
+          <OptionList
+            onSelect={(value) => {
+              setPreferenceDraft((current) => current ? { ...current, readVisibility: value } : current);
+              setPicker(null);
+            }}
+            options={(['everyone', 'contacts', 'nobody'] as OrganizationPreferences['readVisibility'][])
+              .map((value) => [value, readVisibilityLabel(value)])}
+            selected={preferenceDraft.readVisibility}
+            title={pickerTitle}
+          />
+        ) : null}
+        {picker === 'quietHours' && preferenceDraft ? (
+          <View style={styles.quietHoursRow}>
+            <View style={styles.quietField}>
+              <FormField
+                label={t('settings.quietStart')}
+                onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursStart: value || null } : current)}
+                placeholder="21:00"
+                value={preferenceDraft.quietHoursStart?.slice(0, 5) ?? ''}
               />
             </View>
-          ))}
-          {!workspace.accountSessions.some((session) => !session.current && !session.revoked) ? (
-            <View style={styles.scopeNote}>
-              <Ionicons name="information-circle-outline" color={colors.inkSubtle} size={16} />
-              <Text style={styles.scopeNoteText}>{t('settings.noOtherSessions')}</Text>
+            <View style={styles.quietField}>
+              <FormField
+                label={t('settings.quietEnd')}
+                onChangeText={(value) => setPreferenceDraft((current) => current ? { ...current, quietHoursEnd: value || null } : current)}
+                placeholder="07:00"
+                value={preferenceDraft.quietHoursEnd?.slice(0, 5) ?? ''}
+              />
             </View>
-          ) : null}
-        </SettingsSection>
-
-        {!personalRealm ? (
-          <View style={styles.footerNote}>
-            <Ionicons name="lock-closed" size={14} color={colors.inkSubtle} />
-            <Text style={styles.footerNoteText}>{t('settings.privateDmNote')}</Text>
           </View>
         ) : null}
-        <PrimaryButton
-          icon="help-circle-outline"
-          label={t('settings.help')}
-          onPress={() => router.push('./help')}
-          tone="light"
-        />
-        <PrimaryButton
-          icon="log-out-outline"
-          label={t('settings.signOut')}
-          onPress={async () => {
-            // Sign-out revokes this session on the server (owner decision,
-            // Sep 4 2026) so the Devices list and other devices see it end;
-            // if the revoke cannot be sent, the local sign-out still happens.
-            const revoked = auth.sessionId
-              ? await workspace.revokeSession(auth.sessionId, 'sign_out')
-              : false;
-            if (!revoked) await auth.signOut();
-            router.replace('/sign-in');
-          }}
-          tone="danger"
-        />
-
-        <View style={[styles.dangerSection, shadow]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.dangerIcon}>
-              <Ionicons name="trash-outline" size={19} color={colors.red} />
-            </View>
-            <View style={styles.sectionHeaderCopy}>
-              <Text accessibilityRole="header" style={styles.sectionTitle}>
-                {t('settings.dangerTitle')}
-              </Text>
-              <Text style={styles.sectionDescription}>{t('settings.dangerDescription')}</Text>
-            </View>
-          </View>
-          <View style={styles.sectionRows}>
-            <View style={styles.securityRow}>
-              <View style={styles.securityCopy}>
-                <Text style={styles.rowLabel}>{t('settings.deleteAccount')}</Text>
-                <Text style={styles.rowNote}>{t('settings.deleteAccountNote')}</Text>
-              </View>
-              <PrimaryButton
-                icon="trash-outline"
-                label={t('settings.deleteAccount')}
-                onPress={() => {
-                  setDeleteError('');
-                  setDeleteConfirmation('');
-                  setDeleteVisible(true);
-                }}
-                tone="danger"
-              />
-            </View>
-          </View>
-        </View>
-      </ScrollView>
+      </ActionModal>
 
       <ActionModal
         description={mfaEnrollment ? t('settings.mfaEnrollInstructions') : t('settings.mfaVerifyInstructions')}
@@ -982,27 +859,29 @@ export default function SettingsScreen() {
       </ActionModal>
 
       <ActionModal
-        description={t('settings.revokeDescription')}
+        description={personalRealm ? undefined : t('settings.revokeDescription')}
         onClose={() => setRevokeVisible(false)}
-        title={t('settings.revokeTitle')}
+        title={personalRealm ? t('settings.signOutDeviceTitle') : t('settings.revokeTitle')}
         visible={revokeVisible}>
-        <FormField
-          label={t('settings.revokeReason')}
-          multiline
-          onChangeText={setRevokeReason}
-          value={revokeReason}
-        />
+        {!personalRealm ? (
+          <FormField
+            label={t('settings.revokeReason')}
+            multiline
+            onChangeText={setRevokeReason}
+            value={revokeReason}
+          />
+        ) : null}
         <ActionError message={workspace.actionError} />
         <PrimaryButton
-          disabled={revokeReason.trim().length < 3}
+          disabled={!personalRealm && revokeReason.trim().length < 3}
           icon="log-out-outline"
-          label={t('settings.revokeConfirm')}
+          label={personalRealm ? t('settings.signOutDeviceConfirm') : t('settings.revokeConfirm')}
           loading={workspace.actionBusy === 'session-revoke'}
           onPress={async () => {
             const revokingCurrentSession = revokeTargetSessionId === auth.sessionId;
             if (
               revokeTargetSessionId
-              && await workspace.revokeSession(revokeTargetSessionId, revokeReason)
+              && await workspace.revokeSession(revokeTargetSessionId, personalRealm ? 'sign_out' : revokeReason)
             ) {
               if (revokingCurrentSession) {
                 router.replace('/sign-in');
@@ -1045,113 +924,211 @@ export default function SettingsScreen() {
   );
 }
 
-function SettingsSection({
-  icon,
-  title,
-  description,
-  children,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
+/** A titled card of rows separated by hairlines, like a messenger's settings list. */
+function Group({ title, children }: { title?: string; children: ReactNode }) {
+  const rows = Children.toArray(children).filter(Boolean);
   return (
-    <View style={[styles.section, shadow]}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionIcon}>
-          <Ionicons name={icon} size={19} color={colors.mintDark} />
-        </View>
-        <View style={styles.sectionHeaderCopy}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionDescription}>{description}</Text>
-        </View>
+    <View style={styles.group}>
+      {title ? <Text accessibilityRole="header" style={styles.groupTitle}>{title}</Text> : null}
+      <View style={styles.groupCard}>
+        {rows.map((row, index) => (
+          <View key={index}>
+            {index > 0 ? <View style={styles.separator} /> : null}
+            {row}
+          </View>
+        ))}
       </View>
-      <View style={styles.sectionRows}>{children}</View>
     </View>
   );
 }
 
-function PreferenceSwitch({
+function Row({
+  icon,
   label,
   value,
-  onValueChange,
+  hint,
+  onPress,
+  right,
+  tone = 'default',
+  muted = false,
+  disabled = false,
 }: {
+  icon: IconName;
   label: string;
+  value?: string;
+  hint?: string;
+  onPress?: () => void;
+  right?: ReactNode;
+  tone?: 'default' | 'danger';
+  muted?: boolean;
+  disabled?: boolean;
+}) {
+  const content = (
+    <>
+      <Ionicons
+        color={tone === 'danger' ? colors.red : colors.inkMuted}
+        name={icon}
+        size={20}
+        style={styles.rowIcon}
+      />
+      <View style={styles.rowCopy}>
+        <Text
+          numberOfLines={1}
+          style={[styles.rowLabel, tone === 'danger' && styles.rowLabelDanger, muted && styles.rowLabelMuted]}>
+          {label}
+        </Text>
+        {hint ? <Text numberOfLines={1} style={styles.rowHint}>{hint}</Text> : null}
+      </View>
+      {value ? <Text numberOfLines={1} style={styles.rowValue}>{value}</Text> : null}
+      {right}
+      {onPress ? <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} /> : null}
+    </>
+  );
+  if (!onPress) {
+    return <View accessible={false} style={styles.row}>{content}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      {content}
+    </Pressable>
+  );
+}
+
+function SwitchRow({
+  icon,
+  label,
+  hint,
+  value,
+  onValueChange,
+  disabled = false,
+}: {
+  icon: IconName;
+  label: string;
+  hint?: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <View style={styles.preferenceSwitch}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} />
+    <Row
+      hint={hint}
+      icon={icon}
+      label={label}
+      right={(
+        <Switch
+          accessibilityLabel={label}
+          accessibilityState={{ disabled }}
+          disabled={disabled}
+          onValueChange={onValueChange}
+          trackColor={{ true: colors.mint }}
+          value={value}
+        />
+      )}
+    />
+  );
+}
+
+/** A text action at the right edge of a row (verify, sign out, ...). */
+function RowAction({
+  label,
+  onPress,
+  tone = 'accent',
+  loading = false,
+}: {
+  label: string;
+  onPress: () => void;
+  tone?: 'accent' | 'danger';
+  loading?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: loading }}
+      disabled={loading}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.rowAction, pressed && styles.pressed]}>
+      {loading ? (
+        <ActivityIndicator color={colors.mintDark} size="small" />
+      ) : (
+        <Text style={[styles.rowActionText, tone === 'danger' && styles.rowActionDanger]}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+function OptionList<T extends string | null>({
+  title,
+  options,
+  selected,
+  onSelect,
+}: {
+  title: string;
+  options: [T, string][];
+  selected: T;
+  onSelect: (value: T) => void;
+}) {
+  return (
+    <View style={styles.options}>
+      {options.map(([value, label]) => (
+        <Pressable
+          accessibilityLabel={`${title}: ${label}`}
+          accessibilityRole="button"
+          accessibilityState={{ selected: selected === value }}
+          key={value ?? 'auto'}
+          onPress={() => onSelect(value)}
+          style={({ pressed }) => [styles.option, pressed && styles.pressed]}>
+          <Text style={[styles.optionText, selected === value && styles.optionTextSelected]}>{label}</Text>
+          {selected === value ? <Ionicons color={colors.mintDark} name="checkmark" size={20} /> : null}
+        </Pressable>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  errorBanner: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   root: { flex: 1, backgroundColor: colors.canvas },
   loadingScreen: { flex: 1 },
-  header: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, backgroundColor: colors.paper },
-  headerCopy: { flex: 1, minWidth: 0 },
-  headerTitle: { color: colors.ink, fontFamily: type.display, fontSize: 18, fontWeight: '900', textAlign: 'center' },
-  headerSubtitle: { color: colors.inkSubtle, fontSize: 10, textAlign: 'center', marginTop: 2 },
-  headerSpacer: { width: 40 },
-  page: { width: '100%', maxWidth: 800, alignSelf: 'center', gap: spacing.md, padding: spacing.md, paddingBottom: spacing.xxxl },
-  profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
-  profileCardCompact: { alignItems: 'flex-start', flexDirection: 'column' },
-  profileCopy: { flex: 1, minWidth: 0, maxWidth: '100%' },
-  profileName: { color: colors.ink, fontFamily: type.display, fontSize: 19, fontWeight: '900', flexShrink: 1 },
-  profileHandle: { color: colors.mintDark, fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  profileRole: { color: colors.inkMuted, fontSize: 11, marginTop: 3 },
-  profileBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
-  section: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
-  dangerSection: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.red, backgroundColor: colors.paper },
-  dangerIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.redSoft },
-  sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.lg, backgroundColor: colors.paperMuted },
-  sectionIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.mintSoft },
-  sectionHeaderCopy: { flex: 1, minWidth: 0 },
-  sectionTitle: { color: colors.ink, fontSize: 14, fontWeight: '900' },
-  sectionDescription: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  sectionRows: { gap: spacing.sm, padding: spacing.md },
-  languageRow: { gap: spacing.sm },
-  languageOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  languageOption: { minHeight: 44, minWidth: 90, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paperMuted },
-  languageOptionSelected: { borderColor: colors.forest, backgroundColor: colors.forest },
-  languageOptionText: { color: colors.inkMuted, fontSize: 12, fontWeight: '800' },
-  languageOptionTextSelected: { color: colors.white },
-  preferenceForm: { gap: spacing.md },
-  devicePreferenceBoundary: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.mintSoft },
-  devicePreferenceField: { gap: spacing.xs },
-  effectivePreference: { color: colors.mintDark, fontSize: 10, lineHeight: 15, fontWeight: '700' },
-  notificationActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.xs },
+  errorBanner: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },
+  header: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line, backgroundColor: colors.paper },
+  headerTitle: { flex: 1, color: colors.ink, fontFamily: type.display, fontSize: 17, fontWeight: '800', textAlign: 'center' },
+  headerSpacer: { width: 36 },
+  page: { width: '100%', maxWidth: 640, alignSelf: 'center', paddingVertical: spacing.sm, paddingBottom: spacing.xxxl },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: radii.md, backgroundColor: colors.paper },
+  profileCopy: { flex: 1, minWidth: 0 },
+  profileName: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+  profileMeta: { color: colors.inkSubtle, fontSize: 13, marginTop: 1 },
+  group: { marginTop: spacing.md },
+  groupTitle: { color: colors.inkSubtle, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginHorizontal: spacing.lg + spacing.xs, marginBottom: spacing.xxs },
+  groupCard: { marginHorizontal: spacing.sm, borderRadius: radii.md, overflow: 'hidden', backgroundColor: colors.paper },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: spacing.sm + 20 + spacing.sm, backgroundColor: colors.line },
+  row: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  rowIcon: { width: 20, textAlign: 'center' },
+  rowCopy: { flex: 1, minWidth: 0 },
+  rowLabel: { color: colors.ink, fontSize: 15 },
+  rowLabelDanger: { color: colors.red },
+  rowLabelMuted: { color: colors.inkSubtle },
+  rowHint: { color: colors.inkSubtle, fontSize: 12, marginTop: 1 },
+  rowValue: { color: colors.inkSubtle, fontSize: 14, maxWidth: '45%' },
+  rowAction: { minHeight: 32, justifyContent: 'center', paddingHorizontal: spacing.xs },
+  rowActionText: { color: colors.mintDark, fontSize: 14, fontWeight: '700' },
+  rowActionDanger: { color: colors.red },
+  warningText: { color: colors.amber, fontSize: 12, lineHeight: 16, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  inlineError: { paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  options: { gap: 0 },
+  option: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  optionText: { color: colors.ink, fontSize: 15 },
+  optionTextSelected: { color: colors.mintDark, fontWeight: '700' },
   quietHoursRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  quietField: { flex: 1, minWidth: 180 },
-  preferenceSwitch: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  photoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  rowHint: {
-    color: colors.inkMuted,
-    fontSize: 13,
-  },
-  rowLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
-  rowNote: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: 3 },
-  securityRow: { minHeight: 62, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
-  securityCopy: { flex: 1, minWidth: 190 },
-  warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.amberSoft },
-  warningText: { flex: 1, color: colors.amber, fontSize: 10, lineHeight: 15, fontWeight: '700' },
-  deviceRow: { minHeight: 62, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
-  deviceIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.mintSoft },
-  deviceCopy: { flex: 1, minWidth: 150 },
-  scopeNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.paperMuted },
-  scopeNoteText: { flex: 1, color: colors.inkSubtle, fontSize: 10, lineHeight: 15 },
-  footerNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs, padding: spacing.sm },
-  footerNoteText: { flex: 1, color: colors.inkSubtle, fontSize: 10, lineHeight: 15 },
+  quietField: { flex: 1, minWidth: 140 },
   enrollment: { alignItems: 'center', gap: spacing.xs },
   qrCode: { width: 220, height: 220, backgroundColor: colors.white },
   secretLabel: { color: colors.inkSubtle, fontSize: 10, fontWeight: '800' },
