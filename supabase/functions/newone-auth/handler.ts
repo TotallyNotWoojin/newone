@@ -436,13 +436,13 @@ export function defaultAuthDependencies(): AuthDependencies {
     const reviewEmail = reviewEmailSetting.toLowerCase();
     if (
       reviewEmail.length < 3 || reviewEmail.length > 254 || !EMAIL_PATTERN.test(reviewEmail) ||
-      reviewCodeSetting.length < 8 || reviewCodeSetting.length > 32 ||
+      reviewCodeSetting.length < 6 || reviewCodeSetting.length > 32 ||
       !/^[\x21-\x7e]+$/.test(reviewCodeSetting)
     ) {
       // The message never echoes the configured secret values.
       throw new Error(
         'NEWONE_REVIEW_ACCOUNT_EMAIL and NEWONE_REVIEW_ACCOUNT_CODE must be configured together ' +
-          'as a valid email address and an 8-32 character printable code',
+          'as a valid email address and a 6-32 character printable code',
       );
     }
     reviewAccount = { email: reviewEmail, code: reviewCodeSetting };
@@ -2235,7 +2235,7 @@ export function createAuthHandler(
           if (native && identity.installationId !== nativeInstallationId(request)) {
             throw new ApiError(400, 'bad_request');
           }
-          // The designated review account may submit its 8-32 character static
+          // The designated review account may submit its 6-32 character static
           // code; every other destination keeps the exact six-digit contract.
           const reviewDestination = isReviewDestination(dependencies.reviewAccount, identity);
           const code = normalizedString(body.code, {
