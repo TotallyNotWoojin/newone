@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 
 import {
   apiUrlFor,
+  edgeSessionTransport,
   isApiConfigured,
   nativeEdgeRequestHeaders,
   publicRuntimeConfig,
@@ -344,7 +345,11 @@ type NativeAuthPath =
   | '/v2/auth/native/signup/verify';
 
 async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unknown>) {
-  if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
+  // A browser build in direct (bearer) mode uses the same token-returning
+  // routes; it identifies itself honestly as 'web' and the server admits it
+  // only from an allow-listed Origin.
+  const directWeb = Platform.OS === 'web' && edgeSessionTransport === 'bearer';
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android' && !directWeb) {
     throw new WebAuthError('Native sign-in is unavailable on this platform.', 'gateway_unconfigured');
   }
   const installationId = await getInstallationId();

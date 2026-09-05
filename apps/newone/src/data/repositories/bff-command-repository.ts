@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 
 import { resolveStorageSignedUrl } from '@/config/api-routing.mjs';
@@ -67,6 +66,7 @@ import {
   parseDynamicGroupPublishReceipt,
   parseDynamicGroupSaveReceipt,
 } from '@/data/repositories/dynamic-group-dto.mjs';
+import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import type {
   AccountSession,
@@ -963,8 +963,9 @@ export class BffCommandRepository implements CommandRepository {
       );
     }
 
+    const cookieSession = usesCookieSession();
     const session = await this.context.getSession();
-    if (Platform.OS !== 'web' && !session?.access_token) {
+    if (!cookieSession && !session?.access_token) {
       throw new RepositoryError('Sign in again to continue.', 'authentication_required', false);
     }
 
@@ -972,8 +973,8 @@ export class BffCommandRepository implements CommandRepository {
     const timeout = setTimeout(() => controller.abort(), 15_000);
     let response: Response;
     try {
-      const csrfToken = Platform.OS === 'web' ? getWebCsrfToken() : null;
-      if (Platform.OS === 'web' && !csrfToken) {
+      const csrfToken = cookieSession ? getWebCsrfToken() : null;
+      if (cookieSession && !csrfToken) {
         throw new RepositoryError('Your secure web session needs to be refreshed.', 'csrf_required', false);
       }
       const url = apiUrlFor(path as `/${string}`);
@@ -986,7 +987,7 @@ export class BffCommandRepository implements CommandRepository {
       }
       response = await fetch(url, {
         method: input.method ?? 'POST',
-        credentials: Platform.OS === 'web' ? 'include' : 'omit',
+        credentials: cookieSession ? 'include' : 'omit',
         cache: 'no-store',
         headers: {
           Accept: 'application/json',

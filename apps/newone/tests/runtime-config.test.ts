@@ -3,6 +3,7 @@ import { afterEach, describe, expect, jest, test } from '@jest/globals';
 type RuntimeModule = typeof import('@/config/runtime');
 
 const controlledEnvKeys = [
+  'EXPO_PUBLIC_WEB_AUTH_MODE',
   'EXPO_PUBLIC_SUPABASE_URL',
   'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
   'EXPO_PUBLIC_API_URL',
@@ -76,6 +77,77 @@ describe('validated public runtime configuration', () => {
     });
     expect(runtime.apiUrlFor('/v2/auth/session')).toBe('/api/v2/auth/session');
     expect(runtime.nativeEdgeRequestHeaders('controlled-access-token')).toEqual({});
+    expect(runtime.webAuthMode).toBe('cookie');
+    expect(runtime.edgeSessionTransport).toBe('cookie');
+    expect(runtime.isDirectEdgeConfigured).toBe(false);
+  });
+
+  test('EXPO_PUBLIC_WEB_AUTH_MODE=direct routes a web build straight to the Edge Functions with bearer headers', () => {
+    const runtime = loadRuntime('web', {
+      EXPO_PUBLIC_WEB_AUTH_MODE: 'direct',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://coverage-project.supabase.co',
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_controlled_key_123456789',
+      EXPO_PUBLIC_API_URL: '/api',
+    });
+
+    expect(runtime.runtimeMode).toBe('web');
+    expect(runtime.webAuthMode).toBe('direct');
+    expect(runtime.edgeSessionTransport).toBe('bearer');
+    expect(runtime.isApiConfigured).toBe(true);
+    // Native-only flag stays false on web; the transport flag is what the client checks.
+    expect(runtime.isNativeSupabaseConfigured).toBe(false);
+    expect(runtime.isDirectEdgeConfigured).toBe(true);
+    expect(runtime.apiUrlFor('/v2/auth/native/otp/verify')).toBe(
+      'https://coverage-project.supabase.co/functions/v1/newone-auth/v2/auth/native/otp/verify',
+    );
+    expect(runtime.apiUrlFor('/v2/bootstrap')).toBe(
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap',
+    );
+    expect(runtime.nativeEdgeRequestHeaders('controlled-access-token')).toEqual({
+      apikey: 'sb_publishable_controlled_key_123456789',
+      Authorization: 'Bearer controlled-access-token',
+    });
+
+    const explicitFunctionsBase = loadRuntime('web', {
+      EXPO_PUBLIC_WEB_AUTH_MODE: 'direct',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://coverage-project.supabase.co',
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_controlled_key_123456789',
+      EXPO_PUBLIC_API_URL: 'https://coverage-project.supabase.co/functions/v1/',
+    });
+    expect(explicitFunctionsBase.runtimeMode).toBe('web');
+    expect(explicitFunctionsBase.apiUrlFor('/v2/search')).toBe(
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/search',
+    );
+  });
+
+  test('direct web mode fails closed without the public Supabase project and ignores the flag on native', () => {
+    const locked = loadRuntime('web', {
+      EXPO_PUBLIC_WEB_AUTH_MODE: 'direct',
+      EXPO_PUBLIC_API_URL: '/api',
+    });
+    expect(locked.edgeSessionTransport).toBe('bearer');
+    expect(locked.isApiConfigured).toBe(false);
+    expect(locked.runtimeMode).toBe('web_locked');
+    expect(locked.isDirectEdgeConfigured).toBe(false);
+    expect(locked.apiUrlFor('/v2/bootstrap')).toBeNull();
+
+    const invalidMode = loadRuntime('web', {
+      EXPO_PUBLIC_WEB_AUTH_MODE: 'bearer-please',
+      EXPO_PUBLIC_API_URL: '/api',
+    });
+    expect(invalidMode.webAuthMode).toBe('cookie');
+    expect(invalidMode.edgeSessionTransport).toBe('cookie');
+    expect(invalidMode.runtimeMode).toBe('web');
+
+    const native = loadRuntime('ios', {
+      EXPO_PUBLIC_WEB_AUTH_MODE: 'cookie',
+      EXPO_PUBLIC_SUPABASE_URL: 'https://coverage-project.supabase.co',
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_controlled_key_123456789',
+      EXPO_PUBLIC_API_URL: '/api',
+    });
+    expect(native.edgeSessionTransport).toBe('bearer');
+    expect(native.isDirectEdgeConfigured).toBe(true);
+    expect(native.runtimeMode).toBe('native');
   });
 
   test('builds a direct native Edge runtime with separated API-key and bearer headers', () => {

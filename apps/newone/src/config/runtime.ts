@@ -76,6 +76,21 @@ const pushEnvironmentResult = z.enum(['development', 'preview', 'production']).s
   process.env.EXPO_PUBLIC_PUSH_ENVIRONMENT,
 );
 const offlineCacheEnabled = process.env.EXPO_PUBLIC_OFFLINE_CACHE_ENABLED === 'true';
+// How a browser build carries its session. 'cookie' (default) is the
+// same-origin HttpOnly-cookie gateway; 'direct' talks to the Edge Functions
+// with bearer tokens exactly like the native apps, which is what a static host
+// (GitHub Pages) needs. Native builds ignore this setting.
+const webAuthModeResult = z.enum(['cookie', 'direct']).safeParse(
+  process.env.EXPO_PUBLIC_WEB_AUTH_MODE,
+);
+export const webAuthMode: 'cookie' | 'direct' = webAuthModeResult.success
+  ? webAuthModeResult.data
+  : 'cookie';
+const webDirect = Platform.OS === 'web' && webAuthMode === 'direct';
+export type EdgeSessionTransport = 'cookie' | 'bearer';
+export const edgeSessionTransport: EdgeSessionTransport = Platform.OS === 'web' && !webDirect
+  ? 'cookie'
+  : 'bearer';
 
 export const isSupabaseConfigured = supabaseResult.success;
 const normalizedApiUrl = apiResult.success
@@ -86,10 +101,15 @@ export const isApiConfigured = Boolean(resolveApiUrl({
   platform: Platform.OS,
   apiBase: normalizedApiUrl,
   supabaseUrl: supabaseResult.success ? supabaseResult.data.url : null,
+  webDirect,
 }));
 export const isNativeSupabaseConfigured = isSupabaseConfigured
   && isApiConfigured
   && Platform.OS !== 'web';
+/** True wherever the Supabase client itself holds the session (native, or web in direct mode). */
+export const isDirectEdgeConfigured = isSupabaseConfigured
+  && isApiConfigured
+  && edgeSessionTransport === 'bearer';
 
 export type RuntimeMode = 'native' | 'web' | 'web_locked' | 'unconfigured';
 
@@ -125,6 +145,7 @@ export function apiUrlFor(path: `/${string}`) {
     platform: Platform.OS,
     apiBase: publicRuntimeConfig.apiUrl,
     supabaseUrl: publicRuntimeConfig.supabase?.url ?? null,
+    webDirect,
   });
 }
 
@@ -134,5 +155,6 @@ export function nativeEdgeRequestHeaders(accessToken?: string) {
     platform: Platform.OS,
     publishableKey: publicRuntimeConfig.supabase?.publishableKey ?? null,
     accessToken,
+    webDirect,
   });
 }

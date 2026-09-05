@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 
 import { apiUrlFor, nativeEdgeRequestHeaders, publicRuntimeConfig } from '@/config/runtime';
 import {
@@ -10,6 +9,7 @@ import {
   parseRecoveryVerificationReceipt,
   parseVerifiedTotpFactors,
 } from '@/data/repositories/recovery-case-dto.mjs';
+import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -169,12 +169,13 @@ export class RecoveryCaseRepository {
     if (!publicRuntimeConfig.apiUrl) {
       throw new RecoveryCaseRepositoryError('service_unconfigured', false);
     }
+    const cookieSession = usesCookieSession();
     const accessToken = await this.getAccessToken();
-    if (Platform.OS !== 'web' && !accessToken) {
+    if (!cookieSession && !accessToken) {
       throw new RecoveryCaseRepositoryError('authentication_required', false);
     }
-    const csrfToken = Platform.OS === 'web' ? getWebCsrfToken() : null;
-    if (Platform.OS === 'web' && !csrfToken) {
+    const csrfToken = cookieSession ? getWebCsrfToken() : null;
+    if (cookieSession && !csrfToken) {
       throw new RecoveryCaseRepositoryError('csrf_required', false);
     }
     const url = apiUrlFor(path);
@@ -190,7 +191,7 @@ export class RecoveryCaseRepository {
     try {
       response = await fetch(url, {
         method: 'POST',
-        credentials: Platform.OS === 'web' ? 'include' : 'omit',
+        credentials: cookieSession ? 'include' : 'omit',
         cache: 'no-store',
         headers: {
           Accept: 'application/json',
@@ -245,7 +246,7 @@ export class RecoveryCaseRepository {
   }
 
   async listVerifiedTotpFactors(): Promise<VerifiedTotpFactor[]> {
-    if (Platform.OS === 'web') {
+    if (usesCookieSession()) {
       return this.request(
         '/v2/auth/mfa/factors',
         {},

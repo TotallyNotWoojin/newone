@@ -41,6 +41,7 @@ import {
   MAX_MESSAGE_MENTIONS,
   mentionablePeople,
 } from '@/features/chat/mention-controls.mjs';
+import { shouldSendOnEnter } from '@/features/chat/composer-keys';
 import { mentionCopy } from '@/features/chat/mention-copy';
 import { notificationCopy } from '@/features/chat/notification-copy';
 import { translationPreferenceCopy } from '@/features/chat/translation-preference-copy';
@@ -54,6 +55,7 @@ import {
   moderationTargetReportConsentNotice,
 } from '@/features/admin/moderation-copy';
 import { useI18n } from '@/i18n/provider';
+import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, spacing, type } from '@/theme/tokens';
 
@@ -1967,6 +1969,7 @@ function Composer({
   onCancelReply: () => void;
 }) {
   const { t } = useI18n();
+  const { preferences } = useDevicePreferences();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -2078,6 +2081,14 @@ function Composer({
           multiline
           onBlur={onComposerBlur}
           onChangeText={onChangeDraft}
+          onKeyPress={(event) => {
+            // Web: Enter sends, Shift+Enter breaks the line; preventDefault
+            // stops the browser from inserting the newline first.
+            if (shouldSendOnEnter(event.nativeEvent, { enterSends: preferences.enterSends })) {
+              event.preventDefault();
+              onSend();
+            }
+          }}
           onSubmitEditing={onSend}
           placeholder={t('chat.placeholder')}
           placeholderTextColor={colors.inkSubtle}

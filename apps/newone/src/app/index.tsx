@@ -143,6 +143,11 @@ const styles = StyleSheet.create({
   messengerFrame: {
     flex: 1,
     minWidth: 0,
+    // Wide desktop monitors: keep the messenger at a readable width and
+    // centre it instead of stretching the panes edge to edge.
+    width: '100%',
+    maxWidth: 1560,
+    alignSelf: 'center',
     flexDirection: 'row',
     borderRadius: radii.lg,
     overflow: 'hidden',

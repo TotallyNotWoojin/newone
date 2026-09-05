@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 import {
+  isDirectEdgeConfigured,
   isNativeSupabaseConfigured,
   isApiConfigured,
   isSupabaseConfigured,
@@ -14,7 +15,7 @@ import type { Database } from '@/data/database.types';
 // eslint-disable-next-line import/no-unresolved
 import { authStorage } from '@/lib/secure-storage';
 
-export { isNativeSupabaseConfigured, isSupabaseConfigured };
+export { isDirectEdgeConfigured, isNativeSupabaseConfigured, isSupabaseConfigured };
 export const isWebAuthBlocked = Platform.OS === 'web' && !isApiConfigured;
 
 let client: SupabaseClient<Database> | null = null;
@@ -23,8 +24,10 @@ let webRealtimeClient: SupabaseClient<Database> | null = null;
 export function getSupabaseClient() {
   // Native sessions come only from Newone's bounded OTP gateway and are kept
   // in OS-protected storage. Web auth terminates at the Newone BFF so refresh
-  // tokens never enter browser JavaScript.
-  if (!isNativeSupabaseConfigured || !publicRuntimeConfig.supabase || Platform.OS === 'web') return null;
+  // tokens never enter browser JavaScript, unless the build opted into direct
+  // bearer auth (isDirectEdgeConfigured), where the web storage adapter keeps
+  // the session in the encrypted IndexedDB client store.
+  if (isDirectEdgeConfigured !== true || !publicRuntimeConfig.supabase) return null;
   if (client) return client;
 
   client = createClient<Database>(

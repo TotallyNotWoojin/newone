@@ -32,6 +32,18 @@ Deno.test('CORS uses an exact credentialed allowlist and never a wildcard', () =
     'GET, POST, PUT, PATCH, DELETE, OPTIONS',
   );
   assert(meta.corsHeaders.get('access-control-allow-origin') !== '*');
+  // A direct (bearer) browser build sends the native client-binding headers.
+  const allowedHeaders = (meta.corsHeaders.get('access-control-allow-headers') ?? '')
+    .split(',').map((value) => value.trim());
+  for (const required of [
+    'apikey',
+    'authorization',
+    'x-csrf-token',
+    'x-newone-client-platform',
+    'x-newone-installation-id',
+  ]) {
+    assert(allowedHeaders.includes(required), `CORS must allow ${required}`);
+  }
 });
 
 Deno.test('CORS rejects an unlisted browser origin', async () => {

@@ -10,6 +10,8 @@ function loadSupabase(input: {
   nativeConfigured: boolean;
   apiConfigured: boolean;
   supabase: ControlledSupabaseConfig;
+  /** Defaults to the native rule: configured native platforms hold the session directly. */
+  directConfigured?: boolean;
 }) {
   jest.resetModules();
   const clients: Record<string, unknown>[] = [];
@@ -25,6 +27,7 @@ function loadSupabase(input: {
   jest.doMock('@supabase/supabase-js', () => ({ createClient }));
   jest.doMock('@/config/runtime', () => ({
     isNativeSupabaseConfigured: input.nativeConfigured,
+    isDirectEdgeConfigured: input.directConfigured ?? (input.nativeConfigured && input.platform !== 'web'),
     isApiConfigured: input.apiConfigured,
     isSupabaseConfigured: Boolean(input.supabase),
     publicRuntimeConfig: { supabase: input.supabase },
@@ -115,6 +118,41 @@ describe('Supabase client boundaries', () => {
       );
     },
   );
+
+  test('a direct (bearer) web build gets a persisted PKCE client and keeps the sessionless realtime socket', () => {
+    const { authStorage, createClient, supabase } = loadSupabase({
+      platform: 'web',
+      nativeConfigured: false,
+      directConfigured: true,
+      apiConfigured: true,
+      supabase: configured,
+    });
+
+    const client = supabase.getSupabaseClient();
+    expect(client).not.toBeNull();
+    expect(supabase.getSupabaseClient()).toBe(client);
+    expect(createClient).toHaveBeenNthCalledWith(
+      1,
+      configured.url,
+      configured.publishableKey,
+      {
+        auth: {
+          storage: authStorage,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+          flowType: 'pkce',
+        },
+        global: { headers: { 'x-client-info': 'newone-expo/web' } },
+      },
+    );
+    // Realtime on web still uses the token-only socket client fed by the auth state.
+    const realtime = supabase.getRealtimeClient();
+    expect(realtime).not.toBe(client);
+    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(supabase.isDirectEdgeConfigured).toBe(true);
+    expect(supabase.isWebAuthBlocked).toBe(false);
+  });
 
   test('fails closed when web realtime has no public project configuration', () => {
     const { createClient, supabase } = loadSupabase({
