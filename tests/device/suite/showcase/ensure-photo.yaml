@@ -1,0 +1,8 @@
+appId: com.totallynotwoojin.newone
+---
+- runFlow:
+    when:
+      notVisible: "Open image full screen"
+    commands:
+      - runFlow:
+          file: ../media/photo-library.yaml
