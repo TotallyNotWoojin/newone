@@ -310,6 +310,8 @@ export function parseSummaryResolution(
 // failure never delays the next.
 const PROVIDER_RETRY_FLOOR_SECONDS = 15;
 const PROVIDER_RETRY_CEILING_SECONDS = 300;
+// Mirrors private.personal_realm_organization_id() (consumer realm).
+const PERSONAL_REALM_ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 function retryDelay(job: AiJob, error: ApiError): number {
   const backoff = Math.min(
@@ -602,6 +604,9 @@ async function processJob(
         targetLanguage: resolution.source.targetLanguage,
         sourceSha256: resolution.source.sourceSha256,
         correlationId,
+        // Consumer (personal-realm) chats keep faithful reformatting such as
+        // "a las 10" → "at 10:00"; the workplace policy still rejects it.
+        introducedTokenPolicy: job.organizationId === PERSONAL_REALM_ORGANIZATION_ID ? 'allow' : 'reject',
       });
       const providedAt = Date.now();
       await dependencies.completeTranslation(workerId, job, resolution.source, result);

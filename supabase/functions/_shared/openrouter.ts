@@ -50,6 +50,13 @@ export interface TranslationRequest {
   targetLanguage: string;
   sourceSha256: string;
   correlationId: string;
+  /**
+   * 'reject' (default) fails a translation whose output contains a
+   * safety-sensitive value (time, measurement, ID) that the source did not
+   * carry — the workplace policy. 'allow' keeps such output: in consumer
+   * chats "a las 10" → "at 10:00" is a faithful translation, not a leak.
+   */
+  introducedTokenPolicy?: 'reject' | 'allow';
 }
 
 export interface TranslationResult {
@@ -870,12 +877,14 @@ export class OpenRouterLanguageProcessor {
     // persisted as a completed workplace translation.
     const introducedText = protectedTranslation.replace(PROTECTED_PLACEHOLDER_PATTERN, '');
     // Each rejection names its rule (never the content) in the worker log.
-    try {
-      if (protectTokens(introducedText).tokens.length > 0) {
-        throw new ProtectedTokenError();
+    if (request.introducedTokenPolicy !== 'allow') {
+      try {
+        if (protectTokens(introducedText).tokens.length > 0) {
+          throw new ProtectedTokenError();
+        }
+      } catch {
+        throw new ApiError(422, 'ai_output_needs_review', 'translation_output_introduced_token');
       }
-    } catch {
-      throw new ApiError(422, 'ai_output_needs_review', 'translation_output_introduced_token');
     }
     let translatedText: string;
     try {
