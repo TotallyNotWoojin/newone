@@ -45,11 +45,11 @@ function matchingIndex(messages, candidate) {
  * Merge authoritative pages and optimistic rows with deterministic order and
  * identity. This is safe for prepended history and concurrent tail arrivals.
  *
- * With `pruneMissingWithinPage`, an authoritative page is also treated as the
- * complete truth for the id range it spans: a server-backed row that sits
- * between the page's oldest and newest ids but is absent from the page was
- * deleted for everyone or hidden for this member, and is dropped. Rows older
- * than the page and optimistic rows without a server id are untouched.
+ * With `pruneMissingWithinPage`, an authoritative tail page is also treated as
+ * the complete truth from its oldest id onwards: a server-backed row at or
+ * above that id which the page omits was deleted for everyone or hidden for
+ * this member, and is dropped. Rows older than the page, optimistic rows
+ * without a server id, and own sends still settling are untouched.
  */
 export function mergeTimelineMessages(existing, incoming, options = {}) {
   const merged = [...existing];
@@ -67,22 +67,29 @@ export function mergeTimelineMessages(existing, incoming, options = {}) {
       failureReason: message.deliveryState === 'failed' ? message.failureReason : undefined,
     };
   }
-  const pruned = options.pruneMissingWithinPage ? pruneMissingWithinPage(merged, incoming) : merged;
+  const pruned = options.pruneMissingWithinPage ? pruneMissingWithinPage(merged, incoming, options.now) : merged;
   return pruned.sort(compareMessages);
 }
 
-function pruneMissingWithinPage(merged, incoming) {
+const OWN_SEND_SETTLE_MS = 60_000;
+
+function pruneMissingWithinPage(merged, incoming, now = Date.now()) {
   const pageIds = incoming.map((message) => message.serverId).filter(Boolean);
   if (!pageIds.length) return merged;
   const oldest = pageIds.reduce((low, id) => (compareMessageIds(id, low) < 0 ? id : low));
   const newest = pageIds.reduce((high, id) => (compareMessageIds(id, high) > 0 ? id : high));
   const present = new Set(pageIds);
-  return merged.filter((message) =>
-    !message.serverId
-    || present.has(message.serverId)
-    || compareMessageIds(message.serverId, oldest) < 0
-    || compareMessageIds(message.serverId, newest) > 0
-  );
+  return merged.filter((message) => {
+    if (!message.serverId || present.has(message.serverId)) return true;
+    if (compareMessageIds(message.serverId, oldest) < 0) return true;
+    if (compareMessageIds(message.serverId, newest) <= 0) return false;
+    // The page is the conversation's tail, so a server row newer than it that
+    // the page omits was deleted or hidden as well — except an own send that
+    // may have been acknowledged while this page was already in flight.
+    const sentAt = Date.parse(message.createdAt ?? '');
+    const settling = message.isOwn && (Number.isNaN(sentAt) || now - sentAt < OWN_SEND_SETTLE_MS);
+    return settling;
+  });
 }
 
 export function firstUnreadMessageId(messages, lastReadMessageId, unreadCount) {

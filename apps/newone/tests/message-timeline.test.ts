@@ -2,8 +2,8 @@ import { describe, expect, test } from '@jest/globals';
 
 import { mergeTimelineMessages } from '@/data/reconciliation/message-timeline.mjs';
 
-type Row = { id?: string; serverId: string | null; clientMessageId?: string | null; body?: string; createdAt?: string; deliveryState?: string };
-const merge = (existing: Row[], incoming: Row[], options?: { pruneMissingWithinPage?: boolean }) =>
+type Row = { id?: string; serverId: string | null; clientMessageId?: string | null; body?: string; createdAt?: string; deliveryState?: string; isOwn?: boolean };
+const merge = (existing: Row[], incoming: Row[], options?: { pruneMissingWithinPage?: boolean; now?: number }) =>
   mergeTimelineMessages(existing, incoming, options) as Row[];
 
 const row = (serverId: string | null, extra: Partial<Row> & Record<string, unknown> = {}): Row => ({
@@ -38,6 +38,22 @@ describe('mergeTimelineMessages', () => {
     const incoming = [row('10'), row('14')];
     const merged = merge(existing, incoming, { pruneMissingWithinPage: true });
     expect(merged.map((message) => message.serverId ?? message.clientMessageId)).toEqual(['5', '6', '10', '14', 'c1']);
+  });
+
+  test('a received row newer than the tail page that the page omits is dropped', () => {
+    // A deleted the newest message (11); the tail page ends at 10.
+    const existing = [row('9'), row('10'), row('11', { isOwn: false })];
+    const incoming = [row('9'), row('10')];
+    const merged = merge(existing, incoming, { pruneMissingWithinPage: true });
+    expect(merged.map((message) => message.serverId)).toEqual(['9', '10']);
+  });
+
+  test('an own send acknowledged while the page was in flight is kept until it settles', () => {
+    const now = Date.parse('2026-09-04T20:00:20.000Z');
+    const fresh = row('11', { isOwn: true, createdAt: '2026-09-04T20:00:15.000Z' });
+    const old = row('12', { isOwn: true, createdAt: '2026-09-04T19:50:00.000Z' });
+    const merged = merge([row('10'), fresh, old], [row('10')], { pruneMissingWithinPage: true, now });
+    expect(merged.map((message) => message.serverId)).toEqual(['10', '11']);
   });
 
   test('an empty page prunes nothing', () => {
