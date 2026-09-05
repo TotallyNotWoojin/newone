@@ -151,7 +151,7 @@ beforeEach(() => {
 });
 
 describe('personal-realm username discovery on the people screen', () => {
-  test('debounces lowercase-normalized queries and drives every connection-state action on desktop', async () => {
+  test('debounces queries as typed and drives every connection-state action on desktop', async () => {
     mockWorkspace.searchUsers.mockResolvedValue([
       searchResult(),
       searchResult({
@@ -185,7 +185,10 @@ describe('personal-realm username discovery on the people screen', () => {
     await fireEvent.changeText(input, 'SA');
     await fireEvent.changeText(input, 'SAM');
     await waitFor(() => expect(mockWorkspace.searchUsers).toHaveBeenCalledTimes(1));
-    expect(mockWorkspace.searchUsers).toHaveBeenCalledWith('sam');
+    // The query reaches the service exactly as typed: matching is
+    // case-insensitive server-side and also covers display names, so the
+    // client must not mangle "SAM" or a name like "Kyle".
+    expect(mockWorkspace.searchUsers).toHaveBeenCalledWith('SAM');
 
     await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
     expect(screen.getByText('@sam_stranger')).toBeTruthy();

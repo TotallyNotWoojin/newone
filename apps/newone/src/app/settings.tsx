@@ -399,7 +399,11 @@ export default function SettingsScreen() {
           />
           <View style={styles.profileCopy}>
             <Text style={styles.profileName}>{currentUser.displayName}</Text>
-            <Text style={styles.profileRole}>{currentUser.roleLabel}</Text>
+            {/* The @handle is what other people search for, so it belongs next
+                to your name rather than buried in the sign-up flow. */}
+            <Text selectable style={styles.profileHandle}>
+              {currentUser.username ? `@${currentUser.username}` : currentUser.roleLabel}
+            </Text>
             <View style={styles.profileBadges}>
               <StatusBadge
                 icon="checkmark-circle"
@@ -1099,6 +1103,7 @@ const styles = StyleSheet.create({
   profileCardCompact: { alignItems: 'flex-start', flexDirection: 'column' },
   profileCopy: { flex: 1, minWidth: 0, maxWidth: '100%' },
   profileName: { color: colors.ink, fontFamily: type.display, fontSize: 19, fontWeight: '900', flexShrink: 1 },
+  profileHandle: { color: colors.mintDark, fontSize: 14, fontWeight: '700', flexShrink: 1 },
   profileRole: { color: colors.inkMuted, fontSize: 11, marginTop: 3 },
   profileBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
   section: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },

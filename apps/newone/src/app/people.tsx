@@ -80,7 +80,9 @@ export default function PeopleScreen() {
   const searchUsers = workspace.searchUsers;
 
   const handleUsernameQueryChange = (value: string) => {
-    const next = value.toLocaleLowerCase();
+    // Search matches names as well as handles and the service is
+    // case-insensitive, so show people exactly what they typed.
+    const next = value;
     // Invalidate any in-flight search and clear settled results synchronously
     // in the event handler so the debounce effect only schedules fetches.
     usernameSequenceRef.current += 1;

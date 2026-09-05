@@ -383,6 +383,9 @@ function personFromDirectory(
     id: userId,
     membershipId: userId,
     displayName,
+    // The @handle is how people find and identify each other; the bootstrap
+    // now carries it for the directory and the viewer.
+    username: optionalString(row.username),
     initials: initials(displayName),
     roleLabel: optionalString(row.jobTitle) ?? String(row.membershipRole ?? 'member'),
     role: membershipRole(row.membershipRole),
@@ -769,8 +772,10 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     avatarColor: direct?.avatarColor ?? stableColor(id),
     avatarPath: kind === 'direct' ? null : optionalString(row.avatarPath),
     kind,
+    // A direct thread shows the peer's @handle, so the person you are talking
+    // to is identifiable and searchable, not just a display name.
     subtitle: kind === 'direct'
-      ? direct?.roleLabel ?? 'Company member'
+      ? (direct?.username ? `@${direct.username}` : direct?.roleLabel ?? 'Company member')
       : optionalString(row.description) ?? `${memberCount} members`,
     participantCount: memberCount,
     lastMessage: optionalString(preview.body) ?? (row.isArchived ? 'Archived conversation' : 'No messages yet'),
