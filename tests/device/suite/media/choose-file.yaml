@@ -39,9 +39,24 @@ appId: com.totallynotwoojin.newone
     visible: ".*newone-sample.*"
     timeout: 15000
 - takeScreenshot: ${SHOT}-document-list
+# The picker exposes each file as a cell ("newone-sample, pdf, …") whose centre
+# is its name label; a tap there did not pick the file (run-2026-09-04T23-51-05).
+# Tap the thumbnail of the first cell (grid, two seeded items), then fall back to
+# the label once if the picker is still open.
 - tapOn:
-    text: ".*newone-sample.*"
-    index: 0
+    point: "18%,29%"
+- runFlow:
+    when:
+      notVisible: "(Send securely|Send)"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            visible: ".*newone-sample.*"
+          commands:
+            - tapOn:
+                id: "newone-sample, pdf"
 - extendedWaitUntil:
     visible: "(Send securely|Send)"
     timeout: 30000
