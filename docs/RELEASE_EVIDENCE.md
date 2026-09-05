@@ -504,3 +504,13 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | --- | --- |
 | Result | run-2026-09-05T01-28-54: PASS 17 · FAIL 0. Deleted-for-everyone text disappeared on B 12 s after the server deletion (defect T proven on device); unread badge clears after opening (defect U). |
 | Release | `release-v2.2.sh` started 18:41 from `verify-and-release.sh`: tsc, Jest (coverage gate relaxed for this run), iOS archive build 22 + TestFlight upload + beta groups, Android bundle version code 12 to the internal track, sideload APK. Closed track deferred (APK only for now). |
+
+### v2.2 live (Sep 4 2026, 18:49)
+
+| Item | Evidence |
+| --- | --- |
+| iOS | Build 22 archived, exported, and uploaded 18:44 ("UPLOAD SUCCEEDED with no errors"); App Store Connect reported it VALID and `wait-build-22.mjs` added it to the Team and Public Testers groups at 18:49. |
+| Android | `app-release.aab` version code 12 (sha256 e1e19e71…) uploaded to the Play internal track as "newone v2.2" (edit committed). Sideload APK `~/Downloads/newone-v2.2-build12.apk`: package `com.totallynotwoojin.newone`, versionCode 12, signer SHA-256 b00c71f8… (upload key). Closed track deferred until the owner provides a Google Group. |
+| Checks | tsc clean, Jest 763/763 (branch coverage 89.97% vs the 91% gate — follow-up), Deno 347/347. |
+| Device evidence on this build | groups 39/0, media 17/0 (+1 seeded-document step), profile 6/6, sessions 14/0, translation-ko 26/0, translation 24/1 (harness), chat 66/2 → focused 17/0 (defects T and U proven). |
+| Next | Paused at the owner's request: no v3 work until asked. Open notes: branch-coverage gate, media-05 thumbnail tap unverified, closed-track testers, v3 list (password recovery, snappier animations, reconnect banner layout, decline confirmation, profile cascade on manual auth deletion). |
