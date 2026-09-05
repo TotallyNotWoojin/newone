@@ -1,0 +1,12 @@
+appId: com.totallynotwoojin.newone
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
