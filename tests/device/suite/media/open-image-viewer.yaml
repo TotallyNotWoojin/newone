@@ -3,6 +3,12 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Open image full screen"
     timeout: 120000
+# The freshly sent bubble sits at the bottom edge under the composer overlay;
+# Maestro measures against the screen, so nudge the list up before tapping.
+- swipe:
+    start: "50%, 70%"
+    end: "50%, 35%"
+    duration: 400
 - waitForAnimationToEnd:
     timeout: 2000
 - tapOn:
