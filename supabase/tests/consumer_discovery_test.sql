@@ -405,8 +405,9 @@ select ok(
   'a message request delivers its first message'
 );
 
--- 17-20: the pending window allows the requester three messages and the
--- recipient none.
+-- 17-20: since 20260906030000 the personal realm lets anyone chat with
+-- anyone: the requester is no longer capped at three messages and the
+-- recipient can reply without accepting anything.
 select lives_ok(
   $second_message$
     select public.bff_send_message(
@@ -435,7 +436,7 @@ select lives_ok(
   'the pending requester may send a third message'
 );
 
-select throws_ok(
+select lives_ok(
   $fourth_message$
     select public.bff_send_message(
       '99500000-0000-4000-8000-000000000001',
@@ -446,12 +447,10 @@ select throws_ok(
       '{}'::jsonb, 'discovery-bob-msg-4', repeat('4', 64)
     )
   $fourth_message$,
-  '42501',
-  'active conversation membership with posting access is required',
-  'the pending requester is capped at three messages'
+  'the requester is no longer capped at three messages'
 );
 
-select throws_ok(
+select lives_ok(
   $pending_reply$
     select public.bff_send_message(
       '99500000-0000-4000-8000-000000000002',
@@ -462,9 +461,7 @@ select throws_ok(
       '{}'::jsonb, 'discovery-bob-reply-1', repeat('5', 64)
     )
   $pending_reply$,
-  '42501',
-  'active conversation membership with posting access is required',
-  'the recipient cannot reply while the request is pending'
+  'the recipient can reply while the contact request is still pending'
 );
 
 -- 21-23: acceptance through the existing contact response unlocks a normal
@@ -509,7 +506,8 @@ select lives_ok(
   'acceptance lifts the requester message cap'
 );
 
--- 24-25: decline immediately revokes the requester posting window.
+-- 24-25: a declined contact request no longer closes the chat; only a block
+-- does (26-27).
 select is(
   (public.bff_respond_contact(
     '99500000-0000-4000-8000-000000000004',
@@ -526,14 +524,14 @@ select set_config('request.jwt.claims',
   '{"role":"authenticated","sub":"99500000-0000-4000-8000-000000000001","session_id":"99510000-0000-4000-8000-000000000001","aal":"aal1"}',
   true);
 select ok(
-  not private.can_post_to_conversation(
+  private.can_post_to_conversation(
     '11111111-1111-4111-8111-111111111111',
     (select (response ->> 'conversation_id')::uuid from dave_request)
   ),
-  'decline immediately revokes the requester posting window'
+  'a declined contact request leaves the direct chat open'
 );
 
--- 26-27: a block wins over a live pending window.
+-- 26-27: a block closes the chat in both directions.
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 create temporary table iris_request on commit drop as
 select public.bff_send_message_request(
@@ -547,7 +545,7 @@ select public.bff_send_message_request(
 select is(
   (select response ->> 'connection_status' from iris_request),
   'pending',
-  'a message request to a second recipient opens its own pending window'
+  'a message request to a second recipient records its own pending contact'
 );
 
 select set_config('request.jwt.claims',
@@ -568,7 +566,7 @@ select ok(
     '11111111-1111-4111-8111-111111111111',
     (select (response ->> 'conversation_id')::uuid from iris_request)
   ),
-  'a block wins over a pending request window'
+  'a block closes the direct chat'
 );
 
 -- 28-30: anti-enumeration. Relationship writes reach only personal-realm

@@ -287,32 +287,126 @@ describe('authorized workspace search screen', () => {
   });
 });
 
-describe('personal realm search copy', () => {
-  test('uses consumer header copy on desktop', async () => {
-    mockWorkspace = { ...workspace(), organizationId: PERSONAL_REALM_ORGANIZATION_ID };
+describe('personal realm search', () => {
+  const people = [
+    {
+      userId: 'user-sam', username: 'sam_stranger', displayName: 'Sam Stranger',
+      avatarPath: null, connectionState: 'none',
+    },
+    {
+      userId: 'user-ana', username: 'ana_accepted', displayName: null,
+      avatarPath: null, connectionState: 'accepted',
+    },
+  ];
+  function consumerWorkspace(overrides: Record<string, unknown> = {}) {
+    return {
+      ...workspace(),
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      searchUsers: jest.fn(async (..._mockArgs: unknown[]) => people as unknown[]),
+      openOrCreateDirectConversation: jest.fn(
+        async (..._mockArgs: unknown[]) => 'conversation-direct' as string | null,
+      ),
+      ...overrides,
+    };
+  }
+
+  test('searches people and messages as you type, lists people first, and opens a chat from a result on desktop', async () => {
+    mockWorkspace = consumerWorkspace();
     const view = await render(<SearchScreen />);
-    expect(screen.getByText('search.eyebrowConsumer')).toBeTruthy();
-    expect(screen.getByText('search.descriptionConsumer')).toBeTruthy();
-    expect(screen.getByLabelText('search.placeholderConsumer')).toBeTruthy();
-    expect(screen.queryByText('search.eyebrow')).toBeNull();
-    expect(screen.queryByText('search.description')).toBeNull();
-    expect(screen.queryByLabelText('search.placeholder')).toBeNull();
+    // Compact consumer surface: no page header, no filter panel, no submit
+    // button; one line says what to type.
+    expect(screen.queryByText('search.heading')).toBeNull();
+    expect(screen.queryByText('search.eyebrowConsumer')).toBeNull();
+    expect(screen.queryByText('search.descriptionConsumer')).toBeNull();
+    expect(screen.queryByLabelText(copy.filters)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'search.submit' })).toBeNull();
+    expect(screen.getByText('search.startHint')).toBeTruthy();
+    expect(screen.queryByText('search.privateTitle')).toBeNull();
+
+    const input = screen.getByLabelText('search.placeholderPeopleMessages');
+    await fireEvent.changeText(input, 'S');
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
+    expect(mockSearch).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(input, 'Sa');
+    await fireEvent.changeText(input, 'Sam');
+    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
+    expect(mockWorkspace.searchUsers).toHaveBeenCalledTimes(1);
+    expect(mockWorkspace.searchUsers).toHaveBeenCalledWith('Sam');
+    expect(screen.getByText('search.people')).toBeTruthy();
+    expect(screen.getByText('@sam_stranger')).toBeTruthy();
+    expect(screen.getByText('ana_accepted')).toBeTruthy();
+    // Messages ran once with the same query and only the consumer types.
+    await waitFor(() => expect(screen.getByText('Message result')).toBeTruthy());
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+    expect(mockSearch).toHaveBeenCalledWith(expect.objectContaining({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      query: 'Sam',
+      types: ['conversations', 'messages'],
+    }));
+    // The section label is the only "Messages" text: rows carry no type
+    // eyebrow and no match-source chatter.
+    expect(screen.getByText('search.messages')).toBeTruthy();
+    expect(screen.queryByText(copy.resultMatchLabels.translation)).toBeNull();
+    expect(screen.queryByText('Management-only leak')).toBeNull();
+
+    await fireEvent.press(screen.getAllByRole('button', { name: 'people.message' })[0]!);
+    await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith(
+      'user-sam', { displayName: 'Sam Stranger', username: 'sam_stranger' },
+    ));
+    expect(mockRouter.replace).toHaveBeenCalledWith('/');
     await view.unmount();
   });
 
-  test('uses the consumer subtitle on mobile and keeps workspace copy for organizations', async () => {
+  test('shows consumer empty states, resets on a cleared query, and routes to the chat on mobile', async () => {
     mockWidth = 390;
-    mockWorkspace = { ...workspace(), organizationId: PERSONAL_REALM_ORGANIZATION_ID };
-    const consumer = await render(<SearchScreen />);
+    mockWorkspace = consumerWorkspace({ searchUsers: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]) });
+    mockSearch = jest.fn<(..._args: unknown[]) => Promise<any>>().mockResolvedValue({
+      results: [], nextCursor: null, hasMore: false,
+    });
+    const view = await render(<SearchScreen />);
     expect(screen.getByText('search.subtitleConsumer')).toBeTruthy();
     expect(screen.queryByText('search.subtitle')).toBeNull();
-    expect(screen.queryByText('search.eyebrowConsumer')).toBeNull();
-    await consumer.unmount();
 
+    const input = screen.getByLabelText('search.placeholderPeopleMessages');
+    await fireEvent.changeText(input, 'nobody');
+    await waitFor(() => expect(screen.getByText('people.usernameNoResults')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('search.noMatchesConsumer')).toBeTruthy());
+    expect(screen.queryByText('search.empty')).toBeNull();
+    expect(screen.queryByText('search.startHint')).toBeNull();
+
+    // Clearing the query drops both sections and restores the hint.
+    await fireEvent.changeText(input, '');
+    await waitFor(() => expect(screen.getByText('search.startHint')).toBeTruthy());
+    expect(screen.queryByText('people.usernameNoResults')).toBeNull();
+    expect(screen.queryByText('search.noMatchesConsumer')).toBeNull();
+
+    mockWorkspace.searchUsers.mockResolvedValue([people[0]]);
+    await fireEvent.changeText(input, 'sam');
+    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'people.message' }));
+    await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-direct' },
+    }));
+    // A refused open stays put.
+    mockWorkspace.openOrCreateDirectConversation.mockResolvedValueOnce(null);
+    mockRouter.push.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'people.message' }));
+    await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledTimes(2));
+    expect(mockRouter.push).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('keeps workspace copy and the submit flow for organizations', async () => {
+    mockWidth = 390;
     mockWorkspace = workspace();
     await render(<SearchScreen />);
     expect(screen.getByText('search.subtitle')).toBeTruthy();
     expect(screen.getByLabelText('search.placeholder')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'search.submit' })).toBeTruthy();
     expect(screen.queryByText('search.subtitleConsumer')).toBeNull();
+    expect(screen.queryByText('search.startHint')).toBeNull();
   });
 });

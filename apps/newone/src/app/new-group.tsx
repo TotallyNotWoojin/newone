@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,11 +14,13 @@ import {
   SearchField,
   StatusBadge,
 } from '@/components/ui/primitives';
+import type { UserSearchResult } from '@/data/repositories/contracts';
 import type {
   GroupCreationCandidate,
   InitialConversationRole,
 } from '@/data/repositories/group-creation-dto.mjs';
 import type { SelectedAttachment } from '@/data/attachments';
+import type { Person } from '@/domain/types';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
@@ -29,6 +31,9 @@ type GroupKind = 'group' | 'team' | 'shift' | 'incident';
 type PostingMode = 'all_members' | 'admins_only';
 type JoinPolicy = 'inherit' | 'invite_only' | 'approval_required';
 
+/** A picker row: the workplace candidate shape plus the consumer @handle. */
+type PickerCandidate = GroupCreationCandidate & { username?: string | null };
+
 function candidateInitials(displayName: string): string {
   return displayName.trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? '').join('').toUpperCase();
 }
@@ -37,6 +42,32 @@ function candidateColor(candidate: GroupCreationCandidate): string {
   if (candidate.membershipType === 'guest') return '#A55822';
   if (candidate.membershipType === 'contractor') return '#6553A3';
   return '#3478A9';
+}
+
+function directoryCandidate(person: Person): PickerCandidate {
+  return {
+    userId: person.id,
+    displayName: person.displayName,
+    username: person.username ?? null,
+    avatarPath: null,
+    jobTitle: null,
+    membershipRole: 'member',
+    membershipType: 'employee',
+    accessExpiresAt: null,
+  };
+}
+
+function searchCandidate(result: UserSearchResult): PickerCandidate {
+  return {
+    userId: result.userId,
+    displayName: result.displayName ?? result.username,
+    username: result.username,
+    avatarPath: result.avatarPath,
+    jobTitle: null,
+    membershipRole: 'member',
+    membershipType: 'employee',
+    accessExpiresAt: null,
+  };
 }
 
 export default function NewGroupScreen() {
@@ -55,8 +86,8 @@ export default function NewGroupScreen() {
   const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('high');
   const [incidentClassification, setIncidentClassification] = useState('');
   const [search, setSearch] = useState('');
-  const [candidates, setCandidates] = useState<GroupCreationCandidate[]>([]);
-  const [candidateCache, setCandidateCache] = useState<Record<string, GroupCreationCandidate>>({});
+  const [candidates, setCandidates] = useState<PickerCandidate[]>([]);
+  const [candidateCache, setCandidateCache] = useState<Record<string, PickerCandidate>>({});
   const [candidatesLoading, setCandidatesLoading] = useState(true);
   const [selected, setSelected] = useState<Record<string, InitialConversationRole>>({});
   const [avatar, setAvatar] = useState<SelectedAttachment | null>(null);
@@ -66,23 +97,19 @@ export default function NewGroupScreen() {
   const wide = width >= 920;
   const lockedInviteOnly = kind === 'shift' || kind === 'incident';
   // The personal realm is a consumer messenger: no workplace conversation
-  // kinds, no owner/admin promotion at creation, and only accepted
-  // connections (friends) can be added — the directory-style candidate
-  // search is a workplace concept.
+  // kinds and no owner/admin promotion at creation. Anyone can be added: the
+  // picker starts with the people this account already knows and finds
+  // everyone else through the same people search as the People tab.
   const personalRealm = isPersonalRealm(workspace.organizationId);
-  const friendIds = useMemo(
-    () => new Set(
-      workspace.people
-        .filter((person) => person.connectionState === 'connected')
-        .map((person) => person.id),
-    ),
-    [workspace.people],
-  );
-  const visibleCandidates = useMemo(
-    () => personalRealm
-      ? candidates.filter((candidate) => friendIds.has(candidate.userId))
-      : candidates,
-    [candidates, friendIds, personalRealm],
+  const searchUsers = workspace.searchUsers;
+  const people = workspace.people;
+  const directoryCandidates = useMemo(
+    () => (personalRealm
+      ? people
+          .filter((person) => person.connectionState !== 'self' && !person.blockedByMe)
+          .map(directoryCandidate)
+      : []),
+    [people, personalRealm],
   );
   const groupKindOptions = useMemo(
     () => (personalRealm
@@ -96,28 +123,65 @@ export default function NewGroupScreen() {
     [personalRealm, t],
   );
 
+  const rememberCandidates = useCallback((next: PickerCandidate[]) => {
+    setCandidates(next);
+    setCandidateCache((current) => ({
+      ...current,
+      ...Object.fromEntries(next.map((candidate) => [candidate.userId, candidate])),
+    }));
+    setCandidatesLoading(false);
+  }, []);
+
   useEffect(() => {
+    if (personalRealm) return;
     const sequence = ++requestSequence.current;
     const timer = setTimeout(() => {
       setCandidatesLoading(true);
       void queryCandidates(search).then((result) => {
         if (requestSequence.current !== sequence) return;
-        const next = result ?? [];
-        setCandidates(next);
-        setCandidateCache((current) => ({
-          ...current,
-          ...Object.fromEntries(next.map((candidate) => [candidate.userId, candidate])),
-        }));
-        setCandidatesLoading(false);
+        rememberCandidates(result ?? []);
       });
     }, 220);
     return () => clearTimeout(timer);
-  }, [queryCandidates, search]);
+  }, [personalRealm, queryCandidates, rememberCandidates, search]);
+
+  // Consumer picker, short query: the people already known to this account,
+  // narrowed locally by name or handle. Derived, never fetched.
+  const shortConsumerQuery = personalRealm && search.trim().length < 2;
+  const knownCandidates = useMemo(() => {
+    const lowered = search.trim().toLocaleLowerCase();
+    return directoryCandidates.filter((candidate) => (
+      !lowered
+      || candidate.displayName.toLocaleLowerCase().includes(lowered)
+      || (candidate.username ?? '').startsWith(lowered)
+    ));
+  }, [directoryCandidates, search]);
+
+  // Consumer picker, real query: the same people search as the People tab. A
+  // query that drops under two characters only invalidates the search in
+  // flight; the known list above takes over.
+  useEffect(() => {
+    if (!personalRealm) return;
+    const normalized = search.trim();
+    const sequence = ++requestSequence.current;
+    if (normalized.length < 2) return;
+    const timer = setTimeout(() => {
+      setCandidatesLoading(true);
+      void searchUsers(normalized).then((results) => {
+        if (requestSequence.current !== sequence) return;
+        rememberCandidates((results ?? []).map(searchCandidate));
+      });
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [personalRealm, rememberCandidates, search, searchUsers]);
+
+  const visibleCandidates = shortConsumerQuery ? knownCandidates : candidates;
+  const visibleCandidatesLoading = shortConsumerQuery ? false : candidatesLoading;
 
   const selectedGuests = useMemo(
     () => Object.keys(selected)
       .map((userId) => candidateCache[userId])
-      .filter((candidate): candidate is GroupCreationCandidate => candidate?.membershipType === 'guest'),
+      .filter((candidate): candidate is PickerCandidate => candidate?.membershipType === 'guest'),
     [candidateCache, selected],
   );
 
@@ -234,10 +298,12 @@ export default function NewGroupScreen() {
         <View style={[styles.columns, wide && styles.columnsWide]}>
           <View style={styles.configurationColumn}>
             <View style={[styles.card, shadow]}>
-              <View style={styles.cardHeading}>
-                <Text style={styles.eyebrow}>{t('group.detailsEyebrow')}</Text>
-                <Text style={styles.sectionTitle}>{t('group.detailsTitle')}</Text>
-              </View>
+              {personalRealm ? null : (
+                <View style={styles.cardHeading}>
+                  <Text style={styles.eyebrow}>{t('group.detailsEyebrow')}</Text>
+                  <Text style={styles.sectionTitle}>{t('group.detailsTitle')}</Text>
+                </View>
+              )}
               <FormField
                 label={t('group.name')}
                 onChangeText={setName}
@@ -255,8 +321,12 @@ export default function NewGroupScreen() {
               <View style={styles.avatarField}>
                 <View style={styles.avatarCopy}>
                   <Text style={styles.label}>{t('group.avatarTitle')}</Text>
-                  <Text style={styles.helperText}>{t(personalRealm ? 'group.avatarDescriptionConsumer' : 'group.avatarDescription')}</Text>
-                  <Text style={styles.avatarRequirements}>{t('group.avatarRequirements')}</Text>
+                  {personalRealm ? null : (
+                    <>
+                      <Text style={styles.helperText}>{t('group.avatarDescription')}</Text>
+                      <Text style={styles.avatarRequirements}>{t('group.avatarRequirements')}</Text>
+                    </>
+                  )}
                 </View>
                 {avatar ? (
                   <View style={styles.avatarSelection}>
@@ -407,14 +477,16 @@ export default function NewGroupScreen() {
                     selected={historyPolicy === 'all'}
                   />
                 </View>
-                <View style={styles.policyNotice}>
-                  <Ionicons name="time-outline" color={colors.mintDark} size={17} />
-                  <Text style={styles.policyNoticeText}>
-                    {historyPolicy === 'all'
-                      ? t('group.historyAllDisclosure')
-                      : t('group.historySinceJoinDisclosure')}
-                  </Text>
-                </View>
+                {personalRealm ? null : (
+                  <View style={styles.policyNotice}>
+                    <Ionicons name="time-outline" color={colors.mintDark} size={17} />
+                    <Text style={styles.policyNoticeText}>
+                      {historyPolicy === 'all'
+                        ? t('group.historyAllDisclosure')
+                        : t('group.historySinceJoinDisclosure')}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {kind === 'incident' ? (
@@ -445,13 +517,15 @@ export default function NewGroupScreen() {
                 </View>
               ) : null}
 
-              <View style={styles.creationBoundary}>
-                <Ionicons name="shield-checkmark-outline" color={colors.blue} size={18} />
-                <View style={styles.creationBoundaryCopy}>
-                  <Text style={styles.creationBoundaryTitle}>{t('group.atomicTitle')}</Text>
-                  <Text style={styles.creationBoundaryText}>{t('group.atomicDisclosure')}</Text>
+              {personalRealm ? null : (
+                <View style={styles.creationBoundary}>
+                  <Ionicons name="shield-checkmark-outline" color={colors.blue} size={18} />
+                  <View style={styles.creationBoundaryCopy}>
+                    <Text style={styles.creationBoundaryTitle}>{t('group.atomicTitle')}</Text>
+                    <Text style={styles.creationBoundaryText}>{t('group.atomicDisclosure')}</Text>
+                  </View>
                 </View>
-              </View>
+              )}
               <ActionError message={workspace.actionError} />
             </View>
           </View>
@@ -464,10 +538,18 @@ export default function NewGroupScreen() {
                   {Object.keys(selected).length} {t('group.selectedSuffix')}
                 </Text>
               </View>
-              <StatusBadge icon="shield-checkmark" label={joinPolicyLabel} tone="success" />
+              {personalRealm ? null : (
+                <StatusBadge icon="shield-checkmark" label={joinPolicyLabel} tone="success" />
+              )}
             </View>
-            <Text style={styles.candidatePrivacy}>{t('group.candidatePrivacy')}</Text>
-            <SearchField onChangeText={setSearch} placeholder={t(personalRealm ? 'group.searchConsumer' : 'group.search')} value={search} />
+            {personalRealm ? null : (
+              <Text style={styles.candidatePrivacy}>{t('group.candidatePrivacy')}</Text>
+            )}
+            <SearchField
+              onChangeText={setSearch}
+              placeholder={t(personalRealm ? 'people.usernameSearch' : 'group.search')}
+              value={search}
+            />
 
             {selectedGuests.length ? (
               <View style={styles.guestDisclosure}>
@@ -477,13 +559,17 @@ export default function NewGroupScreen() {
             ) : null}
 
             <View style={styles.peopleList}>
-              {candidatesLoading ? (
+              {visibleCandidatesLoading ? (
                 <View style={styles.emptyCandidates}>
                   <Text style={styles.helperText}>{t('group.loadingCandidates')}</Text>
                 </View>
               ) : visibleCandidates.length === 0 ? (
                 <View style={styles.emptyCandidates}>
-                  <Text style={styles.helperText}>{t('group.noCandidates')}</Text>
+                  <Text style={styles.helperText}>
+                    {t(personalRealm
+                      ? shortConsumerQuery ? 'group.pickerHint' : 'people.usernameNoResults'
+                      : 'group.noCandidates')}
+                  </Text>
                 </View>
               ) : visibleCandidates.map((candidate) => {
                 const role = selected[candidate.userId];
@@ -511,21 +597,29 @@ export default function NewGroupScreen() {
                       <Avatar
                         color={candidateColor(candidate)}
                         initials={candidateInitials(candidate.displayName)}
-                        size={44}
+                        size={personalRealm ? 40 : 44}
                       />
                       <View style={styles.personCopy}>
                         <View style={styles.personTitleRow}>
                           <Text numberOfLines={1} style={styles.personName}>{candidate.displayName}</Text>
-                          <StatusBadge
-                            label={membershipLabel}
-                            tone={candidate.membershipType === 'guest'
-                              ? 'warning'
-                              : candidate.membershipType === 'contractor' ? 'purple' : 'neutral'}
-                          />
+                          {personalRealm ? null : (
+                            <StatusBadge
+                              label={membershipLabel}
+                              tone={candidate.membershipType === 'guest'
+                                ? 'warning'
+                                : candidate.membershipType === 'contractor' ? 'purple' : 'neutral'}
+                            />
+                          )}
                         </View>
-                        <Text numberOfLines={1} style={styles.personMeta}>
-                          {candidate.jobTitle ?? candidate.membershipRole}
-                        </Text>
+                        {personalRealm ? (
+                          candidate.username ? (
+                            <Text numberOfLines={1} style={styles.personMeta}>{`@${candidate.username}`}</Text>
+                          ) : null
+                        ) : (
+                          <Text numberOfLines={1} style={styles.personMeta}>
+                            {candidate.jobTitle ?? candidate.membershipRole}
+                          </Text>
+                        )}
                         {expiresAt ? (
                           <Text style={styles.expiryText}>{t('group.accessUntil')} {expiresAt}</Text>
                         ) : null}

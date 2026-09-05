@@ -4034,26 +4034,24 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
-  test('lets a requester post into a pending request thread the bootstrap marks can_post=false', async () => {
-    const requesterTargetId = '60000000-0000-4000-8000-000000000031';
-    const incomingRequesterId = '60000000-0000-4000-8000-000000000032';
+  test('opens a direct chat with a search-discovered stranger in the personal realm and keeps can_post authoritative', async () => {
+    const strangerId = '60000000-0000-4000-8000-000000000031';
+    const lockedCounterpartId = '60000000-0000-4000-8000-000000000032';
+    const directConversationId = '80000000-0000-4000-8000-000000000031';
     const personalSnapshot = workspaceSnapshot();
     personalSnapshot.organizationId = '11111111-1111-4111-8111-111111111111';
     const template = personalSnapshot.conversations[0];
     personalSnapshot.conversations.push(
-      { ...template, id: 'direct-outgoing', kind: 'direct', directParticipantId: requesterTargetId, memberIds: undefined, canPost: false },
-      { ...template, id: 'direct-incoming', kind: 'direct', directParticipantId: incomingRequesterId, memberIds: undefined, canPost: false },
+      { ...template, id: 'direct-locked', kind: 'direct', directParticipantId: lockedCounterpartId, memberIds: undefined, canPost: false },
     );
-    personalSnapshot.messages['direct-outgoing'] = [];
-    personalSnapshot.messages['direct-incoming'] = [];
-    personalSnapshot.cursors['direct-outgoing'] = null;
-    personalSnapshot.cursors['direct-incoming'] = null;
-    const stranger = {
-      id: requesterTargetId,
-      membershipId: requesterTargetId,
+    personalSnapshot.messages['direct-locked'] = [];
+    personalSnapshot.cursors['direct-locked'] = null;
+    personalSnapshot.people.push({
+      id: lockedCounterpartId,
+      membershipId: lockedCounterpartId,
       organizationId: personalSnapshot.organizationId,
-      displayName: 'Sam Stranger',
-      initials: 'SS',
+      displayName: 'Pat Pending',
+      initials: 'PP',
       roleLabel: '',
       role: 'employee' as const,
       site: '',
@@ -4063,50 +4061,67 @@ describe('authoritative workspace provider', () => {
       connectionState: 'pending' as const,
       connectionRequestDirection: 'outgoing' as const,
       avatarColor: '#496D62',
-    };
-    personalSnapshot.people.push(
-      stranger,
-      {
-        ...stranger,
-        id: incomingRequesterId,
-        membershipId: incomingRequesterId,
-        displayName: 'Ian Incoming',
-        initials: 'II',
-        connectionRequestDirection: 'incoming',
-      },
-    );
+    });
     mockLoadWorkspace.mockImplementation(async () => personalSnapshot);
-    mockCommand.mockImplementation(async (method: string, input: unknown) =>
-      controlledCommandResponse(method, input)
-    );
+    mockCommand.mockImplementation(async (method: string, input: unknown) => (
+      method === 'createDirectConversation'
+        ? { conversationId: directConversationId }
+        : controlledCommandResponse(method, input)
+    ));
     const view = await render(
       <WorkspaceProvider>
         <WorkspaceProbe />
       </WorkspaceProvider>,
     );
-    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:2')).toBeTruthy());
     mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
 
+    // A people-search result the directory has not loaded is a valid target
+    // in the realm; the hint names the new thread until the next bootstrap.
+    let conversationId: unknown = null;
     await act(async () => {
-      await currentWorkspace().sendMessage('direct-outgoing', 'Second request message');
+      conversationId = await currentWorkspace().openOrCreateDirectConversation(strangerId, {
+        displayName: 'Sam Stranger',
+        username: 'sam_stranger',
+      });
     });
-    // Online, the send goes straight to the service (no queue trip); the
-    // service owns the request cap.
-    expect(mockEnqueue).not.toHaveBeenCalled();
-    expect(mockCommand).toHaveBeenCalledWith('sendMessage', expect.objectContaining({
-      conversationId: 'direct-outgoing',
-      body: 'Second request message',
-    }));
-    expect(currentWorkspace().messages['direct-outgoing']).toHaveLength(1);
-    expect(currentWorkspace().messages['direct-outgoing'][0]).toMatchObject({ deliveryState: 'sent' });
-    expect(currentWorkspace().actionError).toBeNull();
+    expect(conversationId).toBe(directConversationId);
+    expect(mockCommand).toHaveBeenCalledWith('createDirectConversation', {
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      targetMembershipId: strangerId,
+      idempotencyKey: '50000000-0000-4000-8000-000000000005',
+    });
+    expect(currentWorkspace().selectedConversationId).toBe(directConversationId);
+    expect(currentWorkspace().conversations[0]).toMatchObject({
+      id: directConversationId,
+      kind: 'direct',
+      directParticipantId: strangerId,
+      title: 'Sam Stranger',
+      subtitle: '@sam_stranger',
+    });
+    expect(currentWorkspace().people.find((person) => person.id === strangerId)).toMatchObject({
+      displayName: 'Sam Stranger',
+      username: 'sam_stranger',
+      connectionState: 'available',
+    });
 
-    // The recipient of a pending request still cannot post until accepting.
+    // Reopening the same person reuses the thread without a second command,
+    // and self is never a target.
+    const commandCalls = mockCommand.mock.calls.length;
     await act(async () => {
-      await currentWorkspace().sendMessage('direct-incoming', 'Not yet');
+      conversationId = await currentWorkspace().openOrCreateDirectConversation(strangerId);
+    });
+    expect(conversationId).toBe(directConversationId);
+    expect(mockCommand.mock.calls.length).toBe(commandCalls);
+    await expect(currentWorkspace().openOrCreateDirectConversation(userId)).resolves.toBeNull();
+
+    // A pending contact row no longer carves out a posting window: the
+    // bootstrap's can_post is the single authority for a locked thread.
+    await act(async () => {
+      await currentWorkspace().sendMessage('direct-locked', 'Not permitted');
     });
     expect(mockEnqueue).not.toHaveBeenCalled();
-    expect(currentWorkspace().messages['direct-incoming']).toHaveLength(0);
+    expect(currentWorkspace().messages['direct-locked']).toHaveLength(0);
     expect(currentWorkspace().actionError).not.toBeNull();
     await view.unmount();
   });

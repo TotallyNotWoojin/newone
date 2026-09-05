@@ -259,7 +259,10 @@ interface WorkspaceState {
   selectConversation: (conversationId: string) => void;
   setInboxFilter: (filter: InboxFilter) => void;
   setInboxSearch: (query: string) => void;
-  openOrCreateDirectConversation: (personId: string) => Promise<string | null>;
+  openOrCreateDirectConversation: (
+    personId: string,
+    hint?: { displayName: string; username?: string | null },
+  ) => Promise<string | null>;
   queryGroupCreationCandidates: (query?: string) => Promise<GroupCreationCandidate[] | null>;
   queryConversationMemberCandidates: (
     conversationId: string,
@@ -2353,53 +2356,77 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [refresh]);
 
   const openOrCreateDirectConversation = useCallback(
-    async (personId: string) => {
-      if (!snapshot) return null;
+    async (
+      personId: string,
+      hint?: { displayName: string; username?: string | null },
+    ) => {
+      if (!snapshot || personId === snapshot.currentUser.id) return null;
       const person = snapshot.people.find((item) => item.id === personId);
+      const personalRealm = isPersonalRealm(snapshot.organizationId);
+      // Workspace organizations keep the accepted-connection gate. The
+      // personal realm lets anyone chat with anyone (the service enforces
+      // blocks in both directions), including a people-search result the
+      // directory has not loaded yet, which the hint describes.
       if (
-        !person
-        || person.id === snapshot.currentUser.id
-        || person.connectionState !== 'connected'
-        || person.blockedByMe
+        person
+          ? person.blockedByMe || (!personalRealm && person.connectionState !== 'connected')
+          : !personalRealm
       ) {
         return null;
       }
       const existing = snapshot.conversations.find(
         (conversation) =>
-          conversation.kind === 'direct' && conversation.directParticipantId === person.id,
+          conversation.kind === 'direct' && conversation.directParticipantId === personId,
       );
       if (existing) {
         selectConversation(existing.id);
         return existing.id;
       }
+      const hintName = hint?.displayName.trim() || hint?.username || 'Direct message';
+      const counterpart: Person = person ?? {
+        id: personId,
+        membershipId: personId,
+        organizationId: snapshot.organizationId,
+        displayName: hintName,
+        username: hint?.username ?? null,
+        initials: nameInitials(hintName),
+        roleLabel: hint?.username ? `@${hint.username}` : '',
+        role: 'employee',
+        site: '',
+        department: '',
+        preferredLanguage: snapshot.currentUser.preferredLanguage,
+        presence: 'offline',
+        connectionState: 'available',
+        avatarColor: '#496D62',
+      };
       setActionError(null);
       try {
         const idempotencyKey = createClientId();
         const result = await repositories.commands.createDirectConversation({
           organizationId: snapshot.organizationId,
-          targetMembershipId: person.membershipId ?? person.id,
+          targetMembershipId: counterpart.membershipId ?? counterpart.id,
           idempotencyKey,
         });
         const conversation: Conversation = {
           id: result.conversationId,
           organizationId: snapshot.organizationId,
-          directParticipantId: person.id,
-          title: person.displayName,
-          initials: person.initials,
-          avatarColor: person.avatarColor,
+          directParticipantId: counterpart.id,
+          title: counterpart.displayName,
+          initials: counterpart.initials,
+          avatarColor: counterpart.avatarColor,
           kind: 'direct',
-          subtitle: person.roleLabel,
+          subtitle: counterpart.roleLabel,
           lastMessage: 'No messages yet',
           lastActivity: 'New',
           unreadCount: 0,
           pinned: false,
           favorite: false,
           muted: false,
-          presence: person.presence,
-          activeNowLabel: person.presence === 'online' ? 'Active now' : undefined,
+          presence: counterpart.presence,
+          activeNowLabel: counterpart.presence === 'online' ? 'Active now' : undefined,
           translationPair: languagePair(
             snapshot.currentUser.preferredLanguage,
-            person.preferredLanguage,
+            counterpart.preferredLanguage,
           ),
         };
         setSnapshot((current) =>
@@ -2411,6 +2438,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
                   : [conversation, ...current.conversations],
                 messages: { ...current.messages, [conversation.id]: current.messages[conversation.id] ?? [] },
                 cursors: { ...current.cursors, [conversation.id]: null },
+                // A search-discovered counterpart joins the local directory so
+                // the new thread carries a name until the next bootstrap.
+                people: current.people.some((item) => item.id === counterpart.id)
+                  ? current.people
+                  : [...current.people, counterpart],
               }
             : current,
         );
@@ -2742,20 +2774,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       const conversation = snapshot.conversations.find((item) => item.id === conversationId);
-      // A personal-realm requester keeps posting into a pending request thread
-      // even though the bootstrap reports can_post=false for the not-yet
-      // permitted pair; the service itself enforces the request message cap.
-      const requestCounterpart = conversation?.kind === 'direct'
-        && conversation.directParticipantId
-        && isPersonalRealm(snapshot.organizationId)
-        ? snapshot.people.find((item) => item.id === conversation.directParticipantId)
-        : undefined;
-      const postingIntoPendingRequest = requestCounterpart?.connectionState === 'pending'
-        && requestCounterpart.connectionRequestDirection === 'outgoing';
       if (
         !conversation
         || conversation.managementOnly
-        || (conversation.canPost === false && !postingIntoPendingRequest)
+        || conversation.canPost === false
         || conversation.isReadOnly
         || !isValidMentionSelection(
           mentionUserIds,
