@@ -489,3 +489,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | chat-15 | B still showed A's deleted message within the 45 s window. Server: deletion at 00:37:27, both `message_deleted` invalidations delivered by 00:37:31, and B's bootstrap page (485–497) omits 488. The parser plus reconcile prune was exercised against that live payload in Jest and drops 488, so the client logic is correct; what remains unproven is how quickly B's device refreshed in that window. Before today the message never disappeared until a cold start, so v2.2 is strictly better here. Post-release chat run queued on the rebuilt simulator app. |
 | Defect U (client) | chat-21: the unread badge did not clear after A opened the thread; the read receipt landed only 4 min later when a later step scrolled. With one unread message that fits on screen the pane positioned at the divider and waited for a near-bottom scroll that never came. Fixed in ce01639: a short thread whose unread tail is already on screen is marked read on open (62 UI tests pass). |
 | Decision | Owner asked to ship now. Remaining reruns (translation, media) validated harness flows only and were stopped; `release-v2.2.sh` started at 18:08 (tsc, Jest, TestFlight 22 + beta groups, Play internal + closed tracks with version code 12, sideload APK). Post-release device evidence follows. |
+
+### Focused rerun of the two chat misses (Sep 4 2026, 18:26)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-05T01-16-46 (`areas/focused.mjs`): PASS 16 · FAIL 2. The unread badge now clears after A opens the short thread — defect U confirmed on device. |
+| Deletion on B | Still visible 154 s after the server deletion. Cause: the deleted message was the newest in the thread, so its id sat above the reconcile page's highest id and the range-bound prune kept it. f911e80 treats the tail page as authoritative from its oldest id onwards (own sends still settling are kept); 6 unit tests. `verify-and-release.sh` rebuilds the simulator app, reruns the focused area, and starts the release only on FAIL 0. |
+| Closed track | Deferred at the owner's request (APK only for now). |
