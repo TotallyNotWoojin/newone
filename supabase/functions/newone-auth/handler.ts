@@ -36,6 +36,10 @@ const OTP_PATTERN = /^[0-9]{6}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const EMPLOYEE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
+// The only password rule (owner decision, Sep 2026): at least eight characters.
+// GoTrue's minimum_password_length must agree or updateUserById rejects it.
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 128;
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
 export const OTP_SHOULD_CREATE_USER = false;
@@ -47,6 +51,12 @@ interface AuthIdentity {
   destination: string;
   email: string | null;
   phone: string | null;
+  /**
+   * True once the member chose a password through setPassword. The admin API
+   * assigns every gateway-created account a random password, so the presence
+   * of encrypted_password says nothing; only the app_metadata stamp does.
+   */
+  hasPassword?: boolean;
 }
 
 interface SessionTokens extends AuthIdentity {
@@ -249,6 +259,23 @@ export interface AuthDependencies {
     code: string,
   ): Promise<SessionTokens>;
   generateReviewOtp(destination: string): Promise<string>;
+  /**
+   * GoTrue password grant for an existing account. Unknown accounts and wrong
+   * passwords collapse into the same 401; the route never says which.
+   */
+  signInWithPassword(
+    destinationType: DestinationType,
+    destination: string,
+    password: string,
+  ): Promise<SessionTokens>;
+  /**
+   * Admin-side password update for the bearer's own account. Stamps
+   * app_metadata.newone_password_set_at so clients can tell a chosen password
+   * from the random one the admin API assigned at creation, and bypasses the
+   * secure_password_change re-authentication gate that would otherwise block
+   * members whose (intentionally long-lived) session is older than a day.
+   */
+  setPassword(userId: string, password: string): Promise<void>;
   redeemInvite(
     accessToken: string,
     expectedUserId: string,
@@ -315,11 +342,15 @@ function authIdentity(user: Record<string, unknown>): AuthIdentity {
     ? null
     : parsePhone(user.phone);
   if (email === null && phone === null) throw new ApiError(401, 'unauthorized');
+  const appMetadata = user.app_metadata;
+  const hasPassword = typeof appMetadata === 'object' && appMetadata !== null &&
+    typeof (appMetadata as Record<string, unknown>).newone_password_set_at === 'string';
   return {
     destinationType: email === null ? 'phone' : 'email',
     destination: email ?? phone as string,
     email,
     phone,
+    hasPassword,
   };
 }
 
@@ -733,6 +764,36 @@ export function defaultAuthDependencies(): AuthDependencies {
       }
       return linkedOtp;
     },
+    async signInWithPassword(destinationType, destination, password) {
+      const client = createPublicClient(clientEnvironment);
+      const { data, error } = destinationType === 'email'
+        ? await client.auth.signInWithPassword({ email: destination, password })
+        : await client.auth.signInWithPassword({ phone: destination, password });
+      if (error || !data.session || !data.user) throw new ApiError(401, 'unauthorized');
+      const parsed = sessionTokens(data.session);
+      if (
+        (destinationType === 'email' ? parsed.email : parsed.phone) !== destination
+      ) throw new ApiError(401, 'unauthorized');
+      return parsed;
+    },
+    async setPassword(userId, password) {
+      const { data, error } = await createAdminClient(clientEnvironment).auth.admin.updateUserById(
+        userId,
+        {
+          password,
+          // updateUserById merges app_metadata keys, so newone_signup_state
+          // and any other stamps survive this write.
+          app_metadata: { newone_password_set_at: new Date().toISOString() },
+        },
+      );
+      if (error) {
+        if (error.code === 'weak_password' || error.status === 422) {
+          throw new ApiError(400, 'weak_password');
+        }
+        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      if (!data.user) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+    },
     async redeemInvite(accessToken, expectedUserId, inviteToken, employeeCode) {
       const result = asObject(
         await invokeRpc(
@@ -1012,7 +1073,20 @@ function publicUser(userId: string, identity: AuthIdentity): Record<string, unkn
     destinationType: identity.destinationType,
     email: identity.email,
     phone: identity.phone,
+    hasPassword: identity.hasPassword === true,
   };
+}
+
+function parsePassword(value: unknown, tooShort: 'unauthorized' | 'weak_password'): string {
+  if (
+    typeof value !== 'string' || value.length > PASSWORD_MAX_LENGTH || /[\r\n\0]/.test(value)
+  ) throw new ApiError(400, 'bad_request');
+  // Sign-in keeps the generic credential envelope for short guesses; only the
+  // member's own set/change call names the rule.
+  if (value.length < PASSWORD_MIN_LENGTH) {
+    throw new ApiError(tooShort === 'unauthorized' ? 401 : 400, tooShort);
+  }
+  return value;
 }
 
 function identityMatches(
@@ -1194,6 +1268,21 @@ async function completeOtpAuthentication(
       ? await dependencies.generateReviewOtp(identity.destination)
       : code,
   );
+  return await activateAuthenticatedSession(dependencies, identity, session, installation);
+}
+
+/**
+ * Everything that happens after GoTrue has issued a session, shared by the
+ * code and password grants: the destination must match, the session is bound
+ * to this installation, the invite (if any) is redeemed, and the live session
+ * is re-inspected. Any failure revokes the brand-new session.
+ */
+async function activateAuthenticatedSession(
+  dependencies: AuthDependencies,
+  identity: ParsedOtpIdentity,
+  session: SessionTokens,
+  installation: SessionInstallationInput,
+): Promise<CompletedOtpAuthentication> {
   if (!identityMatches(session, identity.destinationType, identity.destination)) {
     try {
       await dependencies.revoke(session.accessToken);
@@ -1235,6 +1324,38 @@ async function completeOtpAuthentication(
     if (error instanceof ApiError && error.code === 'rate_limited') throw error;
     throw new ApiError(401, 'unauthorized');
   }
+}
+
+/**
+ * Password sign-in for an existing member. It runs the same member
+ * authorization (rate limits per destination, IP, and installation) as an OTP
+ * verification, so guessing shares the OTP verify budget, then the same
+ * activation as a code.
+ */
+async function completePasswordAuthentication(
+  dependencies: AuthDependencies,
+  identity: ParsedOtpIdentity,
+  password: string,
+  ipHash: string,
+  installationHash: string,
+  correlationId: string,
+  installation: SessionInstallationInput,
+): Promise<CompletedOtpAuthentication> {
+  const authorization = await dependencies.authorizeMemberOtp(
+    identity.destinationType,
+    identity.destination,
+    ipHash,
+    installationHash,
+    correlationId,
+    'verify',
+  );
+  if (!authorization.allowed) throw new ApiError(401, 'unauthorized');
+  const session = await dependencies.signInWithPassword(
+    identity.destinationType,
+    identity.destination,
+    password,
+  );
+  return await activateAuthenticatedSession(dependencies, identity, session, installation);
 }
 
 interface SignupProfile {
@@ -1538,7 +1659,8 @@ function isNativeOtpPath(path: string): boolean {
     path === '/v2/auth/native/recovery/otp/request' ||
     path === '/v2/auth/native/recovery/otp/verify' ||
     path === '/v2/auth/native/signup/request' ||
-    path === '/v2/auth/native/signup/verify';
+    path === '/v2/auth/native/signup/verify' ||
+    path === '/v2/auth/native/password/verify';
 }
 
 function nativeInstallationId(request: Request): string {
@@ -1581,6 +1703,7 @@ function requireAllowedRequestContext(
   if (
     (path === '/v2/auth/invitations/redeem' ||
       path === '/v2/auth/account/delete' ||
+      path === '/v2/auth/password/set' ||
       path.startsWith('/v2/auth/recovery/cases')) &&
     /^Bearer\s+[^\s]+$/i.test(request.headers.get('authorization') ?? '') &&
     !request.headers.has('cookie')
@@ -2304,6 +2427,66 @@ export function createAuthHandler(
         } finally {
           await dependencies.settleOtpRequest(startedAt);
         }
+      }
+
+      if (
+        request.method === 'POST' &&
+        (path === '/v2/auth/password/verify' || path === '/v2/auth/native/password/verify')
+      ) {
+        const startedAt = Date.now();
+        try {
+          const native = path === '/v2/auth/native/password/verify';
+          const body = asObject((await parseJson(request, config)).value);
+          onlyKeys(body, [
+            'destinationType',
+            'destination',
+            'password',
+            'installationId',
+            'appVersion',
+            'locale',
+          ]);
+          const identity = parseOtpIdentity(body);
+          if (native && identity.installationId !== nativeInstallationId(request)) {
+            throw new ApiError(400, 'bad_request');
+          }
+          const password = parsePassword(body.password, 'unauthorized');
+          const ipHash = await networkFingerprint(request, config);
+          const installationHash = await installationFingerprint(config, identity.installationId);
+          const { session, active } = await completePasswordAuthentication(
+            dependencies,
+            identity,
+            password,
+            ipHash,
+            installationHash,
+            meta.requestId,
+            sessionInstallation(
+              request,
+              identity,
+              native
+                ? nativeClientPlatform(request, meta)
+                : 'web',
+            ),
+          );
+          return completedAuthResponse(meta, config, native, session, active, {});
+        } finally {
+          await dependencies.settleOtpRequest(startedAt);
+        }
+      }
+
+      if (request.method === 'POST' && path === '/v2/auth/password/set') {
+        // Set or change the caller's own password. Authenticated like
+        // sign-out: web cookie sessions present the CSRF pair, native bearer
+        // sessions are exempt. Codes stay the recovery route, so there is no
+        // unauthenticated reset here.
+        const body = asObject((await parseJson(request, config)).value);
+        onlyKeys(body, ['password']);
+        const password = parsePassword(body.password, 'weak_password');
+        const credential = accessCredential(request, config);
+        verifyCsrf(request, config, credential.viaCookie);
+        const active = await dependencies.inspect(credential.token);
+        if (active.memberships.length === 0) throw new ApiError(401, 'unauthorized');
+        await dependencies.setPassword(active.userId, password);
+        return jsonResponse(meta, 200, { passwordSet: true });
       }
 
       if (request.method === 'POST' && path === '/v2/auth/session/refresh') {

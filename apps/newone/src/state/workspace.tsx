@@ -605,6 +605,12 @@ function definitiveWorkspaceAccessFailure(error: unknown) {
   ].includes(error.code.toLocaleLowerCase());
 }
 
+/** A refused token (401) rather than a membership, permission, or revocation verdict. */
+function staleTokenFailure(error: unknown) {
+  return error instanceof RepositoryError
+    && ['authentication_required', 'http_401'].includes(error.code.toLocaleLowerCase());
+}
+
 function attachmentErrorCode(error: unknown) {
   return error instanceof RepositoryError ? error.code : 'unknown_error';
 }
@@ -744,6 +750,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const reconciliationRunnerRef = useRef<ReturnType<typeof createCoalescedRunner> | null>(null);
   const lastRealtimeEventAtRef = useRef(0);
   const endAccessRef = useRef(auth.endAccess);
+  const refreshSessionRef = useRef(auth.refreshSession);
+  // One forced refresh per failing load: a token can lapse in flight or run
+  // ahead of the server clock, and that must not end access on its own.
+  const retriedAfterRefreshRef = useRef(false);
   const attachmentUploadsRef = useRef(new Map<string, AttachmentUploadOperation>());
   const attachmentCancellationsRef = useRef(new Map<string, AttachmentCancellation>());
   const attachmentScanTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
@@ -765,7 +775,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     endAccessRef.current = auth.endAccess;
-  }, [auth.endAccess]);
+    refreshSessionRef.current = auth.refreshSession;
+  }, [auth.endAccess, auth.refreshSession]);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -1108,6 +1119,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         userId,
         selectedConversationIdRef.current || null,
       );
+      retriedAfterRefreshRef.current = false;
       const nextEntitlement = offlineWorkspaceEntitlement(next.currentUser);
       if (next.currentUser.membershipType !== 'guest' && !nextEntitlement.eligible) {
         await clientStore.purgeUser(userId);
@@ -1198,6 +1210,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } catch (loadError) {
       if (!mountedRef.current || requestedIdentity !== refreshIdentityRef.current) return;
       if (definitiveWorkspaceAccessFailure(loadError)) {
+        if (
+          staleTokenFailure(loadError)
+          && !retriedAfterRefreshRef.current
+          && await refreshSessionRef.current()
+        ) {
+          retriedAfterRefreshRef.current = true;
+          await loadWorkspaceOnceRef.current();
+          return;
+        }
         refreshIdentityRef.current = 'access-ended';
         snapshotRef.current = null;
         selectedConversationIdRef.current = '';

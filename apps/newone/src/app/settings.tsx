@@ -36,6 +36,7 @@ import {
   verifyWebMfa,
 } from '@/lib/web-auth';
 import { SelfRecoveryRequest } from '@/features/security/self-recovery-request';
+import { PasswordSection } from '@/features/settings/password-section';
 import { outboxCopy } from '@/features/settings/outbox-copy';
 import { useAuth } from '@/state/auth';
 import { useDevicePreferences } from '@/state/device-preferences';
@@ -512,7 +513,7 @@ export default function SettingsScreen() {
           </View>
           <Ionicons color={colors.inkSubtle} name="chevron-forward" size={18} />
         </Pressable>
-        {/* AUTH: password section */}
+        <PasswordSection />
 
         <Group title={t('settings.generalTitle')}>
           <Row

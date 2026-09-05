@@ -16,6 +16,8 @@ export interface WebAuthUser {
   id: string;
   email?: string;
   phone?: string;
+  /** Present (true) only once the member has chosen a password. */
+  hasPassword?: boolean;
 }
 
 export interface WebAuthSession {
@@ -134,6 +136,7 @@ function parseSession(payload: Record<string, unknown>): WebAuthSession {
       id,
       ...(typeof user.email === 'string' ? { email: user.email } : {}),
       ...(typeof user.phone === 'string' ? { phone: user.phone } : {}),
+      ...(user.hasPassword === true ? { hasPassword: true } : {}),
     },
     ...(typeof organization.id === 'string' && typeof organization.role === 'string'
       ? { organization: { id: organization.id, role: organization.role } }
@@ -342,7 +345,8 @@ type NativeAuthPath =
   | '/v2/auth/native/recovery/otp/request'
   | '/v2/auth/native/recovery/otp/verify'
   | '/v2/auth/native/signup/request'
-  | '/v2/auth/native/signup/verify';
+  | '/v2/auth/native/signup/verify'
+  | '/v2/auth/native/password/verify';
 
 async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unknown>) {
   // A browser build in direct (bearer) mode uses the same token-returning
@@ -507,6 +511,119 @@ export async function verifyNativeSignup(input: { destination: string; code: str
   };
 }
 
+export async function verifyWebPassword(input: OtpIdentity & { password: string }) {
+  const client = await webClientBinding();
+  return parseSession(
+    await webRequest('/v2/auth/password/verify', {
+      method: 'POST',
+      body: {
+        destinationType: input.destinationType,
+        destination: input.destination,
+        password: input.password,
+        installationId: client.installationId,
+        locale: client.locale,
+        appVersion: client.appVersion,
+      },
+    }),
+  );
+}
+
+export async function verifyNativePassword(input: OtpIdentity & { password: string }) {
+  const payload = await nativeAuthRequest('/v2/auth/native/password/verify', {
+    destinationType: input.destinationType,
+    destination: input.destination,
+    password: input.password,
+  });
+  const parsed = parseSession(payload);
+  const nativeSession = objectValue(payload.session);
+  if (
+    typeof nativeSession.accessToken !== 'string'
+    || typeof nativeSession.refreshToken !== 'string'
+    || !Number.isInteger(nativeSession.expiresIn)
+    || !Array.isArray(payload.memberships)
+  ) {
+    throw new WebAuthError('The native identity gateway returned an invalid session.', 'invalid_response');
+  }
+  return {
+    ...parsed,
+    memberships: payload.memberships,
+    session: {
+      accessToken: nativeSession.accessToken,
+      refreshToken: nativeSession.refreshToken,
+      expiresIn: Number(nativeSession.expiresIn),
+    },
+  };
+}
+
+/** A password counts as set only on an explicit server receipt. */
+function parsePasswordReceipt(payload: Record<string, unknown>) {
+  if (payload.passwordSet !== true) {
+    throw new WebAuthError('The password service returned an invalid receipt.', 'invalid_response');
+  }
+  return { passwordSet: true as const };
+}
+
+export async function setWebPassword(input: { password: string }) {
+  return parsePasswordReceipt(
+    await webRequest('/v2/auth/password/set', {
+      method: 'POST',
+      body: { password: input.password },
+      csrf: true,
+    }),
+  );
+}
+
+/** Bearer-authenticated native call to a gateway route shared with the web BFF. */
+async function nativeBearerRequest(
+  path: '/v2/auth/password/set',
+  accessToken: string,
+  body: Record<string, unknown>,
+) {
+  const url = apiUrlFor(path);
+  const edgeHeaders = nativeEdgeRequestHeaders(accessToken);
+  if (!url || url.startsWith('/') || !edgeHeaders) {
+    throw new WebAuthError('The native identity gateway is not configured.', 'gateway_unconfigured');
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...edgeHeaders,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new WebAuthError('The native identity gateway is unreachable.', 'network_unavailable');
+  }
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Invalid payloads are classified without echoing upstream content.
+  }
+  if (!response.ok) {
+    const problem = objectValue(objectValue(payload).error ?? payload);
+    throw new WebAuthError(
+      'The secure account request was rejected.',
+      typeof problem.code === 'string' ? problem.code : `http_${response.status}`,
+      typeof problem.correlationId === 'string' ? problem.correlationId : undefined,
+    );
+  }
+  return objectValue(objectValue(payload).data ?? payload);
+}
+
+export async function setNativePassword(input: { accessToken: string; password: string }) {
+  return parsePasswordReceipt(
+    await nativeBearerRequest('/v2/auth/password/set', input.accessToken, {
+      password: input.password,
+    }),
+  );
+}
+
 export async function validateNativeMembership(input: { accessToken: string; userId: string }) {
   const url = apiUrlFor('/v2/bootstrap');
   const edgeHeaders = nativeEdgeRequestHeaders(input.accessToken);
@@ -536,17 +653,24 @@ export async function validateNativeMembership(input: { accessToken: string; use
     const root = objectValue(payload);
     const problem = objectValue(root.error ?? root);
     const upstreamCode = typeof problem.code === 'string' ? problem.code.toLocaleLowerCase() : '';
+    if (upstreamCode === 'session_revoked') {
+      throw new WebAuthError('This session was revoked.', 'session_revoked');
+    }
     if (
-      response.status === 401
-      || response.status === 403
+      response.status === 403
       || upstreamCode === 'forbidden'
-      || upstreamCode === 'session_revoked'
       || upstreamCode === 'membership_required'
     ) {
       throw new WebAuthError(
         'This account does not have an active company membership.',
         'membership_required',
       );
+    }
+    if (response.status === 401) {
+      // Not a membership verdict: the token itself was refused (expired in
+      // flight, device clock skew, not refreshed yet). The caller refreshes
+      // and retries before it ever signs anyone out.
+      throw new WebAuthError('The session token was not accepted.', 'http_401');
     }
     throw new WebAuthError(
       'The membership service could not verify this session.',

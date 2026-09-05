@@ -85,7 +85,7 @@ function ProtectedNavigator() {
   const onSignInRoute = pathname === '/sign-in';
   const onHelpRoute = pathname === '/help';
   const onPublicRoute = onSignInRoute || onHelpRoute;
-  const onAuthOnlyRoute = onSignInRoute;
+  const onAuthOnlyRoute = onSignInRoute && !auth.passwordPromptPending;
   const redirectingToSignIn = !auth.authenticated && !onPublicRoute;
   const redirectingToWorkspace = auth.authenticated && onAuthOnlyRoute;
 

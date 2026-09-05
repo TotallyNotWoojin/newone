@@ -1,4 +1,4 @@
-import type { Session } from '@supabase/supabase-js';
+import { isAuthRetryableFetchError, type Session } from '@supabase/supabase-js';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -33,11 +33,15 @@ import {
   requestWebOtp,
   requestWebRecoveryOtp,
   requestWebSignup,
+  setNativePassword,
+  setWebPassword,
   signOutWebSession,
   verifyWebOtp,
+  verifyWebPassword,
   verifyWebRecoveryOtp,
   verifyWebSignup,
   verifyNativeOtp,
+  verifyNativePassword,
   verifyNativeRecoveryOtp,
   verifyNativeSignup,
   validateNativeMembership,
@@ -56,6 +60,23 @@ interface AuthState {
   loading: boolean;
   mode: RuntimeMode;
   error: string | null;
+  /** True once the account has a member-chosen password (server stamp, or set during this run). */
+  hasPassword: boolean;
+  /**
+   * Raised right after a code sign-in for an account without a password so
+   * the sign-in screen can offer to add one; cleared by setPassword,
+   * dismissPasswordPrompt, or any sign-out.
+   */
+  passwordPromptPending: boolean;
+  dismissPasswordPrompt: () => void;
+  signInWithPassword: (input: {
+    destinationType: 'email' | 'phone';
+    destination: string;
+    password: string;
+  }) => Promise<void>;
+  setPassword: (password: string) => Promise<void>;
+  /** Forces a token refresh; resolves true while a session is still held afterwards. */
+  refreshSession: () => Promise<boolean>;
   requestOtp: (input: {
     destinationType: 'email' | 'phone';
     destination: string;
@@ -69,7 +90,7 @@ interface AuthState {
     invitationToken?: string;
     employeeCode?: string;
     code: string;
-  }) => Promise<void>;
+  }) => Promise<{ hasPassword: boolean }>;
   requestSignup: (input: {
     destination: string;
     username: string;
@@ -80,7 +101,7 @@ interface AuthState {
   verifySignup: (input: {
     destination: string;
     code: string;
-  }) => Promise<void>;
+  }) => Promise<{ hasPassword: boolean }>;
   requestRecoveryOtp: (input: {
     destinationType: 'email' | 'phone';
     destination: string;
@@ -90,7 +111,7 @@ interface AuthState {
     destinationType: 'email' | 'phone';
     destination: string;
     code: string;
-  }) => Promise<{ otherSessionsRevoked: number }>;
+  }) => Promise<{ otherSessionsRevoked: number; hasPassword: boolean }>;
   refreshAssurance: () => Promise<'aal1' | 'aal2' | null>;
   signOut: () => Promise<void>;
   endAccess: () => Promise<void>;
@@ -150,6 +171,26 @@ function nativeClaims(accessToken?: string): {
   }
 }
 
+function sessionHasPassword(session: Session | null): boolean {
+  const metadata = session?.user?.app_metadata as Record<string, unknown> | undefined;
+  return typeof metadata?.newone_password_set_at === 'string';
+}
+
+/** A refused token (401) rather than a membership or revocation verdict. */
+function staleTokenFailure(error: unknown): boolean {
+  return Boolean(
+    error && typeof error === 'object' && 'code' in error
+      && typeof (error as { code: unknown }).code === 'string'
+      && (error as { code: string }).code.toLocaleLowerCase() === 'http_401',
+  );
+}
+
+/** A refresh that failed for lack of network, not because the token was rejected. */
+function retryableAuthFailure(error: unknown): boolean {
+  return isAuthRetryableFetchError(error)
+    || (error instanceof Error && error.name === 'AuthRetryableFetchError');
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const { t } = useI18n();
   // Cookie-gateway web keeps its own session state below; native and direct
@@ -162,6 +203,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [webAal, setWebAal] = useState<'aal1' | 'aal2' | null>(null);
   const [loading, setLoading] = useState(isNativeSupabaseConfigured || runtimeMode === 'web');
   const [error, setError] = useState<string | null>(null);
+  // Set-password receipt for the current run; the stored session only learns
+  // about the app_metadata stamp on its next refresh.
+  const [passwordSetFor, setPasswordSetFor] = useState<string | null>(null);
+  const [passwordPromptPending, setPasswordPromptPending] = useState(false);
   const lastUserId = useRef<string | null>(null);
   const activationInFlight = useRef(false);
 
@@ -259,49 +304,125 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (!supabase) return;
 
     let active = true;
-    void supabase.auth
-      .getSession()
-      .then(async ({ data, error: sessionError }) => {
+    let restoreTimer: ReturnType<typeof setTimeout> | null = null;
+    let restoreAttempt = 0;
+    let restoring = false;
+    let restored = false;
+
+    const commit = (next: Session) => {
+      lastUserId.current = next.user.id;
+      setSession(next);
+      setError(null);
+      setLoading(false);
+      restored = true;
+    };
+    const drop = async (cause: unknown) => {
+      await supabase.auth.signOut({ scope: 'local' });
+      if (!active) return;
+      lastUserId.current = null;
+      setSession(null);
+      setError(t(errorMessageKey(cause)));
+      setLoading(false);
+      restored = true;
+    };
+    const scheduleRestore = () => {
+      if (restoreTimer !== null) return;
+      // Offline at launch with an access token that already lapsed: the
+      // session is still on disk, so keep the launch screen and try again
+      // instead of showing "signed out" for a network blip.
+      const delay = Math.min(30_000, 1_000 * 2 ** restoreAttempt);
+      restoreAttempt += 1;
+      restoreTimer = setTimeout(() => {
+        restoreTimer = null;
+        void restoreSession();
+      }, delay);
+    };
+    const adopt = async (stored: Session) => {
+      try {
+        await validateNativeMembership({
+          accessToken: stored.access_token,
+          userId: stored.user.id,
+        });
         if (!active) return;
-        if (sessionError || !data.session) {
-          setSession(null);
-          setError(sessionError ? t('errors.session') : null);
-          setLoading(false);
+        commit(stored);
+      } catch (membershipError) {
+        if (!active) return;
+        if (retainSessionForMembershipFailure(membershipError)) {
+          commit(stored);
           return;
         }
+        if (!staleTokenFailure(membershipError)) {
+          await drop(membershipError);
+          return;
+        }
+        // The token was refused, not the membership: refresh once and check
+        // again before anything signs the member out.
+        const refreshed = await supabase.auth.refreshSession();
+        if (!active) return;
+        if (refreshed.error || !refreshed.data.session) {
+          if (refreshed.error && retryableAuthFailure(refreshed.error)) {
+            commit(stored);
+            return;
+          }
+          await drop(membershipError);
+          return;
+        }
+        const fresh = refreshed.data.session;
         try {
           await validateNativeMembership({
-            accessToken: data.session.access_token,
-            userId: data.session.user.id,
+            accessToken: fresh.access_token,
+            userId: fresh.user.id,
           });
           if (!active) return;
-          lastUserId.current = data.session.user.id;
-          setSession(data.session);
-          setError(null);
-        } catch (membershipError) {
-          if (retainSessionForMembershipFailure(membershipError)) {
-            if (!active) return;
-            lastUserId.current = data.session.user.id;
-            setSession(data.session);
-            setError(null);
-          } else {
-            await supabase.auth.signOut({ scope: 'local' });
-            if (!active) return;
-            lastUserId.current = null;
-            setSession(null);
-            setError(t(errorMessageKey(membershipError)));
+          commit(fresh);
+        } catch (retryError) {
+          if (!active) return;
+          if (retainSessionForMembershipFailure(retryError)) {
+            commit(fresh);
+            return;
           }
+          await drop(retryError);
         }
-        setLoading(false);
-      })
-      .catch(() => {
+      }
+    };
+    const restoreSession = async () => {
+      if (!active || restoring || restored) return;
+      restoring = true;
+      try {
+        let stored: Session | null = null;
+        let failure: unknown = null;
+        try {
+          const { data, error: sessionError } = await supabase.auth.getSession();
+          stored = data.session;
+          failure = sessionError;
+        } catch (restoreError) {
+          failure = restoreError;
+        }
         if (!active) return;
-        setError(t('errors.session'));
+        if (stored) {
+          await adopt(stored);
+          return;
+        }
+        if (failure && retryableAuthFailure(failure)) {
+          scheduleRestore();
+          return;
+        }
+        setSession(null);
+        setError(failure ? t('errors.session') : null);
         setLoading(false);
-      });
+        restored = true;
+      } finally {
+        restoring = false;
+      }
+    };
+    void restoreSession();
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;
+      // The restore above owns the launch state; the client's own initial
+      // notification (null while a refresh is still being retried) must not
+      // flip the app to signed-out underneath it.
+      if (event === 'INITIAL_SESSION' && !restored) return;
       if (activationInFlight.current && event === 'SIGNED_IN') return;
       if (nextSession && lastUserId.current !== nextSession.user.id) return;
       const previousUserId = lastUserId.current;
@@ -316,7 +437,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        // startAutoRefresh ticks immediately, refreshing any token within
+        // 90 seconds of expiry; a launch still waiting on the network retries now.
         supabase.auth.startAutoRefresh();
+        if (!restored) {
+          if (restoreTimer !== null) {
+            clearTimeout(restoreTimer);
+            restoreTimer = null;
+          }
+          void restoreSession();
+        }
       } else {
         supabase.auth.stopAutoRefresh();
       }
@@ -325,6 +455,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => {
       active = false;
+      if (restoreTimer !== null) clearTimeout(restoreTimer);
       supabase.auth.stopAutoRefresh();
       data.subscription.unsubscribe();
       appStateSubscription.remove();
@@ -355,6 +486,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthState>(
     () => {
       const claims = nativeClaims(session?.access_token);
+      const currentUserId = cookieSession ? webUser?.id ?? null : session?.user.id ?? null;
+      const hasPassword = (currentUserId !== null && passwordSetFor === currentUserId)
+        || (cookieSession ? webUser?.hasPassword === true : sessionHasPassword(session));
+      // Every code sign-in reports whether the account already has a password;
+      // one without gets the inline offer to add one.
+      const codeSignInOutcome = (accountHasPassword: boolean) => {
+        setPasswordPromptPending(!accountHasPassword);
+        return { hasPassword: accountHasPassword };
+      };
       return ({
       session,
       user: cookieSession ? webUser : session?.user ?? null,
@@ -365,6 +505,90 @@ export function AuthProvider({ children }: PropsWithChildren) {
       loading,
       mode: runtimeMode,
       error,
+      hasPassword,
+      passwordPromptPending,
+      dismissPasswordPrompt: () => setPasswordPromptPending(false),
+      signInWithPassword: async (input) => {
+        if (cookieSession) {
+          const webSession = await verifyWebPassword(input);
+          setWebUser(webSession.user);
+          setWebSessionId(webSession.sessionId ?? null);
+          setWebAal(webSession.aal ?? null);
+          setError(null);
+          setPasswordPromptPending(false);
+          return;
+        }
+        const nativeClient = getSupabaseClient();
+        if (!nativeClient) throw new WebAuthError('Native identity is unavailable.', 'gateway_unconfigured');
+        const gatewaySession = await verifyNativePassword(input);
+        activationInFlight.current = true;
+        try {
+          const { data, error: setSessionError } = await nativeClient.auth.setSession({
+            access_token: gatewaySession.session.accessToken,
+            refresh_token: gatewaySession.session.refreshToken,
+          });
+          if (setSessionError || !data.session || data.session.user.id !== gatewaySession.user.id) {
+            await nativeClient.auth.signOut({ scope: 'local' });
+            throw new WebAuthError('The native identity gateway returned an invalid session.', 'invalid_response');
+          }
+          lastUserId.current = data.session.user.id;
+          setSession(data.session);
+          setError(null);
+          setPasswordPromptPending(false);
+        } finally {
+          activationInFlight.current = false;
+        }
+      },
+      setPassword: async (password) => {
+        if (cookieSession) {
+          await setWebPassword({ password });
+          setWebUser((current) => (current ? { ...current, hasPassword: true } : current));
+          setPasswordPromptPending(false);
+          return;
+        }
+        const accessToken = session?.access_token;
+        const userId = session?.user.id;
+        if (!accessToken || !userId) {
+          throw new WebAuthError('Setting a password requires an active session.', 'authentication_required');
+        }
+        await setNativePassword({ accessToken, password });
+        setPasswordSetFor(userId);
+        setPasswordPromptPending(false);
+        // Pull the new app_metadata stamp into the stored session so the next
+        // launch knows too; a failed refresh changes nothing about this one.
+        const nativeClient = getSupabaseClient();
+        if (!nativeClient) return;
+        try {
+          const { data } = await nativeClient.auth.refreshSession();
+          if (data.session && data.session.user.id === userId) setSession(data.session);
+        } catch {
+          // The local receipt covers this run.
+        }
+      },
+      refreshSession: async () => {
+        if (cookieSession) {
+          try {
+            const webSession = await refreshWebSession();
+            setWebUser(webSession.user);
+            setWebSessionId(webSession.sessionId ?? null);
+            setWebAal(webSession.aal ?? null);
+            setError(null);
+            return true;
+          } catch {
+            return false;
+          }
+        }
+        const nativeClient = getSupabaseClient();
+        if (!nativeClient) return false;
+        const { data, error: refreshError } = await nativeClient.auth.refreshSession();
+        if (refreshError || !data.session) {
+          // No network is not a verdict on the session: it is still held.
+          return session !== null && retryableAuthFailure(refreshError);
+        }
+        lastUserId.current = data.session.user.id;
+        setSession(data.session);
+        return true;
+      },
       requestOtp: async (input) => {
         if (cookieSession) {
           const result = await requestWebOtp({
@@ -392,7 +616,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setWebSessionId(webSession.sessionId ?? null);
           setWebAal(webSession.aal ?? null);
           setError(null);
-          return;
+          return codeSignInOutcome(webSession.user.hasPassword === true);
         }
         const nativeClient = getSupabaseClient();
         if (!nativeClient) throw new WebAuthError('Native identity is unavailable.', 'gateway_unconfigured');
@@ -410,6 +634,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           lastUserId.current = data.session.user.id;
           setSession(data.session);
           setError(null);
+          return codeSignInOutcome(gatewaySession.user.hasPassword === true);
         } finally {
           activationInFlight.current = false;
         }
@@ -439,7 +664,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setWebSessionId(webSession.sessionId ?? null);
           setWebAal(webSession.aal ?? null);
           setError(null);
-          return;
+          return codeSignInOutcome(webSession.user.hasPassword === true);
         }
         const nativeClient = getSupabaseClient();
         if (!nativeClient) throw new WebAuthError('Native identity is unavailable.', 'gateway_unconfigured');
@@ -457,6 +682,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           lastUserId.current = data.session.user.id;
           setSession(data.session);
           setError(null);
+          return codeSignInOutcome(gatewaySession.user.hasPassword === true);
         } finally {
           activationInFlight.current = false;
         }
@@ -484,7 +710,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setWebSessionId(recovered.sessionId ?? null);
           setWebAal(recovered.aal ?? null);
           setError(null);
-          return { otherSessionsRevoked: recovered.recovery.otherSessionsRevoked };
+          return {
+            otherSessionsRevoked: recovered.recovery.otherSessionsRevoked,
+            ...codeSignInOutcome(recovered.user.hasPassword === true),
+          };
         }
         const nativeClient = getSupabaseClient();
         if (!nativeClient) {
@@ -504,7 +733,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
           lastUserId.current = data.session.user.id;
           setSession(data.session);
           setError(null);
-          return { otherSessionsRevoked: recovered.recovery.otherSessionsRevoked };
+          return {
+            otherSessionsRevoked: recovered.recovery.otherSessionsRevoked,
+            ...codeSignInOutcome(recovered.user.hasPassword === true),
+          };
         } finally {
           activationInFlight.current = false;
         }
@@ -560,6 +792,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setSession(null);
           if (userId) await clientStore.purgeUser(userId);
         }
+        setPasswordPromptPending(false);
         setError(null);
       },
       endAccess: async () => {
@@ -591,6 +824,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             setSession(null);
           }
         }
+        setPasswordPromptPending(false);
         setError(t('errors.accessEnded'));
       },
       deleteAccount: async () => {
@@ -640,7 +874,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
     });
     },
-    [cookieSession, error, loading, session, t, webAal, webRealtimeToken, webSessionId, webUser],
+    [
+      cookieSession,
+      error,
+      loading,
+      passwordPromptPending,
+      passwordSetFor,
+      session,
+      t,
+      webAal,
+      webRealtimeToken,
+      webSessionId,
+      webUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

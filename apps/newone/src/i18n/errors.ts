@@ -14,6 +14,7 @@ export function errorMessageKey(error: unknown): MessageKey {
   if (code === 'invalid_display_name') return 'auth.displayNameInvalid';
   if (code === 'invalid_language') return 'auth.languageInvalid';
   if (code === 'signup_expired') return 'auth.signupExpired';
+  if (code === 'weak_password') return 'auth.passwordTooShort';
   if (code === 'push_needs_device') return 'errors.pushNeedsDevice';
   if (code === 'push_unconfigured') return 'errors.pushUnconfigured';
   if (code === 'notification_permission_denied' || code === 'notification_permission_required') {

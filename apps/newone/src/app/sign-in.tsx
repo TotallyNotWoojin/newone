@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PASSWORD_MIN_LENGTH, PasswordField } from '@/components/ui/password-field';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 // Metro selects the Turnstile-backed web challenge or the native risk-adapter boundary.
 // eslint-disable-next-line import/no-unresolved
@@ -63,6 +64,15 @@ const SIGNUP_USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 // resend window for this long.
 const RESEND_COOLDOWN_SECONDS = 60;
 
+/** The gateway answers a wrong email or password with a bare 401. */
+function credentialRejected(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error
+    && typeof (error as { code: unknown }).code === 'string'
+    ? (error as { code: string }).code.toLocaleLowerCase()
+    : '';
+  return code === 'unauthorized' || code === 'http_401';
+}
+
 const UI_LANGUAGES = [
   { code: 'en', labelKey: 'auth.languageEnglish' },
   { code: 'es', labelKey: 'auth.languageSpanish' },
@@ -93,7 +103,10 @@ export default function SignInScreen() {
   const [employeeCode, setEmployeeCode] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [signInMethod, setSignInMethod] = useState<'code' | 'password'>('code');
+  const [password, setPassword] = useState('');
   const signupMode = accessMode === 'signup';
+  const passwordMode = accessMode === 'returning' && signInMethod === 'password';
   const enrollmentMode = accessMode === 'enrollment';
   const recoveryMode = accessMode === 'recovery';
   // Without a configured Turnstile site key the challenge cannot load; the
@@ -146,6 +159,7 @@ export default function SignInScreen() {
     setAccessMode(nextMode);
     setAuthStep('identity');
     setCode('');
+    setPassword('');
     setMessage('');
     setCaptchaToken(null);
     setCaptchaKey((current) => current + 1);
@@ -158,6 +172,64 @@ export default function SignInScreen() {
       setDestinationType('email');
       setDestination('');
     }
+  };
+
+  const chooseSignInMethod = (nextMethod: 'code' | 'password') => {
+    setSignInMethod(nextMethod);
+    setMessage('');
+    setPassword('');
+    if (nextMethod === 'password' && destinationType !== 'email') {
+      // A password pairs with the account email; phone stays a code channel.
+      setDestinationType('email');
+      setDestination('');
+    }
+  };
+
+  const signInWithPassword = async () => {
+    const normalized = normalizeDestination('email', destination);
+    if (!/^\S+@\S+\.\S+$/.test(normalized)) {
+      setMessage(t('auth.emailInvalid'));
+      return;
+    }
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setMessage(t('auth.passwordTooShort'));
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    try {
+      await auth.signInWithPassword({ destinationType: 'email', destination: normalized, password });
+      router.replace('/');
+    } catch (signInError) {
+      setMessage(credentialRejected(signInError)
+        ? t('auth.passwordIncorrect')
+        : failureMessage(signInError, 'auth.signInUnavailable'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // The one-time offer after a code sign-in: save a password, or skip.
+  const savePassword = async () => {
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setMessage(t('auth.passwordTooShort'));
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    try {
+      await auth.setPassword(password);
+      router.replace('/');
+    } catch (saveError) {
+      setMessage(failureMessage(saveError, 'errors.action'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const skipPassword = () => {
+    auth.dismissPasswordPrompt();
+    router.replace('/');
   };
 
   const sendLink = async () => {
@@ -288,19 +360,20 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage('');
     try {
+      let outcome: { hasPassword: boolean };
       if (signupMode) {
-        await auth.verifySignup({
+        outcome = await auth.verifySignup({
           destination: normalizeDestination('email', destination),
           code: normalizedCode,
         });
       } else if (recoveryMode) {
-        await auth.verifyRecoveryOtp({
+        outcome = await auth.verifyRecoveryOtp({
           destinationType,
           destination: normalizeDestination(destinationType, destination),
           code: normalizedCode,
         });
       } else {
-        await auth.verifyOtp({
+        outcome = await auth.verifyOtp({
           destinationType,
           destination: normalizeDestination(destinationType, destination),
           ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
@@ -308,7 +381,9 @@ export default function SignInScreen() {
           code: normalizedCode,
         });
       }
-      router.replace('/');
+      // An account without a password stays here for the add-a-password offer
+      // (auth.passwordPromptPending renders it); everyone else goes home.
+      if (outcome.hasPassword) router.replace('/');
     } catch (verifyError) {
       const signupExpired = signupMode
         && typeof verifyError === 'object'
@@ -331,6 +406,51 @@ export default function SignInScreen() {
 
   const onCaptchaToken = useCallback((token: string | null) => setCaptchaToken(token), []);
   const onCaptchaError = useCallback(() => setMessage(t('auth.challengeUnavailable')), [t]);
+
+  if (auth.passwordPromptPending) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboard}>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            <View style={[styles.card, styles.fullWidth, shadow]}>
+              <Text style={styles.title}>{t('auth.passwordPromptTitle')}</Text>
+              <Text style={styles.subtitle}>{t('auth.passwordPromptBody')}</Text>
+              <PasswordField
+                autoComplete="new-password"
+                label={t('auth.newPasswordLabel')}
+                onChangeText={setPassword}
+                onSubmitEditing={savePassword}
+                returnKeyType="go"
+                value={password}
+              />
+              <Text style={styles.helperText}>{t('auth.passwordRule')}</Text>
+              {message ? (
+                <Text accessibilityLiveRegion="polite" style={styles.message}>{message}</Text>
+              ) : null}
+              <PrimaryButton
+                icon="checkmark"
+                label={t('auth.savePassword')}
+                loading={loading}
+                onPress={savePassword}
+                style={styles.fullButton}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={skipPassword}
+                style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
+                <Text style={styles.secondaryLinkText}>{t('auth.skipPassword')}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root}>
@@ -417,7 +537,22 @@ export default function SignInScreen() {
             </View>
           ) : null}
 
-          {authStep === 'identity' && !signupMode ? (
+          {authStep === 'identity' && accessMode === 'returning' ? (
+            <View style={styles.modeChoices}>
+              <Chip
+                label={t('auth.methodCode')}
+                onPress={() => chooseSignInMethod('code')}
+                selected={signInMethod === 'code'}
+              />
+              <Chip
+                label={t('auth.methodPassword')}
+                onPress={() => chooseSignInMethod('password')}
+                selected={signInMethod === 'password'}
+              />
+            </View>
+          ) : null}
+
+          {authStep === 'identity' && !signupMode && !passwordMode ? (
             <View style={styles.modeChoices}>
               <Chip
                 label={t('auth.emailChannel')}
@@ -527,20 +662,40 @@ export default function SignInScreen() {
                 onBlur={() => setDestinationFocused(false)}
                 onChangeText={setDestination}
                 onFocus={() => setDestinationFocused(true)}
-                onSubmitEditing={sendLink}
+                onSubmitEditing={passwordMode ? undefined : sendLink}
                 placeholder={
                   destinationType === 'email'
                     ? 'you@example.com'
                     : '+52 81 5555 0192'
                 }
                 placeholderTextColor={colors.inkSubtle}
-                returnKeyType="send"
+                returnKeyType={passwordMode ? 'next' : 'send'}
                 style={styles.input}
                 textContentType={destinationType === 'email' ? 'emailAddress' : 'telephoneNumber'}
                 value={destination}
               />
             )}
           </View>
+          {authStep === 'identity' && passwordMode ? (
+            <>
+              <PasswordField
+                autoComplete="current-password"
+                label={t('auth.passwordLabel')}
+                onChangeText={setPassword}
+                onSubmitEditing={signInWithPassword}
+                placeholder={t('auth.passwordPlaceholder')}
+                returnKeyType="go"
+                style={styles.passwordField}
+                value={password}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => chooseSignInMethod('code')}
+                style={({ pressed }) => [styles.resendLink, pressed && styles.pressed]}>
+                <Text style={styles.resendText}>{t('auth.forgotPassword')}</Text>
+              </Pressable>
+            </>
+          ) : null}
           {authStep === 'verify' ? (
             <Pressable
               accessibilityLabel={t('auth.resendCode')}
@@ -594,7 +749,7 @@ export default function SignInScreen() {
               </View>
             </View>
           ) : null}
-          {authStep === 'identity' && captchaConfigured && !isWebAuthBlocked ? (
+          {authStep === 'identity' && captchaConfigured && !isWebAuthBlocked && !passwordMode ? (
             <CaptchaChallenge
               key={captchaKey}
               label={t('auth.challengeLabel')}
@@ -617,10 +772,12 @@ export default function SignInScreen() {
                 ? t('auth.webNotConfigured')
                 : authStep === 'verify'
                   ? t(recoveryMode ? 'auth.verifyRecovery' : signupMode ? 'auth.verifySignup' : 'auth.verifySignIn')
-                  : t('auth.continue')
+                  : passwordMode
+                    ? t('auth.signIn')
+                    : t('auth.continue')
             }
             loading={loading}
-            onPress={authStep === 'verify' ? verifyCode : sendLink}
+            onPress={authStep === 'verify' ? verifyCode : passwordMode ? signInWithPassword : sendLink}
             style={styles.fullButton}
           />
           {authStep === 'verify' ? (
@@ -817,6 +974,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
+  passwordField: { marginTop: spacing.md },
   languageRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
