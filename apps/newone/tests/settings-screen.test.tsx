@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import SettingsScreen from '@/app/settings';
 import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
@@ -19,15 +19,19 @@ type ControlledWebFactor = {
 };
 type ControlledEnrollment = { factorId: string; qrCode: string; secret: string };
 type ControlledVerification = { factorId: string; challengeId: string; code: string };
+type PermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 const mockListWebMfaFactors = jest.fn<() => Promise<ControlledWebFactor[]>>();
 const mockChallengeWebMfa = jest.fn<(factorId: string) => Promise<{ challengeId: string }>>();
 const mockEnrollWebMfa = jest.fn<(friendlyName: string) => Promise<ControlledEnrollment>>();
 const mockVerifyWebMfa = jest.fn<(input: ControlledVerification) => Promise<void>>();
 const mockGetSupabaseClient = jest.fn<() => any>();
+const mockOpenNotificationSettings = jest.fn(async () => undefined);
+const mockSetLocalPreference = jest.fn();
 const mockTranslate = (key: string) => key;
 
-let mockWidth = 760;
 let mockLocale: 'en' | 'ko' | 'es' = 'en';
+let mockPermission: PermissionState = 'granted';
+let mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null };
 let mockWorkspace: Record<string, any>;
 let mockAuth: Record<string, any>;
 
@@ -45,10 +49,6 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-jest.mock('@/hooks/use-hydration-safe-window-dimensions', () => ({
-  useHydrationSafeWindowDimensions: () => ({ width: mockWidth, height: 900 }),
-}));
-
 jest.mock('@/i18n/provider', () => ({
   useI18n: () => ({
     locale: mockLocale,
@@ -63,6 +63,19 @@ jest.mock('@/state/workspace', () => ({
 
 jest.mock('@/state/auth', () => ({
   useAuth: () => mockAuth,
+}));
+
+jest.mock('@/state/device-preferences', () => ({
+  useDevicePreferences: () => ({
+    preferences: mockLocalPreferences,
+    ready: true,
+    setPreference: (...args: unknown[]) => mockSetLocalPreference(...args),
+  }),
+}));
+
+jest.mock('@/device/push-registration', () => ({
+  getNotificationPermissionState: async () => mockPermission,
+  openNotificationSettings: () => mockOpenNotificationSettings(),
 }));
 
 jest.mock('@/lib/supabase', () => ({
@@ -128,6 +141,16 @@ const devicePreferences = {
   updatedAt: '2030-02-03T04:05:06.000Z',
 };
 
+const otherSession = {
+  sessionId: 'session-other',
+  current: false,
+  platform: 'web',
+  device: { appVersion: '2.3.4' },
+  signal: { clientFamily: 'desktop' },
+  lastUsedAt: '2030-01-02T03:04:05.000Z',
+  revoked: false,
+};
+
 function baseWorkspace(overrides: Record<string, unknown> = {}) {
   return {
     organizationId: '20000000-0000-4000-8000-000000000001',
@@ -136,15 +159,7 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     conversations: [{ id: 'conversation-a', title: 'Operations' }],
     organizationPreferences,
     deviceNotificationPreferences: devicePreferences,
-    accountSessions: [{
-      sessionId: 'session-other',
-      current: false,
-      platform: 'web',
-      device: { appVersion: '2.3.4' },
-      signal: { clientFamily: 'desktop' },
-      lastUsedAt: '2030-01-02T03:04:05.000Z',
-      revoked: false,
-    }, {
+    accountSessions: [otherSession, {
       sessionId: 'session-revoked',
       current: false,
       platform: 'ios',
@@ -156,12 +171,15 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     actionBusy: null,
     actionError: null,
     messageOutbox: [],
+    outboxDegradedReason: null,
     loadAccountSettings: successfulAction(),
     saveOrganizationPreferences: successfulAction(true),
     enableNotifications: successfulAction(),
     loadDeviceNotificationPreferences: successfulAction(),
     saveDeviceNotificationPreferences: successfulAction(),
     updateProfile: successfulAction(true),
+    uploadProfileAvatar: successfulAction(true),
+    removeProfileAvatar: successfulAction(true),
     revokeSession: successfulAction(true),
     cancelOutboxMessage: successfulAction(),
     editOutboxMessage: successfulAction(),
@@ -211,8 +229,9 @@ function nativeMfaClient(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  mockWidth = 760;
   mockLocale = 'en';
+  mockPermission = 'granted';
+  mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null };
   mockWorkspace = baseWorkspace();
   mockAuth = {
     assuranceLevel: 'aal2',
@@ -236,6 +255,8 @@ beforeEach(() => {
 async function renderAndHydrate() {
   const view = await render(<SettingsScreen />);
   await waitFor(() => expect(screen.queryByText('settings.title')).toBeTruthy());
+  // The account preference rows enable once the draft has been seeded.
+  await waitFor(() => expect(screen.getByLabelText('settings.sound').props.accessibilityState?.disabled).toBe(false));
   return view;
 }
 
@@ -246,6 +267,10 @@ async function pressEnabled(name: string) {
     expect(button.props.accessibilityState?.disabled).toBe(false);
   });
   await fireEvent.press(button);
+}
+
+function switchValue(label: string) {
+  return screen.getByLabelText(label).props.value;
 }
 
 async function waitForNativeMfaHydration(
@@ -267,55 +292,132 @@ describe('settings screen', () => {
     mockWorkspace = baseWorkspace({ currentUser: null, organizationPreferences: null });
     const view = await render(<SettingsScreen />);
     expect(screen.queryByText('settings.title')).toBeNull();
-    view.unmount();
+    await view.unmount();
   });
 
-  test('executes account, device, session, navigation, and sign-out interactions', async () => {
-    mockWidth = 390;
+  test('shows a compact profile row, closes, and opens help', async () => {
+    mockWorkspace = baseWorkspace({
+      currentUser: { ...currentUser, username: 'jordan_owner', statusMessage: 'Back at nine' },
+    });
     const view = await renderAndHydrate();
+    expect(screen.getByText('Jordan Owner')).toBeTruthy();
+    expect(screen.getByText('@jordan_owner · Back at nine')).toBeTruthy();
+    expect(screen.queryByText('settings.subtitle')).toBeNull();
+    expect(screen.queryByText('settings.companyVerified')).toBeNull();
+    expect(screen.queryByText('settings.accountVerified')).toBeNull();
+    expect(screen.queryByText('settings.privateDmNote')).toBeNull();
 
     await fireEvent.press(screen.getByLabelText('settings.close'));
     expect(mockRouter.back).toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.help' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('./help');
+    await view.unmount();
+  });
+
+  test('changes the display language and account preferences from row pickers, saving automatically', async () => {
+    const view = await renderAndHydrate();
+    expect(screen.getByText('settings.english')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.displayLanguage' }));
     await fireEvent.press(screen.getByLabelText('settings.displayLanguage: settings.korean'));
     expect(mockSetLocale).toHaveBeenCalledWith('ko');
+    await waitFor(() => expect(screen.queryByLabelText('settings.displayLanguage: settings.korean')).toBeNull());
 
+    expect(screen.getByText('settings.messageLanguageAuto')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.messageLanguage' }));
     await fireEvent.press(screen.getByLabelText('settings.messageLanguage: settings.spanish'));
-    await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), 'bad');
-    await fireEvent(screen.getByLabelText('settings.shiftSuppression'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ uiLanguage: 'en', messageLanguage: 'es' }),
+    ));
+    expect(screen.getByText('settings.spanish')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.readVisibility' }));
+    await fireEvent.press(screen.getByLabelText('settings.readVisibility: settings.readNobody'));
+    await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ messageLanguage: 'es', readVisibility: 'nobody' }),
+    ));
+    expect(screen.getByText('settings.readNobody')).toBeTruthy();
+
     await fireEvent(screen.getByLabelText('settings.sound'), 'valueChange', false);
     await fireEvent(screen.getByLabelText('settings.vibration'), 'valueChange', false);
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.savePreferences' }));
+    await fireEvent(screen.getByLabelText('settings.shiftSuppression'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ soundEnabled: false, vibrationEnabled: false, shiftAwareSuppression: true }),
+    ));
+    await view.unmount();
+  });
+
+  test('edits quiet hours in a sheet and only saves a complete, valid range', async () => {
+    const view = await renderAndHydrate();
+    expect(screen.getByText('21:00–06:30')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.quietHours' }));
+    await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), 'bad');
+    await new Promise((resolve) => setTimeout(resolve, 650));
     expect(mockWorkspace.saveOrganizationPreferences).not.toHaveBeenCalled();
 
+    // Editing one end only keeps the server's HH:MM:SS on the other end.
     await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), '20:15');
-    await fireEvent.changeText(screen.getByLabelText('settings.quietEnd'), '07:45');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.savePreferences' }));
     await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uiLanguage: 'en',
-        messageLanguage: 'es',
-        quietHoursStart: '20:15',
-        quietHoursEnd: '07:45',
-        shiftAwareSuppression: true,
-        soundEnabled: false,
-        vibrationEnabled: false,
-      }),
+      expect.objectContaining({ quietHoursStart: '20:15', quietHoursEnd: '06:30:00' }),
     ));
+    await fireEvent.changeText(screen.getByLabelText('settings.quietEnd'), '');
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledTimes(1);
+    await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), '');
+    await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ quietHoursStart: null, quietHoursEnd: null }),
+    ));
+    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
+    await waitFor(() => expect(screen.getByText('settings.disabled')).toBeTruthy());
+    await view.unmount();
+  });
 
-    const genericButtons = screen.getAllByText('settings.previewGeneric');
-    await fireEvent.press(genericButtons[genericButtons.length - 1]!);
-    const disabledButtons = screen.getAllByText('settings.disabled');
-    await fireEvent.press(disabledButtons[0]!);
-    const enabledButtons = screen.getAllByText('settings.enabled');
-    await fireEvent.press(enabledButtons[enabledButtons.length - 1]!);
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.refreshDevicePreferences' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.saveDevicePreferences' }));
-    expect(mockWorkspace.loadDeviceNotificationPreferences).toHaveBeenCalled();
-    expect(mockWorkspace.saveDeviceNotificationPreferences).toHaveBeenCalledWith(expect.objectContaining({
-      notificationPreview: 'generic',
-    }));
+  test('wires the chat switches to the device preferences', async () => {
+    const view = await renderAndHydrate();
+    expect(screen.getByText('settings.translatedOnlyHint')).toBeTruthy();
+    expect(switchValue('settings.translatedOnly')).toBe(false);
+    expect(switchValue('settings.enterSends')).toBe(true);
+    await fireEvent(screen.getByLabelText('settings.translatedOnly'), 'valueChange', true);
+    expect(mockSetLocalPreference).toHaveBeenCalledWith('translatedOnly', true);
+    await fireEvent(screen.getByLabelText('settings.enterSends'), 'valueChange', false);
+    expect(mockSetLocalPreference).toHaveBeenCalledWith('enterSends', false);
+    await view.unmount();
+  });
+
+  test('sends and hides the outbox section depending on queued messages', async () => {
+    let view = await renderAndHydrate();
+    expect(screen.queryByText('Messages waiting to send')).toBeNull();
+    await view.unmount();
+
+    mockWorkspace = baseWorkspace({
+      messageOutbox: [{
+        id: 'outbox-known',
+        conversationId: 'conversation-a',
+        clientMessageId: 'client-known',
+        body: 'Controlled queued body',
+        createdAt: '2030-01-01T00:00:00.000Z',
+        attempts: 0,
+        state: 'queued',
+        lastErrorCode: null,
+        canEdit: true,
+        canRetry: false,
+        deliveryAmbiguous: false,
+      }],
+    });
+    view = await renderAndHydrate();
+    expect(screen.getByText('Messages waiting to send')).toBeTruthy();
+    expect(screen.getByText('Operations')).toBeTruthy();
+    await view.unmount();
+  });
+
+  test('revokes other and current sessions with a reason on a workspace account, and signs out', async () => {
+    const view = await renderAndHydrate();
+    expect(screen.getByText('WEB · 2.3.4')).toBeTruthy();
+    expect(screen.queryByText('settings.noOtherSessions')).toBeNull();
 
     await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
+    expect(screen.getByText('settings.revokeDescription')).toBeTruthy();
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
     expect(mockWorkspace.revokeSession).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
@@ -336,8 +438,6 @@ describe('settings screen', () => {
     ));
     expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
 
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.help' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('./help');
     // Sign-out revokes the current session server-side first; the workspace
     // performs the local sign-out as part of a successful current-session
     // revoke, so auth.signOut is only the fallback.
@@ -358,7 +458,26 @@ describe('settings screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'settings.signOut' }));
     await waitFor(() => expect(mockAuth.signOut).toHaveBeenCalled());
     expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-    view.unmount();
+    await view.unmount();
+  });
+
+  test('keeps the sheet open when another device cannot be signed out', async () => {
+    mockWorkspace = baseWorkspace({
+      revokeSession: successfulAction(false),
+      accountSessions: [{ ...otherSession, sessionId: 'session-native-other', platform: 'ios', device: null, signal: { clientFamily: 'iphone' } }],
+    });
+    const view = await renderAndHydrate();
+    expect(screen.getByText('iphone')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
+    await fireEvent.changeText(screen.getByLabelText('settings.revokeReason'), 'Keep active after review');
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeConfirm' }));
+    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
+      'session-native-other',
+      'Keep active after review',
+    ));
+    expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
+    expect(screen.getByText('settings.revokeTitle')).toBeTruthy();
+    await view.unmount();
   });
 
   test('enrolls and verifies a native TOTP factor and removes stale enrollments', async () => {
@@ -382,6 +501,7 @@ describe('settings screen', () => {
     mockGetSupabaseClient.mockReturnValue(client);
     const view = await renderAndHydrate();
     await waitForNativeMfaHydration(client, 'settings.mfaEnroll');
+    expect(screen.getByText('settings.mfaNotEnrolled')).toBeTruthy();
 
     await pressEnabled('settings.mfaEnroll');
     await waitFor(() => expect(screen.getByText('CONTROLLEDSECRET')).toBeTruthy());
@@ -399,7 +519,7 @@ describe('settings screen', () => {
       code: '123456',
     }));
     expect(mockAuth.refreshAssurance).toHaveBeenCalled();
-    view.unmount();
+    await view.unmount();
   });
 
   test('shows a native MFA factor-list failure without assuming success', async () => {
@@ -410,7 +530,7 @@ describe('settings screen', () => {
     mockGetSupabaseClient.mockReturnValue(loadFailure);
     const view = await renderAndHydrate();
     await waitFor(() => expect(screen.getByText('settings.mfaLoadError')).toBeTruthy());
-    view.unmount();
+    await view.unmount();
   });
 
   test('shows a native MFA enrollment failure without assuming success', async () => {
@@ -422,10 +542,12 @@ describe('settings screen', () => {
     mockGetSupabaseClient.mockReturnValue(enrollFailure);
     const view = await renderAndHydrate();
     await waitForNativeMfaHydration(enrollFailure, 'settings.mfaEnroll');
+    // A privileged member without a factor sees the warning line.
+    expect(screen.getByText('settings.mfaPrivilegedWarning')).toBeTruthy();
     await pressEnabled('settings.mfaEnroll');
     await waitFor(() => expect(enrollFailure.auth.mfa.enroll).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('settings.mfaEnrollError')).toBeTruthy());
-    view.unmount();
+    await view.unmount();
   });
 
   test('shows a native MFA verification failure without assuming success', async () => {
@@ -435,13 +557,14 @@ describe('settings screen', () => {
     mockGetSupabaseClient.mockReturnValue(verificationFailure);
     const view = await renderAndHydrate();
     await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
+    expect(screen.getByText('settings.mfaAal2')).toBeTruthy();
     await pressEnabled('settings.mfaVerify');
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
     await pressEnabled('settings.mfaVerify');
     await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '111111');
     await pressEnabled('settings.mfaConfirm');
     await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
-    view.unmount();
+    await view.unmount();
   });
 
   test('uses the web MFA boundary for a verified factor', async () => {
@@ -462,7 +585,7 @@ describe('settings screen', () => {
       code: '654321',
     }));
     expect(mockAuth.refreshAssurance).toHaveBeenCalled();
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -480,7 +603,7 @@ describe('settings screen', () => {
     expect(mockEnrollWebMfa).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
     await waitFor(() => expect(screen.queryByText('CONTROLLEDWEBSECRET')).toBeNull());
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -489,7 +612,7 @@ describe('settings screen', () => {
     mockListWebMfaFactors.mockRejectedValueOnce(new Error('gateway unavailable'));
     const view = await renderAndHydrate();
     await waitFor(() => expect(screen.getByText('settings.mfaLoadError')).toBeTruthy());
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -501,7 +624,7 @@ describe('settings screen', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaEnroll' })).toBeTruthy());
     await pressEnabled('settings.mfaEnroll');
     await waitFor(() => expect(screen.getByText('settings.mfaEnrollError')).toBeTruthy());
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -518,7 +641,7 @@ describe('settings screen', () => {
     await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '112233');
     await pressEnabled('settings.mfaConfirm');
     await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -532,7 +655,7 @@ describe('settings screen', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
     await pressEnabled('settings.mfaVerify');
     await waitFor(() => expect(screen.getByText('settings.mfaVerifyError')).toBeTruthy());
-    view.unmount();
+    await view.unmount();
     platform.restore();
   });
 
@@ -551,113 +674,15 @@ describe('settings screen', () => {
     await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '998877');
     await pressEnabled('settings.mfaConfirm');
     await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
-    view.unmount();
-  });
-
-  test('covers alternate preference, device, outbox, session, and pressed interaction states', async () => {
-    mockLocale = 'ko';
-    const savePreferences = successfulAction(false);
-    const revokeSession = successfulAction(false);
-    mockWorkspace = baseWorkspace({
-      organizationPreferences: {
-        ...organizationPreferences,
-        quietHoursStart: null,
-        quietHoursEnd: null,
-        notificationPreview: 'hidden',
-        readVisibility: 'nobody',
-      },
-      deviceNotificationPreferences: {
-        ...devicePreferences,
-        effective: {
-          notificationPreview: 'hidden',
-          soundEnabled: false,
-          vibrationEnabled: true,
-        },
-      },
-      messageOutbox: [{
-        id: 'outbox-known',
-        conversationId: 'conversation-a',
-        clientMessageId: 'client-known',
-        body: 'Controlled queued body',
-        createdAt: '2030-01-01T00:00:00.000Z',
-        attempts: 0,
-        state: 'queued',
-        lastErrorCode: null,
-        canEdit: true,
-        canRetry: false,
-        deliveryAmbiguous: false,
-      }, {
-        id: 'outbox-unknown',
-        conversationId: 'conversation-missing',
-        clientMessageId: 'client-unknown',
-        body: 'Controlled failed body',
-        createdAt: '2030-01-02T00:00:00.000Z',
-        attempts: 2,
-        state: 'failed',
-        lastErrorCode: 'network_unavailable',
-        canEdit: false,
-        canRetry: true,
-        deliveryAmbiguous: true,
-      }],
-      accountSessions: [{
-        sessionId: 'session-native-other',
-        current: false,
-        platform: 'ios',
-        device: null,
-        signal: { clientFamily: 'iphone' },
-        lastUsedAt: '2030-01-03T00:00:00.000Z',
-        revoked: false,
-      }],
-      saveOrganizationPreferences: savePreferences,
-      revokeSession,
-    });
-    mockAuth = { ...mockAuth, session: null };
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByText('한국어')).toBeTruthy());
-    await waitFor(() => expect(screen.getByText('Operations')).toBeTruthy());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.savePreferences' })).toBeTruthy());
-    await waitFor(() => expect(screen.getByText('settings.currentDevicePreferences')).toBeTruthy());
-    expect(screen.getByText('더 이상 이용할 수 없는 대화')).toBeTruthy();
-    expect(screen.getByText('iphone')).toBeTruthy();
-
-    const displayKorean = screen.getByLabelText('settings.displayLanguage: settings.korean');
-    await fireEvent(displayKorean, 'pressIn');
-    await fireEvent(displayKorean, 'pressOut');
-    const autoLanguage = screen.getByLabelText('settings.messageLanguage: settings.messageLanguageAuto');
-    await fireEvent(autoLanguage, 'pressIn');
-    await fireEvent.press(autoLanguage);
-    await fireEvent.press(screen.getAllByText('settings.previewGeneric')[0]!);
-    await fireEvent.press(screen.getByText('settings.readContacts'));
-    await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), '18:00');
-    await fireEvent.changeText(screen.getByLabelText('settings.quietStart'), '');
-    await fireEvent.changeText(screen.getByLabelText('settings.quietEnd'), '');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.savePreferences' }));
-    await waitFor(() => expect(savePreferences).toHaveBeenCalled());
-
-    const hiddenDevice = screen.getByText('settings.previewHiddenDevice');
-    await fireEvent(hiddenDevice, 'pressIn');
-    await fireEvent.press(hiddenDevice);
-    const enabled = screen.getAllByText('settings.enabled');
-    await fireEvent(enabled[0]!, 'pressIn');
-    await fireEvent.press(enabled[0]!);
-
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
-    await fireEvent.changeText(screen.getByLabelText('settings.revokeReason'), 'Keep active after review');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeConfirm' }));
-    await waitFor(() => expect(revokeSession).toHaveBeenCalledWith(
-      'session-native-other',
-      'Keep active after review',
-    ));
-    expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
-    view.unmount();
+    await view.unmount();
   });
 
   test('gates account deletion behind the exact username before the destructive action enables', async () => {
-    mockWidth = 390;
     mockWorkspace = baseWorkspace({
       currentUser: { ...currentUser, username: 'jordan_owner' },
     });
     const view = await renderAndHydrate();
+    expect(screen.getByText('settings.dangerTitle')).toBeTruthy();
 
     await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
     expect(screen.getByText('settings.deleteDialogTitle')).toBeTruthy();
@@ -683,24 +708,21 @@ describe('settings screen', () => {
     await pressEnabled('settings.deleteConfirm');
     await waitFor(() => expect(mockAuth.deleteAccount).toHaveBeenCalledTimes(1));
     expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-    view.unmount();
+    await view.unmount();
   });
 
-  test('falls back to the DELETE confirmation and completes deletion on desktop widths', async () => {
-    mockWidth = 1280;
+  test('falls back to the DELETE confirmation and completes deletion', async () => {
     const view = await renderAndHydrate();
-
     await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
     expect(screen.queryByLabelText('settings.deleteConfirmUsername')).toBeNull();
     await fireEvent.changeText(screen.getByLabelText('settings.deleteConfirmFallback'), 'DELETE');
     await pressEnabled('settings.deleteConfirm');
     await waitFor(() => expect(mockAuth.deleteAccount).toHaveBeenCalledTimes(1));
     expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-    view.unmount();
+    await view.unmount();
   });
 
   test('keeps the account and dialog on a rejected deletion and shows the mapped error', async () => {
-    mockWidth = 1280;
     mockAuth = {
       ...mockAuth,
       deleteAccount: jest.fn(async () => {
@@ -708,25 +730,26 @@ describe('settings screen', () => {
       }),
     };
     const view = await renderAndHydrate();
-
     await fireEvent.press(screen.getByRole('button', { name: 'settings.deleteAccount' }));
     await fireEvent.changeText(screen.getByLabelText('settings.deleteConfirmFallback'), 'DELETE');
     await pressEnabled('settings.deleteConfirm');
     await waitFor(() => expect(screen.getByText('errors.unavailable')).toBeTruthy());
     expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
     expect(screen.getByText('settings.deleteDialogTitle')).toBeTruthy();
-    view.unmount();
+    await view.unmount();
   });
 
-  test('saves a profile edit through the workspace on compact widths and gates invalid drafts', async () => {
-    mockWidth = 390;
+  test('edits the profile in a sheet, gates invalid drafts, and closes on success', async () => {
     mockWorkspace = baseWorkspace({
       currentUser: { ...currentUser, username: 'jordan_owner', statusMessage: 'Original status' },
     });
     const view = await renderAndHydrate();
+    expect(screen.queryByLabelText('settings.displayName')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.profileTitle' }));
     await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Owner'));
     expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('Original status');
-    expect(screen.getByText('settings.usernameNote @jordan_owner')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.choosePhoto' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'settings.removePhoto' })).toBeNull();
     const saveButton = () => screen.getByRole('button', { name: 'settings.saveProfile' });
     expect(saveButton().props.accessibilityState?.disabled).toBe(true);
 
@@ -747,15 +770,21 @@ describe('settings screen', () => {
       statusMessage: ' On shift ',
     }));
     expect(mockWorkspace.updateProfile).toHaveBeenCalledTimes(1);
-    view.unmount();
+    await waitFor(() => expect(screen.queryByLabelText('settings.displayName')).toBeNull());
+    await view.unmount();
   });
 
-  test('keeps the profile draft bound to the authoritative user on desktop widths', async () => {
-    mockWidth = 1280;
+  test('keeps the profile draft bound to the authoritative user and offers photo removal', async () => {
+    mockWorkspace = baseWorkspace({
+      profileAvatarUrls: { 'user-owner': 'https://cdn.example/avatar.jpg' },
+      requestProfileAvatar: jest.fn(),
+    });
     const view = await renderAndHydrate();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.profileTitle' }));
     await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Owner'));
     expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('');
-    expect(screen.queryByText(/settings\.usernameNote/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.removePhoto' }));
+    expect(mockWorkspace.removeProfileAvatar).toHaveBeenCalledTimes(1);
     const saveButton = () => screen.getByRole('button', { name: 'settings.saveProfile' });
     expect(saveButton().props.accessibilityState?.disabled).toBe(true);
 
@@ -763,26 +792,21 @@ describe('settings screen', () => {
     await fireEvent.changeText(screen.getByLabelText('settings.displayName'), 'Jordan Owner  ');
     expect(saveButton().props.accessibilityState?.disabled).toBe(true);
     await fireEvent.changeText(screen.getByLabelText('settings.statusMessage'), 'Back at nine');
-    await pressEnabled('settings.saveProfile');
-    await waitFor(() => expect(mockWorkspace.updateProfile).toHaveBeenCalledWith({
-      displayName: 'Jordan Owner  ',
-      statusMessage: 'Back at nine',
-    }));
+    expect(saveButton().props.accessibilityState?.disabled).toBe(false);
 
     // The authoritative user changes (the receipt landed): the draft follows
     // the server, never the text left in the inputs.
-    mockWorkspace = baseWorkspace({
+    mockWorkspace = {
+      ...mockWorkspace,
       currentUser: { ...currentUser, displayName: 'Jordan Renamed', statusMessage: 'Back at nine' },
-    });
-    view.rerender(<SettingsScreen />);
-    await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Renamed'));
-    expect(screen.getByLabelText('settings.statusMessage').props.value).toBe('Back at nine');
+    };
+    await view.rerender(<SettingsScreen />);
+    await waitFor(() => expect(screen.getByLabelText('settings.displayName').props.value).toBe('Jordan Owner  '));
     expect(screen.getByText('Jordan Renamed')).toBeTruthy();
-    expect(saveButton().props.accessibilityState?.disabled).toBe(true);
-    view.unmount();
+    await view.unmount();
   });
 
-  test('renders authoritative loading and unavailable preference/device/session states', async () => {
+  test('renders loading and unavailable states without guessing', async () => {
     mockLocale = 'es';
     mockWorkspace = baseWorkspace({
       actionBusy: 'account-settings-load',
@@ -797,94 +821,148 @@ describe('settings screen', () => {
     const view = await render(<SettingsScreen />);
     await waitFor(() => expect(mockGetSupabaseClient).toHaveBeenCalled());
     await waitFor(() => expect(screen.getAllByText('Authoritative settings unavailable.').length).toBeGreaterThan(0));
-    expect(screen.getByText('settings.devicePreferencesUnavailable')).toBeTruthy();
     expect(screen.getByText('settings.noOtherSessions')).toBeTruthy();
-    expect(screen.getByText('Español')).toBeTruthy();
-    fireEvent.press(screen.getByRole('button', { name: 'settings.enableNotifications' }));
-    expect(mockWorkspace.enableNotifications).toHaveBeenCalled();
+    expect(screen.getByText('settings.spanish')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'settings.revokeCurrent' })).toBeNull();
+    // Account preference rows wait for the draft.
+    expect(screen.getByLabelText('settings.sound').props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'settings.quietHours' }).props.accessibilityState?.disabled).toBe(true);
+    // Permission granted but no device binding: the switch is off.
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.allowNotifications')).toBe(false);
     await pressEnabled('settings.mfaEnroll');
     expect(screen.queryByText('settings.mfaEnrollDialog')).toBeNull();
-    view.unmount();
+    await view.unmount();
   });
 });
 
-describe('device notification registration failures', () => {
-  test.each([390, 1280])('keeps the device unregistered and shows the mapped failure at width %i', async (width) => {
-    mockWidth = width;
+describe('notifications switch', () => {
+  test('is on when the OS allows and the device is bound, and turning it off opens the system settings', async () => {
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.allowNotifications')).toBe(true);
+    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', false);
+    await waitFor(() => expect(mockOpenNotificationSettings).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('asks the OS and binds the device when permission is undetermined', async () => {
+    mockPermission = 'undetermined';
+    mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.allowNotifications')).toBe(false);
+    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
+    expect(mockOpenNotificationSettings).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('sends a denied permission to the system settings instead of a prompt that cannot appear', async () => {
+    mockPermission = 'denied';
+    mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
+    await waitFor(() => expect(mockOpenNotificationSettings).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('binds the device by itself when the user comes back from the system settings with permission granted', async () => {
+    mockPermission = 'denied';
+    mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    // React Native's test setup already mocks AppState; read the registered
+    // listener from it rather than spying (a restore would wipe the mock).
+    const addListener = AppState.addEventListener as unknown as { mock: { calls: unknown[][] } };
+    const listener = addListener.mock.calls.find(([event]) => event === 'change')?.[1] as
+      ((state: string) => void) | undefined;
+    expect(listener).toBeDefined();
+
+    mockPermission = 'granted';
+    await act(async () => {
+      listener?.('active');
+    });
+    await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
+    await view.unmount();
+  });
+
+  test('stays off and shows the mapped failure when the device cannot be bound', async () => {
+    mockPermission = 'undetermined';
     mockWorkspace = baseWorkspace({
       deviceNotificationPreferences: null,
       enableNotifications: successfulAction(false),
     });
     const view = await renderAndHydrate();
-    fireEvent.press(screen.getByRole('button', { name: 'settings.enableNotifications' }));
+    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
     await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
 
-    // The provider reports the failure; the screen must not flip to a
-    // registered device and keeps offering the action.
     mockWorkspace = { ...mockWorkspace, actionError: 'errors.pushNeedsDevice' };
     await view.rerender(<SettingsScreen />);
-    expect(screen.getByRole('button', { name: 'settings.enableNotifications' })).toBeTruthy();
-    expect(screen.queryByText(/settings\.currentDevice ·/)).toBeNull();
+    expect(switchValue('settings.allowNotifications')).toBe(false);
     expect(screen.getAllByText('errors.pushNeedsDevice').length).toBeGreaterThan(0);
-    view.unmount();
+    await view.unmount();
+  });
+
+  test('is absent where the platform cannot receive pushes', async () => {
+    mockPermission = 'unavailable';
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.queryByLabelText('settings.allowNotifications')).toBeNull());
+    expect(screen.getByLabelText('settings.sound')).toBeTruthy();
+    await view.unmount();
   });
 });
 
 describe('personal realm settings', () => {
-  test.each([390, 1280])('hides workplace-only sections and rewords shared notes at width %i', async (width) => {
-    mockWidth = width;
+  test('hides workplace-only sections and signs other devices out without a reason', async () => {
     mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
     const view = await renderAndHydrate();
     await waitFor(() => expect(mockWorkspace.loadAccountSettings).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getAllByText('settings.sound').length).toBeGreaterThan(0));
 
-    // Hidden: authenticator, lost-authenticator recovery, administrator note, shift switch.
+    // Hidden: authenticator, lost-authenticator recovery, shift switch, session revocation.
+    expect(screen.queryByText('settings.securityTitle')).toBeNull();
     expect(screen.queryByText('settings.mfaTitle')).toBeNull();
     expect(screen.queryByRole('button', { name: 'settings.mfaEnroll' })).toBeNull();
     expect(screen.queryAllByText('Request lost-authenticator recovery')).toHaveLength(0);
-    expect(screen.queryByText('settings.privateDmNote')).toBeNull();
-    expect(screen.queryByText('settings.shiftSuppression')).toBeNull();
-    expect(screen.queryByText('settings.companyVerified')).toBeNull();
-    expect(screen.queryByText('settings.preferencesDescription')).toBeNull();
-    expect(screen.queryByText('settings.deviceNotificationsNote')).toBeNull();
-    expect(screen.queryByText('settings.devicePreferencesBoundary')).toBeNull();
+    expect(screen.queryByLabelText('settings.shiftSuppression')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'settings.revokeCurrent' })).toBeNull();
     // No authenticator hydration is attempted for a consumer account.
     expect(mockGetSupabaseClient).not.toHaveBeenCalled();
 
-    // Consumer wording replaces the shared notes.
-    expect(screen.getByText('settings.accountVerified')).toBeTruthy();
-    expect(screen.getByText('settings.preferencesDescriptionConsumer')).toBeTruthy();
-    expect(screen.getByText('settings.deviceNotificationsNoteConsumer')).toBeTruthy();
-    expect(screen.getByText('settings.devicePreferencesBoundaryConsumer')).toBeTruthy();
-
     // Everything consumer-relevant stays.
     for (const title of [
-      'settings.profileTitle', 'settings.languageTitle', 'settings.notificationsTitle',
+      'settings.generalTitle', 'settings.chatsTitle', 'settings.notificationsTitle',
       'settings.sessionsTitle', 'settings.dangerTitle',
     ]) {
       expect(screen.getByText(title)).toBeTruthy();
     }
-    expect(screen.getByText('settings.sessionsDescription')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.profileTitle' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'settings.help' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'settings.signOut' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'settings.deleteAccount' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'settings.saveProfile' })).toBeTruthy();
-    view.unmount();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
+    expect(screen.getByText('settings.signOutDeviceTitle')).toBeTruthy();
+    expect(screen.queryByLabelText('settings.revokeReason')).toBeNull();
+    await pressEnabled('settings.signOutDeviceConfirm');
+    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith('session-other', 'sign_out'));
+    await waitFor(() => expect(screen.queryByText('settings.signOutDeviceTitle')).toBeNull());
+    await view.unmount();
   });
 
   test('keeps every workplace section for a workspace organization', async () => {
-    mockWidth = 390;
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaEnroll' })).toBeTruthy());
-    await waitFor(() => expect(screen.getByText('settings.shiftSuppression')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
+    expect(screen.getByText('settings.securityTitle')).toBeTruthy();
     expect(screen.getByText('settings.mfaTitle')).toBeTruthy();
+    expect(screen.getByLabelText('settings.shiftSuppression')).toBeTruthy();
     expect(screen.getAllByText('Request lost-authenticator recovery').length).toBeGreaterThan(0);
-    expect(screen.getByText('settings.privateDmNote')).toBeTruthy();
-    expect(screen.getByText('settings.companyVerified')).toBeTruthy();
-    expect(screen.getByText('settings.preferencesDescription')).toBeTruthy();
-    expect(screen.getByText('settings.deviceNotificationsNote')).toBeTruthy();
-    expect(screen.queryByText('settings.accountVerified')).toBeNull();
-    expect(screen.queryByText('settings.preferencesDescriptionConsumer')).toBeNull();
+    expect(screen.getByRole('button', { name: 'settings.revokeCurrent' })).toBeTruthy();
     expect(mockGetSupabaseClient).toHaveBeenCalled();
-    view.unmount();
+    await view.unmount();
   });
 });

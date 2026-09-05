@@ -29,6 +29,9 @@ declare module '@/device/push-registration' {
   ): { remove(): void };
   export function noteRegisteredPushToken(token: string | null | undefined): void;
   export function resetPushTokenMemoryForTests(): void;
+  export type NotificationPermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
+  export function getNotificationPermissionState(): Promise<NotificationPermissionState>;
+  export function openNotificationSettings(): Promise<void>;
 }
 
 declare module '@/device/notification-navigation' {

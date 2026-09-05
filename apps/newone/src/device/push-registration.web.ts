@@ -27,3 +27,11 @@ export function addPushTokenRefreshListener(
 
 export function noteRegisteredPushToken(_token: string | null | undefined) {}
 export function resetPushTokenMemoryForTests() {}
+
+export type NotificationPermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
+
+export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
+  return 'unavailable';
+}
+
+export async function openNotificationSettings(): Promise<void> {}

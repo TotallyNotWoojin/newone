@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { Linking } from 'react-native';
 
 const mockSetNotificationChannelAsync: any = jest.fn();
 const mockGetPermissionsAsync: any = jest.fn();
@@ -84,6 +85,8 @@ import {
   configureNotificationChannels,
   getCurrentInstallationId,
   getExistingDeviceRegistration,
+  getNotificationPermissionState,
+  openNotificationSettings,
   requestDeviceRegistration,
 } from '@/device/push-registration.native';
 
@@ -291,5 +294,30 @@ describe('permission request and refresh lifecycle', () => {
     await flushRegistrationWork();
     expect(mockGetPermissionsAsync).toHaveBeenCalledTimes(2);
     expect(onRegistration).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('operating-system permission state', () => {
+  test.each([
+    [{ granted: true, status: 'granted', canAskAgain: true }, 'granted'],
+    [{ granted: false, status: 'denied', canAskAgain: false }, 'denied'],
+    [{ granted: false, status: 'undetermined', canAskAgain: false }, 'denied'],
+    [{ granted: false, status: 'undetermined', canAskAgain: true }, 'undetermined'],
+  ])('reads %j as %s without prompting', async (permissions, expected) => {
+    mockGetPermissionsAsync.mockResolvedValue(permissions);
+    await expect(getNotificationPermissionState()).resolves.toBe(expected);
+    expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  test('is unavailable off the native platforms', async () => {
+    mockPlatform = 'web';
+    await expect(getNotificationPermissionState()).resolves.toBe('unavailable');
+    expect(mockGetPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  test('opens the system settings page for this app', async () => {
+    const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    await openNotificationSettings();
+    expect(openSettings).toHaveBeenCalledTimes(1);
   });
 });

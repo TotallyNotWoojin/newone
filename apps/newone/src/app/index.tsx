@@ -15,6 +15,7 @@ import {
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { NotificationPrompt } from '@/features/notifications/notification-prompt';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing } from '@/theme/tokens';
@@ -77,6 +78,7 @@ export default function ChatsScreen() {
         />
       }>
       <WorkspaceStatusBanner />
+      <NotificationPrompt />
       {workspace.status === 'loading' || workspace.status === 'error' || ordinaryConversations.length === 0 ? (
         <WorkspaceStatePanel resource="chats" />
       ) : desktop ? (
