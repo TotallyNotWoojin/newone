@@ -1,0 +1,19 @@
+appId: com.totallynotwoojin.newone
+---
+- extendedWaitUntil:
+    visible: "Open image full screen"
+    timeout: 120000
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "Open image full screen"
+    index: 0
+- extendedWaitUntil:
+    visible: "Close image"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-viewer
+- tapOn: "Close image"
+- extendedWaitUntil:
+    notVisible: "Close image"
+    timeout: 10000
+- assertVisible: ".*Write a message….*"

@@ -28,6 +28,7 @@ import {
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments';
 import { useConversationTyping } from '@/data/realtime/use-conversation-typing';
+import { ImageViewerModal } from '@/features/chat/image-viewer';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
 import { firstUnreadMessageId } from '@/data/reconciliation/message-timeline.mjs';
 import type { ConversationMemberCandidate } from '@/data/repositories/contracts';
@@ -2235,15 +2236,25 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
   useEffect(() => {
     if (wantsPreview) void loadPreview?.(message);
   }, [loadPreview, message, wantsPreview]);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const clientMessageId = message.clientMessageId ?? '';
   const retryBusy = workspace.actionBusy === `attachment-retry:${clientMessageId}`;
   const cancelBusy = workspace.actionBusy === `attachment-cancel:${clientMessageId}`;
   return (
     <View style={[styles.attachment, message.isOwn && styles.attachmentOwn]}>
       {previewUrl ? (
-        <Pressable accessibilityLabel={t('chat.imagePreview')} accessibilityRole="imagebutton" onPress={onDownload}>
+        <Pressable accessibilityLabel={t('chat.imageOpen')} accessibilityRole="imagebutton" onPress={() => setViewerOpen(true)}>
           <Image resizeMode="cover" source={{ uri: previewUrl }} style={styles.attachmentImagePreview} />
         </Pressable>
+      ) : null}
+      {previewUrl ? (
+        <ImageViewerModal
+          name={attachment.name}
+          onClose={() => setViewerOpen(false)}
+          onDownload={canDownload ? onDownload : undefined}
+          uri={previewUrl}
+          visible={viewerOpen}
+        />
       ) : null}
       <Pressable
         accessibilityHint={canDownload ? t('chat.fileDownloadHint') : transferStatus.label}
