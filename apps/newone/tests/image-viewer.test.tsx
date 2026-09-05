@@ -6,10 +6,9 @@ import { ImageViewerModal } from '@/features/chat/image-viewer';
 jest.mock('@/i18n/provider', () => ({
   useI18n: () => ({ t: (key: string) => key, locale: 'en' }),
 }));
-jest.mock('react-native-safe-area-context', () => {
-  const { View } = jest.requireActual('react-native') as typeof import('react-native');
-  return { SafeAreaView: View };
-});
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 59, bottom: 34, left: 0, right: 0 }),
+}));
 
 describe('ImageViewerModal', () => {
   test('shows the image full screen with close and download controls', async () => {

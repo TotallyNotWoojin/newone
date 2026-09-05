@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n } from '@/i18n/provider';
 import { colors, spacing } from '@/theme/tokens';
@@ -37,6 +37,9 @@ export function ImageViewerModal({
 }) {
   const { t } = useI18n();
   const { width, height } = useWindowDimensions();
+  // A modal window gets no safe-area view insets of its own; the root
+  // provider's insets keep the bar below the status bar, where taps arrive.
+  const insets = useSafeAreaInsets();
   const [chromeVisible, setChromeVisible] = useState(true);
   useEffect(() => {
     if (visible) setChromeVisible(true);
@@ -72,7 +75,7 @@ export function ImageViewerModal({
           </Pressable>
         </ScrollView>
         {chromeVisible ? (
-          <SafeAreaView edges={['top']} pointerEvents="box-none" style={styles.chrome}>
+          <View pointerEvents="box-none" style={[styles.chrome, { paddingTop: insets.top }]}>
             <View style={styles.bar}>
               <Pressable
                 accessibilityLabel={t('chat.imageViewerClose')}
@@ -96,7 +99,7 @@ export function ImageViewerModal({
                 <View style={styles.barButton} />
               )}
             </View>
-          </SafeAreaView>
+          </View>
         ) : null}
       </View>
     </Modal>
@@ -106,14 +109,13 @@ export function ImageViewerModal({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   scrollContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
-  chrome: { position: 'absolute', top: 0, left: 0, right: 0 },
+  chrome: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   barButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   title: { flex: 1, color: colors.white, fontSize: 15, fontWeight: '600', textAlign: 'center', marginHorizontal: spacing.sm },
