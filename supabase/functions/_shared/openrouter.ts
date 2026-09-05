@@ -108,6 +108,12 @@ export interface SummaryRequest {
   sourceFingerprint: string;
   language: string;
   correlationId: string;
+  /**
+   * 'reject' (default) fails a summary whose text contains a time, measurement
+   * or ID the sources did not literally carry — the workplace policy. 'allow'
+   * keeps it: in a consumer chat "a las 10" summarized as "at 10:00" is fine.
+   */
+  introducedTokenPolicy?: 'reject' | 'allow';
 }
 
 interface SummaryEvidence {
@@ -464,6 +470,7 @@ function restoreSummaryString(
   min: number,
   max: number,
   tokens: Array<{ placeholder: string; value: string }>,
+  allowIntroduced = false,
 ): string {
   let text = normalizedString(value, { min, max }) as string;
   const allowed = new Map(tokens.map((token) => [token.placeholder, token.value]));
@@ -481,13 +488,15 @@ function restoreSummaryString(
     if (!allowed.has(match[0])) throw new ApiError(422, 'ai_output_needs_review', 'summary_unknown_placeholder');
   }
   const withoutPlaceholders = text.replace(PROTECTED_PLACEHOLDER_PATTERN, '');
-  try {
-    if (protectTokens(withoutPlaceholders).tokens.length > 0) {
-      throw new ApiError(422, 'ai_output_needs_review', 'summary_protected_token_in_output');
+  if (!allowIntroduced) {
+    try {
+      if (protectTokens(withoutPlaceholders).tokens.length > 0) {
+        throw new ApiError(422, 'ai_output_needs_review', 'summary_protected_token_in_output');
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(422, 'ai_output_needs_review', 'summary_output_unprotectable');
     }
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(422, 'ai_output_needs_review', 'summary_output_unprotectable');
   }
   for (const [placeholder, original] of allowed) text = text.replaceAll(placeholder, original);
   if (text.includes('__NEWONE_PROTECTED_')) {
@@ -542,6 +551,7 @@ function summaryEvidence(
   allowedRefs: ReadonlySet<string>,
   tokens: Array<{ placeholder: string; value: string }>,
   maximumTextLength = 4000,
+  allowIntroduced = false,
 ): SummaryEvidence {
   const row = routerObject(value);
   try {
@@ -550,7 +560,7 @@ function summaryEvidence(
     throw new ApiError(503, 'provider_unavailable', 'provider_summary_evidence_keys', 5);
   }
   return {
-    text: cleanSummaryText(restoreSummaryString(row.text, 1, maximumTextLength, tokens), allowedRefs),
+    text: cleanSummaryText(restoreSummaryString(row.text, 1, maximumTextLength, tokens, allowIntroduced), allowedRefs),
     sourceRefs: sourceReferences(row.sourceRefs, allowedRefs),
   };
 }
@@ -1199,8 +1209,9 @@ export class OpenRouterLanguageProcessor {
     }
     const allowedRefs = new Set(Object.keys(sourceMap));
     const tokens = protectedSources.tokens;
+    const allowIntroduced = request.introducedTokenPolicy === 'allow';
     const evidence = (value: unknown, maximumTextLength = 4000) =>
-      summaryEvidence(value, allowedRefs, tokens, maximumTextLength);
+      summaryEvidence(value, allowedRefs, tokens, maximumTextLength, allowIntroduced);
     const actionItems = boundedArray(output.actionItems, 50).map((entry) => {
       const row = routerObject(entry);
       try {
@@ -1211,22 +1222,22 @@ export class OpenRouterLanguageProcessor {
       const base = evidence({ text: row.text, sourceRefs: row.sourceRefs }, 2000);
       return {
         ...base,
-        owner: row.owner === null ? null : restoreSummaryString(row.owner, 1, 240, tokens),
-        due: row.due === null ? null : restoreSummaryString(row.due, 1, 240, tokens),
+        owner: row.owner === null ? null : restoreSummaryString(row.owner, 1, 240, tokens, allowIntroduced),
+        due: row.due === null ? null : restoreSummaryString(row.due, 1, 240, tokens, allowIntroduced),
       };
     }).filter((entry) => entry.text.length > 0);
     // An item whose text was nothing but reference codes says nothing on its
     // own; the summary prose must still say something.
     const withText = (entry: SummaryEvidence) => entry.text.length > 0;
     const summary = cleanSummaryText(
-      restoreSummaryString(output.summary, 1, 12000, tokens),
+      restoreSummaryString(output.summary, 1, 12000, tokens, allowIntroduced),
       allowedRefs,
     );
     if (summary.length === 0) {
       throw new ApiError(422, 'ai_output_needs_review', 'summary_prose_empty');
     }
     let primaryTopic = cleanSummaryText(
-      restoreSummaryString(output.primaryTopic, 1, 240, tokens),
+      restoreSummaryString(output.primaryTopic, 1, 240, tokens, allowIntroduced),
       allowedRefs,
     );
     // A topic left with no letter or digit (the model wrote only placeholders

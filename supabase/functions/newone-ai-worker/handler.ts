@@ -642,6 +642,8 @@ async function processJob(
       sourceFingerprint: resolution.source.sourceFingerprint,
       language: resolution.source.language,
       correlationId,
+      // Consumer chats keep faithful times/units in the summary text.
+      introducedTokenPolicy: job.organizationId === PERSONAL_REALM_ORGANIZATION_ID ? 'allow' : 'reject',
     });
     await dependencies.completeSummary(workerId, job, resolution.source, result);
     return 'completed';
