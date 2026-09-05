@@ -497,3 +497,10 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | Result | run-2026-09-05T01-16-46 (`areas/focused.mjs`): PASS 16 · FAIL 2. The unread badge now clears after A opens the short thread — defect U confirmed on device. |
 | Deletion on B | Still visible 154 s after the server deletion. Cause: the deleted message was the newest in the thread, so its id sat above the reconcile page's highest id and the range-bound prune kept it. f911e80 treats the tail page as authoritative from its oldest id onwards (own sends still settling are kept); 6 unit tests. `verify-and-release.sh` rebuilds the simulator app, reruns the focused area, and starts the release only on FAIL 0. |
 | Closed track | Deferred at the owner's request (APK only for now). |
+
+### Focused rerun green; release started (Sep 4 2026, 18:41)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-05T01-28-54: PASS 17 · FAIL 0. Deleted-for-everyone text disappeared on B 12 s after the server deletion (defect T proven on device); unread badge clears after opening (defect U). |
+| Release | `release-v2.2.sh` started 18:41 from `verify-and-release.sh`: tsc, Jest (coverage gate relaxed for this run), iOS archive build 22 + TestFlight upload + beta groups, Android bundle version code 12 to the internal track, sideload APK. Closed track deferred (APK only for now). |
