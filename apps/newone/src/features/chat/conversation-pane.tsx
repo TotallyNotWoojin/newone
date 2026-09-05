@@ -94,6 +94,7 @@ export function ConversationPane({
   const [newMessageCount, setNewMessageCount] = useState(0);
   const scrollOffsetRef = useRef(0);
   const contentHeightRef = useRef(0);
+  const viewportHeightRef = useRef(0);
   const nearBottomRef = useRef(true);
   const previousTailRef = useRef<string | null>(null);
   const previousConversationRef = useRef<string | null>(null);
@@ -228,7 +229,15 @@ export function ConversationPane({
     unreadDividerYRef.current = y;
     if (!initialPositionedRef.current) {
       initialPositionedRef.current = true;
-      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 20), animated: false }));
+      const target = Math.max(0, y - 20);
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: target, animated: false });
+        // A short thread shows its unread tail without any scroll, so the
+        // near-bottom scroll handler never fires; mark it read here.
+        if (conversationId && contentHeightRef.current - target - viewportHeightRef.current < 72) {
+          void workspace.markConversationRead(conversationId);
+        }
+      });
     }
   };
 
@@ -246,10 +255,15 @@ export function ConversationPane({
     if (!initialPositionedRef.current) {
       if (unreadDividerId && unreadDividerYRef.current !== null) {
         initialPositionedRef.current = true;
-        scrollRef.current?.scrollTo({
-          y: Math.max(0, unreadDividerYRef.current - 20),
-          animated: false,
-        });
+        const target = Math.max(0, unreadDividerYRef.current - 20);
+        scrollRef.current?.scrollTo({ y: target, animated: false });
+        // Same short-thread case as positionAtUnreadDivider: the unread tail is
+        // already on screen, and no scroll will follow to mark it read.
+        if (conversationId && height - target - viewportHeightRef.current < 72) {
+          requestAnimationFrame(() => {
+            void workspace.markConversationRead(conversationId);
+          });
+        }
       } else if (!unreadDividerId) {
         initialPositionedRef.current = true;
         requestAnimationFrame(() => {
@@ -543,6 +557,7 @@ export function ConversationPane({
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={handleContentSizeChange}
+        onLayout={(event) => { viewportHeightRef.current = event.nativeEvent.layout.height; }}
         onScroll={handleScroll}
         ref={scrollRef}
         scrollEventThrottle={16}
