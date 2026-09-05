@@ -2,6 +2,7 @@ import { sha256Hex } from '../_shared/crypto.ts';
 import { ApiError } from '../_shared/errors.ts';
 import { DISABLED_OPENROUTER_PLUGINS } from '../_shared/openrouter-control-plane.ts';
 import {
+  cleanSummaryText,
   type FetchLike,
   OpenRouterLanguageProcessor,
   parseOpenRouterPolicy,
@@ -624,4 +625,138 @@ Deno.test('summary rejects invented protected identifiers and numbers', async ()
       }),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',
   );
+});
+
+Deno.test('summary prose is stored clean: no source codes, headings, or markdown; speakers reach the prompt', async () => {
+  let sent: Record<string, unknown> | undefined;
+  const processor = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async (_input, init) => {
+    sent = JSON.parse(String(init?.body));
+    return new Response(
+      JSON.stringify({
+        id: 'gen-summary-prose',
+        model: policyValue.model,
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              primaryTopic: '## Weekend plans (s0001)',
+              summary: '**You** asked whether Saturday works [sources: s0001, s0002].\n\n' +
+                'They said yes s0002 , and suggested noon (s0003).\n### Decisions\n- Meet at noon.',
+              keyTopics: [
+                { text: 'Saturday meetup [s0001]', sourceRefs: ['s0001'] },
+                { text: 's0002', sourceRefs: ['s0002'] },
+              ],
+              decisions: [{ text: 'Meet at noon (s0003)', sourceRefs: ['s0003'] }],
+              actionItems: [],
+              ambiguities: [],
+            }),
+          },
+        }],
+        usage: { prompt_tokens: 120, completion_tokens: 60 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    );
+  });
+  const result = await processor.summarize({
+    sources: [
+      { messageId: '11', body: 'Does Saturday work?', speaker: 'you' },
+      { messageId: '12', body: 'Yes!', speaker: 'participant 1' },
+      { messageId: '13', body: 'Say noon?', speaker: 'participant 1' },
+    ],
+    sourceFingerprint: 'd'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000004',
+  });
+  assertEquals(result.primaryTopic, 'Weekend plans');
+  assertEquals(
+    result.summary,
+    'You asked whether Saturday works.\n\nThey said yes, and suggested noon.\nDecisions\n• Meet at noon.',
+  );
+  assertEquals(result.keyTopics, [{ text: 'Saturday meetup', sourceRefs: ['s0001'] }]);
+  assertEquals(result.decisions, [{ text: 'Meet at noon', sourceRefs: ['s0003'] }]);
+  assert(!/\bs[0-9]{4}\b/.test(result.summary));
+  const messages = sent?.messages as Array<Record<string, string>>;
+  const system = String(messages[0]?.content ?? '');
+  assert(system.includes('plain, readable prose'));
+  assert(system.includes('"you" is the person reading the recap'));
+  assert(!system.includes('__NEWONE_PROTECTED_'));
+  const user = String(messages[1]?.content ?? '');
+  assert(user.includes('"speaker":"you"'));
+  assert(user.includes('"speaker":"participant 1"'));
+  assert(!user.includes('"11"'));
+  assert(!user.includes('__NEWONE_PROTECTED_'));
+});
+
+Deno.test('summary prose that is only reference codes is rejected and speaker labels are validated', async () => {
+  const completion = (summary: string) =>
+    new Response(
+      JSON.stringify({
+        id: 'gen-summary-empty',
+        model: policyValue.model,
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              primaryTopic: 'Topic',
+              summary,
+              keyTopics: [],
+              decisions: [],
+              actionItems: [],
+              ambiguities: [],
+            }),
+          },
+        }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    );
+  const processor = (summary: string) =>
+    new OpenRouterLanguageProcessor({
+      apiKey: 'test-openrouter-key-that-is-long-enough',
+      dataClassification: 'synthetic',
+      policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+    }, async () => completion(summary));
+  const base = {
+    sourceFingerprint: 'e'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000005',
+  };
+  await assertRejects(
+    () => processor('[sources: s0001] s0001').summarize({ ...base, sources: [{ messageId: '21', body: 'Hi.' }] }),
+    (error) => error instanceof ApiError && error.code === 'ai_output_needs_review' && error.message === 'summary_prose_empty',
+  );
+  await assertRejects(
+    () =>
+      processor('Fine.').summarize({
+        ...base,
+        sources: [{ messageId: '21', body: 'Hi.', speaker: 'Participant One!' }],
+      }),
+    (error) => error instanceof ApiError && error.status === 400,
+  );
+  // A speakerless request (older resolvers) gets no speaker guidance at all.
+  let sent: Record<string, unknown> | undefined;
+  const plain = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async (_input, init) => {
+    sent = JSON.parse(String(init?.body));
+    return completion('Fine.');
+  });
+  await plain.summarize({ ...base, sources: [{ messageId: '21', body: 'Hi.' }] });
+  const messages = sent?.messages as Array<Record<string, string>>;
+  assert(!String(messages[0]?.content ?? '').includes('speaker label'));
+  assert(!String(messages[1]?.content ?? '').includes('"speaker"'));
+});
+
+Deno.test('cleanSummaryText removes only minted references and tidies the sentence around them', () => {
+  const allowed = new Set(['s0001', 's0002']);
+  assertEquals(cleanSummaryText('Model s2024 ships (s0001), see s0002.', allowed), 'Model s2024 ships, see.');
+  assertEquals(cleanSummaryText('Kept [sources: s0009] because it is not ours.', allowed), 'Kept [sources: s0009] because it is not ours.');
+  assertEquals(cleanSummaryText('  # Title  \n\n\n\n* one\n- two  ', allowed), 'Title\n\n• one\n• two');
+  assertEquals(cleanSummaryText('출처 확인【s0001】 완료, , 끝.', allowed), '출처 확인 완료, 끝.');
 });

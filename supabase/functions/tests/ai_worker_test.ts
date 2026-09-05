@@ -355,7 +355,14 @@ Deno.test('summary persistence keeps source evidence and remains within database
     processorId: openRouterEnvironment.policy.providerTag,
   };
   const persisted = summaryPersistence(summaryResult, source);
-  assertEquals(persisted.keyTopics, ['Line status [sources:s0001]']);
+  // Stored text is what people read; citations travel in provenance instead.
+  assertEquals(persisted.keyTopics, ['Line status']);
+  assertEquals(persisted.ambiguities, ['Restart time is unknown.']);
+  assertEquals(persisted.provenance.evidence, {
+    keyTopics: [{ sourceRefs: ['s0001'] }],
+    ambiguities: [{ sourceRefs: ['s0001'] }],
+  });
+  assertEquals(persisted.provenance.evidenceEncoding, 'provenance-evidence-v2');
   assertEquals(persisted.decisions[0], {
     text: 'Keep the line stopped.',
     sourceRefs: ['s0001'],
@@ -404,6 +411,41 @@ Deno.test('summary resolution drops bodiless attachment and system messages and 
     code = error instanceof ApiError ? error.code : 'other';
   }
   assertEquals(code, 'summary_no_text_sources');
+});
+
+Deno.test('summary resolution labels speakers relative to the requester', () => {
+  const job = { id: '3', organizationId, topic: 'summary' as const, payload: {}, attempts: 1 };
+  const provider = openRouterEnvironment.policy.providerTag;
+  const requester = '33333333-3333-4333-8333-333333333333';
+  const resolved = parseSummaryResolution({
+    authorized: true,
+    provider_egress_allowed: true,
+    organization_id: organizationId,
+    processor_id: provider,
+    route_policy: 'approved_zero_retention',
+    provider_route_policy: 'zero_retention_only',
+    ai_policy_version: 2,
+    summary_id: '11111111-1111-4111-8111-111111111111',
+    conversation_id: '22222222-2222-4222-8222-222222222222',
+    requested_by_user_id: requester,
+    source_fingerprint: 'c'.repeat(64),
+    language_code: 'en',
+    messages: [
+      { message_id: '3', body: 'Monday?', sender_user_id: requester.toUpperCase(), created_at: '2026-09-04 10:00:00+00' },
+      { message_id: '4', body: 'Works.', sender_user_id: '44444444-4444-4444-8444-444444444444' },
+      { message_id: '5', body: 'Same for me.', sender_user_id: '55555555-5555-4555-8555-555555555555' },
+      { message_id: '6', body: 'Great.', sender_user_id: '44444444-4444-4444-8444-444444444444' },
+      { message_id: '7', body: 'No sender here.' },
+    ],
+  }, job, provider);
+  assert(resolved.authorized);
+  assertEquals(resolved.authorized && resolved.source.sources, [
+    { messageId: '3', body: 'Monday?', speaker: 'you' },
+    { messageId: '4', body: 'Works.', speaker: 'participant 1' },
+    { messageId: '5', body: 'Same for me.', speaker: 'participant 2' },
+    { messageId: '6', body: 'Great.', speaker: 'participant 1' },
+    { messageId: '7', body: 'No sender here.' },
+  ]);
 });
 
 Deno.test('a summary that cannot run is failed terminally without a source hash', async () => {
