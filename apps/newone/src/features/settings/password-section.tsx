@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal } from '@/components/ui/action-modal';
 import { PASSWORD_MIN_LENGTH, PasswordField } from '@/components/ui/password-field';
@@ -8,11 +8,12 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { useAuth } from '@/state/auth';
-import { colors, radii, shadow, spacing } from '@/theme/tokens';
+import { colors, radii, spacing } from '@/theme/tokens';
 
 /**
- * One settings row: set a password when the account has none, change it
- * otherwise. Codes stay the recovery route, so there is no "forgot" path here.
+ * One settings row, styled like the list rows around it: set a password when
+ * the account has none, change it otherwise. Codes stay the recovery route, so
+ * there is no "forgot" path here.
  */
 export function PasswordSection() {
   const auth = useAuth();
@@ -23,7 +24,9 @@ export function PasswordSection() {
   const [error, setError] = useState('');
   const [updated, setUpdated] = useState(false);
   const hasPassword = auth.hasPassword === true;
-  const actionLabel = t(hasPassword ? 'settings.passwordChangeAction' : 'settings.passwordSetAction');
+  const hint = updated
+    ? t('settings.passwordUpdated')
+    : t(hasPassword ? 'settings.passwordSetNote' : 'settings.passwordNoneNote');
 
   const open = () => {
     setPassword('');
@@ -54,25 +57,29 @@ export function PasswordSection() {
   };
 
   return (
-    <View style={[styles.card, shadow]}>
-      <View style={styles.row}>
-        <View style={styles.icon}>
-          <Ionicons name="key-outline" size={19} color={colors.mintDark} />
-        </View>
-        <View style={styles.copy}>
-          <Text accessibilityRole="header" style={styles.title}>{t('settings.passwordTitle')}</Text>
-          <Text style={styles.note}>
-            {updated
-              ? t('settings.passwordUpdated')
-              : t(hasPassword ? 'settings.passwordSetNote' : 'settings.passwordNoneNote')}
+    <View style={styles.group}>
+      <View style={styles.card}>
+        <Pressable
+          accessibilityHint={hint}
+          accessibilityLabel={t('settings.passwordTitle')}
+          accessibilityRole="button"
+          onPress={open}
+          style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+          <Ionicons color={colors.inkMuted} name="key-outline" size={20} style={styles.icon} />
+          <View style={styles.copy}>
+            <Text numberOfLines={1} style={styles.label}>{t('settings.passwordTitle')}</Text>
+            <Text numberOfLines={1} style={styles.hint}>{hint}</Text>
+          </View>
+          <Text numberOfLines={1} style={styles.value}>
+            {t(hasPassword ? 'settings.passwordChangeAction' : 'settings.passwordSetAction')}
           </Text>
-        </View>
-        <PrimaryButton label={actionLabel} onPress={open} tone="light" />
+          <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
+        </Pressable>
       </View>
       <ActionModal
         description={t('auth.passwordRule')}
         onClose={close}
-        title={actionLabel}
+        title={t('settings.passwordTitle')}
         visible={visible}>
         <PasswordField
           autoComplete="new-password"
@@ -89,31 +96,27 @@ export function PasswordSection() {
   );
 }
 
+// Mirrors the settings screen's group/row metrics so this reads as one list.
 const styles = StyleSheet.create({
+  group: { marginTop: spacing.md },
   card: {
+    marginHorizontal: spacing.sm,
+    borderRadius: radii.md,
     overflow: 'hidden',
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
     backgroundColor: colors.paper,
   },
   row: {
-    minHeight: 62,
+    minHeight: 46,
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
-  icon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.md,
-    backgroundColor: colors.mintSoft,
-  },
-  copy: { flex: 1, minWidth: 150 },
-  title: { color: colors.ink, fontSize: 14, fontWeight: '900' },
-  note: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: 3 },
+  icon: { width: 20, textAlign: 'center' },
+  copy: { flex: 1, minWidth: 0 },
+  label: { color: colors.ink, fontSize: 15 },
+  hint: { color: colors.inkSubtle, fontSize: 12, marginTop: 1 },
+  value: { color: colors.inkSubtle, fontSize: 14, maxWidth: '45%' },
+  pressed: { opacity: 0.7 },
 });

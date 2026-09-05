@@ -33,7 +33,8 @@ describe('settings password row', () => {
     expect(screen.getByText('settings.passwordNoneNote')).toBeTruthy();
     expect(screen.queryByLabelText('auth.newPasswordLabel')).toBeNull();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.passwordSetAction' }));
+    expect(screen.getByText('settings.passwordSetAction')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.passwordTitle' }));
     expect(screen.getByText('auth.passwordRule')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
     expect(screen.getByText('auth.passwordTooShort')).toBeTruthy();
@@ -61,8 +62,9 @@ describe('settings password row', () => {
     };
     const view = await render(<PasswordSection />);
     expect(screen.getByText('settings.passwordSetNote')).toBeTruthy();
+    expect(screen.getByText('settings.passwordChangeAction')).toBeTruthy();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.passwordChangeAction' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.passwordTitle' }));
     await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
     await waitFor(() => expect(screen.getByText('auth.passwordTooShort')).toBeTruthy());
