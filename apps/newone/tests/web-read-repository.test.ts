@@ -394,12 +394,12 @@ function bootstrapPayload() {
       versionNumber: 1,
       languageCode: 'en-US',
       status: 'draft',
-      primaryTopic: 'Gate safety',
-      summaryBody: 'Secure the gate and inspect the valve.',
-      keyTopics: ['Gate', 'Valve'],
-      decisions: [{ text: 'Lock gate', sourceMessageIds: ['101'] }],
-      actionItems: [{ text: 'Inspect valve', owner: 'Ana', due: '18:30', sourceMessageIds: ['102'] }],
-      ambiguities: ['Valve number'],
+      primaryTopic: 'Gate safety (s0001)',
+      summaryBody: 'Secure the gate [sources:s0001,s0002] and inspect the valve.',
+      keyTopics: ['Gate [sources:s0001]', 'Valve', 's0002'],
+      decisions: [{ text: 'Lock gate (s0001)', sourceMessageIds: ['101'] }],
+      actionItems: [{ text: 'Inspect valve [sources:s0002]', owner: 'Ana', due: '18:30', sourceMessageIds: ['102'] }],
+      ambiguities: ['Valve number [sources:s0001,s0002]'],
       sourceMessageIds: ['101', '102'],
       sourceFirstMessageId: '101',
       sourceLastMessageId: '102',
@@ -880,7 +880,17 @@ describe('authoritative web read repository', () => {
     });
     expect(workspace.updates[0]).toMatchObject({ severity: 'important', acknowledged: true });
     expect(workspace.handoffs[0]).toMatchObject({ status: 'draft', canSign: true, sourceCount: 2 });
-    expect(workspace.summaries[0]).toMatchObject({ status: 'ready_for_review', primaryTopic: 'Gate safety' });
+    expect(workspace.summaries[0]).toMatchObject({
+      status: 'ready_for_review',
+      primaryTopic: 'Gate safety',
+      summary: 'Secure the gate and inspect the valve.',
+      ambiguities: [{ text: 'Valve number', sourceMessageIds: [] }],
+    });
+    // Older rows carry evidence suffixes in their text; none of it reaches a screen.
+    expect(workspace.summaries[0].keyTopics.map((item) => item.text)).toEqual(['Gate', 'Valve']);
+    expect(workspace.summaries[0].decisions[0]).toEqual({ text: 'Lock gate', sourceMessageIds: ['101'] });
+    expect(workspace.summaries[0].actionItems[0]).toMatchObject({ title: 'Inspect valve', owner: 'Ana' });
+    expect(JSON.stringify(workspace.summaries[0])).not.toMatch(/\bs0\d{3}\b|\[sources/);
     expect(workspace.actions[0]).toMatchObject({ assigneeName: 'Ana Torres', status: 'confirmed' });
     expect(workspace.capabilities).toEqual(['audit.read', 'communications.publish']);
     expect(workspace.discoverableConversations[0].myJoinRequest).toMatchObject({ status: 'pending' });

@@ -75,6 +75,11 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: (value: string) => mockClipboardWrite(value),
 }));
 
+jest.mock('expo-file-system', () => ({
+  Paths: { cache: 'file:///cache/' },
+  File: function File() {},
+}));
+
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: (...mockArgs: unknown[]) => mockDocumentPicker(...mockArgs),
 }));
@@ -520,12 +525,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.send'));
     expect(onSend).toHaveBeenCalledWith('Confirmed for this shift', undefined, []);
 
-    await fireEvent.press(screen.getByText('chat.briefing'));
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText('Gate and valve safety')).toBeTruthy();
+    expect(screen.getByText('The shift must secure the gate and inspect the valve.')).toBeTruthy();
     expect(screen.getByText('Inspect the valve')).toBeTruthy();
-
-    await fireEvent.press(screen.getAllByLabelText('chat.openSource missing-source')[0]);
-    await waitFor(() => expect(screen.getByText('chat.sourceUnavailable')).toBeTruthy());
+    expect(screen.queryByText(/chat\.sourceFingerprint|chat\.provenance|chat\.summaryBoundary/)).toBeNull();
 
     await fireEvent.press(screen.getAllByLabelText('chat.confirmAction')[0]);
     await fireEvent.press(screen.getByLabelText(colleague.displayName));
@@ -731,7 +735,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       messages={[translatedMessage(), incomingMessage()]}
       onSend={noopSend}
     />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
 
     await fireEvent.press(screen.getByLabelText('chat.correctSummary'));
     await fireEvent.changeText(screen.getByLabelText('chat.primaryTopic'), 'Verified gate safety');
@@ -784,15 +788,16 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     const messages = [translatedMessage()];
     mockWorkspace.summaries = [];
     const missing = await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    await fireEvent.press(screen.getByLabelText('chat.requestSummary'));
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
     expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', ['message-translated']);
     await missing.unmount();
 
     mockWorkspace = buildWorkspace();
     mockWorkspace.summaries = [summary({ status: 'failed', failureCode: 'provider_unavailable' })];
     const failed = await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
     expect(mockPush).toHaveBeenCalledWith('/handoffs');
@@ -801,8 +806,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     mockWorkspace = buildWorkspace();
     mockWorkspace.summaries = [summary({ status: 'generating' })];
     const processing = await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    expect(screen.getByText('chat.summaryProcessingBody')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('chat.summaryGenerating')).toBeTruthy();
     await processing.unmount();
 
     mockWorkspace = buildWorkspace();
@@ -814,9 +819,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       reviewNote: 'Controlled reviewer note.',
     })];
     await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    expect(screen.getByText('chat.summarySourceStale')).toBeTruthy();
-    expect(screen.getByText('Controlled reviewer note.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
+    expect(screen.getByText('chat.summaryApproved')).toBeTruthy();
+    expect(screen.queryByText('Controlled reviewer note.')).toBeNull();
   });
 
   test('exercises conversation security controls, scoped membership, reporting, and departure', async () => {
@@ -1546,15 +1552,17 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       messages={[translatedMessage()]}
       onSend={noopSend}
     />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    expect(screen.getByText('chat.summaryPolicyStale')).toBeTruthy();
-    expect(screen.getByText(/chat\.manualCorrection/)).toBeTruthy();
-    expect(screen.getByText('quality.reportSubmitted')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    // A corrected version with no text yet reads as "nothing summarized"; no provenance is shown.
+    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
+    expect(screen.queryByText(/chat\.manualCorrection/)).toBeNull();
+    expect(screen.queryByText(/chat\.sourceFingerprint/)).toBeNull();
     expect(screen.getByText('Completed inspection')).toBeTruthy();
     expect(screen.getByText('Cancelled inspection')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.startAction'));
     await fireEvent.press(screen.getByLabelText('chat.cancelAction'));
-    await fireEvent.press(screen.getByLabelText('chat.requestSummary'));
+    // The reader's own corrected version marks where "new messages" start.
+    await fireEvent.press(screen.getByLabelText('chat.summarizeNew'));
     expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-confirmed', 'in_progress');
     expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-progress', 'cancelled');
     expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', ['message-translated']);
@@ -1567,7 +1575,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       messages={[translatedMessage()]}
       onSend={noopSend}
     />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
 
     await fireEvent.press(screen.getByLabelText('chat.correctSummary'));
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
@@ -1588,20 +1596,22 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
   });
 
-  test('routes queued and superseded summaries to the manual handoff workflow', async () => {
+  test('shows queued summaries as generating and routes superseded ones to the manual handoff workflow', async () => {
     mockWorkspace.summaries = [summary({ status: 'queued' })];
     const queued = await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
-    expect(mockPush).toHaveBeenCalledWith('/handoffs');
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('chat.summaryGenerating')).toBeTruthy();
+    expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
     await queued.unmount();
 
     mockWorkspace = buildWorkspace();
     mockWorkspace.summaries = [summary({ status: 'superseded', failureCode: null })];
     await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    expect(screen.getByText('chat.summaryStaleBody')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
     expect(screen.queryByText(/chat\.failureCode/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
+    expect(mockPush).toHaveBeenCalledWith('/handoffs');
   });
 
   test('renders own image-transfer and nullable translation-provenance branches', async () => {
@@ -1908,8 +1918,9 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       messages={[translatedMessage()]}
       onSend={noopSend}
     />);
-    await fireEvent.press(screen.getByText('chat.briefing'));
-    expect(screen.getByText(/chat\.notAvailable · 2026-08-04T18:20:00.000Z/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summarize'));
+    expect(screen.getByText('The shift must secure the gate and inspect the valve.')).toBeTruthy();
+    expect(screen.queryByText(/chat\.notAvailable/)).toBeNull();
     expect(screen.queryByLabelText('chat.reportSummaryError')).toBeNull();
     await summaryView.unmount();
 
