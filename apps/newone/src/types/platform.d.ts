@@ -27,6 +27,8 @@ declare module '@/device/push-registration' {
     organizationId: string,
     onRegistration: (registration: RegisterDeviceInput) => void | Promise<void>,
   ): { remove(): void };
+  export function noteRegisteredPushToken(token: string | null | undefined): void;
+  export function resetPushTokenMemoryForTests(): void;
 }
 
 declare module '@/device/notification-navigation' {

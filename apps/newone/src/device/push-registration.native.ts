@@ -59,6 +59,7 @@ export async function getCurrentInstallationId(): Promise<string | null> {
 /** Uses an already-granted permission only. UI must request notification permission deliberately. */
 export async function getExistingDeviceRegistration(
   organizationId: string,
+  knownToken?: string,
 ): Promise<RegisterDeviceInput | null> {
   if (!Device.isDevice || (Platform.OS !== 'ios' && Platform.OS !== 'android')) return null;
   const permissions = await Notifications.getPermissionsAsync();
@@ -66,7 +67,11 @@ export async function getExistingDeviceRegistration(
   const binding = pushBinding();
   if (!binding) return null;
   await configureNotificationChannels();
-  const token = await Notifications.getExpoPushTokenAsync({ projectId: binding.projectId });
+  // A token delivered by the push-token event is used as is; fetching it again
+  // would emit another event.
+  const token = knownToken !== undefined
+    ? { data: knownToken }
+    : await Notifications.getExpoPushTokenAsync({ projectId: binding.projectId });
   if (typeof token.data !== 'string' || !EXPO_TOKEN_PATTERN.test(token.data)) return null;
   const id = await getInstallationId();
   return {
@@ -83,14 +88,41 @@ export async function getExistingDeviceRegistration(
   };
 }
 
+// The token most recently handed to the service. expo-notifications emits a
+// push-token event for every getExpoPushTokenAsync() call, so a listener that
+// re-fetched the token re-triggered itself: TestFlight 23 registered a device
+// 6,252 times in two minutes and tripped the rate limit. The listener now uses
+// the token carried by the event and ignores one it has already registered.
+let lastRegisteredPushToken: string | null = null;
+let refreshInFlight = false;
+
+export function noteRegisteredPushToken(token: string | null | undefined) {
+  if (typeof token === 'string' && token.length > 0) lastRegisteredPushToken = token;
+}
+
+export function resetPushTokenMemoryForTests() {
+  lastRegisteredPushToken = null;
+  refreshInFlight = false;
+}
+
 export function addPushTokenRefreshListener(
   organizationId: string,
   onRegistration: (registration: RegisterDeviceInput) => void | Promise<void>,
 ) {
-  return Notifications.addPushTokenListener(() => {
-    void getExistingDeviceRegistration(organizationId).then((registration) => {
-      if (registration) void onRegistration(registration);
-    });
+  return Notifications.addPushTokenListener((event) => {
+    const token = typeof event?.data === 'string' ? event.data : null;
+    if (!token || token === lastRegisteredPushToken || refreshInFlight) return;
+    refreshInFlight = true;
+    void getExistingDeviceRegistration(organizationId, token)
+      .then(async (registration) => {
+        if (!registration) return;
+        noteRegisteredPushToken(registration.pushToken);
+        await onRegistration(registration);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        refreshInFlight = false;
+      });
   });
 }
 

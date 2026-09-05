@@ -135,6 +135,7 @@ import {
   addPushTokenRefreshListener,
   getCurrentInstallationId,
   getExistingDeviceRegistration,
+  noteRegisteredPushToken,
   requestDeviceRegistration,
 } from '@/device/push-registration'; // eslint-disable-line import/no-unresolved
 import { useAuth } from '@/state/auth';
@@ -2295,7 +2296,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     let active = true;
     void getExistingDeviceRegistration(snapshot.organizationId)
       .then(async (registration) => {
-        if (active && registration) await repositories.commands.registerDevice(registration);
+        if (!active || !registration) return;
+        await repositories.commands.registerDevice(registration);
+        noteRegisteredPushToken(registration.pushToken);
       })
       .catch(() => {
         // Permission was already granted, but registration can safely retry on
@@ -2814,6 +2817,52 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         }
         return;
       }
+      // Send straight to the service while online: the bubble goes to "sent"
+      // as soon as the receipt lands, with no trip through the encrypted queue
+      // (owner feedback on v2.3: "it should just send the message"). The queue
+      // below is reached only when the device is offline or the send failed
+      // on the network, so a message still survives a dropped connection.
+      if (connectivity !== 'offline') {
+        try {
+          const receipt = await repositories.commands.sendMessage(input);
+          markMessage(clientMessageId, {
+            serverId: receipt.messageId,
+            deliveryState: 'sent',
+            failureReason: undefined,
+          });
+          setConnectivity('online');
+          reconcileConversationAfterSend(conversationId);
+          // Anything else waiting in the durable queue (receipts, device
+          // registration) still drains on the next send.
+          void flushOutbox();
+          return;
+        } catch (commandError) {
+          if (!isOfflineError(commandError)) {
+            const failure = t(errorMessageKey(commandError));
+            markMessage(clientMessageId, { deliveryState: 'failed', failureReason: failure });
+            setActionError(failure);
+            // Keep the failed send in the outbox list so it can be retried or
+            // cancelled from Settings, as a queued send that failed would be.
+            try {
+              await withTimeout(
+                clientStore.enqueue({
+                  ...command,
+                  attempts: 1,
+                  state: 'failed',
+                  lastErrorCode: commandError instanceof RepositoryError ? commandError.code : 'unknown_error',
+                }),
+                OUTBOX_ENQUEUE_TIMEOUT_MS,
+                'outbox_enqueue_timeout',
+              );
+              void flushOutbox();
+            } catch {
+              // The bubble already shows the failure; the list is a convenience.
+            }
+            return;
+          }
+          setConnectivity('offline');
+        }
+      }
       // The encrypted local queue exists so a message survives going offline;
       // delivery must never depend on it. If sealing or persisting the command
       // fails or stalls, send online directly and record why, instead of
@@ -2847,7 +2896,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         if (isOfflineError(commandError)) setConnectivity('offline');
       }
     },
-    [flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, snapshot, t],
+    [connectivity, flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, snapshot, t],
   );
 
   const synchronizeMessageOutbox = useCallback(async () => {

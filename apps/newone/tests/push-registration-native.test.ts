@@ -9,7 +9,7 @@ const mockGetInstallationId: any = jest.fn();
 const mockCreateClientId: any = jest.fn();
 
 let capturedHandler: any;
-let tokenRefreshListener: (() => void) | null = null;
+let tokenRefreshListener: ((event: { data: string }) => void) | null = null;
 let mockPlatform = 'ios';
 let mockIsDevice = true;
 let mockRuntimeConfig: any = {
@@ -70,7 +70,7 @@ jest.mock('expo-notifications', () => ({
   getPermissionsAsync: (...args: unknown[]) => mockGetPermissionsAsync(...args),
   requestPermissionsAsync: (...args: unknown[]) => mockRequestPermissionsAsync(...args),
   getExpoPushTokenAsync: (...args: unknown[]) => mockGetExpoPushTokenAsync(...args),
-  addPushTokenListener: (listener: () => void) => {
+  addPushTokenListener: (listener: (event: { data: string }) => void) => {
     tokenRefreshListener = listener;
     return mockAddPushTokenListener(listener);
   },
@@ -80,6 +80,7 @@ jest.mock('expo-notifications', () => ({
 
 import {
   addPushTokenRefreshListener,
+  resetPushTokenMemoryForTests,
   configureNotificationChannels,
   getCurrentInstallationId,
   getExistingDeviceRegistration,
@@ -89,6 +90,7 @@ import {
 beforeEach(() => {
   jest.clearAllMocks();
   tokenRefreshListener = null;
+  resetPushTokenMemoryForTests();
   mockPlatform = 'ios';
   mockIsDevice = true;
   mockRuntimeConfig = {
@@ -268,14 +270,24 @@ describe('permission request and refresh lifecycle', () => {
     const onRegistration = jest.fn<(registration: any) => void>();
     const subscription = addPushTokenRefreshListener('organization-controlled', onRegistration);
     expect(subscription).toEqual(expect.objectContaining({ remove: expect.any(Function) }));
-    tokenRefreshListener?.();
+    tokenRefreshListener?.({ data: 'ExponentPushToken[controlled_token_123456789]' });
     await flushRegistrationWork();
     expect(onRegistration).toHaveBeenCalledWith(expect.objectContaining({
       organizationId: 'organization-controlled',
+      pushToken: 'ExponentPushToken[controlled_token_123456789]',
     }));
+    // The event's token is used as is: no second fetch, which would emit
+    // another event and loop.
+    expect(mockGetExpoPushTokenAsync).not.toHaveBeenCalled();
+
+    // The same token again is a no-op.
+    tokenRefreshListener?.({ data: 'ExponentPushToken[controlled_token_123456789]' });
+    await flushRegistrationWork();
+    expect(onRegistration).toHaveBeenCalledTimes(1);
+    expect(mockGetPermissionsAsync).toHaveBeenCalledTimes(1);
 
     mockGetPermissionsAsync.mockResolvedValue({ granted: false });
-    tokenRefreshListener?.();
+    tokenRefreshListener?.({ data: 'ExponentPushToken[controlled_token_987654321]' });
     await flushRegistrationWork();
     expect(mockGetPermissionsAsync).toHaveBeenCalledTimes(2);
     expect(onRegistration).toHaveBeenCalledTimes(1);

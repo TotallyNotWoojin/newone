@@ -4090,12 +4090,9 @@ describe('authoritative workspace provider', () => {
     await act(async () => {
       await currentWorkspace().sendMessage('direct-outgoing', 'Second request message');
     });
-    expect(mockEnqueue).toHaveBeenCalledTimes(1);
-    expect(mockEnqueue.mock.calls[0]![0]).toMatchObject({
-      kind: 'send_message',
-      payload: expect.objectContaining({ conversationId: 'direct-outgoing', body: 'Second request message' }),
-    });
-    // The queued command reaches the send route unchanged; the service owns the cap.
+    // Online, the send goes straight to the service (no queue trip); the
+    // service owns the request cap.
+    expect(mockEnqueue).not.toHaveBeenCalled();
     expect(mockCommand).toHaveBeenCalledWith('sendMessage', expect.objectContaining({
       conversationId: 'direct-outgoing',
       body: 'Second request message',
@@ -4108,7 +4105,7 @@ describe('authoritative workspace provider', () => {
     await act(async () => {
       await currentWorkspace().sendMessage('direct-incoming', 'Not yet');
     });
-    expect(mockEnqueue).toHaveBeenCalledTimes(1);
+    expect(mockEnqueue).not.toHaveBeenCalled();
     expect(currentWorkspace().messages['direct-incoming']).toHaveLength(0);
     expect(currentWorkspace().actionError).not.toBeNull();
     await view.unmount();

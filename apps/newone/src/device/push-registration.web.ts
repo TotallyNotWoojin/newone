@@ -24,3 +24,6 @@ export function addPushTokenRefreshListener(
 ) {
   return { remove() {} };
 }
+
+export function noteRegisteredPushToken(_token: string | null | undefined) {}
+export function resetPushTokenMemoryForTests() {}
