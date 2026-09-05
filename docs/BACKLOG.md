@@ -18,3 +18,9 @@ Paused until the owner says go. Items are in rough priority order.
 8. Manual auth-user deletion from the Supabase dashboard fails on the profile foreign key (no cascade); the in-app delete-account path handles it.
 9. Device suite: reuse accounts across areas to cut setup time; media-05 thumbnail tap in the Files picker still unverified.
 10. Store listings in Spanish and Korean (the app already ships those languages).
+
+## Follow-ups from v3 verification (Sep 5 2026)
+
+11. Summaries call the other person "participant 1" because display names are not sent to the model. Send first names (or map participant labels back to names client-side) so a summary reads "Diego agreed to…".
+12. Chats-list preview from a live message event still shows the original language until the next reconcile; update the preview when the translation arrives (client, workspace.tsx message-event path).
+13. A real server-side "mute all notifications" (device_registrations.notifications_muted); today the Settings switch only reflects OS permission and deep-links to system settings.
