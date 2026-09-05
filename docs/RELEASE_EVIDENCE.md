@@ -466,3 +466,11 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | trans-16 | B's mixed message "La reunión es el lunes but bring…" was detected as `es` with a real detector method, which equals B's display language, so the app correctly omits "Translate for me" (a translation is not needed). The step now checks the detected language first and records that outcome; the Korean variant still exercises the action because its mixed message falls back to the sender language. |
 | Harness | The broadened driver-crash detection also matched ordinary assertion failures in the debug log (each was retried and mislabelled ENVIRONMENT); narrowed to unambiguous driver-death markers. |
 | Next | media and translation-ko (running), then a rebuild and final chat + translation runs. |
+
+### Media rerun with the seeded document (Sep 4 2026, 17:06)
+
+| Item | Evidence |
+| --- | --- |
+| Result | run-2026-09-04T23-51-05: PASS 17 · FAIL 0 · UNREACHABLE 1 (photo, voice note, video, playback, attachment states all green). |
+| media-05 | The Files picker now lists both seeded files under "On My iPhone" (screenshot 001-media-05-document-FAIL.png, "2 items"), but the tap on the file-name label did not pick the file. The flow taps the first cell's thumbnail and falls back to the cell id. Queued once more at the end of the final queue. |
+| Harness | The driver-death check now reads only `[ERROR]` lines of Maestro's debug log; the INFO-level driver status check at every flow start also mentions a refused connection and had mislabelled two ordinary failures. |
