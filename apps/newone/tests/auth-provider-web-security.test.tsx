@@ -411,7 +411,7 @@ describe('web authentication security state machine', () => {
         code: '654321',
       });
     });
-    expect(recovery).toEqual({ otherSessionsRevoked: 6 });
+    expect(recovery).toEqual({ otherSessionsRevoked: 6, hasPassword: false });
     expect(currentAuth().sessionId).toBe('session-web');
     await view.unmount();
   });

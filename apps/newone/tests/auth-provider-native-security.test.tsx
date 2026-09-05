@@ -389,7 +389,7 @@ describe('native authentication security state machine', () => {
         code: '654321',
       });
     });
-    expect(result).toEqual({ otherSessionsRevoked: 4 });
+    expect(result).toEqual({ otherSessionsRevoked: 4, hasPassword: false });
     await view.unmount();
   });
 

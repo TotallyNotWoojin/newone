@@ -2463,10 +2463,7 @@ export function createAuthHandler(
               request,
               identity,
               native
-                ? oneOf(
-                  request.headers.get('x-newone-client-platform'),
-                  ['ios', 'android'] as const,
-                )
+                ? nativeClientPlatform(request, meta)
                 : 'web',
             ),
           );
