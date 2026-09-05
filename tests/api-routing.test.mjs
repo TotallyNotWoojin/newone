@@ -66,6 +66,19 @@ test('routing fails closed on arbitrary native API origins and non-api web bases
   assert.equal(resolveApiUrl({
     path: '/v2/bootstrap', platform: 'web', apiBase: 'https://api.example.test', supabaseUrl: projectUrl,
   }), null);
+  // A direct (bearer) web build is routed like native: to the project's Edge Functions only.
+  assert.equal(resolveApiUrl({
+    path: '/v2/bootstrap', platform: 'web', apiBase: '/api', supabaseUrl: projectUrl, webDirect: true,
+  }), `${functionsBase}/newone-read/v2/bootstrap`);
+  assert.equal(resolveApiUrl({
+    path: '/v2/auth/native/otp/verify', platform: 'web', apiBase: functionsBase, supabaseUrl: projectUrl, webDirect: true,
+  }), `${functionsBase}/newone-auth/v2/auth/native/otp/verify`);
+  assert.equal(resolveApiUrl({
+    path: '/v2/bootstrap', platform: 'web', apiBase: 'https://api.example.test', supabaseUrl: projectUrl, webDirect: true,
+  }), null);
+  assert.equal(resolveApiUrl({
+    path: '/v2/bootstrap', platform: 'web', apiBase: '/api', supabaseUrl: null, webDirect: true,
+  }), null);
   assert.equal(resolveApiUrl({
     path: '/v2/%2e%2e/admin', platform: 'ios', apiBase: functionsBase, supabaseUrl: projectUrl,
   }), null);
@@ -100,6 +113,15 @@ test('native Edge headers never use the publishable key as a bearer credential',
   assert.deepEqual(directEdgeRequestHeaders({
     platform: 'web', publishableKey, accessToken: userJwt,
   }), {});
+  assert.deepEqual(directEdgeRequestHeaders({
+    platform: 'web', publishableKey, accessToken: userJwt, webDirect: true,
+  }), {
+    apikey: publishableKey,
+    Authorization: `Bearer ${userJwt}`,
+  });
+  assert.equal(directEdgeRequestHeaders({
+    platform: 'web', publishableKey: ['sb', 'secret', 'forbidden', 'credential'].join('_'), webDirect: true,
+  }), null);
   assert.equal(directEdgeRequestHeaders({
     platform: 'ios', publishableKey: ['sb', 'secret', 'forbidden', 'credential'].join('_'), accessToken: userJwt,
   }), null);

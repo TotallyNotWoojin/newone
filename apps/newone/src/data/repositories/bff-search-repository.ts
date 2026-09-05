@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 
 import { apiUrlFor, nativeEdgeRequestHeaders, publicRuntimeConfig } from '@/config/runtime';
 import type {
@@ -8,6 +7,7 @@ import type {
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
 import { normalizeSearchRequest, parseSearchPage } from '@/data/search-contract.mjs';
+import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 
 type UnknownRecord = Record<string, unknown>;
@@ -29,12 +29,13 @@ export class BffSearchRepository implements SearchRepository {
     if (!publicRuntimeConfig.apiUrl) {
       throw new RepositoryError('The secure search service is not configured.', 'service_unconfigured', false);
     }
+    const cookieSession = usesCookieSession();
     const session = await this.context.getSession();
-    if (Platform.OS !== 'web' && !session?.access_token) {
+    if (!cookieSession && !session?.access_token) {
       throw new RepositoryError('Sign in again to search.', 'authentication_required', false);
     }
-    const csrfToken = Platform.OS === 'web' ? getWebCsrfToken() : null;
-    if (Platform.OS === 'web' && !csrfToken) {
+    const csrfToken = cookieSession ? getWebCsrfToken() : null;
+    if (cookieSession && !csrfToken) {
       throw new RepositoryError('Your secure web session needs to be refreshed.', 'csrf_required', false);
     }
     const url = apiUrlFor('/v2/search');
@@ -51,7 +52,7 @@ export class BffSearchRepository implements SearchRepository {
     try {
       response = await fetch(url, {
         method: 'POST',
-        credentials: Platform.OS === 'web' ? 'include' : 'omit',
+        credentials: cookieSession ? 'include' : 'omit',
         cache: 'no-store',
         headers: {
           Accept: 'application/json',

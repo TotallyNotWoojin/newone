@@ -1,6 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, PropsWithChildren, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 
 import { publicRuntimeConfig, runtimeMode, type RuntimeMode } from '@/config/runtime';
 // Metro selects the native or safe web client store.
@@ -15,6 +15,7 @@ import {
 } from '@/data/persistence/offline-identity.mjs';
 import { errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
+import { usesCookieSession } from '@/lib/session-transport';
 import {
   getSupabaseClient,
   getRealtimeClient,
@@ -151,6 +152,9 @@ function nativeClaims(accessToken?: string): {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const { t } = useI18n();
+  // Cookie-gateway web keeps its own session state below; native and direct
+  // (bearer) web hold the session in the Supabase client.
+  const cookieSession = usesCookieSession();
   const [session, setSession] = useState<Session | null>(null);
   const [webUser, setWebUser] = useState<WebAuthUser | null>(null);
   const [webRealtimeToken, setWebRealtimeToken] = useState<string | null>(null);
@@ -162,7 +166,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const activationInFlight = useRef(false);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (cookieSession) {
       if (runtimeMode !== 'web') {
         return;
       }
@@ -325,10 +329,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       data.subscription.unsubscribe();
       appStateSubscription.remove();
     };
-  }, [t]);
+  }, [cookieSession, t]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !webUser) {
+    if (!cookieSession || !webUser) {
       return;
     }
     let active = true;
@@ -346,23 +350,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
       active = false;
       clearInterval(interval);
     };
-  }, [webUser]);
+  }, [cookieSession, webUser]);
 
   const value = useMemo<AuthState>(
     () => {
       const claims = nativeClaims(session?.access_token);
       return ({
       session,
-      user: Platform.OS === 'web' ? webUser : session?.user ?? null,
-      authenticated: Boolean(Platform.OS === 'web' ? webUser : session),
-      realtimeToken: Platform.OS === 'web' ? webRealtimeToken : session?.access_token ?? null,
-      sessionId: Platform.OS === 'web' ? webSessionId : claims.sessionId,
-      assuranceLevel: Platform.OS === 'web' ? webAal : claims.assuranceLevel,
+      user: cookieSession ? webUser : session?.user ?? null,
+      authenticated: Boolean(cookieSession ? webUser : session),
+      realtimeToken: cookieSession ? webRealtimeToken : session?.access_token ?? null,
+      sessionId: cookieSession ? webSessionId : claims.sessionId,
+      assuranceLevel: cookieSession ? webAal : claims.assuranceLevel,
       loading,
       mode: runtimeMode,
       error,
       requestOtp: async (input) => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const result = await requestWebOtp({
             destinationType: input.destinationType,
             destination: input.destination,
@@ -376,7 +380,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { channelConfigured: result.channel.configured };
       },
       verifyOtp: async (input) => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const webSession = await verifyWebOtp({
             destinationType: input.destinationType,
             destination: input.destination,
@@ -411,7 +415,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       requestSignup: async (input) => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           await requestWebSignup({
             destination: input.destination,
             username: input.username,
@@ -426,7 +430,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       verifySignup: async (input) => {
         // A returned signup receipt (new account) and a silent sign-in for an
         // existing account commit the exact same session state.
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const webSession = await verifyWebSignup({
             destination: input.destination,
             code: input.code,
@@ -458,7 +462,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       requestRecoveryOtp: async (input) => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const result = await requestWebRecoveryOtp({
             destinationType: input.destinationType,
             destination: input.destination,
@@ -470,7 +474,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { channelConfigured: result.channel.configured };
       },
       verifyRecoveryOtp: async (input) => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const recovered = await verifyWebRecoveryOtp({
             destinationType: input.destinationType,
             destination: input.destination,
@@ -506,7 +510,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       },
       refreshAssurance: async () => {
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           const webSession = await getWebSession();
           setWebUser(webSession.user);
           setWebSessionId(webSession.sessionId ?? null);
@@ -526,7 +530,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         } catch {
           // Local credential and cache teardown must continue if the socket is unhealthy.
         }
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           try {
             if (webUser) await signOutWebSession();
           } catch {
@@ -564,7 +568,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         } catch {
           // Continue revocation teardown even if the socket is already closed.
         }
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           try {
             if (webUser) await signOutWebSession();
           } catch {
@@ -592,7 +596,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       deleteAccount: async () => {
         // The authenticated deletion call must complete before any local
         // teardown; a rejected deletion leaves the session fully intact.
-        if (Platform.OS === 'web') {
+        if (cookieSession) {
           await deleteWebAccount();
           try {
             await getRealtimeClient()?.removeAllChannels();
@@ -636,7 +640,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
     });
     },
-    [error, loading, session, t, webAal, webRealtimeToken, webSessionId, webUser],
+    [cookieSession, error, loading, session, t, webAal, webRealtimeToken, webSessionId, webUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

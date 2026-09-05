@@ -174,12 +174,15 @@ export function edgeFunctionForPath(path) {
 /**
  * Web is deliberately same-origin and native is deliberately direct-to-Edge.
  * No arbitrary absolute API hosts are accepted for either trust boundary.
+ * A browser build that opted into `webDirect` (bearer tokens, no cookie
+ * gateway) is routed exactly like native: straight to the project's Edge
+ * Functions.
  */
-export function resolveApiUrl({ path, platform, apiBase, supabaseUrl }) {
+export function resolveApiUrl({ path, platform, apiBase, supabaseUrl, webDirect = false }) {
   const functionName = edgeFunctionForPath(path);
   if (!functionName || typeof apiBase !== 'string') return null;
 
-  if (platform === 'web') {
+  if (platform === 'web' && webDirect !== true) {
     return apiBase.replace(/\/+$/, '') === '/api' ? `/api${path}` : null;
   }
 
@@ -195,8 +198,8 @@ export function resolveApiUrl({ path, platform, apiBase, supabaseUrl }) {
   return functionsBase ? `${functionsBase}/${functionName}${path}` : null;
 }
 
-export function directEdgeRequestHeaders({ platform, publishableKey, accessToken }) {
-  if (platform === 'web') return {};
+export function directEdgeRequestHeaders({ platform, publishableKey, accessToken, webDirect = false }) {
+  if (platform === 'web' && webDirect !== true) return {};
   const key = typeof publishableKey === 'string' ? publishableKey.trim() : '';
   if (
     key.length < 20

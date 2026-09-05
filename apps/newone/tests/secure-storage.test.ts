@@ -12,6 +12,16 @@ const mockSetItemAsync = jest.fn<(
   options?: Record<string, unknown>,
 ) => Promise<void>>();
 const mockDeleteItemAsync = jest.fn<(key: string) => Promise<void>>();
+const mockClientStore = {
+  initialize: jest.fn(async () => undefined),
+  getCache: jest.fn(async () => null as string | null),
+  putCache: jest.fn(async () => undefined),
+  removeCache: jest.fn(async () => undefined),
+};
+
+// The web adapter reaches for the encrypted client store only in direct mode;
+// Jest resolves the native store here, which must not load.
+jest.mock('@/data/persistence/client-store', () => ({ clientStore: mockClientStore }));
 
 jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
@@ -222,6 +232,7 @@ describe('web secure storage adapter', () => {
       authStorage: webAuthStorage,
     } = jest.requireActual<typeof import('@/lib/secure-storage.web')>('@/lib/secure-storage.web');
 
+    // Cookie-gateway web (the default) never persists a bearer token.
     expect(webAuthStorage).toBe(webStorage);
     await expect(webStorage.getItem('controlled-web-key')).resolves.toBeNull();
     await webStorage.setItem('controlled-web-key', 'first');
@@ -229,5 +240,21 @@ describe('web secure storage adapter', () => {
     await expect(webStorage.getItem('controlled-web-key')).resolves.toBe('second');
     await webStorage.removeItem('controlled-web-key');
     await expect(webStorage.getItem('controlled-web-key')).resolves.toBeNull();
+  });
+
+  test('direct (bearer) web keeps the auth session in the encrypted client store instead', async () => {
+    let webModule: typeof import('@/lib/secure-storage.web') | null = null;
+    jest.isolateModules(() => {
+      jest.doMock('@/config/runtime', () => ({ webAuthMode: 'direct' }));
+      webModule = jest.requireActual<typeof import('@/lib/secure-storage.web')>('@/lib/secure-storage.web');
+    });
+    jest.dontMock('@/config/runtime');
+    const { authStorage: directAuthStorage, secureStorage: memoryStorage } = webModule!;
+
+    expect(directAuthStorage).not.toBe(memoryStorage);
+    await directAuthStorage.setItem('sb-controlled-auth-token', 'session-json');
+    expect(mockClientStore.initialize).toHaveBeenCalledTimes(1);
+    expect(mockClientStore.putCache).toHaveBeenCalledWith('web-session.sb-controlled-auth-token', 'session-json');
+    await expect(memoryStorage.getItem('sb-controlled-auth-token')).resolves.toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { type Href, Stack, usePathname, useRouter } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { PropsWithChildren, useEffect, useMemo, useState } from 'react';
@@ -25,6 +25,7 @@ import { colors, spacing, type } from '@/theme/tokens';
 // eslint-disable-next-line import/no-unresolved
 import { useNotificationNavigation } from '@/device/notification-navigation';
 import { installCrashGuard } from '@/lib/crash-guard';
+import { consumeWebDeepLink } from '@/lib/web-deep-link';
 
 installCrashGuard();
 
@@ -93,6 +94,14 @@ function ProtectedNavigator() {
     if (!auth.authenticated && !onPublicRoute) router.replace('/sign-in');
     if (auth.authenticated && onAuthOnlyRoute) router.replace('/');
   }, [auth.authenticated, auth.loading, onAuthOnlyRoute, onPublicRoute, router]);
+
+  // A static web host sends deep links through 404.html; finish them here,
+  // after the session is known, so the route is not lost behind sign-in.
+  useEffect(() => {
+    if (auth.loading || !auth.authenticated) return;
+    const target = consumeWebDeepLink();
+    if (target) router.replace(target as Href);
+  }, [auth.authenticated, auth.loading, router]);
 
   useEffect(() => {
     let active = true;

@@ -1560,3 +1560,93 @@ Deno.test('ambiguous factor deletion stays executing for safe retry; resumed abs
   assertEquals(recovered.status, 200);
   assertEquals(deleteCalled, false);
 });
+
+Deno.test('a direct-mode browser may use the native token routes only from an allow-listed Origin and only as web', async () => {
+  const handler = createAuthHandler(() => dependencies());
+  const browserVerify = (platform: string, headers: HeadersInit = {}) =>
+    new Request('https://project.supabase.co/functions/v1/newone-auth/v2/auth/native/otp/verify', {
+      method: 'POST',
+      headers: {
+        apikey: 'publishable',
+        'Content-Type': 'application/json',
+        Origin: 'https://app.newone.example',
+        'X-Newone-Client-Platform': platform,
+        'X-Newone-Installation-Id': installationId,
+        ...headers,
+      },
+      body: JSON.stringify({
+        installationId,
+        destinationType: 'email',
+        destination: session.email,
+        code: '123456',
+      }),
+    });
+
+  // Allow-listed Origin, honest platform: tokens come back in the body, never as cookies.
+  const accepted = await handler(browserVerify('web'));
+  assertEquals(accepted.status, 200);
+  assertEquals(accepted.headers.get('access-control-allow-origin'), 'https://app.newone.example');
+  assertEquals(accepted.headers.getSetCookie().length, 0);
+  const body = await accepted.json();
+  assertEquals(body.session, {
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    expiresIn: session.expiresIn,
+  });
+  assertEquals(body.memberships, memberships);
+
+  // A browser may not claim to be a native app.
+  const impersonating = await handler(browserVerify('ios'));
+  assertEquals(impersonating.status, 400);
+  assertEquals((await impersonating.json()).error.code, 'bad_request');
+
+  // Without an Origin the native routes stay native-only.
+  const originless = await handler(nativePost('/v2/auth/native/otp/verify', {
+    destinationType: 'email',
+    destination: session.email,
+    code: '123456',
+  }, { 'X-Newone-Client-Platform': 'web' }));
+  assertEquals(originless.status, 403);
+  assertEquals((await originless.json()).error.code, 'origin_not_allowed');
+
+  // A foreign Origin is refused before any OTP work happens.
+  const foreign = await handler(browserVerify('web', { Origin: 'https://evil.example' }));
+  assertEquals(foreign.status, 403);
+  assertEquals((await foreign.json()).error.code, 'origin_not_allowed');
+});
+
+Deno.test('a direct-mode browser binds its recovery session installation as web', async () => {
+  const platforms: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      bindSessionInstallation: async (_token, installation) => {
+        platforms.push(installation.platform);
+        return { sessionId: '00000000-0000-4000-8000-000000000020' };
+      },
+    })
+  );
+  const response = await handler(
+    new Request('https://project.supabase.co/functions/v1/newone-auth/v2/auth/native/recovery/otp/verify', {
+      method: 'POST',
+      headers: {
+        apikey: 'publishable',
+        'Content-Type': 'application/json',
+        Origin: 'https://app.newone.example',
+        'X-Newone-Client-Platform': 'web',
+        'X-Newone-Installation-Id': installationId,
+      },
+      body: JSON.stringify({
+        installationId,
+        destinationType: 'email',
+        destination: session.email,
+        code: '123456',
+      }),
+    }),
+  );
+  assertEquals(response.status, 200);
+  assertEquals(response.headers.getSetCookie().length, 0);
+  const body = await response.json();
+  assertEquals(body.session.accessToken, session.accessToken);
+  assertEquals(body.recovery.currentSessionPreserved, true);
+  assertEquals(platforms, ['web']);
+});

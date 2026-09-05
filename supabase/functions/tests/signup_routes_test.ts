@@ -873,3 +873,40 @@ Deno.test('existing-account downgrade mail failure surfaces as 503 code_delivery
     assert(!line.includes('654321'));
   }
 });
+
+Deno.test('a direct-mode browser completes native signup verify as web from an allow-listed Origin only', async () => {
+  const platforms: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      bindSessionInstallation: async (_accessToken, installation) => {
+        platforms.push(installation.platform);
+        return { sessionId };
+      },
+    })
+  );
+  const browserVerify = (platform: string) =>
+    new Request('https://project.supabase.co/functions/v1/newone-auth/v2/auth/native/signup/verify', {
+      method: 'POST',
+      headers: {
+        apikey: 'publishable',
+        'Content-Type': 'application/json',
+        Origin: 'https://app.newone.example',
+        'X-Newone-Client-Platform': platform,
+        'X-Newone-Installation-Id': installationId,
+      },
+      body: JSON.stringify(verifyBody),
+    });
+
+  const verified = await handler(browserVerify('web'));
+  assertEquals(verified.status, 200);
+  assertEquals(verified.headers.getSetCookie().length, 0);
+  const body = await verified.json();
+  assertEquals(body.session.accessToken, session.accessToken);
+  assertEquals(body.signup.username, 'new_member');
+  assertEquals(platforms, ['web']);
+
+  // A browser may not present itself as a native platform.
+  const impersonating = await handler(browserVerify('android'));
+  assertEquals(impersonating.status, 400);
+  assertEquals(platforms, ['web']);
+});

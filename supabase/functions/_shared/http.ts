@@ -223,7 +223,8 @@ export function buildRequestMeta(request: Request, config: RuntimeConfig): Reque
 
   const headers = new Headers({
     'Access-Control-Allow-Headers':
-      'apikey, authorization, content-type, idempotency-key, x-correlation-id, x-csrf-token',
+      'apikey, authorization, content-type, idempotency-key, x-correlation-id, x-csrf-token, ' +
+      'x-newone-client-platform, x-newone-installation-id',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Vary': 'Origin',

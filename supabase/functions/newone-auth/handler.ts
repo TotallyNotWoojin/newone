@@ -1545,6 +1545,22 @@ function nativeInstallationId(request: Request): string {
   return uuid(request.headers.get('x-newone-installation-id'));
 }
 
+/**
+ * The token-returning routes serve the native apps, which never send an
+ * Origin. A browser build in direct (bearer) mode may use them as well, but
+ * only from an allow-listed Origin (enforced by buildRequestMeta) and only
+ * while declaring itself as 'web', so the session installation stays honest.
+ */
+function nativeClientPlatform(
+  request: Request,
+  meta: RequestMeta,
+): SessionInstallationInput['platform'] {
+  const platform = request.headers.get('x-newone-client-platform');
+  return meta.origin
+    ? oneOf(platform, ['web'] as const)
+    : oneOf(platform, ['ios', 'android'] as const);
+}
+
 function requireAllowedRequestContext(
   request: Request,
   meta: RequestMeta,
@@ -1893,10 +1909,7 @@ export function createAuthHandler(
               request,
               identity,
               native
-                ? oneOf(
-                  request.headers.get('x-newone-client-platform'),
-                  ['ios', 'android'] as const,
-                )
+                ? nativeClientPlatform(request, meta)
                 : 'web',
             ),
           );
@@ -2045,10 +2058,7 @@ export function createAuthHandler(
             request,
             identity,
             native
-              ? oneOf(
-                request.headers.get('x-newone-client-platform'),
-                ['ios', 'android'] as const,
-              )
+              ? nativeClientPlatform(request, meta)
               : 'web',
           );
           const authorization = await dependencies.authorizeSignupOtp(
@@ -2260,10 +2270,7 @@ export function createAuthHandler(
               request,
               identity,
               native
-                ? oneOf(
-                  request.headers.get('x-newone-client-platform'),
-                  ['ios', 'android'] as const,
-                )
+                ? nativeClientPlatform(request, meta)
                 : 'web',
             ),
           );

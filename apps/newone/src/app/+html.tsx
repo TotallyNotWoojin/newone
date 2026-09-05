@@ -1,6 +1,10 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
+// Expo inlines experiments.baseUrl here at export time, so the shell's fixed
+// assets resolve when the app is hosted under a path such as /app.
+const base = process.env.EXPO_BASE_URL ?? '';
+
 export default function RootDocument({ children }: PropsWithChildren) {
   return (
     <html lang="en">
@@ -18,10 +22,10 @@ export default function RootDocument({ children }: PropsWithChildren) {
         <meta content="yes" name="apple-mobile-web-app-capable" />
         <meta content="Newone" name="apple-mobile-web-app-title" />
         <meta content="black-translucent" name="apple-mobile-web-app-status-bar-style" />
-        <link href="/manifest.json" rel="manifest" />
-        <link href="/newone-icon.svg" rel="icon" type="image/svg+xml" />
-        <link href="/newone-icon-192.png" rel="apple-touch-icon" sizes="192x192" />
-        <script defer src="/register-service-worker.js" />
+        <link href={`${base}/manifest.json`} rel="manifest" />
+        <link href={`${base}/newone-icon.svg`} rel="icon" type="image/svg+xml" />
+        <link href={`${base}/newone-icon-192.png`} rel="apple-touch-icon" sizes="192x192" />
+        <script defer src={`${base}/register-service-worker.js`} />
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 
 import { apiUrlFor, nativeEdgeRequestHeaders, publicRuntimeConfig } from '@/config/runtime';
 import {
@@ -14,6 +13,7 @@ import type {
   ModerationCaseStatus,
   ModerationEvidenceMetadata,
 } from '@/data/repositories/moderation-case-dto.mjs';
+import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -158,12 +158,13 @@ export class ModerationCaseRepository {
     if (!publicRuntimeConfig.apiUrl) {
       throw new ModerationCaseRepositoryError('service_unconfigured', false);
     }
+    const cookieSession = usesCookieSession();
     const accessToken = await this.getAccessToken();
-    if (Platform.OS !== 'web' && !accessToken) {
+    if (!cookieSession && !accessToken) {
       throw new ModerationCaseRepositoryError('authentication_required', false);
     }
-    const csrfToken = Platform.OS === 'web' ? getWebCsrfToken() : null;
-    if (Platform.OS === 'web' && !csrfToken) {
+    const csrfToken = cookieSession ? getWebCsrfToken() : null;
+    if (cookieSession && !csrfToken) {
       throw new ModerationCaseRepositoryError('csrf_required', false);
     }
     const url = apiUrlFor(path);
@@ -178,7 +179,7 @@ export class ModerationCaseRepository {
     try {
       response = await fetch(url, {
         method: 'POST',
-        credentials: Platform.OS === 'web' ? 'include' : 'omit',
+        credentials: cookieSession ? 'include' : 'omit',
         cache: 'no-store',
         headers: {
           Accept: 'application/json',

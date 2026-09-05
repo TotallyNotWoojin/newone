@@ -1,5 +1,3 @@
-import { Platform } from 'react-native';
-
 import { apiUrlFor, nativeEdgeRequestHeaders } from '@/config/runtime';
 import type {
   AdminRoleName,
@@ -39,6 +37,7 @@ import { RepositoryError } from '@/data/repositories/contracts';
 import { parseOrganizationPolicy } from '@/data/repositories/organization-policy-dto.mjs';
 import { compareMessageIds } from '@/data/reconciliation/message-timeline.mjs';
 import { parseMentionDto } from '@/features/chat/mention-controls.mjs';
+import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import { parseWorkspaceCapabilities } from '@/data/repositories/capability-dto.mjs';
 import { stripSummarySourceTokens } from '@/data/summary-text';
@@ -274,13 +273,14 @@ async function readRequest(
   body: JsonRecord,
 ) {
   const url = apiUrlFor(path);
-  const csrfToken = Platform.OS === 'web' ? getWebCsrfToken() : null;
-  const session = Platform.OS === 'web' ? null : await context.getSession();
+  const cookieSession = usesCookieSession();
+  const csrfToken = cookieSession ? getWebCsrfToken() : null;
+  const session = cookieSession ? null : await context.getSession();
   const edgeHeaders = nativeEdgeRequestHeaders(session?.access_token);
   if (
     !url
-    || (Platform.OS === 'web' && !csrfToken)
-    || (Platform.OS !== 'web' && (!session?.access_token || !edgeHeaders))
+    || (cookieSession && !csrfToken)
+    || (!cookieSession && (!session?.access_token || !edgeHeaders))
   ) {
     throw new RepositoryError('Your secure session needs to be restored.', 'authentication_required', false);
   }
@@ -288,7 +288,7 @@ async function readRequest(
   try {
     response = await fetch(url, {
       method: 'POST',
-      credentials: Platform.OS === 'web' ? 'include' : 'omit',
+      credentials: cookieSession ? 'include' : 'omit',
       cache: 'no-store',
       headers: {
         Accept: 'application/json',
