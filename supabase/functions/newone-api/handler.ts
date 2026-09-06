@@ -6,7 +6,7 @@ import {
   loadClientEnvironment,
 } from '../_shared/clients.ts';
 import { safeEqual } from '../_shared/crypto.ts';
-import { ApiError, asApiError, fromDatabaseError } from '../_shared/errors.ts';
+import { ApiError, asApiError, fromDatabaseError, DEFAULT_MESSAGES } from '../_shared/errors.ts';
 import {
   accessCredential,
   buildRequestMeta,
@@ -145,6 +145,7 @@ function logSafeFailure(meta: RequestMeta, route: MatchedRoute | null, error: un
     route: route?.template ?? 'unmatched',
     code: safe.code,
     status: safe.status,
+    ...(safe.status < 500 && safe.message && safe.message !== DEFAULT_MESSAGES[safe.code] ? { detail: safe.message.slice(0, 200) } : {}),
   }));
 }
 

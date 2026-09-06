@@ -35,7 +35,7 @@ export type ErrorCode =
   | 'method_not_allowed'
   | 'internal_error';
 
-const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
+export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   bad_request: 'The request is invalid.',
   invalid_json: 'The request body must be valid JSON.',
   unsupported_media_type: 'The request must use application/json.',

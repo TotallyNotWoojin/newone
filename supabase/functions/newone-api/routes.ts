@@ -3138,6 +3138,17 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       };
     }
     case 'device.register': {
+      try {
+        onlyKeys(body, [
+          'organizationId', 'installationId', 'platform', 'pushToken', 'pushTokenType',
+          'pushProjectId', 'pushEnvironment', 'appVersion', 'locale',
+        ]);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 400) {
+          throw new ApiError(400, 'bad_request', `device.register: keys ${Object.keys(body).sort().join(',')}`);
+        }
+        throw error;
+      }
       onlyKeys(body, [
         'organizationId',
         'installationId',
@@ -3156,19 +3167,32 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       // the language-script-region core; drop anything the pattern rejects.
       const rawLocale = optionalString(body, 'locale', { max: 80, nullable: true }) ?? null;
       const locale = rawLocale === null ? null : normalizeLocaleTag(rawLocale);
+      // A refused registration names the field in the error message so the
+      // rejection log says what the phone sent wrong (owner report, Sep 6 2026:
+      // four 400s with no clue which value they were about).
+      const field = <T>(name: string, parse: () => T): T => {
+        try {
+          return parse();
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 400) {
+            throw new ApiError(400, 'bad_request', `device.register: ${name}`);
+          }
+          throw error;
+        }
+      };
       return {
-        organizationId: organization(body),
+        organizationId: field('organizationId', () => organization(body)),
         values: {
-          installationId: requiredUuid(body, 'installationId'),
-          platform: oneOf(body.platform, ['ios', 'android'] as const),
-          pushToken: expoPushToken(body.pushToken),
-          pushTokenType: oneOf(body.pushTokenType, ['expo'] as const),
-          pushProjectId: requiredUuid(body, 'pushProjectId'),
-          pushEnvironment: oneOf(
+          installationId: field('installationId', () => requiredUuid(body, 'installationId')),
+          platform: field('platform', () => oneOf(body.platform, ['ios', 'android'] as const)),
+          pushToken: field('pushToken', () => expoPushToken(body.pushToken)),
+          pushTokenType: field('pushTokenType', () => oneOf(body.pushTokenType, ['expo'] as const)),
+          pushProjectId: field('pushProjectId', () => requiredUuid(body, 'pushProjectId')),
+          pushEnvironment: field('pushEnvironment', () => oneOf(
             body.pushEnvironment,
             ['development', 'preview', 'production'] as const,
-          ),
-          appVersion: optionalString(body, 'appVersion', { max: 80, nullable: true }) ?? null,
+          )),
+          appVersion: field('appVersion', () => optionalString(body, 'appVersion', { max: 80, nullable: true }) ?? null),
           locale,
         },
       };
