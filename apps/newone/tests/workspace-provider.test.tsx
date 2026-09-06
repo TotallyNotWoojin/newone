@@ -4313,6 +4313,66 @@ describe('reconciliation safety net', () => {
     await view.unmount();
   });
 
+  test('follows a message event with quick reconciles until the preview arrives translated, never for own texts', async () => {
+    jest.useFakeTimers();
+    try {
+      const withPreview = (overrides: Record<string, unknown>) => {
+        const snapshot = workspaceSnapshot();
+        snapshot.conversations[0] = { ...snapshot.conversations[0]!, ...overrides };
+        return snapshot;
+      };
+      const original = withPreview({ lastMessage: 'Hola', lastMessageSenderId: otherUserId, lastMessageTranslated: false });
+      const translated = withPreview({ lastMessage: 'Hello', lastMessageSenderId: otherUserId, lastMessageTranslated: true });
+      const own = withPreview({ lastMessage: 'Mine', lastMessageSenderId: userId, lastMessageTranslated: false });
+      mockLoadWorkspace.mockImplementation(async () => original);
+      const view = await render(
+        <WorkspaceProvider>
+          <WorkspaceProbe />
+        </WorkspaceProvider>,
+      );
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy();
+      mockLoadWorkspace.mockClear();
+      const invalidate = mockRealtimeOptions?.onInvalidate as (event?: unknown) => void;
+
+      // A message event: one reconcile now; the preview is still the original, so a follow-up comes 3s later.
+      await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      expect(currentWorkspace().conversations[0]?.lastMessage).toBe('Hola');
+      await act(async () => { await jest.advanceTimersByTimeAsync(2_999); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      mockLoadWorkspace.mockImplementation(async () => translated);
+      await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2);
+      expect(currentWorkspace().conversations[0]?.lastMessage).toBe('Hello');
+      // Translated: the ladder stops (the next rung would have been 6s later).
+      await act(async () => { await jest.advanceTimersByTimeAsync(7_000); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2);
+
+      // An own text needs no translation: one reconcile, no follow-up.
+      mockLoadWorkspace.mockImplementation(async () => own);
+      mockLoadWorkspace.mockClear();
+      await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(3_500); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+
+      // An event without a conversation reconciles once, as before.
+      mockLoadWorkspace.mockClear();
+      await act(async () => { invalidate(); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(3_500); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      await view.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('polls the inbox snapshot on a jittered ~30s cadence, skipping a fetch already in flight or made moot by a recent realtime event', async () => {
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
     jest.useFakeTimers();

@@ -50,6 +50,10 @@ export async function run(ctx) {
       expected: 'Conversation row with A in Chats; the text is visible within 45s; no Accept/Decline banner', screen: 'chats → conversation',
     });
     await ctx.observe(devB, { id: 'people-05b-recipient-screen', title: 'Screen after receiving a message from someone new (what the recipient sees)', screen: 'conversation' });
+    // v3.1 (backlog 5): declining a request asks first. Consumers have nothing
+    // to decline any more (message and connect requests left the personal realm),
+    // so the confirmation lives on the workplace People card and is proven by Jest.
+    ctx.note({ id: 'people-05-decline-confirm', title: 'Declining a request asks first (Decline / Keep)', status: 'UNREACHABLE', observed: 'No request to decline exists for a consumer account; the Decline / Keep confirmation is on the workplace People card (Jest workflow-screens: Keep leaves the request, Decline confirms it).', expected: 'A small Decline / Keep confirmation before a request is declined' });
   }
 
   // C leaves device B; B signs up there.

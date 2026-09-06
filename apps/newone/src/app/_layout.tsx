@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { stackMotion } from '@/components/navigation/stack-motion';
 import { AuthProvider, useAuth } from '@/state/auth';
 import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 import { I18nProvider } from '@/i18n/provider';
@@ -119,13 +120,11 @@ function ProtectedNavigator() {
     return <AuthLoadingScreen label={auth.loading ? 'Loading…' : 'One moment…'} />;
   }
 
+  const motion = stackMotion(reduceMotion);
   const navigator = (
-    <Stack screenOptions={{ headerShown: false, animation: reduceMotion ? 'none' : 'fade' }}>
+    <Stack screenOptions={{ headerShown: false, ...motion.screen }}>
       <Stack.Screen name="index" />
-      <Stack.Screen
-        name="conversation/[id]"
-        options={{ animation: reduceMotion ? 'none' : 'slide_from_right' }}
-      />
+      <Stack.Screen name="conversation/[id]" options={motion.push} />
       <Stack.Screen name="updates" />
       <Stack.Screen name="search" />
       <Stack.Screen name="handoffs" />

@@ -6,7 +6,7 @@ import { EmptyState, PrimaryButton } from '@/components/ui/primitives';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, radii, shadow, spacing } from '@/theme/tokens';
 
 /** A degraded realtime connection self-heals in the background (resubscribe
  * with backoff); only surface the disruptive-looking indicator once the
@@ -69,13 +69,18 @@ export function WorkspaceStatusBanner() {
     warning: { background: colors.amberSoft, foreground: colors.amber },
     danger: { background: colors.redSoft, foreground: colors.red },
   }[tone];
+  // A pill floating over the list: the rows never move when it appears or
+  // clears, so a tap aimed at a row lands on that row (a shifting list once
+  // declined a request, run-2026-09-04T20-41-40). Taps beside the pill reach the list.
   return (
-    <View
-      accessibilityLiveRegion="polite"
-      accessibilityRole={tone === 'danger' ? 'alert' : undefined}
-      style={[styles.banner, { backgroundColor: palette.background }]}>
-      <Ionicons color={palette.foreground} name={icon} size={15} />
-      <Text style={[styles.bannerText, { color: palette.foreground }]}>{label}</Text>
+    <View pointerEvents="box-none" style={styles.bannerLayer}>
+      <View
+        accessibilityLiveRegion="polite"
+        accessibilityRole={tone === 'danger' ? 'alert' : undefined}
+        style={[styles.banner, shadow, { backgroundColor: palette.background }]}>
+        <Ionicons color={palette.foreground} name={icon} size={15} />
+        <Text style={[styles.bannerText, { color: palette.foreground }]}>{label}</Text>
+      </View>
     </View>
   );
 }
@@ -156,19 +161,23 @@ export function WorkspaceStatePanel({
 }
 
 const styles = StyleSheet.create({
-  banner: {
+  bannerLayer: {
     position: 'absolute',
-    top: 0,
+    top: spacing.xs,
     left: 0,
     right: 0,
     zIndex: 20,
-    minHeight: 38,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  banner: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
   },
   bannerText: {
     flexShrink: 1,

@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { PropsWithChildren } from 'react';
+import { type PropsWithChildren, useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 
+/** A sheet settles in one quick beat; closing is immediate. The system
+ * cross-dissolve (about 350 ms plus presentation lag) made every sheet feel
+ * slow to open. */
+export const SHEET_OPEN_MS = 140;
+
 export function ActionModal({
   visible,
   title,
@@ -29,17 +36,40 @@ export function ActionModal({
   onClose: () => void;
 }>) {
   const { t } = useI18n();
+  const progress = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!visible) {
+      progress.setValue(0);
+      return undefined;
+    }
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: SHEET_OPEN_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [progress, visible]);
+  const cardMotion = {
+    opacity: progress,
+    transform: [
+      { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+      { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) },
+    ],
+  };
   return (
     <Modal
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       presentationStyle="overFullScreen"
       transparent
       visible={visible}>
+      <Animated.View pointerEvents="none" style={[styles.dim, { opacity: progress }]} />
       <SafeAreaView style={styles.overlay}>
         <Pressable accessibilityLabel={t('common.closeDialog')} accessibilityRole="button" onPress={onClose} style={StyleSheet.absoluteFill} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboard}>
-          <View accessibilityViewIsModal style={[styles.card, shadow]}>
+          <Animated.View accessibilityViewIsModal style={[styles.card, shadow, cardMotion]}>
             <View style={styles.header}>
               <View style={styles.headerCopy}>
                 <Text accessibilityRole="header" style={styles.title}>{title}</Text>
@@ -60,7 +90,7 @@ export function ActionModal({
               showsVerticalScrollIndicator={false}>
               {children}
             </ScrollView>
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
@@ -114,11 +144,18 @@ export function ActionError({ message }: { message?: string | null }) {
 }
 
 const styles = StyleSheet.create({
+  dim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(5, 22, 18, 0.62)',
+  },
   overlay: {
     flex: 1,
     justifyContent: 'center',
     padding: spacing.md,
-    backgroundColor: 'rgba(5, 22, 18, 0.62)',
   },
   keyboard: {
     width: '100%',

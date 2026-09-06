@@ -196,7 +196,14 @@ describe('people workflow screen', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
 
     await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
+    // Decline asks first: Keep leaves the request alone, a second deliberate tap declines.
     await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    expect(screen.getByText('people.declineConfirmTitle')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'people.keepRequest' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('people.declineConfirmTitle')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'people.declineConfirm' }));
     expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(1, 'user-incoming', 'accepted');
     expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(2, 'user-incoming', 'declined');
     await fireEvent.press(screen.getByRole('button', { name: 'people.cancelRequest' }));
@@ -323,7 +330,7 @@ function groupCandidate(overrides: Record<string, unknown>) {
 describe('group creation workflow screen', () => {
   test('creates an incident with exact roles and recovers a real avatar upload failure', async () => {
     const candidates = [
-      groupCandidate({ userId: 'membership-employee', displayName: 'Employee Candidate' }),
+      groupCandidate({ userId: 'membership-employee', displayName: 'Employee Candidate', username: 'employee_c' }),
       groupCandidate({
         userId: 'membership-guest', displayName: 'Guest Candidate', membershipType: 'guest',
         accessExpiresAt: '2026-08-30T12:00:00.000Z',
@@ -347,6 +354,8 @@ describe('group creation workflow screen', () => {
 
     const view = await render(<NewGroupScreen />);
     await waitFor(() => expect(screen.getByText('Employee Candidate')).toBeTruthy());
+    // v3.1: the picker row carries the @handle next to the job title.
+    expect(screen.getByText('Operator · @employee_c')).toBeTruthy();
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Employee Candidate' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.admin' }));
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Guest Candidate' }));

@@ -15,6 +15,17 @@ function exactKeys(value, keys, label) {
   }
 }
 
+/** Every required key present, nothing beyond the required and optional ones. */
+function allowedKeys(value, required, optional, label) {
+  const actual = Object.keys(value);
+  if (
+    required.some((key) => !Object.prototype.hasOwnProperty.call(value, key))
+    || actual.some((key) => !required.includes(key) && !optional.includes(key))
+  ) {
+    throw new TypeError(`Invalid ${label}.`);
+  }
+}
+
 function member(value, values, label) {
   if (typeof value !== 'string' || !values.includes(value)) throw new TypeError(`Invalid ${label}.`);
   return value;
@@ -45,7 +56,9 @@ function timestamp(value, label) {
 
 function candidate(value) {
   const row = object(value, 'group creation candidate');
-  exactKeys(row, [
+  // The @handle joins the payload once every shipped client tolerates the key
+  // (defect AD): optional here, null for a row without one.
+  allowedKeys(row, [
     'userId',
     'displayName',
     'avatarPath',
@@ -53,7 +66,7 @@ function candidate(value) {
     'membershipRole',
     'membershipType',
     'accessExpiresAt',
-  ], 'group creation candidate');
+  ], ['username'], 'group creation candidate');
   const membershipRole = member(
     row.membershipRole,
     ['owner', 'admin', 'manager', 'member'],
@@ -70,9 +83,14 @@ function candidate(value) {
   if (membershipType === 'guest' && (membershipRole !== 'member' || accessExpiresAt === null)) {
     throw new TypeError('Invalid guest group creation candidate.');
   }
+  const username = Object.prototype.hasOwnProperty.call(row, 'username')
+    ? nullableText(row.username, 64, 'candidate username')
+    : null;
+  if (username !== null && /\s/.test(username)) throw new TypeError('Invalid candidate username.');
   return {
     userId: identifier(row.userId, 'candidate identity'),
     displayName: text(row.displayName, 1, 160, 'candidate display name'),
+    username,
     avatarPath: nullableText(row.avatarPath, 1024, 'candidate avatar path'),
     jobTitle: nullableText(row.jobTitle, 160, 'candidate job title'),
     membershipRole,

@@ -61,6 +61,9 @@ export default function PeopleScreen() {
   const [filter, setFilter] = useState<PeopleFilter>('all');
   const [search, setSearch] = useState('');
   const [managePersonId, setManagePersonId] = useState('');
+  // Declining asks first: a mis-tap on a shifting list once declined a request
+  // outright (run-2026-09-04T20-41-40), and a decline cannot be undone.
+  const [decliningPersonId, setDecliningPersonId] = useState('');
   const [contactAlias, setContactAlias] = useState('');
   const [favoriteContact, setFavoriteContact] = useState(false);
   const [reportCategory, setReportCategory] = useState<
@@ -69,6 +72,7 @@ export default function PeopleScreen() {
   const [reportDetails, setReportDetails] = useState('');
   const [reportConsent, setReportConsent] = useState(false);
   const managePerson = workspace.people.find((person) => person.id === managePersonId);
+  const decliningPerson = workspace.people.find((person) => person.id === decliningPersonId);
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [peopleQuery, setPeopleQuery] = useState('');
   const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
@@ -176,7 +180,7 @@ export default function PeopleScreen() {
       desktop={desktop}
       key={person.id}
       onConnect={() => void workspace.updateConnection(person.id)}
-      onDecline={() => void workspace.respondConnection(person.id, 'declined')}
+      onDecline={() => setDecliningPersonId(person.id)}
       onAccept={() => void workspace.respondConnection(person.id, 'accepted')}
       onMessage={() => void openMessage(person)}
       onManage={() => openManage(person)}
@@ -344,6 +348,25 @@ export default function PeopleScreen() {
       </ScrollView>
       </KeyboardAvoidingScreen>
       )}
+      <ActionModal
+        description={decliningPerson ? t('people.declineConfirmBody').replace('{name}', decliningPerson.displayName) : undefined}
+        onClose={() => setDecliningPersonId('')}
+        title={t('people.declineConfirmTitle')}
+        visible={Boolean(decliningPerson)}>
+        <View style={styles.confirmActions}>
+          <PrimaryButton
+            icon="close"
+            label={t('people.declineConfirm')}
+            onPress={() => {
+              const personId = decliningPersonId;
+              setDecliningPersonId('');
+              void workspace.respondConnection(personId, 'declined');
+            }}
+            tone="danger"
+          />
+          <PrimaryButton label={t('people.keepRequest')} onPress={() => setDecliningPersonId('')} tone="light" />
+        </View>
+      </ActionModal>
       <ActionModal
         description={personalRealm ? undefined : t('people.manageDescription')}
         onClose={() => setManagePersonId('')}
@@ -613,6 +636,11 @@ function PersonCard({
 const styles = StyleSheet.create({
   keyboard: {
     flex: 1,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
   },
   page: {
     flexGrow: 1,

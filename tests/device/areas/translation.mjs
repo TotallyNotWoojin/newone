@@ -18,6 +18,7 @@ export async function run(ctx) {
     en2: (tag) => `Second English message while translation is off ${tag}`, en2Hit: '(segundo|Segundo|inglés)',
     ownHit: '(inglés|Inglés)',
     mixed: (tag) => `La reunión es el lunes but bring the printed report please ${tag}`, mixedKey: (tag) => `printed report please ${tag}`, mixedHit: '(por favor|impreso)', mixedHitEn: 'Monday',
+    previewText: (tag) => `Nos vemos el lunes por la mañana ${tag}`, previewKey: (tag) => `mañana ${tag}`, previewHit: '(Monday|monday)',
   });
 }
 
@@ -131,5 +132,23 @@ export async function runPair(ctx, cfg) {
       timeoutMs: 240_000,
     });
   }
+  // v3.1 (backlog 12): a message that arrives while the Chats list is open shows
+  // its translation in the row preview without leaving the list.
+  if (cfg.previewText) {
+    await ctx.step({ id: 'trans-17-a-back-to-chats', title: 'A returns to the Chats list', device: devA, flow: 'chat/back-to-chats.yaml', expected: 'Chats', screen: 'chats' });
+    const previewText = cfg.previewText(tag);
+    const sentPreview = Date.now();
+    await ctx.step({ id: 'trans-18-b-sends-while-a-lists', title: `B sends a ${cfg.code} message while A is on the Chats list`, device: devB, flow: 'chat/send-text.yaml', env: { TEXT: previewText }, expected: 'bubble', screen: 'conversation' });
+    await ctx.step({
+      id: 'trans-19-a-preview-translated', title: 'A\'s Chats row for B shows the English translation while the list stays open', device: devA, flow: 'chat/preview-translated.yaml', env: { PEER: B.displayName, HIT: cfg.previewHit, TIMEOUT: '90000' },
+      expected: `Row preview containing "" within 90s; the list stays open (no composer)`, screen: 'chats', latencyFrom: sentPreview,
+      serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, cfg.previewKey(tag)), (r) => (r?.translations ?? '').includes('en=completed'), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row?.translations }; },
+      timeoutMs: 240_000,
+    });
+  }
+  // v3.1 (backlog 6b): "Translation delayed" replaces "Translating…" once a pending
+  // translation outlives its normal window. A provider outage cannot be staged
+  // against the live backend without touching it, so the state is proven by Jest.
+  ctx.note({ id: 'trans-20-translation-delayed', title: 'Bubble says "Translation delayed" when a translation outlives its normal window', status: 'UNREACHABLE', observed: 'A provider outage cannot be staged against the live backend; covered by Jest (conversation-ui: "Translating…" first, "Translation delayed" after 45 s while still pending, translation still applied when it lands).', expected: 'Quiet "Translation delayed" line after 45 s; the translation still arrives later' });
   ctx.accounts = { A, B };
 }

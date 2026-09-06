@@ -20,6 +20,10 @@ appId: com.totallynotwoojin.newone
     visible: ".*(${NAME}|No one matched that search).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-candidates
+# v3.1 (backlog 14): the candidate row carries the person's @handle under the name.
+- extendedWaitUntil:
+    visible: ".*@${QUERY}.*"
+    timeout: 10000
 # Candidate rows are merged accessibility nodes (initials + name); select the
 # row below the search button so the search field itself is never the target.
 - tapOn:

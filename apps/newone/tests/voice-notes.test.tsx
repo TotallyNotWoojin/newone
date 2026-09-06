@@ -303,14 +303,16 @@ describe('audio attachment playback bubble', () => {
     expect(mockPlayer.play).toHaveBeenCalledTimes(1);
     expect(mockPlayer.seekTo).not.toHaveBeenCalled();
 
+    // Bubbles are memoized (v3.1); a status change re-renders through the
+    // player hook in the app, so here the message object changes instead.
     mockPlayerStatus = { playing: true, currentTime: 3, duration: 10 };
-    await view.rerender(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await view.rerender(<ConversationPane conversation={conversation()} messages={[{ ...message }]} onSend={noopSend} />);
     expect(screen.getByText('0:03 / 0:10')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.pauseVoiceNote'));
     expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
 
     mockPlayerStatus = { playing: false, currentTime: 10, duration: 10 };
-    await view.rerender(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await view.rerender(<ConversationPane conversation={conversation()} messages={[{ ...message }]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.playVoiceNote'));
     expect(mockPlayer.seekTo).toHaveBeenCalledWith(0);
     expect(mockPlayer.play).toHaveBeenCalledTimes(2);

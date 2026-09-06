@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Keyboard } from 'react-native';
+import { FlatList, Keyboard } from 'react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
-import { ConversationPane } from '@/features/chat/conversation-pane';
+import { ConversationPane, TRANSLATION_DELAYED_AFTER_MS } from '@/features/chat/conversation-pane';
 
 const mockPush = jest.fn<(_href: unknown) => void>();
 const mockReplace = jest.fn<(_href: unknown) => void>();
@@ -160,6 +160,31 @@ async function noopSend(
   _replyTo?: Message,
   _mentionUserIds?: string[],
 ): Promise<void> {}
+
+type FiberLike = {
+  elementType?: unknown;
+  memoizedProps?: unknown;
+  child?: FiberLike;
+  sibling?: FiberLike;
+  return?: FiberLike;
+  stateNode?: { current?: FiberLike };
+};
+
+// The FlatList element itself, not the host scroll view it spreads its props
+// onto (whose renderItem is FlatList's own per-render wrapper): walk the
+// current fiber tree from the render root.
+function timelineListProps(view: { root: unknown }): { renderItem: unknown; initialNumToRender: number } {
+  let fiber = (view.root as { unstable_fiber?: FiberLike } | null)?.unstable_fiber;
+  while (fiber?.return) fiber = fiber.return;
+  const stack: (FiberLike | undefined)[] = [fiber?.stateNode?.current ?? fiber];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (node.elementType === FlatList) return node.memoizedProps as { renderItem: unknown; initialNumToRender: number };
+    stack.push(node.sibling, node.child);
+  }
+  throw new Error('The timeline list is not rendered.');
+}
 
 function conversation(overrides: Record<string, unknown> = {}) {
   return {
@@ -857,6 +882,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     }) : ({
       candidates: [{
         userId: 'user-external-one', membershipId: 'membership-external-one', displayName: 'Casey Wright',
+        username: 'casey_w',
         initials: 'CW', avatarColor: null, avatarPath: null, roleLabel: 'Engineer', department: 'Maintenance',
         site: 'Denver', suspended: false,
       }],
@@ -905,6 +931,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.changeText(screen.getByLabelText('chat.memberSearchLabel'), 'casey');
     await fireEvent.press(screen.getByLabelText('chat.memberSearchAction'));
     await waitFor(() => expect(screen.getByText('Casey Wright')).toBeTruthy());
+    // v3.1: the candidate row shows the @handle under the name.
+    expect(screen.getByText('@casey_w')).toBeTruthy();
     await fireEvent.press(screen.getByText('Casey Wright'));
     await fireEvent.press(screen.getAllByLabelText('chat.adminRole').at(-1)!);
     await fireEvent.press(screen.getByLabelText('chat.loadMoreMembers'));
@@ -1133,6 +1161,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('chat.unreadMessages')).toBeTruthy();
     const list = view.root!.queryAll((node) => node.props.inverted === true && typeof node.props.onScroll === 'function')[0];
     expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+    // One phone screen of compact bubbles mounts with the push transition; the rest fills in small batches.
+    expect(list.props.initialNumToRender).toBeLessThanOrEqual(16);
+    expect(list.props.maxToRenderPerBatch).toBeLessThanOrEqual(8);
+    const renderItem = timelineListProps(view).renderItem;
     mockWorkspace.markConversationRead.mockClear();
 
     // Scrolled into history: an arrival shows the jump pill instead of moving the view.
@@ -1149,6 +1181,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       onSend={noopSend}
     />);
     await waitFor(() => expect(screen.getByText(/1 chat\.newMessages/)).toBeTruthy());
+    // Rows keep their renderer across pane re-renders, so arrivals and typing never re-render every bubble.
+    expect(timelineListProps(view).renderItem).toBe(renderItem);
     expect(mockWorkspace.markConversationRead).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText(/1 chat\.newMessages/));
     expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main');
@@ -1302,18 +1336,26 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         mentionUserIds: [], edited: false, pinned: false, forwarded: false, replyTo: undefined, reactions: [],
       }),
     ];
-    await render(<ConversationPane
+    // The list mounts one screen of rows first (the rest fills in batches the
+    // test renderer never triggers), so the system rows get their own render.
+    const systemView = await render(<ConversationPane
       conversation={conversation({ kind: 'announcement', unreadCount: 0, lastReadMessageId: null })}
-      messages={[...systemMessages, ...variantMessages]}
+      messages={systemMessages}
       onSend={noopSend}
     />);
-
     expect(screen.getByText('chat.systemPostingAdminsOnly')).toBeTruthy();
     expect(screen.getByText('chat.systemPostingAllMembers')).toBeTruthy();
     expect(screen.getByText(/chat\.systemJoinApproved/)).toBeTruthy();
     expect(screen.getByText('chat.systemConversationCreated')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarChanged')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarRemoved')).toBeTruthy();
+    await systemView.unmount();
+
+    await render(<ConversationPane
+      conversation={conversation({ kind: 'announcement', unreadCount: 0, lastReadMessageId: null })}
+      messages={variantMessages}
+      onSend={noopSend}
+    />);
     // Bubbles carry no provenance; language details sit behind "Show details" in the sheet.
     expect(screen.queryByText('quality.reportSubmitted')).toBeNull();
     expect(screen.queryByText(/chat\.detectedLanguage|chat\.originalUpper|chat\.translationUpper/)).toBeNull();
@@ -2432,6 +2474,40 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     await render(<ConversationPane conversation={conversation()} messages={[pending]} onSend={noopSend} />);
     expect(screen.getByText('chat.translating')).toBeTruthy();
     expect(screen.queryByText(/chat\.translationQueued|chat\.translationProcessing/)).toBeNull();
+  });
+
+  test('says a pending translation is delayed once it has outlived the normal window', async () => {
+    const stale = incomingMessage({
+      attachment: undefined, translationState: 'queued', translation: undefined,
+      createdAt: new Date(Date.now() - 2 * TRANSLATION_DELAYED_AFTER_MS).toISOString(),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[stale]} onSend={noopSend} />);
+    expect(screen.getByText('chat.translationDelayed')).toBeTruthy();
+    expect(screen.queryByText('chat.translating')).toBeNull();
+    // The delayed line is quiet: no retry link, the revive path stays server-side.
+    expect(screen.queryByLabelText('chat.retryTranslation')).toBeNull();
+  });
+
+  test('flips a fresh pending translation to delayed only after the window, and drops the line once it lands', async () => {
+    jest.useFakeTimers();
+    try {
+      const fresh = incomingMessage({
+        attachment: undefined, translationState: 'queued', translation: undefined,
+        createdAt: new Date().toISOString(),
+      });
+      const view = await render(<ConversationPane conversation={conversation()} messages={[fresh]} onSend={noopSend} />);
+      expect(screen.getByText('chat.translating')).toBeTruthy();
+      await act(async () => { jest.advanceTimersByTime(TRANSLATION_DELAYED_AFTER_MS - 1_000); });
+      expect(screen.getByText('chat.translating')).toBeTruthy();
+      await act(async () => { jest.advanceTimersByTime(1_500); });
+      expect(screen.getByText('chat.translationDelayed')).toBeTruthy();
+      // The revive path delivered it: the translation replaces the status line.
+      await view.rerender(<ConversationPane conversation={conversation()} messages={[translatedMessage({ isOwn: false })]} onSend={noopSend} />);
+      expect(screen.queryByText('chat.translationDelayed')).toBeNull();
+      expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('sends on the return key when Enter-sends is on and inserts newlines when it is off', async () => {

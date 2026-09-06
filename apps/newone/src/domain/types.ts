@@ -343,6 +343,10 @@ export interface Conversation {
   subtitle: string;
   participantCount?: number;
   lastMessage: string;
+  /** Who wrote the preview message; own texts need no translation. */
+  lastMessageSenderId?: string;
+  /** The preview already shows the viewer's translation. */
+  lastMessageTranslated?: boolean;
   lastActivity: string;
   unreadCount: number;
   lastReadMessageId?: string | null;

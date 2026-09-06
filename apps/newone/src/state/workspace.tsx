@@ -88,6 +88,7 @@ import {
 } from '@/data/reconciliation/message-timeline.mjs';
 import {
   useUserRealtime,
+  type InboxInvalidation,
   type RealtimeState,
 } from '@/data/realtime/use-user-realtime';
 import type {
@@ -651,6 +652,12 @@ function waitFor(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
+// A translation lands seconds after its message, but the server emits no
+// event for it: the recipient would show the original until the next poll.
+// After a conversation-scoped invalidation (a message arrived), reconcile
+// again on this short ladder until the preview arrives translated.
+export const TRANSLATION_FOLLOW_UP_DELAYS_MS = [3_000, 6_000, 12_000];
+
 // Reconciliation safety net: while active and online, poll the inbox
 // snapshot on a jittered cadence so both sides of a conversation converge
 // even if a realtime invalidation was dropped. The window shrinks while
@@ -759,6 +766,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const loadWorkspaceOnceRef = useRef<() => Promise<void>>(async () => {});
   const reconciliationRunnerRef = useRef<ReturnType<typeof createCoalescedRunner> | null>(null);
   const lastRealtimeEventAtRef = useRef(0);
+  const translationFollowUpRef = useRef<{ conversationId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const endAccessRef = useRef(auth.endAccess);
   const refreshSessionRef = useRef(auth.refreshSession);
   // One forced refresh per failing load: a token can lapse in flight or run
@@ -1364,10 +1372,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     const attachmentScanTimers = attachmentScanTimersRef.current;
     const conversationAvatarTimers = conversationAvatarTimersRef.current;
     const conversationAvatarCache = conversationAvatarCacheRef.current;
+    const translationFollowUp = translationFollowUpRef;
     const runner = createCoalescedRunner(() => loadWorkspaceOnceRef.current());
     reconciliationRunnerRef.current = runner;
     return () => {
       mountedRef.current = false;
+      if (translationFollowUp.current) {
+        clearTimeout(translationFollowUp.current.timer);
+        translationFollowUp.current = null;
+      }
       for (const operation of attachmentUploads.values()) {
         operation.controller?.abort();
         void cleanupPreparedAttachment(operation.prepared);
@@ -1422,10 +1435,46 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const markRealtimeEventFresh = useCallback(() => {
     lastRealtimeEventAtRef.current = Date.now();
   }, []);
-  const handleRealtimeInvalidate = useCallback(() => {
+  // The preview of a conversation still shows the original after a message
+  // event while its translation is in flight (no event marks completion), so
+  // a few quick reconciles follow until the server preview arrives translated.
+  // Own texts, previews already translated, and a loaded tail that needs no
+  // translation stop the ladder at once.
+  const followUpTranslation = useCallback((conversationId: string, attempt: number) => {
+    const pending = translationFollowUpRef.current;
+    if (pending) {
+      clearTimeout(pending.timer);
+      translationFollowUpRef.current = null;
+    }
+    if (!mountedRef.current || attempt >= TRANSLATION_FOLLOW_UP_DELAYS_MS.length) return;
+    const snapshot = snapshotRef.current;
+    const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
+    if (
+      !snapshot
+      || !conversation
+      || conversation.translationMode === 'off'
+      || !conversation.lastMessage
+      || conversation.lastMessageTranslated
+      || conversation.lastMessageSenderId === snapshot.currentUser.id
+    ) return;
+    const tail = snapshot.messages[conversationId]?.at(-1);
+    if (tail?.serverId && tail.translationState !== 'queued' && tail.translationState !== 'translating') return;
+    const timer = setTimeout(() => {
+      translationFollowUpRef.current = null;
+      if (!mountedRef.current) return;
+      void refresh().then(() => followUpTranslation(conversationId, attempt + 1));
+    }, TRANSLATION_FOLLOW_UP_DELAYS_MS[attempt]);
+    translationFollowUpRef.current = { conversationId, timer };
+  }, [refresh]);
+  const handleRealtimeInvalidate = useCallback((event?: InboxInvalidation) => {
     markRealtimeEventFresh();
-    reconcileWorkspace();
-  }, [markRealtimeEventFresh, reconcileWorkspace]);
+    const conversationId = event?.conversationId;
+    if (!conversationId) {
+      reconcileWorkspace();
+      return;
+    }
+    void refresh().then(() => followUpTranslation(conversationId, 0));
+  }, [followUpTranslation, markRealtimeEventFresh, reconcileWorkspace, refresh]);
   const handleRealtimeReconcile = useCallback(() => {
     markRealtimeEventFresh();
     reconcileWorkspace();

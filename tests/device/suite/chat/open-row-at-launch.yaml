@@ -1,0 +1,42 @@
+appId: com.totallynotwoojin.newone
+---
+# Right after launch the status pill ("Reconnecting…") can still be showing.
+# Since v3.1 it floats over the list instead of pushing it down, so the PEER
+# row is tapped at once, without waiting for the pill to clear (the wait the
+# other flows carry since run-2026-09-04T20-41-40), and the conversation that
+# opens must be PEER's: a tap that lands on the row below would open someone
+# else's chat.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${PEER}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    visible: ".*${PEER}.*"
+    timeout: 45000
+- takeScreenshot: ${SHOT}-before-tap
+- tapOn: ".*${PEER}.*"
+# A tap taken from a just-stale hierarchy can land on empty space while the
+# rows settle (chat-open-a-3); a person taps again, so do we. The wrong
+# conversation opening is NOT retried: the header check below reports it.
+- runFlow:
+    when:
+      notVisible: ".*Write a message….*"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            notVisible: ".*Write a message….*"
+          commands:
+            - tapOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- assertVisible: "(Back to chats|Volver a chats)"
+- assertVisible: ".*${PEER}.*"
+- takeScreenshot: ${SHOT}-opened

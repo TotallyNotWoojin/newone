@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 import {
@@ -164,6 +165,21 @@ describe('degraded realtime indicator', () => {
     } finally {
       jest.clearAllTimers();
     }
+  });
+
+  test('floats over the list as a pill so rows never shift when it appears or clears', async () => {
+    mockWorkspace.realtimeState = 'connecting';
+    const view = await render(<WorkspaceStatusBanner />);
+    expect(screen.getByText('status.reconnecting')).toBeTruthy();
+    // An absolute layer over the list; taps beside the pill still reach the rows.
+    const layer = view.root!;
+    expect(layer.props.pointerEvents).toBe('box-none');
+    const layerStyle = StyleSheet.flatten(layer.props.style);
+    expect(layerStyle.position).toBe('absolute');
+    expect(layerStyle.left).toBe(0);
+    expect(layerStyle.right).toBe(0);
+    expect(layerStyle.minHeight).toBeUndefined();
+    await view.unmount();
   });
 
   test('surfaces the immediate connecting/error copy without waiting, and never both at once', async () => {
