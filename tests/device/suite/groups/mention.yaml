@@ -5,7 +5,14 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
-# The chip renders an icon plus its label as one node on iOS 26.
+# The chip only appears once the draft contains "@" (v3 compact composer);
+# it renders an icon plus its label as one node on iOS 26.
+- tapOn:
+    id: "composer-input"
+- inputText: "@"
+- extendedWaitUntil:
+    visible: ".*Mention people.*"
+    timeout: 10000
 - tapOn: ".*Mention people.*"
 - extendedWaitUntil:
     visible: "People"

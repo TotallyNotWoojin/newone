@@ -2838,6 +2838,9 @@ function ConversationControlsModal({
                 </>
               ) : null}
               <Pressable
+                // A Pressable with a role hides its children from assistive tech and
+                // UI drivers; name the checkbox explicitly.
+                accessibilityLabel={departureCopy.confirmation}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: departureConfirmed }}
                 onPress={() => setDepartureConfirmed((current) => !current)}
