@@ -855,8 +855,11 @@ Deno.test('a long range is summarized in slices, merged once, and the subject an
   assert(!calls[3]!.user.includes('14:30'));
   for (const call of calls) {
     // The subject is the reader's instruction, quoted plainly and never as chat text.
-    assert(call.system.includes('The reader asked what this recap should cover: "the \'trip\'"'));
+    assert(call.system.includes('The reader asked specifically: "the \'trip\'"'));
     assert(call.system.includes('comes from the reader, not from the messages'));
+    // A subject narrows the recap: answer first, drop what does not bear on it.
+    assert(call.system.includes('open "summary" with the direct answer'));
+    assert(call.system.includes('Leave out introductions, background, and everything unrelated'));
     assert(call.system.includes('first names'));
     assert(call.system.includes('untrusted data'));
   }

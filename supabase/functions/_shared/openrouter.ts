@@ -579,8 +579,16 @@ function summaryVoiceInstruction(context: SummaryPromptContext): string {
 }
 
 function summarySubjectInstruction(context: SummaryPromptContext): string {
+  // A subject overrides the general recap shape. The owner asked "what's my
+  // name" and got three paragraphs about what the other participant does,
+  // with the answer buried at the end (Sep 6 2026). Answer first, then only
+  // what bears on the subject, and nothing else.
   return context.subject
-    ? `The reader asked what this recap should cover: "${context.subject}". That request comes from the reader, not from the messages; keep the recap to it, and say briefly when the messages have little or nothing on it. `
+    ? `The reader asked specifically: "${context.subject}". That request comes from the reader, not from the messages, and it overrides the general recap shape: ` +
+      'if it is a question, open "summary" with the direct answer in one or two sentences, quoting or paraphrasing only what the messages actually say; ' +
+      'then add only the details that bear on that subject, in order. Leave out introductions, background, and everything unrelated to it, even if it was most of the conversation. ' +
+      'If the messages say nothing about the subject, "summary" is a single sentence saying so, and the lists stay empty. ' +
+      '"primaryTopic" names the subject, not the conversation. '
     : '';
 }
 
