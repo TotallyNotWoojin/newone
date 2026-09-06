@@ -6,6 +6,16 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
+# A keyboard left up by the previous step stays up under the attachment sheet
+# and hides its Send button (the driver still reports the button visible).
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 2000
 - tapOn: "Add attachment"
 - extendedWaitUntil:
     visible: "Photo library"
