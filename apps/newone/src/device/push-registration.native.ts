@@ -44,6 +44,16 @@ export async function configureNotificationChannels() {
   ]);
 }
 
+/**
+ * The phone's locale as a plain language-region tag. Intl reports Unicode
+ * extensions ("en-US-u-hc-h23" for a 24-hour clock), which the service does not
+ * store; only the core is sent, and nothing at all when it is unusable.
+ */
+export function registrationLocale(raw = Intl.DateTimeFormat().resolvedOptions().locale): string | null {
+  const core = String(raw ?? '').trim().replace(/_/g, '-').split(/-(?:u|x|t)(?:-|$)/i)[0];
+  return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(core) ? core : null;
+}
+
 function pushBinding() {
   const projectId = publicRuntimeConfig.easProjectId ?? Constants.easConfig?.projectId ?? null;
   const environment = publicRuntimeConfig.pushEnvironment;
@@ -83,7 +93,7 @@ export async function getExistingDeviceRegistration(
     pushProjectId: binding.projectId,
     pushEnvironment: binding.environment,
     appVersion: Constants.expoConfig?.version,
-    locale: Intl.DateTimeFormat().resolvedOptions().locale,
+    locale: registrationLocale() ?? undefined,
     idempotencyKey: createClientId(),
   };
 }

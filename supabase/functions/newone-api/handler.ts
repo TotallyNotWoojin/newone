@@ -137,9 +137,10 @@ function fallbackMeta(request: Request): RequestMeta {
 
 function logSafeFailure(meta: RequestMeta, route: MatchedRoute | null, error: unknown): void {
   const safe = asApiError(error);
-  if (safe.status < 500) return;
+  // Client-caused rejections carry no payload but are logged too: a 400 on
+  // device registration went unseen for a day because only 5xx was recorded.
   console.error(JSON.stringify({
-    event: 'newone_api_failure',
+    event: safe.status < 500 ? 'newone_api_rejected' : 'newone_api_failure',
     correlation_id: meta.requestId,
     route: route?.template ?? 'unmatched',
     code: safe.code,

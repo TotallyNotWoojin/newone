@@ -88,6 +88,7 @@ import {
   getNotificationPermissionState,
   openNotificationSettings,
   requestDeviceRegistration,
+  registrationLocale,
 } from '@/device/push-registration.native';
 
 beforeEach(() => {
@@ -319,5 +320,19 @@ describe('operating-system permission state', () => {
     const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
     await openNotificationSettings();
     expect(openSettings).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('registration locale', () => {
+  test('sends the plain language-region tag and drops Unicode extensions', () => {
+    // A 24-hour clock or calendar preference makes Intl report "-u-…" tags,
+    // and the service refused those registrations (owner report, Sep 6 2026).
+    expect(registrationLocale('en-US-u-hc-h23')).toBe('en-US');
+    expect(registrationLocale('ko-KR-u-ca-gregory')).toBe('ko-KR');
+    expect(registrationLocale('zh-Hant-TW')).toBe('zh-Hant-TW');
+    expect(registrationLocale('ko_KR')).toBe('ko-KR');
+    expect(registrationLocale('')).toBeNull();
+    expect(registrationLocale('x-private')).toBeNull();
+    expect(typeof registrationLocale() === 'string' || registrationLocale() === null).toBe(true);
   });
 });

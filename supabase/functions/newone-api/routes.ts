@@ -31,6 +31,15 @@ import {
 } from '../_shared/validation.ts';
 
 const LANGUAGE_PATTERN = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
+
+/** "en-US-u-hc-h23" → "en-US"; "ko_KR" → "ko-KR"; anything else unusable → null. */
+export function normalizeLocaleTag(value: string): string | null {
+  const core = value.trim().replace(/_/g, '-').split(/-(?:u|x|t)(?:-|$)/i)[0] ?? '';
+  if (core.length < 2 || core.length > 35) return null;
+  const [language = '', ...rest] = core.split('-');
+  const tag = [language.toLowerCase(), ...rest].join('-');
+  return LANGUAGE_PATTERN.test(tag) ? tag : null;
+}
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const EMPLOYEE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
@@ -3140,10 +3149,13 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         'appVersion',
         'locale',
       ]);
-      const locale = optionalString(body, 'locale', { min: 2, max: 35, nullable: true }) ?? null;
-      if (locale !== null && !LANGUAGE_PATTERN.test(locale)) {
-        throw new ApiError(400, 'bad_request');
-      }
+      // The locale is informational. Phones report tags with Unicode extensions
+      // ("en-US-u-hc-h23" for a 24-hour clock, "-u-ca-…" for a calendar), and
+      // refusing the whole registration for that left people unable to turn
+      // notifications on ("check the entered information", Sep 6 2026). Keep
+      // the language-script-region core; drop anything the pattern rejects.
+      const rawLocale = optionalString(body, 'locale', { max: 80, nullable: true }) ?? null;
+      const locale = rawLocale === null ? null : normalizeLocaleTag(rawLocale);
       return {
         organizationId: organization(body),
         values: {

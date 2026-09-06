@@ -297,7 +297,10 @@ Deno.test('dynamic-group, announcement, attachment, invite, and role validators 
   });
 
   const device = matched('POST', '/v2/devices');
-  await rejects(device, {
+  // The locale is informational: an unusable tag is dropped, never a reason
+  // to refuse the registration (owner could not turn notifications on when
+  // the phone reported "en-US-u-hc-h23", Sep 6 2026).
+  const parsedDevice = await parseCommand(device, {
     organizationId,
     installationId: requestId,
     platform: 'ios',
@@ -308,6 +311,19 @@ Deno.test('dynamic-group, announcement, attachment, invite, and role validators 
     appVersion: null,
     locale: 'not a locale',
   });
+  assert(parsedDevice.values.locale === null);
+  const parsedClock = await parseCommand(device, {
+    organizationId,
+    installationId: requestId,
+    platform: 'ios',
+    pushToken: 'ExpoPushToken[abcdefgh12345678]',
+    pushTokenType: 'expo',
+    pushProjectId: userId,
+    pushEnvironment: 'production',
+    appVersion: null,
+    locale: 'en-US-u-hc-h23',
+  });
+  assert(parsedClock.values.locale === 'en-US');
 
   const invite = matched('POST', '/v2/admin/invitations');
   const inviteBase = {
