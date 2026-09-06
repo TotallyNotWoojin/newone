@@ -604,3 +604,4 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | 22:06 | translation-ko 25/0/2 info. |
 | 22:30 | negative 2 fail (both harness: the taken-username flow never typed a password; the email retype hack — flows fixed, sign-in input carries an id). reviewcheck exposed defect AC: the client's auth routing table (`api-routing.mjs`) lacked the three v3 password paths, so set-password and password sign-in hit the API function and answered 404 — every existing account would have been stuck at the mandatory password step. Fixed with a routing test; ships in build 27. |
 | 22:40 | First full pass complete. Second pass started on a rebuilt simulator app (test ids, leave-checkbox label, routing fix): auth, chat, people, groups, v3, negative, reviewcheck. |
+| 22:50 | Second pass: auth 14 pass / 0 fail / 4 info on the rebuilt app (Edit profile status by id; signup password by id; add-a-password step handled). |
