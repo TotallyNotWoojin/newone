@@ -1,11 +1,16 @@
 appId: com.totallynotwoojin.newone
 ---
+# Returning sign-in ("Sign in" mode chip — "Returning member" on older builds;
+# index 0 because the primary button also reads "Sign in" on the password
+# method) with an email that has no account.
 - launchApp
 - extendedWaitUntil:
-    visible: "Returning member"
+    visible: "(Returning member|Sign in)"
     timeout: 30000
 - tapOn: "English"
-- tapOn: "Returning member"
+- tapOn:
+    text: "(Returning member|Sign in)"
+    index: 0
 - scrollUntilVisible:
     element:
       text: "you@example.com"
@@ -14,7 +19,12 @@ appId: com.totallynotwoojin.newone
 - tapOn: "you@example.com"
 - eraseText: 120
 - inputText: ${EMAIL}
-- tapOn: "Email address"
+# The label tap after typing commits the field on iOS; on Android the label sits
+# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
+# Tap on "Email address" not found), so it is optional there.
+- tapOn:
+    text: "Email address"
+    optional: true
 - scrollUntilVisible:
     element:
       text: "(Continue securely|Continue)"

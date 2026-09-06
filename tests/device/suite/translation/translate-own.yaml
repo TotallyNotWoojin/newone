@@ -2,7 +2,8 @@ appId: com.totallynotwoojin.newone
 ---
 # Long-press one's own message TARGET → "Translate for me" (owner backlog:
 # a sender can ask for their own message in their display language). The
-# translation card for LANG then appears on the bubble.
+# translation then renders as plain text under the bubble's original;
+# TRANSLATED is a word or regex it must contain.
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -36,6 +37,6 @@ appId: com.totallynotwoojin.newone
     notVisible: "Message actions"
     timeout: 15000
 - extendedWaitUntil:
-    visible: ".*TRANSLATION · ${LANG}.*"
+    visible: ".*${TRANSLATED}.*"
     timeout: ${TIMEOUT}
 - takeScreenshot: ${SHOT}-own-translated

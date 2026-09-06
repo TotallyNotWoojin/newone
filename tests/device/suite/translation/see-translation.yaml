@@ -1,6 +1,11 @@
 appId: com.totallynotwoojin.newone
 ---
-# The peer's message TEXT arrives, then its translation card for LANG.
+# The peer's message TEXT arrives, then its translation into LANG renders as
+# plain text under the original (the Sep 2026 chat stream removed the
+# "TRANSLATION · XX" / "ORIGINAL · XX" labels, "Machine translation" and the
+# detected-language line). TRANSLATED is a word or regex the translation must
+# contain (e.g. "lunes" for Monday); the original stays visible above it.
+# Language details live in the long-press sheet (translation/show-details.yaml).
 # Returning from Settings can leave the thread at its top with the keyboard
 # up (trans-11, run-2026-09-04T07-12-12): dismiss and scroll to the message.
 - runFlow:
@@ -21,8 +26,7 @@ appId: com.totallynotwoojin.newone
     timeout: 45000
 - takeScreenshot: ${SHOT}-original-arrived
 - extendedWaitUntil:
-    visible: ".*TRANSLATION · ${LANG}.*"
+    visible: ".*${TRANSLATED}.*"
     timeout: ${TIMEOUT}
 - takeScreenshot: ${SHOT}-translated
-- assertVisible: ".*ORIGINAL · .*"
 - assertVisible: ".*${TEXT}.*"

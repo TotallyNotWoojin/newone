@@ -30,7 +30,12 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
-- tapOn: "Email address"
+# The label tap after typing commits the field on iOS; on Android the label sits
+# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
+# Tap on "Email address" not found), so it is optional there.
+- tapOn:
+    text: "Email address"
+    optional: true
 - scrollUntilVisible:
     element:
       text: "your_username"
@@ -38,7 +43,9 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "your_username"
 - inputText: ${USERNAME}
-- tapOn: "Username"
+- tapOn:
+    text: "Username"
+    optional: true
 - scrollUntilVisible:
     element:
       text: "Your name as others will see it"
@@ -46,7 +53,9 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Your name as others will see it"
 - inputText: ${DISPLAY_NAME}
-- tapOn: "Display name"
+- tapOn:
+    text: "Display name"
+    optional: true
 - scrollUntilVisible:
     element:
       text: "(Continue securely|Continue)"

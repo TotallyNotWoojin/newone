@@ -1,9 +1,0 @@
-appId: com.totallynotwoojin.newone
----
-# On a search result card, tap Connect; the card flips to "Cancel request".
-- assertVisible: "Connect"
-- tapOn: "Connect"
-- extendedWaitUntil:
-    visible: "Cancel request"
-    timeout: 20000
-- takeScreenshot: ${SHOT}-pending

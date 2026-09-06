@@ -9,8 +9,9 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "Resend code"
+# Confirmation copy is "We sent you a new code." since the Sep 2026 auth stream.
 - extendedWaitUntil:
-    visible: ".*(We sent a new one-time code|could not|Too many|unavailable|cannot reach).*"
+    visible: ".*(We sent you a new code|could not|Too many|unavailable|cannot reach).*"
     timeout: 20000
 # The "(NNs)" countdown is a child of the accessible Pressable, so it is only
 # visible in the screenshot; the disabled state is what the tree exposes.
@@ -18,4 +19,4 @@ appId: com.totallynotwoojin.newone
 - assertVisible:
     text: "Resend code"
     enabled: false
-- assertVisible: "We sent a new one-time code through your selected channel."
+- assertVisible: "We sent you a new code."

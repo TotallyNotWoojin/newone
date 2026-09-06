@@ -1,8 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Restrict the search to the Messages type chip and re-run.
-# The type chips sit at the top of the search form; after typing, the keyboard
-# is up and the form is scrolled to the results. Dismiss and scroll back up.
+# Consumers have no type-filter chips (the "Messages" chip this flow used to
+# tap is workplace-only): the Search tab lists People, then Messages. Open
+# the Messages result; the conversation opens with the matched text.
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -11,23 +11,16 @@ appId: com.totallynotwoojin.newone
           start: "50%, 30%"
           end: "50%, 88%"
           duration: 600
-# The type chips row is on screen after the keyboard goes; the chip can be
-# partially clipped in the horizontal row, so tap it rather than scroll for
-# full visibility (run-2026-09-04T08-10-25).
-- tapOn: "Messages"
-- tapOn:
-    text: "Search"
-    index: 1
-- extendedWaitUntil:
-    visible: ".*${QUERY}.*"
-    timeout: 30000
+- hideKeyboard
 - scrollUntilVisible:
     element:
       text: ".*Open .*"
     direction: DOWN
     timeout: 30000
-- takeScreenshot: ${SHOT}-filtered
-- tapOn: ".*Open .*"
+- takeScreenshot: ${SHOT}-result
+- tapOn:
+    text: ".*Open .*"
+    index: 0
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000

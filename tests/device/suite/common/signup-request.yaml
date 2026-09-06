@@ -36,7 +36,12 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "you@example.com"
 - inputText: ${EMAIL}
-- tapOn: "Email address"
+# The label tap after typing commits the field on iOS; on Android the label sits
+# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
+# Tap on "Email address" not found), so it is optional there.
+- tapOn:
+    text: "Email address"
+    optional: true
 # Simulator typing sometimes drops or reorders characters. Check the field holds
 # the exact value; refocus the input (third "Email address" node: two label nodes,
 # then the field) and retype once if not.
@@ -60,7 +65,9 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "your_username"
 - inputText: ${USERNAME}
-- tapOn: "Username"
+- tapOn:
+    text: "Username"
+    optional: true
 # Simulator typing sometimes drops or reorders characters. Check the field holds
 # the exact value; refocus the input (third "Username" node: two label nodes,
 # then the field) and retype once if not.
@@ -84,7 +91,9 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Your name as others will see it"
 - inputText: ${DISPLAY_NAME}
-- tapOn: "Display name"
+- tapOn:
+    text: "Display name"
+    optional: true
 # Simulator typing sometimes drops or reorders characters. Check the field holds
 # the exact value; refocus the input (third "Display name" node: two label nodes,
 # then the field) and retype once if not.

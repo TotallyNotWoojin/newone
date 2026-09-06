@@ -1,6 +1,6 @@
-// PUSH TESTER: one signed-in account on a simulator that the owner can send a
-// message request to; the harness then accepts and sends messages on demand so
-// the owner's physical device receives real pushes.
+// PUSH TESTER: one signed-in account on a simulator that the owner can message
+// directly (no requests for consumers); the harness then sends messages on
+// demand (pushsend) so the owner's physical device receives real pushes.
 export const meta = { id: 'pushtester', devices: 1, title: 'PUSH TESTER account (single device)' };
 
 export async function run(ctx) {

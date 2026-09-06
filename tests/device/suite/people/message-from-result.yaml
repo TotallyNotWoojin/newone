@@ -1,0 +1,30 @@
+appId: com.totallynotwoojin.newone
+---
+# From a People search result (people/search-user.yaml left the row on
+# screen): tap Message → the direct conversation opens at once (no message
+# request, no approval; consumers can message anyone) → type TEXT → send.
+# The recipient simply sees the message in Chats.
+- assertVisible: "Message"
+- tapOn:
+    text: "Message"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-conversation-open
+- tapOn:
+    id: "composer-input"
+- eraseText: 60
+- inputText: ${TEXT}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
+    timeout: 20000
+- extendedWaitUntil:
+    notVisible: "Not sent"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-first-message

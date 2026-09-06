@@ -1,8 +1,10 @@
 appId: com.totallynotwoojin.newone
 ---
-# New group → search the candidate list for a NON-friend's name. Expected:
-# "No authorized candidates match this search." If the stranger appears,
-# add them and try to create.
+# New group → search the picker for a stranger (STRANGER_QUERY is their
+# @username). Consumers can add anyone (Sep 2026 social stream), so the
+# stranger must be offered as "Add STRANGER"; the old "No authorized
+# candidates match this search." refusal no longer exists. Nothing is created:
+# the form is cancelled.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -21,12 +23,9 @@ appId: com.totallynotwoojin.newone
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
-# Typing the name leaves the keyboard up over the member section; a tap on the
+# Typing the name leaves the keyboard up over the people section; a tap on the
 # search field then lands on the keys and the stranger's name is appended to
 # the group name. Dismiss it first (see groups/create-group.yaml).
-- tapOn: "GROUP SETUP"
-# iOS 26.5 keyboards without the prediction bar defeat the text guard
-# (neg-06, run-2026-09-04T14-27-52); ask iOS to hide it first.
 - hideKeyboard
 - runFlow:
     when:
@@ -38,12 +37,12 @@ appId: com.totallynotwoojin.newone
           duration: 600
 - scrollUntilVisible:
     element:
-      text: "(Search company directory|Search your friends)"
+      text: "Search by name or @username"
     direction: DOWN
     timeout: 30000
-- tapOn: "(Search company directory|Search your friends)"
-- inputText: ${STRANGER}
-- tapOn: "MEMBERS"
+- tapOn: "Search by name or @username"
+- inputText: ${STRANGER_QUERY}
+- hideKeyboard
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -52,9 +51,11 @@ appId: com.totallynotwoojin.newone
           start: "50%, 30%"
           end: "50%, 88%"
           duration: 600
-- extendedWaitUntil:
-    visible: ".*(No authorized candidates match this search|Add ${STRANGER}).*"
+- scrollUntilVisible:
+    element:
+      text: "Add ${STRANGER}"
+    direction: DOWN
     timeout: 30000
 - takeScreenshot: ${SHOT}-candidates
-- assertVisible: "No authorized candidates match this search."
+- assertVisible: "Add ${STRANGER}"
 - tapOn: "Cancel group creation"

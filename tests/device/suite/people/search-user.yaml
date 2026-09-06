@@ -1,6 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# People → search a username; the matching person card must appear.
+# People → search a name or @username; the matching person row must appear
+# with its EXPECT_BUTTON ("Message" for anyone, "Blocked" for a blocked
+# person). The search runs as you type; there is no submit button.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -12,7 +14,7 @@ appId: com.totallynotwoojin.newone
 # simulator (Settings opened instead). Recover and tap People again.
 - runFlow:
     when:
-      notVisible: "Search by username"
+      notVisible: "Search by name or @username"
     commands:
       - waitForAnimationToEnd:
           timeout: 3000
@@ -23,19 +25,18 @@ appId: com.totallynotwoojin.newone
             - tapOn: "Close settings"
       - runFlow:
           when:
-            notVisible: "Search by username"
+            notVisible: "Search by name or @username"
           commands:
             - tapOn: "People"
 - extendedWaitUntil:
-    visible: "Search by username"
+    visible: "Search by name or @username"
     timeout: 15000
-- tapOn: "Search by username"
+- tapOn: "Search by name or @username"
 - eraseText: 40
 - inputText: ${USERNAME}
 - extendedWaitUntil:
     visible: ${NAME}
     timeout: 20000
-- tapOn: "Find people by username"
 - extendedWaitUntil:
     visible: ${EXPECT_BUTTON}
     timeout: 15000

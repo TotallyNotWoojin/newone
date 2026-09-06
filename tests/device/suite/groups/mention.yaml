@@ -1,19 +1,20 @@
 appId: com.totallynotwoojin.newone
 ---
-# Composer → Mention people → pick NAME → type → send.
+# Composer → Mention people → pick NAME → type → send. The picker's list is
+# headed "People" (was "Available members").
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
 # The chip renders an icon plus its label as one node on iOS 26.
 - tapOn: ".*Mention people.*"
 - extendedWaitUntil:
-    visible: "Available members"
+    visible: "People"
     timeout: 15000
 - takeScreenshot: ${SHOT}-mention-picker
 - tapOn:
     text: ".*${NAME}.*"
-    below: "Available members"
-# The picked member shows as a chip whose accessibility label is
+    below: "People"
+# The picked person shows as a chip whose accessibility label is
 # "Remove mention: NAME" (run-2026-09-04T17-53-11); the older "Selected: NAME"
 # label no longer exists.
 - extendedWaitUntil:

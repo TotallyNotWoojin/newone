@@ -1,6 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
-# Controls → Members → tap "ROLE · NAME" chip → close → system row.
+# Controls → People → tap "ROLE · NAME" chip → close → system row
+# "… had their role changed."
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -20,5 +21,5 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-after
 - tapOn: "Close dialog"
 - extendedWaitUntil:
-    visible: ".*had their conversation role changed.*"
+    visible: ".*had their role changed.*"
     timeout: 30000

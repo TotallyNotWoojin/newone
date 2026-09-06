@@ -19,25 +19,26 @@ appId: com.totallynotwoojin.newone
 # below it (a request row's Decline button, run-2026-09-04T20-41-40). Let the
 # banner clear and the list settle before touching a row.
 - extendedWaitUntil:
-    notVisible: ".*(Reconnecting and checking|Reconectando y|재연결하고|Offline · |Sin conexión · |오프라인 · |Loading your private|Cargando tu espacio|불러오는 중).*"
+    notVisible: ".*(Reconnecting and checking|Reconectando y|재연결하고|Offline · |Sin conexión · |오프라인 · |Loading…|Cargando…|불러오는 중).*"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
 - tapOn: ".*${PEER}.*"
-# The list can shift right after launch (the Requests section resolves once the
-# people list arrives), so a tap taken from a just-stale hierarchy lands on
-# empty space (chat-open-a-3, media-00c). A person taps again; so do we.
+# The list can shift right after launch (rows settle once the people list
+# arrives), so a tap taken from a just-stale hierarchy lands on empty space
+# (chat-open-a-3, media-00c). A person taps again; so do we. The composer is the
+# only thing to wait for: message-request banners are gone for consumers.
 - runFlow:
     when:
-      notVisible: ".*(Write a message…|Accept|Request pending).*"
+      notVisible: ".*Write a message….*"
     commands:
       - waitForAnimationToEnd:
           timeout: 3000
       - runFlow:
           when:
-            notVisible: ".*(Write a message…|Accept|Request pending).*"
+            notVisible: ".*Write a message….*"
           commands:
             - tapOn: ".*${PEER}.*"
 - extendedWaitUntil:
-    visible: ".*(Write a message…|Accept|Request pending).*"
+    visible: ".*Write a message….*"
     timeout: 20000

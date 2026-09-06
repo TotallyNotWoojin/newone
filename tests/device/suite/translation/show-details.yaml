@@ -1,12 +1,42 @@
 appId: com.totallynotwoojin.newone
 ---
-- tapOn:
-    text: "Show details"
-    index: 0
-- extendedWaitUntil:
-    visible: ".*Source language · .*"
+# Language details moved off the bubble into the long-press sheet: long-press
+# the message TARGET → "Message actions" → "Show details" → the details block
+# names the source and target languages (target = LANG) → "Hide details" →
+# close the sheet.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
     timeout: 15000
+- longPressOn:
+    text: ".*${TARGET}.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- scrollUntilVisible:
+    element:
+      text: "Show details"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Show details"
+- extendedWaitUntil:
+    visible: ".*Target language · ${LANG}.*"
+    timeout: 15000
+- assertVisible: ".*Source language · .*"
 - takeScreenshot: ${SHOT}-details
-- tapOn:
-    text: "Hide details"
-    index: 0
+- tapOn: "Hide details"
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 10000

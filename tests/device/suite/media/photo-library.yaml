@@ -1,7 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Add attachment → Photo library → first photo → Send securely; the bubble
-# shows the attachment card that reaches "Scanned and safe".
+# Add attachment → Photo library → first photo → Send; the bubble is the photo
+# itself: dimmed under a progress ring while uploading, then tappable with the
+# accessibility label "Open image full screen" (no file card for photos).
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
@@ -36,10 +37,10 @@ appId: com.totallynotwoojin.newone
     notVisible: "(Send securely|Send)"
     timeout: 60000
 - extendedWaitUntil:
-    visible: ".*(Scanned and safe|Ready|Security scan in progress|Uploading|Quarantined for scanning|Uploading securely|Preparing secure upload).*"
+    visible: ".*(Open image full screen|Uploading|Upload progress|Preparing upload).*"
     timeout: 60000
 - takeScreenshot: ${SHOT}-sending
 - extendedWaitUntil:
-    visible: ".*(Scanned and safe|Ready).*"
+    visible: "Open image full screen"
     timeout: 120000
 - takeScreenshot: ${SHOT}-clean

@@ -1,5 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
+# Controls → "Leave this group" → tick "I understand" (the long acknowledgement
+# sentence was shortened in the Sep 2026 terminology pass) → "Leave group".
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -10,7 +12,7 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 30000
 - takeScreenshot: ${SHOT}-leave-section
-- tapOn: ".*I understand that history is preserved.*"
+- tapOn: "I understand"
 - tapOn: "Leave group"
 - extendedWaitUntil:
     notVisible: "Conversation controls"

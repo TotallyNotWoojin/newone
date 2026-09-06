@@ -6,7 +6,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Create account"
     timeout: 15000
-# Consumer sign-in offers only Create account / Returning member (owner
-# backlog v2): the enrollment and recovery chips must be gone.
+# Consumer sign-in offers only Create account / Sign in (owner backlog v2):
+# the enrollment and recovery chips must be gone.
 - assertNotVisible: "First-time enrollment"
 - assertNotVisible: "Recover access"

@@ -1,6 +1,8 @@
-// GROUPS on three devices: A (owner), B, C. Friendships first (group
-// candidates are friends), then create, fan-out, add/remove, promote/demote,
-// member self-role check, ownership transfer, leave, avatar, @mention.
+// GROUPS on three devices: A (owner), B, C. Anyone can be added to a group
+// (Sep 2026 social stream), so there is no friendship setup: A creates the
+// group by finding B through the picker's people search, then fan-out,
+// add/remove, promote/demote, member self-role check, ownership transfer,
+// leave, avatar, @mention.
 export const meta = { id: 'groups', devices: 3, title: 'GROUPS (A/B/C)' };
 
 export async function run(ctx) {
@@ -17,21 +19,14 @@ export async function run(ctx) {
     return;
   }
 
-  // Friendships: A connects with B and C; they accept from People.
-  for (const [peer, dev] of [[B, devB], [C, devC]]) {
-    await ctx.step({ id: `setup-friend-${peer.label}-search`, title: `Setup: A finds ${peer.displayName}`, device: devA, flow: 'people/search-user.yaml', env: { USERNAME: peer.username, NAME: peer.displayName, EXPECT_BUTTON: 'Connect' }, expected: 'card', screen: 'people' });
-    await ctx.step({ id: `setup-friend-${peer.label}-connect`, title: `Setup: A connects with ${peer.displayName}`, device: devA, flow: 'people/connect.yaml', expected: 'pending', screen: 'people' });
-    await ctx.step({ id: `setup-friend-${peer.label}-see`, title: `Setup: ${peer.displayName} sees the request`, device: dev, flow: 'people/see-request.yaml', env: { NAME: A.displayName }, expected: 'Requests', screen: 'people' });
-    await ctx.step({
-      id: `setup-friend-${peer.label}-accept`, title: `Setup: ${peer.displayName} accepts`, device: dev, flow: 'people/accept-request.yaml', env: { NAME: A.displayName }, expected: 'friends', screen: 'people',
-      serverTruth: async () => { const w = await server.waitFor(() => server.connection(A.userId, peer.userId), (r) => r?.status === 'accepted', { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
-    });
-  }
+  // The friendship setup loop (setup-friend-*: search → Connect → Requests →
+  // Accept) is gone: connect requests no longer exist for consumers and the
+  // group picker finds anyone by name or @username.
 
   const name = `Crew ${tag}`;
   const created = await ctx.step({
-    id: 'groups-01-create', title: 'A creates a group with B (name + member from friends)', device: devA,
-    flow: 'groups/create-group.yaml', env: { NAME: name, MEMBER1: B.displayName, HAS_MEMBER2: 'false', MEMBER2: '' },
+    id: 'groups-01-create', title: 'A creates a group with B (name + person found by @username search)', device: devA,
+    flow: 'groups/create-group.yaml', env: { NAME: name, MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'false', MEMBER2: '', MEMBER2_QUERY: '' },
     expected: 'Group conversation opens; server conversations row with A owner + B member', screen: 'new-group',
     serverTruth: async () => { const w = await server.waitFor(() => server.groupByName(name), (r) => Boolean(r), { timeoutMs: 20_000 }); const m = w.row ? await server.members(w.row.id) : []; return { ok: w.ok && m.some((r) => r.user_id === A.userId && r.role === 'owner') && m.some((r) => r.user_id === B.userId), detail: { group: w.row?.id, members: m } }; },
   });
@@ -47,8 +42,8 @@ export async function run(ctx) {
   await ctx.step({ id: 'groups-04-b-receives', title: 'B receives the group message', device: devB, flow: 'chat/see-text.yaml', env: { TEXT: g1, TIMEOUT: '30000' }, expected: 'visible', screen: 'group' });
 
   await ctx.step({
-    id: 'groups-05-add-member', title: 'A adds C from the controls sheet', device: devA, flow: 'groups/add-member.yaml', env: { NAME: C.displayName },
-    expected: 'C added; system row "… was added to the conversation."; server 3 active members', screen: 'group → Conversation controls',
+    id: 'groups-05-add-member', title: 'A adds C from the controls sheet (Add people → Search people → Add to group)', device: devA, flow: 'groups/add-member.yaml', env: { NAME: C.displayName, QUERY: C.username },
+    expected: 'C added; system row "… was added to the group."; server 3 active members', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => rows.some((r) => r.user_id === C.userId && r.status === 'active'), { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
   const g2 = `Fan-out ${tag}`;
@@ -60,13 +55,13 @@ export async function run(ctx) {
   await ctx.observe(devC, { id: 'groups-09b-c-history', title: 'What C sees of the history from before joining (history policy)', screen: 'group' });
 
   const m1 = `Mention probe ${tag}`;
-  await ctx.step({ id: 'groups-10-mention', title: 'A @mentions B in the group', device: devA, flow: 'groups/mention.yaml', env: { NAME: B.displayName, TEXT: m1 }, expected: 'Mention picker works; message sends', screen: 'group → Mention people' });
+  await ctx.step({ id: 'groups-10-mention', title: 'A @mentions B in the group', device: devA, flow: 'groups/mention.yaml', env: { NAME: B.displayName, TEXT: m1 }, expected: 'Mention picker ("People" list) works; message sends', screen: 'group → Mention people' });
   await ctx.step({ id: 'groups-11-b-sees-mention', title: 'B sees the mention message', device: devB, flow: 'chat/see-text.yaml', env: { TEXT: m1, TIMEOUT: '30000' }, expected: 'visible', screen: 'group' });
   await ctx.observe(devB, { id: 'groups-11b-mention-render', title: 'Mention rendering on B', screen: 'group' });
 
   await ctx.step({
     id: 'groups-12-promote', title: 'A promotes B to Admin', device: devA, flow: 'groups/set-role.yaml', env: { ROLE: 'Admin', NAME: B.displayName },
-    expected: 'Chip selected; system row "… had their conversation role changed."; server role admin', screen: 'group → Conversation controls',
+    expected: 'Chip selected; system row "… had their role changed."; server role admin', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => rows.find((r) => r.user_id === B.userId)?.role === 'admin', { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === B.userId) }; },
   });
   await ctx.step({
@@ -76,13 +71,13 @@ export async function run(ctx) {
   });
   await ctx.step({
     id: 'groups-14-member-self-role', title: 'Member (B) cannot change roles: no role chips/remove/add controls', device: devB, flow: 'groups/member-self-role-check.yaml', env: { SELF: B.displayName, OTHER: C.displayName },
-    expected: 'Controls sheet for a member shows the members list without role chips, Remove buttons or Add a member', screen: 'group → Conversation controls',
+    expected: 'Controls sheet for a member shows the People list without role chips, Remove buttons or the Add people section', screen: 'group → Conversation controls',
     serverTruth: async () => { const rows = await server.members(gid); return { ok: rows.find((r) => r.user_id === B.userId)?.role === 'member', detail: rows }; },
   });
 
   await ctx.step({
     id: 'groups-15-remove-member', title: 'A removes C', device: devA, flow: 'groups/remove-member.yaml', env: { NAME: C.displayName },
-    expected: 'System row "… was removed from the conversation."; server C not active', screen: 'group → Conversation controls',
+    expected: 'System row "… was removed from the group."; server C not active', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => { const c = rows.find((r) => r.user_id === C.userId); return !c || c.status !== 'active'; }, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === C.userId) ?? 'row gone' }; },
   });
   await ctx.step({ id: 'groups-16-c-after-removal', title: 'Removed member C no longer sees the group after relaunch', device: devC, flow: 'groups/group-gone.yaml', env: { NAME: name }, expected: 'Group not listed for C', screen: 'chats', optional: true });
@@ -93,9 +88,9 @@ export async function run(ctx) {
     expected: 'server B owner; A demoted (record A\'s new role)', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => rows.find((r) => r.user_id === B.userId)?.role === 'owner', { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
-  await ctx.observe(devA, { id: 'groups-17b-after-transfer', title: 'A\'s view after transfer (own role in members list)', screen: 'group' });
+  await ctx.observe(devA, { id: 'groups-17b-after-transfer', title: 'A\'s view after transfer (own role in the People list)', screen: 'group' });
   await ctx.step({
-    id: 'groups-18-leave', title: 'A leaves the group', device: devA, flow: 'groups/leave-group.yaml',
+    id: 'groups-18-leave', title: 'A leaves the group ("I understand" → Leave group)', device: devA, flow: 'groups/leave-group.yaml',
     expected: 'Sheet closes, A back in Chats; server A not active', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => { const a = rows.find((r) => r.user_id === A.userId); return !a || a.status !== 'active'; }, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === A.userId) ?? 'row gone' }; },
   });
