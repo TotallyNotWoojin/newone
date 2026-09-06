@@ -84,7 +84,10 @@ export async function run(ctx) {
   //    is a device preference.) The card renders only while the OS permission
   //    is undetermined/denied; a simulator that already granted it never shows
   //    it, which the FAIL screenshot would make obvious.
-  await ctx.step({ id: 'v3-01-notification-card', title: 'First signed-in launch shows the "Turn on notifications" card; "Not now" removes it', device: devA, flow: 'v3/notification-prompt.yaml', expected: 'Card with "Turn on" and "Not now" at the top of Chats; gone right after Not now', screen: 'chats' });
+  const card = await ctx.step({ id: 'v3-01-notification-card', title: 'First signed-in launch shows the "Turn on notifications" card; "Not now" removes it', device: devA, flow: 'v3/notification-prompt.yaml', expected: 'Card with "Turn on" and "Not now" at the top of Chats; gone right after Not now', screen: 'chats' });
+  if (card.uiOk && (card.entry?.screenshots ?? []).some((shot) => String(shot).includes('card-absent'))) {
+    ctx.note({ id: 'v3-01-card-not-exercised', title: 'Notification card not exercised on this simulator', status: 'INFO', expected: 'Card with "Turn on" and "Not now" at first signed-in launch', observed: 'No card rendered: the simulator already answered the OS notification prompt in an earlier run, and the card only renders while that permission is undetermined. A fresh install re-arms it (the first pass showed the card). v3-01c still checks that no card appears after the relaunch.', screen: 'chats' });
+  }
   await ctx.step({ id: 'v3-01b-relaunch', title: 'Force-quit and relaunch', device: devA, flow: 'common/relaunch.yaml', expected: 'Chats', screen: 'chats' });
   await ctx.step({ id: 'v3-01c-card-stays-gone', title: 'The answered card does not return after the relaunch', device: devA, flow: 'v3/notification-prompt-gone.yaml', expected: 'No "Turn on notifications" card, no "Not now"', screen: 'chats' });
 
@@ -140,7 +143,7 @@ export async function run(ctx) {
   // 4. Enter key sends: the switch is on by default, so prove it does
   //    something by turning it off first (return key breaks the line, nothing
   //    sent), then back on (return key sends).
-  await ctx.step({ id: 'v3-04a-enter-sends-off', title: 'Settings → "Enter key sends" switch off', device: devA, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Enter key sends' }, expected: 'Switch flips (default on → off); back to Chats', screen: 'settings → Chats group' });
+  await ctx.step({ id: 'v3-04a-enter-sends-off', title: 'Settings → "Enter key sends" switch off', device: devA, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Enter key sends', ID: 'setting-enter-sends' }, expected: 'Switch flips (default on → off); back to Chats', screen: 'settings → Chats group' });
   await openA();
   const newline = 'enter newline test';
   await ctx.step({
@@ -152,7 +155,7 @@ export async function run(ctx) {
       return { ok: !row, detail: row ? `SENT DESPITE THE SWITCH BEING OFF: message ${row.id}` : 'no message row (correct)' };
     },
   });
-  await ctx.step({ id: 'v3-04c-enter-sends-on', title: 'Settings → "Enter key sends" switch back on', device: devA, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Enter key sends' }, expected: 'Switch on again; back to Chats', screen: 'settings → Chats group' });
+  await ctx.step({ id: 'v3-04c-enter-sends-on', title: 'Settings → "Enter key sends" switch back on', device: devA, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Enter key sends', ID: 'setting-enter-sends' }, expected: 'Switch on again; back to Chats', screen: 'settings → Chats group' });
   await openA();
   const enterText = 'enter sends test';
   await ctx.step({
@@ -179,7 +182,7 @@ export async function run(ctx) {
     },
     timeoutMs: 240_000,
   });
-  await ctx.step({ id: 'v3-05b-translated-only-on', title: 'B: Settings → "Show only translations" on', device: devB, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Show only translations' }, expected: 'Switch on (hint "Tap a message to see the original"); back to Chats', screen: 'settings → Chats group' });
+  await ctx.step({ id: 'v3-05b-translated-only-on', title: 'B: Settings → "Show only translations" on', device: devB, flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Show only translations', ID: 'setting-translated-only' }, expected: 'Switch on (hint "Tap a message to see the original"); back to Chats', screen: 'settings → Chats group' });
   await openB();
   await ctx.step({
     id: 'v3-05-translation-only-bubble', title: 'B sees only the Korean translation with an "Original" control; "Show original" reveals the Spanish', device: devB,

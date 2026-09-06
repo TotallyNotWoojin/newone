@@ -19,6 +19,11 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "you@example.com"
+# The field keeps whatever the previous step typed, and a tap lands the cursor
+# mid-text, so erasing alone leaves a tail. The iOS clear button empties it.
+- tapOn:
+    text: "Clear text"
+    optional: true
 - eraseText: 120
 - inputText: ${EMAIL}
 # The label tap after typing commits the field on iOS; on Android the label sits
@@ -34,14 +39,31 @@ appId: com.totallynotwoojin.newone
     when:
       notVisible: "${EMAIL}"
     commands:
-      - tapOn:
-          text: "Email address"
-          index: 2
+      - runFlow:
+          when:
+            visible:
+              id: "sign-in-destination"
+          commands:
+            - tapOn:
+                id: "sign-in-destination"
+      - runFlow:
+          when:
+            notVisible:
+              id: "sign-in-destination"
+          commands:
+            - tapOn:
+                text: "Email address"
+                index: 2
       - waitForAnimationToEnd:
           timeout: 2000
+      - tapOn:
+          text: "Clear text"
+          optional: true
       - eraseText: 120
       - inputText: ${EMAIL}
-      - tapOn: "Email address"
+      - tapOn:
+          text: "Email address"
+          optional: true
 - assertVisible: "${EMAIL}"
 - takeScreenshot: ${SHOT}-returning-form
 - scrollUntilVisible:

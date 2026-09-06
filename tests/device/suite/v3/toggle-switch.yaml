@@ -20,8 +20,7 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - takeScreenshot: ${SHOT}-before
 - tapOn:
-    text: "${LABEL}"
-    index: 1
+    id: "${ID}"
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: ${SHOT}-after

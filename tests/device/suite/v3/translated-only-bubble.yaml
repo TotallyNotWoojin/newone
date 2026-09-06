@@ -29,23 +29,37 @@ appId: com.totallynotwoojin.newone
 # address the one under a given text, so open them all (at most three
 # messages from the peer exist at this point): the target's original is then
 # among the revealed ones and its control reads "Hide original".
+# The control that belongs to the target bubble sits right under its text;
+# tapping the topmost "Show original" opened other bubbles instead.
 - tapOn:
     text: "Show original"
-    index: 0
+    below:
+      text: ".*${HIT}.*"
+    optional: true
 - runFlow:
     when:
-      visible: "Show original"
+      notVisible: ".*${TEXT_KEY}.*"
     commands:
       - tapOn:
           text: "Show original"
           index: 0
+          optional: true
 - runFlow:
     when:
-      visible: "Show original"
+      notVisible: ".*${TEXT_KEY}.*"
     commands:
       - tapOn:
           text: "Show original"
           index: 0
+          optional: true
+- runFlow:
+    when:
+      notVisible: ".*${TEXT_KEY}.*"
+    commands:
+      - tapOn:
+          text: "Show original"
+          index: 0
+          optional: true
 - extendedWaitUntil:
     visible: ".*${TEXT_KEY}.*"
     timeout: 10000
