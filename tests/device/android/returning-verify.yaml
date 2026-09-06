@@ -19,6 +19,12 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "(Verify and sign in|Sign in)"
+- extendedWaitUntil:
+    visible: "(Not now|Ahora no|나중에|Chats|채팅)"
+    timeout: 45000
+- tapOn:
+    text: "(Not now|Ahora no|나중에)"
+    optional: true
 - waitForAnimationToEnd:
     timeout: 4000
 - takeScreenshot: ${SHOT}-android-after-verify

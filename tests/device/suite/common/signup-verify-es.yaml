@@ -31,6 +31,12 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Verificar y crear la cuenta"
 - extendedWaitUntil:
+    visible: "(Not now|Ahora no|나중에|Chats|채팅)"
+    timeout: 45000
+- tapOn:
+    text: "(Not now|Ahora no|나중에)"
+    optional: true
+- extendedWaitUntil:
     visible: "Chats"
     timeout: 40000
 # A fresh install shows the "Turn on notifications" card at the top of the
