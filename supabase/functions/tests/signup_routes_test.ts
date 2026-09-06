@@ -87,6 +87,7 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     sendCodeEmail: async () => {},
     verifyOtp: async () => session,
     signInWithPassword: async () => session,
+    lookupPasswordState: async () => ({ hasPassword: true }),
     setPassword: async () => {},
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');

@@ -89,6 +89,7 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
       throw new Error('review OTP must not be generated');
     },
     signInWithPassword: async () => session,
+    lookupPasswordState: async () => ({ hasPassword: true }),
     setPassword: async () => {},
     redeemInvite: async () => {
       throw new Error('password sign-in never redeems an invite');
