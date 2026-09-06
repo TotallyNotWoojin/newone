@@ -1,0 +1,14 @@
+appId: com.totallynotwoojin.newone
+---
+# After the force-quit and relaunch (common/relaunch.yaml) the answered card
+# must not come back: the answer is stored on the device.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+# The card, when it does render, appears right after the list settles and the
+# OS permission read returns; give that the same settle time the signup flows use.
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Turn on notifications"
+- assertNotVisible: "Not now"
+- takeScreenshot: ${SHOT}-no-card

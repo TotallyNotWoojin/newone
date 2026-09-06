@@ -1,0 +1,54 @@
+appId: com.totallynotwoojin.newone
+---
+# "Show only translations" is on: the peer's message shows only its translation
+# (a Korean text containing HIT) plus a small "Original" control whose
+# accessibility name is "Show original"; the original (TEXT_KEY, a fragment of
+# the Spanish) stays hidden until that control is tapped, when it appears under
+# the translation and the control becomes "Hide original".
+# Returning from Settings can leave the thread at its top with the keyboard up
+# (trans-11, run-2026-09-04T07-12-12): dismiss and scroll to the message.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${HIT}.*"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- extendedWaitUntil:
+    visible: "Show original"
+    timeout: 15000
+- assertNotVisible: ".*${TEXT_KEY}.*"
+- takeScreenshot: ${SHOT}-translation-only
+# Every translated bubble in view carries its own control and Maestro cannot
+# address the one under a given text, so open them all (at most three
+# messages from the peer exist at this point): the target's original is then
+# among the revealed ones and its control reads "Hide original".
+- tapOn:
+    text: "Show original"
+    index: 0
+- runFlow:
+    when:
+      visible: "Show original"
+    commands:
+      - tapOn:
+          text: "Show original"
+          index: 0
+- runFlow:
+    when:
+      visible: "Show original"
+    commands:
+      - tapOn:
+          text: "Show original"
+          index: 0
+- extendedWaitUntil:
+    visible: ".*${TEXT_KEY}.*"
+    timeout: 10000
+- assertVisible: "Hide original"
+- assertVisible: ".*${HIT}.*"
+- takeScreenshot: ${SHOT}-original-shown

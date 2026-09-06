@@ -1,0 +1,26 @@
+appId: com.totallynotwoojin.newone
+---
+# With "Enter key sends" OFF the keyboard return key breaks the line: the draft
+# stays in the composer with its send button and nothing is sent (the area
+# checks the server for the absence of a row). The draft is cleared afterwards.
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 20000
+- tapOn:
+    id: "composer-input"
+- eraseText: 60
+- inputText: ${TEXT}
+- takeScreenshot: ${SHOT}-typed
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-after-return
+# A non-empty draft shows the send button and hides the placeholder.
+- assertVisible: "Send message"
+- assertNotVisible: ".*Write a message….*"
+- eraseText: 80
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-cleared

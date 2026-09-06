@@ -1,0 +1,24 @@
+appId: com.totallynotwoojin.newone
+---
+# With "Enter key sends" ON (the default) the keyboard return key sends: the
+# bubble appears and the composer empties without touching the send button.
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 20000
+- tapOn:
+    id: "composer-input"
+- eraseText: 60
+- inputText: ${TEXT}
+- takeScreenshot: ${SHOT}-typed
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
+    timeout: 20000
+- extendedWaitUntil:
+    notVisible: "Not sent"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-sent

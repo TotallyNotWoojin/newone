@@ -1,0 +1,49 @@
+appId: com.totallynotwoojin.newone
+---
+# Header "Summarize" → the "Summary" sheet. Nothing has been summarized yet, so
+# the sheet must offer "Summarize conversation" and say "Nothing summarized
+# yet." (not "No new messages…"). After the request "Generating" gives way to
+# the prose and Copy/Share become enabled; Copy confirms with "Copied". The
+# prose must carry no source-id citations ("s1234"-style tokens belong to the
+# workplace product, never to a consumer summary).
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- tapOn: "Summarize"
+- extendedWaitUntil:
+    visible: "Summary"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Summarize conversation"
+    timeout: 15000
+- assertVisible: "Nothing summarized yet."
+- assertNotVisible: "No new messages since the last summary."
+- takeScreenshot: ${SHOT}-sheet
+- tapOn: "Summarize conversation"
+- extendedWaitUntil:
+    visible: ".*(Generating|No new messages since the last summary|Summary unavailable|Source changed).*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-requested
+- extendedWaitUntil:
+    notVisible: "Generating"
+    timeout: 180000
+- takeScreenshot: ${SHOT}-ready
+- assertNotVisible: "Summary unavailable"
+- assertNotVisible: "Source changed"
+# Ready: the prose is on screen and both actions are enabled.
+- assertVisible:
+    text: "Copy"
+    enabled: true
+- assertVisible:
+    text: "Share"
+    enabled: true
+- assertNotVisible: ".*s[0-9]{4}.*"
+- tapOn: "Copy"
+- extendedWaitUntil:
+    visible: "Copied"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-copied
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 15000
