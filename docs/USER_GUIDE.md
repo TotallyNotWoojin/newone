@@ -102,7 +102,7 @@ Blocking stops optional direct contact but does not suppress required official n
 
 ## Devices and account security
 
-In **You → Password**, add or change a password so you can sign in with your email and password. A one-time code sent to your email always works too, and it is the way back in if you forget the password: there is no separate reset link.
+You sign in with your email and password. In **You → Password** you can change the password. If you forget it, tap **Forgot password?** on the sign-in screen: a one-time code goes to your email, and after entering it you choose a new password. There is no separate reset link.
 
 In **You → Devices and sessions**, review active devices and revoke anything unfamiliar. Sign out before returning or replacing a device. A suspended account loses new access even if an older token has not reached its nominal expiry.
 

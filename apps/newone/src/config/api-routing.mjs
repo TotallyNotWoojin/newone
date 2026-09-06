@@ -24,6 +24,9 @@ const AUTH_PATHS = new Set([
   '/v2/auth/password/verify',
   '/v2/auth/native/password/verify',
   '/v2/auth/password/set',
+  // Account lookup (v3.2): the first step of every returning sign-in.
+  '/v2/auth/account/lookup',
+  '/v2/auth/native/account/lookup',
   '/v2/auth/mfa/factors',
   '/v2/auth/mfa/enroll',
   '/v2/auth/mfa/challenge',

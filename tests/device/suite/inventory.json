@@ -5,7 +5,7 @@
     "method": "static read of screen sources, feature components and the English catalog block (catalog.ts lines 1-1047); no runtime execution",
     "consumerModel": "personal realm = isPersonalRealm(workspace.organizationId); consumerIosReachable reflects what a plain consumer account on a physical iPhone can reach given the JSX gating recorded per control",
     "sourceFileNote": "controls carry 'sourceFile' only when the JSX lives outside the screen's own file",
-    "revised": "2026-09-05: applied the v3 summary and settings streams by hand (Summary sheet replaces the briefing card; compact settings with pickers, Edit profile sheet, Allow notifications switch, Devices group, consumer sign-out dialog, first-launch notification card); 2026-09-06: applied the v3 chat, social, terminology and auth streams by hand (compact bubbles without translation labels, 'Show details'/'Propose correction' in the long-press sheet, report actions removed, inline photos, no message requests, invite-anyone people picker, consumer search without filters, 'Sign in' chip + code/password methods + 'Add a password' step, consumer wording: people/Everyone/Add people/Add to group/Show more/New owner/I understand)"
+    "revised": "2026-09-05: applied the v3 summary and settings streams by hand (Summary sheet replaces the briefing card; compact settings with pickers, Edit profile sheet, Allow notifications switch, Devices group, consumer sign-out dialog, first-launch notification card); 2026-09-06: applied the v3 chat, social, terminology and auth streams by hand (compact bubbles without translation labels, 'Show details'/'Propose correction' in the long-press sheet, report actions removed, inline photos, no message requests, invite-anyone people picker, consumer search without filters, 'Sign in' chip + code/password methods + 'Add a password' step, consumer wording: people/Everyone/Add people/Add to group/Show more/New owner/I understand); 2026-09-06 (v3.2, stream D): sign-in is email → Continue (account lookup) → password → Sign in; 'Forgot password?' → emailed code → 'Set a new password'; the Email me a code / Use password method chips, the Email/Phone channel chips and the 'Add a password' step are gone"
   },
   "screens": [
     {
@@ -176,24 +176,34 @@
           "sourceLine": 414
         },
         {
-          "id": "sign-in.method-code",
-          "label": "Email me a code",
-          "catalogKey": "auth.methodCode",
-          "kind": "chip",
-          "gating": "authStep === 'identity' && accessMode === 'returning'",
+          "id": "sign-in.forgot-password",
+          "label": "Forgot password?",
+          "catalogKey": "auth.forgotPassword",
+          "kind": "button",
+          "gating": "authStep === 'password' (returning, account with a password)",
           "consumerIosReachable": true,
-          "note": "chooseSignInMethod('code'); the default returning method (Sep 2026 auth stream)",
-          "sourceLine": 525
+          "note": "testID forgot-password; requests a recovery code (requestRecoveryOtp) and moves to the code step; the code then opens 'Set a new password' (v3.2)",
+          "sourceLine": 566
         },
         {
-          "id": "sign-in.method-password",
-          "label": "Use password",
-          "catalogKey": "auth.methodPassword",
-          "kind": "chip",
-          "gating": "authStep === 'identity' && accessMode === 'returning'",
+          "id": "sign-in.create-account-shortcut",
+          "label": "Create an account instead",
+          "catalogKey": "auth.createAccountShortcut",
+          "kind": "button",
+          "gating": "authStep === 'identity' && unknownAccount (the lookup found no account for the email)",
           "consumerIosReachable": true,
-          "note": "chooseSignInMethod('password'); reveals the password field and makes the primary button read 'Sign in' (auth.signIn); 'Forgot your password? Email me a code instead' link switches back",
-          "sourceLine": 530
+          "note": "testID create-account-shortcut; shown under 'There’s no account with that email.' (auth.noAccount); switches to Create account keeping the email (v3.2)",
+          "sourceLine": 674
+        },
+        {
+          "id": "sign-in.new-password",
+          "label": "New password",
+          "catalogKey": "auth.newPasswordLabel",
+          "kind": "input",
+          "gating": "authStep === 'new-password' (after a verified recovery code)",
+          "consumerIosReachable": true,
+          "note": "testID new-password; PasswordField under the 'Set a new password' title (auth.newPasswordTitle); submit runs completeRecovery (v3.2)",
+          "sourceLine": 577
         },
         {
           "id": "sign-in.mode-enrollment",
@@ -214,26 +224,6 @@
           "consumerIosReachable": true,
           "note": "chooseAccessMode('recovery'); shows amber recovery warning (line 437)",
           "sourceLine": 418
-        },
-        {
-          "id": "sign-in.channel-email",
-          "label": "Email",
-          "catalogKey": "auth.emailChannel",
-          "kind": "chip",
-          "gating": "authStep === 'identity' && !signupMode",
-          "consumerIosReachable": "conditional",
-          "note": "chooseDestinationType('email'); hidden in the default Create account mode",
-          "sourceLine": 424
-        },
-        {
-          "id": "sign-in.channel-phone",
-          "label": "Phone",
-          "catalogKey": "auth.phoneChannel",
-          "kind": "chip",
-          "gating": "authStep === 'identity' && !signupMode",
-          "consumerIosReachable": "conditional",
-          "note": "chooseDestinationType('phone'); international +E.164 format required",
-          "sourceLine": 429
         },
         {
           "id": "sign-in.invitation-token",
@@ -260,19 +250,9 @@
           "label": "Email address",
           "catalogKey": "auth.signupEmailLabel",
           "kind": "input",
-          "gating": "authStep === 'identity' && destinationType === 'email'",
+          "gating": "authStep === 'identity' (email only since v3.2; the Email/Phone chips and the phone field are gone)",
           "consumerIosReachable": true,
-          "note": "placeholder 'you@example.com'; label key is auth.signupEmailLabel in signup mode, auth.emailLabel otherwise; onSubmitEditing=sendLink",
-          "sourceLine": 507
-        },
-        {
-          "id": "sign-in.destination-phone",
-          "label": "Phone number",
-          "catalogKey": "auth.phoneLabel",
-          "kind": "input",
-          "gating": "authStep === 'identity' && destinationType === 'phone' (only selectable when !signupMode)",
-          "consumerIosReachable": "conditional",
-          "note": "placeholder '+52 81 5555 0192'; keyboardType phone-pad",
+          "note": "testID sign-in-destination; placeholder 'you@example.com'; label key is auth.signupEmailLabel in signup mode, auth.emailLabel otherwise; onSubmitEditing=lookupAccount (returning) or sendLink; on the password step the email shows as a static row",
           "sourceLine": 507
         },
         {
@@ -290,10 +270,10 @@
           "label": "Password",
           "catalogKey": "auth.passwordLabel",
           "kind": "input",
-          "gating": "authStep === 'identity' && passwordMode (returning + 'Use password')",
+          "gating": "authStep === 'password' (returning: the lookup found an account with a password)",
           "consumerIosReachable": true,
-          "note": "PasswordField; submit runs signInWithPassword",
-          "sourceLine": 665
+          "note": "testID password; PasswordField next to the static email row; submit runs signInWithPassword (v3.2)",
+          "sourceLine": 553
         },
         {
           "id": "sign-in.resend-code",
@@ -342,38 +322,28 @@
           "kind": "button",
           "gating": "disabled={isWebAuthBlocked}; label switches on verify step",
           "consumerIosReachable": true,
-          "note": "Identity step: sendLink ('Continue', was 'Continue securely'); password method: 'Sign in' (auth.signIn). Verify step label: 'Verify and create account' (auth.verifySignup) / 'Sign in' (auth.verifySignIn, was 'Verify and sign in') / 'Verify and secure account' (auth.verifyRecovery)",
-          "sourceLine": 614
+          "note": "Identity step: lookupAccount (returning) or sendLink (signup/invitation), label 'Continue'; password step: 'Sign in' (auth.signIn); verify step: 'Verify and create account' (auth.verifySignup) / 'Continue' (returning forgot-password code) / 'Sign in' (auth.verifySignIn, invitation); new-password step: 'Save password' (auth.savePassword)",
+          "sourceLine": 692
         },
         {
-          "id": "sign-in.password-prompt-save",
+          "id": "sign-in.save-password",
           "label": "Save password",
           "catalogKey": "auth.savePassword",
           "kind": "button",
-          "gating": "authStep === 'password-prompt': shown once after a code sign-in on a returning account without a password",
+          "gating": "authStep === 'new-password': after a verified forgot-password code",
           "consumerIosReachable": true,
-          "note": "'Add a password' step (auth.passwordPromptTitle); saves the new password then lands on Chats",
-          "sourceLine": 437
+          "note": "'Set a new password' step (auth.newPasswordTitle); the primary button; saves the password through the recovering session (completeRecovery) then lands on Chats. The old 'Add a password' step and its 'Not now' skip are gone (v3.2)",
+          "sourceLine": 692
         },
         {
-          "id": "sign-in.password-prompt-skip",
-          "label": "Not now",
-          "catalogKey": "auth.skipPassword",
+          "id": "sign-in.different-email",
+          "label": "Use a different email",
+          "catalogKey": "auth.differentEmail",
           "kind": "button",
-          "gating": "authStep === 'password-prompt'",
+          "gating": "authStep === 'verify' || authStep === 'password'",
           "consumerIosReachable": true,
-          "note": "Skips the password step; the common verify flows wait for '(Not now|Ahora no|나중에|Chats|채팅)' and tap it",
-          "sourceLine": 446
-        },
-        {
-          "id": "sign-in.different-identity",
-          "label": "Use a different email or phone",
-          "catalogKey": "auth.differentIdentity",
-          "kind": "button",
-          "gating": "authStep === 'verify'",
-          "consumerIosReachable": true,
-          "note": "Returns to identity step, clears code and message",
-          "sourceLine": 629
+          "note": "testID different-email; returns to the identity step, clears code, password and message (was 'Use a different email or phone')",
+          "sourceLine": 700
         },
         {
           "id": "sign-in.help-link",
@@ -4065,24 +4035,6 @@
       "gating": "sign-in identity step (mode/language chips always visible)"
     },
     {
-      "key": "auth.emailChannel",
-      "en": "Email",
-      "usedIn": [
-        "sign-in.tsx:425"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "authStep === 'identity' && !signupMode"
-    },
-    {
-      "key": "auth.phoneChannel",
-      "en": "Phone",
-      "usedIn": [
-        "sign-in.tsx:430"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "authStep === 'identity' && !signupMode"
-    },
-    {
       "key": "auth.invitationTokenLabel",
       "en": "Single-use invitation token",
       "usedIn": [
@@ -4180,13 +4132,13 @@
       "gating": "authStep === 'verify'"
     },
     {
-      "key": "auth.differentIdentity",
-      "en": "Use a different email or phone",
+      "key": "auth.differentEmail",
+      "en": "Use a different email",
       "usedIn": [
-        "sign-in.tsx:637"
+        "sign-in.tsx:700"
       ],
       "consumerIosReachable": true,
-      "gating": "authStep === 'verify'"
+      "gating": "authStep === 'verify' || authStep === 'password'"
     },
     {
       "key": "auth.verifySignup",
@@ -8045,24 +7997,6 @@
       "gating": "delete-account modal"
     },
     {
-      "key": "auth.methodCode",
-      "en": "Email me a code",
-      "usedIn": [
-        "sign-in.tsx:525"
-      ],
-      "consumerIosReachable": true,
-      "gating": "authStep === 'identity' && accessMode === 'returning'"
-    },
-    {
-      "key": "auth.methodPassword",
-      "en": "Use password",
-      "usedIn": [
-        "sign-in.tsx:530"
-      ],
-      "consumerIosReachable": true,
-      "gating": "authStep === 'identity' && accessMode === 'returning'"
-    },
-    {
       "key": "auth.signIn",
       "en": "Sign in",
       "usedIn": [
@@ -8075,20 +8009,29 @@
       "key": "auth.savePassword",
       "en": "Save password",
       "usedIn": [
-        "sign-in.tsx:437",
+        "sign-in.tsx:692",
         "password-section.tsx:93"
       ],
       "consumerIosReachable": true,
-      "gating": "'Add a password' step after a code sign-in"
+      "gating": "'Set a new password' step after a forgot-password code; Settings password sheet"
     },
     {
-      "key": "auth.skipPassword",
-      "en": "Not now",
+      "key": "auth.forgotPassword",
+      "en": "Forgot password?",
       "usedIn": [
-        "sign-in.tsx:446"
+        "sign-in.tsx:566"
       ],
       "consumerIosReachable": true,
-      "gating": "'Add a password' step after a code sign-in"
+      "gating": "password step of the returning sign-in"
+    },
+    {
+      "key": "auth.createAccountShortcut",
+      "en": "Create an account instead",
+      "usedIn": [
+        "sign-in.tsx:674"
+      ],
+      "consumerIosReachable": true,
+      "gating": "identity step after the lookup found no account"
     },
     {
       "key": "chat.imageOpen",

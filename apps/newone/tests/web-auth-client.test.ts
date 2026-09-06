@@ -9,6 +9,8 @@ import {
   getWebCsrfToken,
   getWebSession,
   listWebMfaFactors,
+  lookupNativeAccount,
+  lookupWebAccount,
   redeemNativeInvitation,
   requestNativeOtp,
   requestNativeRecoveryOtp,
@@ -749,5 +751,76 @@ describe('password gateway client', () => {
     });
     await expect(setNativePassword({ accessToken: 'controlled-access-token', password: 'correct horse battery' }))
       .rejects.toMatchObject({ code: 'network_unavailable' });
+  });
+});
+
+describe('account lookup client', () => {
+  test('asks the device-bound native lookup and accepts only an explicit two-fact answer', async () => {
+    jsonResponse({ data: { exists: true, hasPassword: true } });
+    await expect(lookupNativeAccount({
+      destinationType: 'email',
+      destination: 'person@example.test',
+    })).resolves.toEqual({ exists: true, hasPassword: true });
+    const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v2/auth/native/account/lookup');
+    expect(init.headers).toMatchObject({
+      'X-Newone-Client-Platform': 'ios',
+      'X-Newone-Installation-Id': '20000000-0000-4000-8000-000000000002',
+      apikey: 'sb_publishable_controlled_test_key',
+    });
+    expect(JSON.parse(String(init.body))).toEqual({
+      destinationType: 'email',
+      destination: 'person@example.test',
+      installationId: '20000000-0000-4000-8000-000000000002',
+    });
+
+    jsonResponse({ data: { exists: false, hasPassword: false } });
+    await expect(lookupNativeAccount({
+      destinationType: 'email',
+      destination: 'nobody@example.test',
+      captchaToken: 'controlled-captcha-token-value',
+    })).resolves.toEqual({ exists: false, hasPassword: false });
+    const [, secondInit] = controlledFetch.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(secondInit.body))).toMatchObject({ captchaToken: 'controlled-captcha-token-value' });
+
+    jsonResponse({ error: { code: 'rate_limited', retryAfterSeconds: 900 } }, 429);
+    await expect(lookupNativeAccount({
+      destinationType: 'email',
+      destination: 'person@example.test',
+    })).rejects.toMatchObject({ code: 'rate_limited' });
+
+    // A half answer is not an answer: nothing is inferred from a missing fact.
+    jsonResponse({ data: { exists: true } });
+    await expect(lookupNativeAccount({
+      destinationType: 'email',
+      destination: 'person@example.test',
+    })).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  test('asks the same-origin web lookup with the client binding', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: { origin: 'https://app.example.test' } },
+    });
+    jsonResponse({ data: { exists: true, hasPassword: false } });
+    try {
+      await expect(lookupWebAccount({
+        destinationType: 'email',
+        destination: 'person@example.test',
+        captchaToken: 'controlled-captcha-token-value',
+      })).resolves.toEqual({ exists: true, hasPassword: false });
+      const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/v2/auth/account/lookup');
+      expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+      expect(JSON.parse(String(init.body))).toMatchObject({
+        destinationType: 'email',
+        destination: 'person@example.test',
+        captchaToken: 'controlled-captcha-token-value',
+        installationId: '20000000-0000-4000-8000-000000000002',
+      });
+    } finally {
+      platform.restore();
+    }
   });
 });

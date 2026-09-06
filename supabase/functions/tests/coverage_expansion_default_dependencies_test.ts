@@ -404,6 +404,20 @@ const mockFetch: typeof fetch = async (input, init) => {
   if (url.pathname === '/auth/v1/admin/users' && init?.method === 'POST') {
     return json({ id: actorUserId, email: 'newcomer@example.com' });
   }
+  if (url.pathname === '/auth/v1/admin/users') {
+    // The listing filter is a substring match: the lookup must pick the exact
+    // address out of the page and ignore the near miss.
+    return json({
+      users: [
+        { id: deviceId, email: 'not-owner@example.com', app_metadata: {} },
+        {
+          id: actorUserId,
+          email: 'owner@example.com',
+          app_metadata: { newone_password_set_at: '2026-09-06T00:00:00.000Z' },
+        },
+      ],
+    });
+  }
   if (url.pathname.startsWith('/auth/v1/admin/users/')) {
     if (url.pathname.endsWith('/factors')) return json({ factors: [] });
     return json({
@@ -903,6 +917,12 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
     assertEquals(emailSession.userId, actorUserId);
     const phoneSession = await dependencies.verifyOtp('phone', '+15555550123', '123456');
     assertEquals(phoneSession.destinationType, 'email');
+
+    assertEquals(
+      await dependencies.lookupPasswordState('owner@example.com'),
+      { hasPassword: true },
+    );
+    assertEquals(await dependencies.lookupPasswordState('nobody@example.com'), null);
 
     assertEquals(
       await dependencies.redeemInvite(accessToken, actorUserId, 'invite-token', null),

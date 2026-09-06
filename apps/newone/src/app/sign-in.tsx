@@ -51,10 +51,12 @@ function invitationFromInitialLocation() {
   return invitationToken;
 }
 
-function normalizeDestination(destinationType: 'email' | 'phone', value: string) {
-  return destinationType === 'email'
-    ? value.trim().toLocaleLowerCase()
-    : value.trim().replace(/[\s().-]/g, '');
+// Sign-in is email only (owner decision, Sep 2026); the server's phone paths
+// stay inert.
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
+
+function normalizeEmail(value: string) {
+  return value.trim().toLocaleLowerCase();
 }
 
 // Mirrors the server-side consumer username contract exactly.
@@ -64,7 +66,7 @@ const SIGNUP_USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 // resend window for this long.
 const RESEND_COOLDOWN_SECONDS = 60;
 
-/** The gateway answers a wrong email or password with a bare 401. */
+/** The gateway answers a wrong password or a wrong code with a bare 401. */
 function credentialRejected(error: unknown) {
   const code = error && typeof error === 'object' && 'code' in error
     && typeof (error as { code: unknown }).code === 'string'
@@ -79,6 +81,13 @@ const UI_LANGUAGES = [
   { code: 'ko', labelKey: 'auth.languageKorean' },
 ] as const;
 
+type AccessMode = 'signup' | 'returning' | 'enrollment';
+
+// identity: the email (plus the signup or invitation fields). password: a
+// known account's password. verify: the emailed code (signup, invitation, or
+// forgot password). new-password: the replacement after a recovery code.
+type AuthStep = 'identity' | 'password' | 'verify' | 'new-password';
+
 export default function SignInScreen() {
   const router = useRouter();
   const auth = useAuth();
@@ -87,28 +96,27 @@ export default function SignInScreen() {
   const wide = Platform.OS === 'web' && width >= 920;
   const [destination, setDestination] = useState('');
   const [destinationFocused, setDestinationFocused] = useState(false);
-  const [destinationType, setDestinationType] = useState<'email' | 'phone'>('email');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [code, setCode] = useState('');
-  const [authStep, setAuthStep] = useState<'identity' | 'verify'>('identity');
+  const [authStep, setAuthStep] = useState<AuthStep>('identity');
   const [resendCooldown, setResendCooldown] = useState(0);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [initialInvitationToken] = useState(invitationFromInitialLocation);
-  const [accessMode, setAccessMode] = useState<'signup' | 'returning' | 'enrollment' | 'recovery'>(
+  const [accessMode, setAccessMode] = useState<AccessMode>(
     initialInvitationToken ? 'enrollment' : 'signup',
   );
   const [invitationToken, setInvitationToken] = useState(initialInvitationToken);
   const [employeeCode, setEmployeeCode] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [signInMethod, setSignInMethod] = useState<'code' | 'password'>('code');
   const [password, setPassword] = useState('');
+  // The lookup found no account for the email: offer the signup shortcut.
+  const [unknownAccount, setUnknownAccount] = useState(false);
   const signupMode = accessMode === 'signup';
-  const passwordMode = accessMode === 'returning' && signInMethod === 'password';
+  const returningMode = accessMode === 'returning';
   const enrollmentMode = accessMode === 'enrollment';
-  const recoveryMode = accessMode === 'recovery';
   // Without a configured Turnstile site key the challenge cannot load; the
   // server exempts tokenless native requests, so the client omits the token.
   const captchaConfigured = Boolean(publicRuntimeConfig.turnstileSiteKey);
@@ -145,52 +153,117 @@ export default function SignInScreen() {
       : `${localized} (${errorCode})`;
   };
 
-  const chooseDestinationType = (nextType: 'email' | 'phone') => {
-    if (nextType === destinationType) return;
-    setDestinationType(nextType);
-    setDestination('');
-    setCode('');
-    setMessage('');
+  const captchaMissing = () =>
+    captchaConfigured && (!captchaToken || captchaToken.length < 20 || /\s/.test(captchaToken));
+  const resetCaptcha = () => {
     setCaptchaToken(null);
     setCaptchaKey((current) => current + 1);
   };
 
-  const chooseAccessMode = (nextMode: 'signup' | 'returning' | 'enrollment' | 'recovery') => {
+  const chooseAccessMode = (nextMode: AccessMode) => {
     setAccessMode(nextMode);
     setAuthStep('identity');
     setCode('');
     setPassword('');
     setMessage('');
-    setCaptchaToken(null);
-    setCaptchaKey((current) => current + 1);
+    setUnknownAccount(false);
+    resetCaptcha();
     if (nextMode !== 'enrollment') {
       setInvitationToken('');
       setEmployeeCode('');
     }
-    if (nextMode === 'signup' && destinationType !== 'email') {
-      // Open signup is delivered exclusively over email.
-      setDestinationType('email');
-      setDestination('');
+  };
+
+  // Back to the email from the password, code, or new-password step.
+  const useDifferentEmail = () => {
+    setAuthStep('identity');
+    setCode('');
+    setPassword('');
+    setMessage('');
+    setUnknownAccount(false);
+  };
+
+  // Forgot password (and the rare account that never chose a password): email
+  // a recovery code and move to the code step. Throws so the caller localizes.
+  const sendRecoveryCode = async (normalized: string) => {
+    const result = await auth.requestRecoveryOtp({
+      destinationType: 'email',
+      destination: normalized,
+      ...(captchaToken ? { captchaToken } : {}),
+    });
+    resetCaptcha();
+    if (!result.channelConfigured) {
+      setMessage(t('auth.channelUnavailable'));
+      return;
+    }
+    setPassword('');
+    setCode('');
+    setAuthStep('verify');
+    setResendCooldown(RESEND_COOLDOWN_SECONDS);
+  };
+
+  // Returning sign-in, step one: the service says whether an account uses the
+  // email and whether it has a password.
+  const lookupAccount = async () => {
+    if (isWebAuthBlocked) {
+      setMessage(t('auth.gatewayUnavailable'));
+      return;
+    }
+    const normalized = normalizeEmail(destination);
+    if (!EMAIL_PATTERN.test(normalized)) {
+      setMessage(t('auth.emailInvalid'));
+      return;
+    }
+    if (captchaMissing()) {
+      setMessage(t('auth.challengeRequired'));
+      return;
+    }
+    setLoading(true);
+    setMessage('');
+    setUnknownAccount(false);
+    try {
+      const account = await auth.lookupAccount({
+        destinationType: 'email',
+        destination: normalized,
+        ...(captchaToken ? { captchaToken } : {}),
+      });
+      if (!account.exists) {
+        setUnknownAccount(true);
+        setMessage(t('auth.noAccount'));
+        return;
+      }
+      if (account.hasPassword) {
+        setPassword('');
+        setAuthStep('password');
+        return;
+      }
+      // No password on file (only possible for an account from before the
+      // v3.2 wipe): the forgot-password road, code then a new password.
+      await sendRecoveryCode(normalized);
+    } catch (lookupError) {
+      setMessage(failureMessage(lookupError, 'auth.signInUnavailable'));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const chooseSignInMethod = (nextMethod: 'code' | 'password') => {
-    setSignInMethod(nextMethod);
+  const forgotPassword = async () => {
+    if (captchaMissing()) {
+      setMessage(t('auth.challengeRequired'));
+      return;
+    }
+    setLoading(true);
     setMessage('');
-    setPassword('');
-    if (nextMethod === 'password' && destinationType !== 'email') {
-      // A password pairs with the account email; phone stays a code channel.
-      setDestinationType('email');
-      setDestination('');
+    try {
+      await sendRecoveryCode(normalizeEmail(destination));
+    } catch (requestError) {
+      setMessage(failureMessage(requestError, 'auth.signInUnavailable'));
+    } finally {
+      setLoading(false);
     }
   };
 
   const signInWithPassword = async () => {
-    const normalized = normalizeDestination('email', destination);
-    if (!/^\S+@\S+\.\S+$/.test(normalized)) {
-      setMessage(t('auth.emailInvalid'));
-      return;
-    }
     if (password.length < PASSWORD_MIN_LENGTH) {
       setMessage(t('auth.passwordTooShort'));
       return;
@@ -198,7 +271,11 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage('');
     try {
-      await auth.signInWithPassword({ destinationType: 'email', destination: normalized, password });
+      await auth.signInWithPassword({
+        destinationType: 'email',
+        destination: normalizeEmail(destination),
+        password,
+      });
       router.replace('/');
     } catch (signInError) {
       setMessage(credentialRejected(signInError)
@@ -209,8 +286,9 @@ export default function SignInScreen() {
     }
   };
 
-  // The one-time offer after a code sign-in: save a password, or skip.
-  const savePassword = async () => {
+  // After the recovery code: the new password is saved through the recovered
+  // session, which keeps that session valid, and the member is signed in.
+  const saveNewPassword = async () => {
     if (password.length < PASSWORD_MIN_LENGTH) {
       setMessage(t('auth.passwordTooShort'));
       return;
@@ -218,7 +296,7 @@ export default function SignInScreen() {
     setLoading(true);
     setMessage('');
     try {
-      await auth.setPassword(password);
+      await auth.completeRecovery(password);
       router.replace('/');
     } catch (saveError) {
       setMessage(failureMessage(saveError, 'errors.action'));
@@ -227,23 +305,18 @@ export default function SignInScreen() {
     }
   };
 
-
+  // Signup and workplace invitation: request the emailed code.
   const sendLink = async () => {
     if (isWebAuthBlocked) {
       setMessage(t('auth.gatewayUnavailable'));
       return;
     }
-    const normalized = normalizeDestination(destinationType, destination);
-    const destinationValid = destinationType === 'email'
-      ? /^\S+@\S+\.\S+$/.test(normalized)
-      : /^\+[1-9][0-9]{7,14}$/.test(normalized);
-    if (!destinationValid) {
-      setMessage(t(destinationType === 'email'
-        ? signupMode ? 'auth.signupEmailInvalid' : 'auth.emailInvalid'
-        : 'auth.phoneInvalid'));
+    const normalized = normalizeEmail(destination);
+    if (!EMAIL_PATTERN.test(normalized)) {
+      setMessage(t(signupMode ? 'auth.signupEmailInvalid' : 'auth.emailInvalid'));
       return;
     }
-    if (captchaConfigured && (!captchaToken || captchaToken.length < 20 || /\s/.test(captchaToken))) {
+    if (captchaMissing()) {
       setMessage(t('auth.challengeRequired'));
       return;
     }
@@ -283,44 +356,38 @@ export default function SignInScreen() {
         setMessage(t('auth.signupOtpSent'));
         return;
       }
-      const result = recoveryMode
-        ? await auth.requestRecoveryOtp({
-            destinationType,
-            destination: normalized,
-            ...(captchaToken ? { captchaToken } : {}),
-          })
-        : await auth.requestOtp({
-            destinationType,
-            destination: normalized,
-            ...(captchaToken ? { captchaToken } : {}),
-            ...(enrollmentMode ? { invitationToken: normalizedInvitationToken } : {}),
-            ...(normalizedEmployeeCode ? { employeeCode: normalizedEmployeeCode } : {}),
-          });
+      const result = await auth.requestOtp({
+        destinationType: 'email',
+        destination: normalized,
+        ...(captchaToken ? { captchaToken } : {}),
+        ...(enrollmentMode ? { invitationToken: normalizedInvitationToken } : {}),
+        ...(normalizedEmployeeCode ? { employeeCode: normalizedEmployeeCode } : {}),
+      });
       if (!result.channelConfigured) {
         setMessage(t('auth.channelUnavailable'));
         return;
       }
       setAuthStep('verify');
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
-      setMessage(t(recoveryMode ? 'auth.recoveryOtpSent' : 'auth.otpSent'));
+      setMessage(t('auth.otpSent'));
     } catch (requestError) {
       setMessage(failureMessage(requestError, 'auth.signInUnavailable'));
     } finally {
       setLoading(false);
-      setCaptchaToken(null);
-      setCaptchaKey((current) => current + 1);
+      resetCaptcha();
     }
   };
 
   // Re-runs the exact request that delivered the current code, with the values
-  // already entered on the identity step, then closes a fresh resend window.
+  // already entered, then closes a fresh resend window.
   const resendCode = async () => {
     setLoading(true);
     setMessage('');
+    const normalized = normalizeEmail(destination);
     try {
       if (signupMode) {
         await auth.requestSignup({
-          destination: normalizeDestination('email', destination),
+          destination: normalized,
           username,
           displayName: displayName.trim(),
           language: locale,
@@ -329,14 +396,11 @@ export default function SignInScreen() {
         setMessage(t('auth.codeResent'));
         return;
       }
-      const result = recoveryMode
-        ? await auth.requestRecoveryOtp({
-            destinationType,
-            destination: normalizeDestination(destinationType, destination),
-          })
+      const result = returningMode
+        ? await auth.requestRecoveryOtp({ destinationType: 'email', destination: normalized })
         : await auth.requestOtp({
-            destinationType,
-            destination: normalizeDestination(destinationType, destination),
+            destinationType: 'email',
+            destination: normalized,
             ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
             ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
           });
@@ -361,32 +425,34 @@ export default function SignInScreen() {
     }
     setLoading(true);
     setMessage('');
+    const normalized = normalizeEmail(destination);
     try {
-      let outcome: { hasPassword: boolean };
       if (signupMode) {
-        outcome = await auth.verifySignup({
-          destination: normalizeDestination('email', destination),
-          code: normalizedCode,
-          password,
-        });
-      } else if (recoveryMode) {
-        outcome = await auth.verifyRecoveryOtp({
-          destinationType,
-          destination: normalizeDestination(destinationType, destination),
-          code: normalizedCode,
-        });
-      } else {
-        outcome = await auth.verifyOtp({
-          destinationType,
-          destination: normalizeDestination(destinationType, destination),
-          ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
-          ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
-          code: normalizedCode,
-        });
+        await auth.verifySignup({ destination: normalized, code: normalizedCode, password });
+        router.replace('/');
+        return;
       }
-      // An account without a password stays here for the add-a-password offer
-      // (auth.passwordPromptPending renders it); everyone else goes home.
-      if (outcome.hasPassword) router.replace('/');
+      if (returningMode) {
+        // Forgot password: the code signs the member in only once the new
+        // password below is saved.
+        await auth.verifyRecoveryOtp({
+          destinationType: 'email',
+          destination: normalized,
+          code: normalizedCode,
+        });
+        setPassword('');
+        setCode('');
+        setAuthStep('new-password');
+        return;
+      }
+      await auth.verifyOtp({
+        destinationType: 'email',
+        destination: normalized,
+        ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
+        ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
+        code: normalizedCode,
+      });
+      router.replace('/');
     } catch (verifyError) {
       const signupExpired = signupMode
         && typeof verifyError === 'object'
@@ -398,10 +464,11 @@ export default function SignInScreen() {
         // with every field intact so the member can request a fresh code.
         setAuthStep('identity');
         setCode('');
-        setCaptchaToken(null);
-        setCaptchaKey((current) => current + 1);
+        resetCaptcha();
       }
-      setMessage(failureMessage(verifyError, 'auth.verifyFailed'));
+      setMessage(credentialRejected(verifyError)
+        ? t('auth.verifyFailed')
+        : failureMessage(verifyError, 'auth.verifyFailed'));
     } finally {
       setLoading(false);
     }
@@ -410,45 +477,47 @@ export default function SignInScreen() {
   const onCaptchaToken = useCallback((token: string | null) => setCaptchaToken(token), []);
   const onCaptchaError = useCallback(() => setMessage(t('auth.challengeUnavailable')), [t]);
 
-  if (auth.passwordPromptPending) {
-    return (
-      <SafeAreaView style={styles.root}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboard}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            <View style={[styles.card, styles.fullWidth, shadow]}>
-              <Text style={styles.title}>{t('auth.passwordPromptTitle')}</Text>
-              <Text style={styles.subtitle}>{t('auth.passwordPromptBody')}</Text>
-              <PasswordField
-                autoComplete="new-password"
-                label={t('auth.newPasswordLabel')}
-                testID="new-password"
-                onChangeText={setPassword}
-                onSubmitEditing={savePassword}
-                returnKeyType="go"
-                value={password}
-              />
-              <Text style={styles.helperText}>{t('auth.passwordRule')}</Text>
-              {message ? (
-                <Text accessibilityLiveRegion="polite" style={styles.message}>{message}</Text>
-              ) : null}
-              <PrimaryButton
-                icon="checkmark"
-                label={t('auth.savePassword')}
-                loading={loading}
-                onPress={savePassword}
-                style={styles.fullButton}
-              />
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    );
-  }
+  const title = enrollmentMode
+    ? t('auth.titleEnroll')
+    : signupMode
+      ? t('auth.titleSignup')
+      : authStep === 'new-password'
+        ? t('auth.newPasswordTitle')
+        : t('auth.titleReturn');
+  const subtitle = enrollmentMode
+    ? t('auth.subtitleEnroll')
+    : signupMode
+      ? t('auth.subtitleSignup')
+      : authStep === 'password'
+        ? t('auth.subtitlePassword')
+        : authStep === 'verify'
+          ? t('auth.otpSent')
+          : authStep === 'new-password'
+            ? t('auth.passwordRule')
+            : t('auth.subtitleReturn');
+  const primaryLabel = isWebAuthBlocked
+    ? t('auth.webNotConfigured')
+    : authStep === 'verify'
+      ? t(signupMode ? 'auth.verifySignup' : returningMode ? 'auth.continue' : 'auth.verifySignIn')
+      : authStep === 'password'
+        ? t('auth.signIn')
+        : authStep === 'new-password'
+          ? t('auth.savePassword')
+          : t('auth.continue');
+  const primaryAction = authStep === 'verify'
+    ? verifyCode
+    : authStep === 'password'
+      ? signInWithPassword
+      : authStep === 'new-password'
+        ? saveNewPassword
+        : returningMode
+          ? lookupAccount
+          : sendLink;
+  // The challenge guards every code delivery. It sits on the identity step;
+  // the password step shows it only when no token is held for a
+  // "Forgot password?" request (the lookup keeps its token for that).
+  const showCaptcha = captchaConfigured && !isWebAuthBlocked
+    && (authStep === 'identity' || (authStep === 'password' && !captchaToken));
 
   return (
     <SafeAreaView style={styles.root}>
@@ -477,24 +546,8 @@ export default function SignInScreen() {
         </View>
 
         <View style={[styles.card, wide ? styles.cardWide : styles.fullWidth, shadow]}>
-          <Text style={styles.title}>
-            {recoveryMode
-              ? t('auth.titleRecovery')
-              : enrollmentMode
-                ? t('auth.titleEnroll')
-                : signupMode
-                  ? t('auth.titleSignup')
-                  : t('auth.titleReturn')}
-          </Text>
-          <Text style={styles.subtitle}>
-            {recoveryMode
-              ? t('auth.subtitleRecovery')
-              : enrollmentMode
-                ? t('auth.subtitleEnroll')
-                : signupMode
-                  ? t('auth.subtitleSignup')
-                  : t('auth.subtitleReturn')}
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
           <View style={styles.languageRow}>
             <Text style={styles.languageLabel}>{t('auth.languageLabel')}</Text>
@@ -511,46 +564,7 @@ export default function SignInScreen() {
           {authStep === 'identity' ? (
             <View style={styles.modeChoices}>
               <Chip label={t('auth.modeSignup')} onPress={() => chooseAccessMode('signup')} selected={signupMode} />
-              <Chip label={t('auth.returning')} onPress={() => {
-                chooseAccessMode('returning');
-              }} selected={accessMode === 'returning'} />
-            </View>
-          ) : null}
-
-          {authStep === 'identity' && accessMode === 'returning' ? (
-            <View style={styles.modeChoices}>
-              <Chip
-                label={t('auth.methodCode')}
-                onPress={() => chooseSignInMethod('code')}
-                selected={signInMethod === 'code'}
-              />
-              <Chip
-                label={t('auth.methodPassword')}
-                onPress={() => chooseSignInMethod('password')}
-                selected={signInMethod === 'password'}
-              />
-            </View>
-          ) : null}
-
-          {authStep === 'identity' && !signupMode && !passwordMode ? (
-            <View style={styles.modeChoices}>
-              <Chip
-                label={t('auth.emailChannel')}
-                onPress={() => chooseDestinationType('email')}
-                selected={destinationType === 'email'}
-              />
-              <Chip
-                label={t('auth.phoneChannel')}
-                onPress={() => chooseDestinationType('phone')}
-                selected={destinationType === 'phone'}
-              />
-            </View>
-          ) : null}
-
-          {authStep === 'identity' && recoveryMode ? (
-            <View style={styles.recoveryWarning}>
-              <Ionicons color={colors.amber} name="warning-outline" size={18} />
-              <Text style={styles.recoveryWarningText}>{t('auth.recoveryWarning')}</Text>
+              <Chip label={t('auth.returning')} onPress={() => chooseAccessMode('returning')} selected={returningMode} />
             </View>
           ) : null}
 
@@ -588,78 +602,73 @@ export default function SignInScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.label}>
-            {authStep === 'verify'
-              ? t('auth.codeLabel')
-              : t(destinationType === 'email'
-                  ? signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel'
-                  : 'auth.phoneLabel')}
-          </Text>
-          <View style={[styles.inputWrap, destinationFocused && styles.inputWrapFocused]}>
-            <Ionicons
-              name={authStep === 'verify' ? 'keypad-outline' : destinationType === 'email' ? 'mail-outline' : 'call-outline'}
-              size={18}
-              color={colors.inkSubtle}
-            />
-            {authStep === 'verify' ? (
-              <TextInput
-                accessibilityLabel={t('auth.codeA11y')}
-                autoComplete="one-time-code"
-                keyboardType="number-pad"
-                maxLength={6}
-                onChangeText={setCode}
-                onSubmitEditing={verifyCode}
-                placeholder="000000"
-                placeholderTextColor={colors.inkSubtle}
-                returnKeyType="done"
-                style={styles.input}
-                textContentType="oneTimeCode"
-                value={code}
-              />
-            ) : (
-              <TextInput
-                accessibilityHint={
-                  destinationType === 'email'
-                    ? recoveryMode
-                      ? t('auth.recoveryEmailHint')
-                      : enrollmentMode
+          {authStep === 'identity' || authStep === 'verify' ? (
+            <>
+              <Text style={styles.label}>
+                {authStep === 'verify'
+                  ? t('auth.codeLabel')
+                  : t(signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel')}
+              </Text>
+              <View style={[styles.inputWrap, destinationFocused && styles.inputWrapFocused]}>
+                <Ionicons
+                  name={authStep === 'verify' ? 'keypad-outline' : 'mail-outline'}
+                  size={18}
+                  color={colors.inkSubtle}
+                />
+                {authStep === 'verify' ? (
+                  <TextInput
+                    accessibilityLabel={t('auth.codeA11y')}
+                    autoComplete="one-time-code"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    onChangeText={setCode}
+                    onSubmitEditing={verifyCode}
+                    placeholder="000000"
+                    placeholderTextColor={colors.inkSubtle}
+                    returnKeyType="done"
+                    style={styles.input}
+                    testID="sign-in-code"
+                    textContentType="oneTimeCode"
+                    value={code}
+                  />
+                ) : (
+                  <TextInput
+                    accessibilityHint={
+                      enrollmentMode
                         ? t('auth.emailInviteHint')
                         : signupMode
                           ? t('auth.signupEmailHint')
                           : t('auth.emailHint')
-                    : recoveryMode
-                      ? t('auth.recoveryPhoneHint')
-                      : enrollmentMode
-                        ? t('auth.phoneInviteHint')
-                        : t('auth.phoneHint')
-                }
-                accessibilityLabel={t(destinationType === 'email'
-                  ? signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel'
-                  : 'auth.phoneLabel')}
-                autoCapitalize="none"
-                autoComplete={destinationType === 'email' ? 'email' : 'tel'}
-                keyboardType={destinationType === 'email' ? 'email-address' : 'phone-pad'}
-                onBlur={() => setDestinationFocused(false)}
-                onChangeText={setDestination}
-                onFocus={() => setDestinationFocused(true)}
-                onSubmitEditing={passwordMode ? undefined : sendLink}
-                clearButtonMode="while-editing"
-                testID="sign-in-destination"
-                placeholder={
-                  destinationType === 'email'
-                    ? 'you@example.com'
-                    : '+52 81 5555 0192'
-                }
-                placeholderTextColor={colors.inkSubtle}
-                returnKeyType={passwordMode ? 'next' : 'send'}
-                style={styles.input}
-                textContentType={destinationType === 'email' ? 'emailAddress' : 'telephoneNumber'}
-                value={destination}
-              />
-            )}
-          </View>
-          {authStep === 'identity' && passwordMode ? (
+                    }
+                    accessibilityLabel={t(signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel')}
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    keyboardType="email-address"
+                    onBlur={() => setDestinationFocused(false)}
+                    onChangeText={setDestination}
+                    onFocus={() => setDestinationFocused(true)}
+                    onSubmitEditing={returningMode ? lookupAccount : sendLink}
+                    clearButtonMode="while-editing"
+                    testID="sign-in-destination"
+                    placeholder="you@example.com"
+                    placeholderTextColor={colors.inkSubtle}
+                    returnKeyType="send"
+                    style={styles.input}
+                    textContentType="emailAddress"
+                    value={destination}
+                  />
+                )}
+              </View>
+            </>
+          ) : null}
+
+          {authStep === 'password' ? (
             <>
+              <Text style={styles.label}>{t('auth.emailLabel')}</Text>
+              <View style={styles.inputWrap}>
+                <Ionicons name="mail-outline" size={18} color={colors.inkSubtle} />
+                <Text numberOfLines={1} style={styles.staticValue}>{normalizeEmail(destination)}</Text>
+              </View>
               <PasswordField
                 autoComplete="current-password"
                 label={t('auth.passwordLabel')}
@@ -673,12 +682,27 @@ export default function SignInScreen() {
               />
               <Pressable
                 accessibilityRole="button"
-                onPress={() => chooseSignInMethod('code')}
-                style={({ pressed }) => [styles.resendLink, pressed && styles.pressed]}>
+                disabled={loading}
+                onPress={forgotPassword}
+                style={({ pressed }) => [styles.resendLink, pressed && styles.pressed]}
+                testID="forgot-password">
                 <Text style={styles.resendText}>{t('auth.forgotPassword')}</Text>
               </Pressable>
             </>
           ) : null}
+
+          {authStep === 'new-password' ? (
+            <PasswordField
+              autoComplete="new-password"
+              label={t('auth.newPasswordLabel')}
+              testID="new-password"
+              onChangeText={setPassword}
+              onSubmitEditing={saveNewPassword}
+              returnKeyType="go"
+              value={password}
+            />
+          ) : null}
+
           {authStep === 'verify' ? (
             <Pressable
               accessibilityLabel={t('auth.resendCode')}
@@ -741,7 +765,7 @@ export default function SignInScreen() {
               />
             </View>
           ) : null}
-          {authStep === 'identity' && captchaConfigured && !isWebAuthBlocked && !passwordMode ? (
+          {showCaptcha ? (
             <CaptchaChallenge
               key={captchaKey}
               label={t('auth.challengeLabel')}
@@ -756,32 +780,30 @@ export default function SignInScreen() {
                 : message || auth.error}
             </Text>
           ) : null}
-          <PrimaryButton
-            disabled={isWebAuthBlocked}
-            icon="arrow-forward"
-            label={
-              isWebAuthBlocked
-                ? t('auth.webNotConfigured')
-                : authStep === 'verify'
-                  ? t(recoveryMode ? 'auth.verifyRecovery' : signupMode ? 'auth.verifySignup' : 'auth.verifySignIn')
-                  : passwordMode
-                    ? t('auth.signIn')
-                    : t('auth.continue')
-            }
-            loading={loading}
-            onPress={authStep === 'verify' ? verifyCode : passwordMode ? signInWithPassword : sendLink}
-            style={styles.fullButton}
-          />
-          {authStep === 'verify' ? (
+          {unknownAccount && authStep === 'identity' ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => {
-                setAuthStep('identity');
-                setCode('');
-                setMessage('');
-              }}
-              style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
-              <Text style={styles.secondaryLinkText}>{t('auth.differentIdentity')}</Text>
+              onPress={() => chooseAccessMode('signup')}
+              style={({ pressed }) => [styles.resendLink, pressed && styles.pressed]}
+              testID="create-account-shortcut">
+              <Text style={styles.resendText}>{t('auth.createAccountShortcut')}</Text>
+            </Pressable>
+          ) : null}
+          <PrimaryButton
+            disabled={isWebAuthBlocked}
+            icon={authStep === 'new-password' ? 'checkmark' : 'arrow-forward'}
+            label={primaryLabel}
+            loading={loading}
+            onPress={primaryAction}
+            style={styles.fullButton}
+          />
+          {authStep === 'verify' || authStep === 'password' ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={useDifferentEmail}
+              style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}
+              testID="different-email">
+              <Text style={styles.secondaryLinkText}>{t('auth.differentEmail')}</Text>
             </Pressable>
           ) : null}
 
@@ -964,23 +986,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginBottom: spacing.xs,
   },
-  enrollmentNote: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15, marginTop: spacing.xs },
-  recoveryWarning: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.amberSoft,
-  },
-  recoveryWarningText: {
-    flex: 1,
-    color: colors.amber,
-    fontSize: 10,
-    lineHeight: 16,
-    fontWeight: '700',
-  },
   label: {
     color: colors.ink,
     fontSize: 11,
@@ -1009,6 +1014,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: spacing.sm,
   },
+  staticValue: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.ink,
+    fontSize: 14,
+    paddingVertical: spacing.sm,
+  },
   message: {
     color: colors.amber,
     fontSize: 10,
@@ -1018,29 +1030,6 @@ const styles = StyleSheet.create({
   fullButton: {
     width: '100%',
     marginTop: spacing.md,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.lineStrong,
-  },
-  dividerText: {
-    color: colors.inkSubtle,
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  ssoNote: {
-    color: colors.inkSubtle,
-    fontSize: 9,
-    textAlign: 'center',
-    marginTop: spacing.xs,
   },
   resendLink: {
     minHeight: 44,

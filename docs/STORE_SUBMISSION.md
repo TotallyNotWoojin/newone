@@ -9,7 +9,7 @@ Console; the answers to give are written out here.
 - App name: Newone Chat. Bundle / package: `com.totallynotwoojin.newone`.
 - Category: Social Networking (secondary: Productivity). Age rating: 4+ (messaging and user-generated content declared; reporting and blocking exist).
 - Pricing: free, no in-app purchases, no ads.
-- Sign-in: email plus password, or an emailed one-time code ("Email me a code" on the sign-in form). Review account: `review@newonechat.com`; its password lives in `~/.config/newone/review-account-password.txt` and its six-digit static code in `~/.config/newone/review-account-code.txt` on the owner's Mac (either works; the App Store Connect demo-account field carries the password) (never commit it). Enter the email on the Returning member tab, then the code.
+- Sign-in (v3.2): email, then password ("Sign in" chip → email → Continue → password → Sign in); "Forgot password?" emails a one-time code and then asks for a new password. Review account: `review@newonechat.com`; its password lives in `~/.config/newone/review-account-password.txt` on the owner's Mac (the App Store Connect demo-account field carries it; never commit it). The six-digit static code in `~/.config/newone/review-account-code.txt` still serves the server's web/admin code route but the app no longer offers a code sign-in.
 - Hosted pages: GitHub Pages from the `newone-legal` repo (https://totallynotwoojin.github.io/newone-legal/): index, privacy, terms, support. Switch to newonechat.com once DNS is set (see below). A copy also sits in the public Supabase storage bucket `site`.
 
 ## What the app collects (for both questionnaires)

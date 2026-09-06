@@ -30,21 +30,11 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "인증하고 계정 만들기"
-- extendedWaitUntil:
-    visible: "(Save password|Guardar contraseña|비밀번호 저장|Chats|채팅)"
-    timeout: 45000
-- runFlow:
-    when:
-      visible: "(Save password|Guardar contraseña|비밀번호 저장)"
-    commands:
-      - tapOn:
-          id: "new-password"
-      - inputText: Newone-test-2026
-      - hideKeyboard
-      - tapOn: "(Save password|Guardar contraseña|비밀번호 저장)"
+# The password was typed on the form (v3.2: every account is created with
+# one), so the code lands straight on the chats list.
 - extendedWaitUntil:
     visible: "채팅"
-    timeout: 40000
+    timeout: 45000
 # A fresh install shows the "Turn on notifications" card at the top of the
 # chats list on the first signed-in launch. A person answers it once; "나중에"
 # records the answer so the card never returns. The card waits for the OS

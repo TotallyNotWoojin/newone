@@ -1,0 +1,32 @@
+appId: com.totallynotwoojin.newone
+---
+# Sign-in is email only (v3.2): on the "Sign in" step there are no Email/Phone
+# channel chips and no "Email me a code"/"Use password" method chips; the email
+# field keeps its neutral placeholder. Create account has no channel chips
+# either.
+- launchApp
+- extendedWaitUntil:
+    visible: "(Returning member|Sign in)"
+    timeout: 30000
+- tapOn: "English"
+- tapOn:
+    text: "(Returning member|Sign in)"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "sign-in-destination"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-sign-in-step
+- assertNotVisible: "Phone"
+- assertNotVisible: "Phone number"
+- assertNotVisible: "Email me a code"
+- assertNotVisible: "Use password"
+- assertNotVisible: "+52 81 5555 0192"
+- assertVisible: "you@example.com"
+- tapOn: "Create account"
+- extendedWaitUntil:
+    visible: "your_username"
+    timeout: 15000
+- assertNotVisible: "Phone"
+- assertNotVisible: "Phone number"
+- takeScreenshot: ${SHOT}-signup-step

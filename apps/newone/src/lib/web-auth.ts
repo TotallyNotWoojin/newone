@@ -350,7 +350,8 @@ type NativeAuthPath =
   | '/v2/auth/native/recovery/otp/verify'
   | '/v2/auth/native/signup/request'
   | '/v2/auth/native/signup/verify'
-  | '/v2/auth/native/password/verify';
+  | '/v2/auth/native/password/verify'
+  | '/v2/auth/native/account/lookup';
 
 async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unknown>) {
   // A browser build in direct (bearer) mode uses the same token-returning
@@ -559,6 +560,48 @@ export async function verifyNativePassword(input: OtpIdentity & { password: stri
       expiresIn: Number(nativeSession.expiresIn),
     },
   };
+}
+
+interface AccountLookupInput {
+  /** Sign-in is email only; the server keeps its phone paths inert. */
+  destinationType: 'email';
+  destination: string;
+  captchaToken?: string | null;
+}
+
+/** The lookup answer must state both facts explicitly; nothing is inferred from silence. */
+function parseAccountLookup(payload: Record<string, unknown>) {
+  if (typeof payload.exists !== 'boolean' || typeof payload.hasPassword !== 'boolean') {
+    throw new WebAuthError('The identity gateway returned an invalid lookup.', 'invalid_response');
+  }
+  return { exists: payload.exists, hasPassword: payload.hasPassword };
+}
+
+export async function lookupWebAccount(input: AccountLookupInput) {
+  const client = await webClientBinding();
+  return parseAccountLookup(
+    await webRequest('/v2/auth/account/lookup', {
+      method: 'POST',
+      body: {
+        destinationType: input.destinationType,
+        destination: input.destination,
+        ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
+        installationId: client.installationId,
+        locale: client.locale,
+        appVersion: client.appVersion,
+      },
+    }),
+  );
+}
+
+export async function lookupNativeAccount(input: AccountLookupInput) {
+  return parseAccountLookup(
+    await nativeAuthRequest('/v2/auth/native/account/lookup', {
+      destinationType: input.destinationType,
+      destination: input.destination,
+      ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
+    }),
+  );
 }
 
 /** A password counts as set only on an explicit server receipt. */

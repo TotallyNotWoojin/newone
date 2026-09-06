@@ -123,8 +123,9 @@ export async function adminRequest(adminKey, path, init = {}) {
 }
 
 // Full gateway signup for one synthetic identity: request, admin-API OTP,
-// verify. Returns the verified native session and identity facts.
-export async function signupUser(keys, { runId, label, language }) {
+// verify. Returns the verified native session and identity facts. A password
+// (the v3 signup form always sends one) is stored at request time.
+export async function signupUser(keys, { runId, label, language, password = null }) {
   const entropy = randomBytes(3).toString('hex');
   const email = `${runId}-${label}@example.test`;
   const username = `e2e_${label}_${entropy}`.slice(0, 30);
@@ -139,6 +140,7 @@ export async function signupUser(keys, { runId, label, language }) {
       language,
       installationId,
       captchaToken: 'hosted-smoke-captcha-placeholder',
+      ...(password ? { password } : {}),
     },
   });
   const requestStatus = request.payload?.data?.status ?? request.payload?.status;

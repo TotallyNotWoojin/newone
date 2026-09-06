@@ -75,7 +75,17 @@ interface InviteAuthorization {
 interface OtpAuthorization {
   allowed: boolean;
   channelConfigured: boolean;
+  /**
+   * The authorizer's own retry hint: its rate window (900 s) when a bucket is
+   * exhausted, a short pause (60 s) when the address is simply not a member,
+   * 0 when allowed. Only the account lookup reads it; the OTP routes keep
+   * their constant envelope.
+   */
+  retryAfterSeconds?: number;
 }
+
+/** Above this hint the member authorizer refused for rate, not for identity. */
+const UNKNOWN_ACCOUNT_RETRY_SECONDS = 60;
 
 const SIGNUP_AUTHORIZATION_REASONS = [
   'ok',
@@ -273,6 +283,13 @@ export interface AuthDependencies {
     destination: string,
     password: string,
   ): Promise<SessionTokens>;
+  /**
+   * Whether the account behind an email address has a member-chosen password
+   * (app_metadata.newone_password_set_at). Null when the admin user listing
+   * holds no exact match for the address; the lookup route then assumes a
+   * password, which only costs the member one "Forgot password?" tap.
+   */
+  lookupPasswordState(destination: string): Promise<{ hasPassword: boolean } | null>;
   /**
    * Admin-side password update for the bearer's own account. Stamps
    * app_metadata.newone_password_set_at so clients can tell a chosen password
@@ -598,6 +615,10 @@ export function defaultAuthDependencies(): AuthDependencies {
       return {
         allowed: result.allowed === true,
         channelConfigured: result.channel_configured === true,
+        ...(typeof result.retry_after_seconds === 'number' &&
+            Number.isSafeInteger(result.retry_after_seconds) && result.retry_after_seconds >= 0
+          ? { retryAfterSeconds: Math.min(86400, result.retry_after_seconds) }
+          : {}),
       };
     },
     async authorizeSignupOtp(
@@ -804,6 +825,34 @@ export function defaultAuthDependencies(): AuthDependencies {
         (destinationType === 'email' ? parsed.email : parsed.phone) !== destination
       ) throw new ApiError(401, 'unauthorized');
       return parsed;
+    },
+    async lookupPasswordState(destination) {
+      // GoTrue's admin user listing is the only session-less read of
+      // app_metadata (the auth schema is not exposed to PostgREST). Its
+      // filter is a substring match, so the exact address is picked out of
+      // the page here; an address that somehow falls off the page answers
+      // null and the route assumes a password.
+      const query = new URLSearchParams({ filter: destination, per_page: '100' });
+      const response = await fetch(`${clientEnvironment.url}/auth/v1/admin/users?${query}`, {
+        headers: {
+          apikey: clientEnvironment.secretKey,
+          Authorization: `Bearer ${clientEnvironment.secretKey}`,
+        },
+      });
+      if (!response.ok) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      const listing = asObject(await response.json().catch(() => ({})));
+      if (!Array.isArray(listing.users)) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      const match = listing.users.find((entry) =>
+        entry !== null && typeof entry === 'object' &&
+        typeof (entry as Record<string, unknown>).email === 'string' &&
+        ((entry as Record<string, unknown>).email as string).toLowerCase() === destination
+      );
+      if (!match) return null;
+      const appMetadata = (match as Record<string, unknown>).app_metadata;
+      return {
+        hasPassword: typeof appMetadata === 'object' && appMetadata !== null &&
+          typeof (appMetadata as Record<string, unknown>).newone_password_set_at === 'string',
+      };
     },
     async setPassword(accessToken, userId, password) {
       // The admin password update logs the member out of every session,
@@ -1709,7 +1758,8 @@ function isNativeOtpPath(path: string): boolean {
     path === '/v2/auth/native/recovery/otp/verify' ||
     path === '/v2/auth/native/signup/request' ||
     path === '/v2/auth/native/signup/verify' ||
-    path === '/v2/auth/native/password/verify';
+    path === '/v2/auth/native/password/verify' ||
+    path === '/v2/auth/native/account/lookup';
 }
 
 function nativeInstallationId(request: Request): string {
@@ -2280,6 +2330,59 @@ export function createAuthHandler(
         } finally {
           await dependencies.settleOtpRequest(startedAt);
         }
+      }
+
+      if (
+        request.method === 'POST' &&
+        (path === '/v2/auth/account/lookup' || path === '/v2/auth/native/account/lookup')
+      ) {
+        // The first step of every returning sign-in (v3.2): does an account
+        // use this email, and has it chosen a password? The screen already
+        // tells a member when no account exists, so the answer is explicit.
+        // It runs the member OTP authorizer with the request purpose: the same
+        // per-address, per-IP, and per-installation buckets and limits a code
+        // request consumes, because a lookup now precedes every sign-in the
+        // way a code request used to.
+        const native = path === '/v2/auth/native/account/lookup';
+        const body = asObject((await parseJson(request, config)).value);
+        onlyKeys(body, [
+          'destinationType',
+          'destination',
+          'installationId',
+          'appVersion',
+          'locale',
+          'captchaToken',
+        ]);
+        const identity = parseOtpIdentity(body);
+        // Email only: the app has no phone sign-in; the phone paths stay inert.
+        if (
+          identity.destinationType !== 'email' || identity.inviteToken !== null ||
+          identity.employeeCode !== null ||
+          (native && identity.installationId !== nativeInstallationId(request))
+        ) throw new ApiError(400, 'bad_request');
+        captchaToken(body.captchaToken, captchaRequiredFor(dependencies.captchaMode, native));
+        const ipHash = await networkFingerprint(request, config);
+        const installationHash = await installationFingerprint(config, identity.installationId);
+        const authorization = await dependencies.authorizeMemberOtp(
+          identity.destinationType,
+          identity.destination,
+          ipHash,
+          installationHash,
+          meta.requestId,
+          'request',
+        );
+        if (!authorization.allowed) {
+          const retryAfterSeconds = authorization.retryAfterSeconds ?? 0;
+          if (retryAfterSeconds > UNKNOWN_ACCOUNT_RETRY_SECONDS) {
+            throw new ApiError(429, 'rate_limited', undefined, retryAfterSeconds);
+          }
+          return jsonResponse(meta, 200, { exists: false, hasPassword: false });
+        }
+        const passwordState = await dependencies.lookupPasswordState(identity.destination);
+        return jsonResponse(meta, 200, {
+          exists: true,
+          hasPassword: passwordState === null ? true : passwordState.hasPassword,
+        });
       }
 
       if (request.method === 'POST' && path === '/v2/auth/otp/request') {
