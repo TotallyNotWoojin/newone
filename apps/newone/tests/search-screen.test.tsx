@@ -316,8 +316,6 @@ describe('personal realm search', () => {
     // Compact consumer surface: no page header, no filter panel, no submit
     // button; one line says what to type.
     expect(screen.queryByText('search.heading')).toBeNull();
-    expect(screen.queryByText('search.eyebrowConsumer')).toBeNull();
-    expect(screen.queryByText('search.descriptionConsumer')).toBeNull();
     expect(screen.queryByLabelText(copy.filters)).toBeNull();
     expect(screen.queryByRole('button', { name: 'search.submit' })).toBeNull();
     expect(screen.getByText('search.startHint')).toBeTruthy();

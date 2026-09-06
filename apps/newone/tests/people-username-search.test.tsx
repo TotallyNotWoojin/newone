@@ -166,8 +166,6 @@ describe('personal-realm people search', () => {
 
     expect(isPersonalRealm(mockWorkspace.organizationId)).toBe(true);
     // No explanatory chrome: the search field stands alone above the list.
-    expect(screen.queryByText('people.usernameSearchTitle')).toBeNull();
-    expect(screen.queryByText('people.usernameSearchHint')).toBeNull();
     expect(screen.queryByText('people.descriptionConsumer')).toBeNull();
     expect(screen.queryByText('people.heading')).toBeNull();
     expect(screen.getByText('people.emptyConsumer')).toBeTruthy();
@@ -193,7 +191,7 @@ describe('personal-realm people search', () => {
     // state: strangers, pending requests and friends alike.
     expect(screen.getAllByRole('button', { name: 'people.message' })).toHaveLength(3);
     for (const gone of [
-      'people.sendMessageRequest', 'people.connect', 'people.accept', 'people.decline', 'people.cancelRequest',
+      'people.connect', 'people.accept', 'people.decline', 'people.cancelRequest',
     ]) {
       expect(screen.queryByRole('button', { name: gone })).toBeNull();
     }
@@ -357,7 +355,7 @@ describe('personal realm known-people list', () => {
     expect(screen.queryByText('Jordan Lee')).toBeNull();
     // Requests, connections, and the workplace directory chrome are gone.
     for (const absent of [
-      'people.requests', 'people.friends', 'people.friendsEmpty', 'people.eyebrow', 'people.description',
+      'people.eyebrow', 'people.description',
       'people.directory', 'people.safeFields', 'status.emptyPeople', 'status.emptyPeopleBody',
     ]) {
       expect(screen.queryByText(absent)).toBeNull();

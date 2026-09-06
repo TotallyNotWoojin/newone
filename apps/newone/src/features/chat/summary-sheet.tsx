@@ -265,7 +265,7 @@ export function SummarySheet({
           ) : null}
         </View>
       ) : null}
-      {canManage ? (
+      {canManage && !consumer ? (
         <PrimaryButton
           icon="options-outline"
           label={t('chat.summarySchedule')}

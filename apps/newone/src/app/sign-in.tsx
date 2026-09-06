@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PASSWORD_MIN_LENGTH, PasswordField } from '@/components/ui/password-field';
-import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
+import { Chip, PrimaryButton } from '@/components/ui/primitives';
 // Metro selects the Turnstile-backed web challenge or the native risk-adapter boundary.
 // eslint-disable-next-line import/no-unresolved
 import { CaptchaChallenge } from '@/components/security/captcha-challenge';
@@ -469,34 +469,16 @@ export default function SignInScreen() {
             <View style={styles.logoDot} />
           </View>
           <Text style={styles.brand}>newone</Text>
-          <Text style={styles.brandTag}>{t('auth.brandTag')}</Text>
           <Text style={styles.brandStatement}>
             {t('auth.statement')}
           </Text>
           <View style={styles.trustList}>
-            <TrustItem icon="people-outline" text={t('auth.trustMessages')} />
             <TrustItem icon="language-outline" text={t('auth.trustLanguages')} />
-            <TrustItem icon="shield-checkmark-outline" text={t('auth.trustIdentity')} />
+            <TrustItem icon="people-outline" text={t('auth.trustMessages')} />
           </View>
         </View>
 
         <View style={[styles.card, wide ? styles.cardWide : styles.fullWidth, shadow]}>
-          <View style={styles.cardTopline}>
-            <StatusBadge
-              icon={recoveryMode ? 'shield-checkmark' : signupMode ? 'person-add' : 'lock-closed'}
-              label={
-                recoveryMode
-                  ? t('auth.recovery')
-                  : enrollmentMode
-                    ? t('auth.firstUse')
-                    : signupMode
-                      ? t('auth.modeSignup')
-                      : t('auth.returning')
-              }
-              tone={recoveryMode ? 'warning' : 'success'}
-            />
-            <Text style={styles.cardStep}>{t('auth.secureAccess')}</Text>
-          </View>
           <Text style={styles.title}>
             {recoveryMode
               ? t('auth.titleRecovery')
@@ -894,13 +876,6 @@ const styles = StyleSheet.create({
     letterSpacing: -1.4,
     marginTop: spacing.md,
   },
-  brandTag: {
-    color: 'rgba(255,255,255,0.48)',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.8,
-    marginTop: 2,
-  },
   brandStatement: {
     maxWidth: 410,
     color: colors.white,
@@ -946,17 +921,6 @@ const styles = StyleSheet.create({
     flexBasis: 460,
     flexGrow: 1,
   },
-  cardTopline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardStep: {
-    color: colors.inkSubtle,
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
   title: {
     color: colors.ink,
     fontFamily: type.display,
@@ -964,7 +928,6 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontWeight: '900',
     letterSpacing: -0.7,
-    marginTop: spacing.lg,
   },
   subtitle: {
     color: colors.inkMuted,

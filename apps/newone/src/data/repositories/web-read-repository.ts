@@ -41,6 +41,8 @@ import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import { parseWorkspaceCapabilities } from '@/data/repositories/capability-dto.mjs';
 import { stripSummarySourceTokens } from '@/data/summary-text';
+import { isPersonalRealm } from '@/constants/personal-realm';
+import { catalogs } from '@/i18n/catalog';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -358,6 +360,16 @@ function userSearchResultFromDto(row: JsonRecord): UserSearchResult {
   };
 }
 
+/**
+ * Stand-in for a person the client cannot name. The personal realm says
+ * "Someone"; workspace organizations keep their member wording.
+ */
+function unknownPersonLabel(current: Person): string {
+  return catalogs[current.preferredLanguage][
+    isPersonalRealm(current.organizationId) ? 'chat.companyMemberConsumer' : 'chat.companyMember'
+  ];
+}
+
 function personFromDirectory(
   row: JsonRecord,
   currentUserId: string,
@@ -365,6 +377,7 @@ function personFromDirectory(
   connections: JsonRecord[],
   savedContacts: JsonRecord[],
   blockedIds: Set<string>,
+  personalRealm: boolean,
 ): Person {
   const userId = requiredString(row.userId, 'directory member');
   const displayName = requiredString(row.displayName, 'directory name');
@@ -388,12 +401,16 @@ function personFromDirectory(
     // now carries it for the directory and the viewer.
     username: optionalString(row.username),
     initials: initials(displayName),
-    roleLabel: optionalString(row.jobTitle) ?? String(row.membershipRole ?? 'member'),
+    // Consumers carry no job title, site, or department; the personal realm
+    // leaves these blank instead of showing workplace placeholders.
+    roleLabel: personalRealm ? '' : optionalString(row.jobTitle) ?? String(row.membershipRole ?? 'member'),
     role: membershipRole(row.membershipRole),
-    site: memberUnits.find((unit) => unit.kind === 'site')?.name ?? 'Company-wide',
-    department: memberUnits.find((unit) => unit.kind === 'department')?.name
-      ?? memberUnits.find((unit) => unit.kind === 'team')?.name
-      ?? 'General',
+    site: personalRealm ? '' : memberUnits.find((unit) => unit.kind === 'site')?.name ?? 'Company-wide',
+    department: personalRealm
+      ? ''
+      : memberUnits.find((unit) => unit.kind === 'department')?.name
+        ?? memberUnits.find((unit) => unit.kind === 'team')?.name
+        ?? 'General',
     preferredLanguage: language(row.preferredLanguage),
     presence: userId === currentUserId ? 'online' : 'offline',
     connectionState: state,
@@ -409,7 +426,7 @@ function personFromDirectory(
   };
 }
 
-function currentPerson(row: JsonRecord, units: OrganizationUnitOption[]): Person {
+function currentPerson(row: JsonRecord, units: OrganizationUnitOption[], personalRealm: boolean): Person {
   const person = personFromDirectory(
     { ...row, unitIds: row.unitIds ?? [], isSavedContact: false, isBlocked: false },
     requiredString(row.userId, 'current user'),
@@ -417,6 +434,7 @@ function currentPerson(row: JsonRecord, units: OrganizationUnitOption[]): Person
     [],
     [],
     new Set(),
+    personalRealm,
   );
   // The bootstrap strips a null status, so only a present string is carried.
   const statusMessage = optionalString(row.statusMessage);
@@ -624,7 +642,7 @@ function messageFromDto(
   const sender = objectValue(row.sender);
   const senderId = requiredString(sender.userId ?? row.senderUserId, 'message sender');
   const knownSender = peopleById.get(senderId);
-  const displayName = optionalString(sender.displayName) ?? knownSender?.displayName ?? 'Company member';
+  const displayName = optionalString(sender.displayName) ?? knownSender?.displayName ?? unknownPersonLabel(current);
   const detection = languageDetectionFromDto(row);
   const selectedTranslation = parseTranslation(row, messageLanguage);
   const approvedCorrection = selectedTranslation?.correction?.status === 'approved'
@@ -689,7 +707,7 @@ function messageFromDto(
     edited: Boolean(row.editedAt),
     pinned: row.pinned === true,
     replyTo: Object.keys(reply).length ? {
-      senderName: peopleById.get(String(reply.senderUserId))?.displayName ?? 'Company member',
+      senderName: peopleById.get(String(reply.senderUserId))?.displayName ?? unknownPersonLabel(current),
       preview: optionalString(reply.body) ?? '',
     } : undefined,
     reactions: reactionSummary(values(row.reactions), current.id),
@@ -724,6 +742,7 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
   const kind = conversationKind(row.kind);
   const directId = optionalString(row.directCounterpartUserId);
   const direct = directId ? peopleById.get(directId) : undefined;
+  const personalRealm = isPersonalRealm(current.organizationId);
   const members = values(row.members).slice(0, 500);
   const memberCount = Math.max(0, integer(row.memberCount, members.length));
   const memberProfiles = members.map((member) => {
@@ -776,10 +795,13 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     // A direct thread shows the peer's @handle, so the person you are talking
     // to is identifiable and searchable, not just a display name.
     subtitle: kind === 'direct'
-      ? (direct?.username ? `@${direct.username}` : direct?.roleLabel ?? 'Company member')
-      : optionalString(row.description) ?? `${memberCount} members`,
+      ? (direct?.username
+        ? `@${direct.username}`
+        : personalRealm ? '' : direct?.roleLabel ?? unknownPersonLabel(current))
+      : optionalString(row.description) ?? '',
     participantCount: memberCount,
-    lastMessage: optionalString(preview.body) ?? (row.isArchived ? 'Archived conversation' : 'No messages yet'),
+    // Empty until something is sent; the list renders the localized fallback.
+    lastMessage: optionalString(preview.body) ?? '',
     lastActivity: dateTimeLabel(preview.createdAt ?? row.updatedAt),
     unreadCount: Math.max(0, integer(row.unreadCount)),
     lastReadMessageId: optionalIdentifier(row.lastReadMessageId),
@@ -790,7 +812,6 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     mutedUntil,
     translationMode,
     presence: direct?.presence,
-    activeNowLabel: direct?.presence === 'online' ? 'Active now' : undefined,
     translationPair: direct && direct.preferredLanguage !== current.preferredLanguage
       ? `${current.preferredLanguage.toUpperCase()} ↔ ${direct.preferredLanguage.toUpperCase()}`
       : undefined,
@@ -1284,6 +1305,7 @@ export class WebReadRepository implements ReadRepository {
     }
     const organization = objectValue(payload.organization);
     const organizationId = requiredString(organization.organizationId, 'organization');
+    const personalRealm = isPersonalRealm(organizationId);
     const units: OrganizationUnitOption[] = values(payload.units).map((unit) => {
       const kind = requiredString(unit.kind, 'organization unit kind');
       if (!['site', 'department', 'team', 'line', 'shift'].includes(kind)) {
@@ -1316,12 +1338,12 @@ export class WebReadRepository implements ReadRepository {
       );
     }
     const currentUser: CurrentWorkspaceUser = {
-      ...currentPerson(currentRow, units),
+      ...currentPerson(currentRow, units, personalRealm),
       ...currentMembership,
       organizationId,
     };
     const people = values(payload.directory).map((row) => {
-      const person = personFromDirectory(row, currentUser.id, units, connections, savedContacts, blockedIds);
+      const person = personFromDirectory(row, currentUser.id, units, connections, savedContacts, blockedIds, personalRealm);
       person.organizationId = organizationId;
       return person;
     });

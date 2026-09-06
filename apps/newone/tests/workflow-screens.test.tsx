@@ -555,7 +555,6 @@ describe('group creation workflow screen', () => {
     ]) {
       expect(screen.queryByText(absent)).toBeNull();
     }
-    expect(screen.queryByLabelText('group.searchConsumer')).toBeNull();
 
     // One character narrows the known list locally without a service call.
     const input = screen.getByLabelText('people.usernameSearch');

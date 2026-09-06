@@ -1531,7 +1531,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             ? {
                 ...conversation,
                 lastMessage: last?.originalText
-                  || (last?.attachment ? `Attachment: ${last.attachment.name}` : 'No messages yet'),
+                  || (last?.attachment ? `Attachment: ${last.attachment.name}` : ''),
                 lastActivity: last?.sentAt ?? conversation.lastActivity,
               }
             : conversation
@@ -2416,14 +2416,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           avatarColor: counterpart.avatarColor,
           kind: 'direct',
           subtitle: counterpart.roleLabel,
-          lastMessage: 'No messages yet',
-          lastActivity: 'New',
+          lastMessage: '',
+          lastActivity: '',
           unreadCount: 0,
           pinned: false,
           favorite: false,
           muted: false,
           presence: counterpart.presence,
-          activeNowLabel: counterpart.presence === 'online' ? 'Active now' : undefined,
           translationPair: languagePair(
             snapshot.currentUser.preferredLanguage,
             counterpart.preferredLanguage,
@@ -2563,10 +2562,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           initials: nameInitials(created.name),
           avatarColor: '#496D62',
           kind: created.kind,
-          subtitle: `${created.memberCount} members`,
+          subtitle: created.description ?? '',
           participantCount: created.memberCount,
-          lastMessage: 'No messages yet',
-          lastActivity: 'New',
+          lastMessage: '',
+          lastActivity: '',
           unreadCount: 0,
           pinned: false,
           favorite: false,
@@ -3072,7 +3071,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
               ? {
                   ...conversation,
                   lastMessage: last?.originalText
-                    || (last?.attachment ? `Attachment: ${last.attachment.name}` : 'No messages yet'),
+                    || (last?.attachment ? `Attachment: ${last.attachment.name}` : ''),
                   lastActivity: last?.sentAt ?? conversation.lastActivity,
                 }
               : conversation
@@ -4957,7 +4956,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         kind: 'direct',
         subtitle: counterpart.roleLabel,
         lastMessage: text,
-        lastActivity: 'New',
+        lastActivity: '',
         unreadCount: 0,
         pinned: false,
         favorite: false,

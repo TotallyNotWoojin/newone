@@ -274,7 +274,7 @@ function ConversationRow({
                   styles.rowPreview,
                   conversation.unreadCount > 0 && styles.rowPreviewUnread,
                 ]}>
-                {conversation.lastMessage}
+                {conversation.lastMessage || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet')}
               </Text>
             </View>
             {conversation.unreadCount ? (

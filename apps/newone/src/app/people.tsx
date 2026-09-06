@@ -421,12 +421,18 @@ export default function PeopleScreen() {
             value={reportDetails}
           />
           <View style={styles.reportDisclosure}>
-            <Text style={styles.reportDisclosureText}>
-              {moderationTargetReportConsentNotice(locale, 'member')}
-            </Text>
-            <Text style={styles.reportRouteText}>
-              {moderationMemberSafetyRouteNotice(locale)}
-            </Text>
+            {personalRealm ? (
+              <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
+            ) : (
+              <>
+                <Text style={styles.reportDisclosureText}>
+                  {moderationTargetReportConsentNotice(locale, 'member')}
+                </Text>
+                <Text style={styles.reportRouteText}>
+                  {moderationMemberSafetyRouteNotice(locale)}
+                </Text>
+              </>
+            )}
             <Pressable
               accessibilityRole="checkbox"
               accessibilityState={{ checked: reportConsent }}
@@ -441,7 +447,7 @@ export default function PeopleScreen() {
                 color={reportConsent ? colors.mintDark : colors.inkSubtle}
                 size={22}
               />
-              <Text style={styles.reportConsentText}>{safetyCopy.reportConsentLabel}</Text>
+              <Text style={styles.reportConsentText}>{personalRealm ? t('people.reportConsentConsumer') : safetyCopy.reportConsentLabel}</Text>
             </Pressable>
           </View>
           <PrimaryButton
