@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Keyboard } from 'react-native';
+import { FlatList, Keyboard } from 'react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
@@ -160,6 +160,31 @@ async function noopSend(
   _replyTo?: Message,
   _mentionUserIds?: string[],
 ): Promise<void> {}
+
+type FiberLike = {
+  elementType?: unknown;
+  memoizedProps?: unknown;
+  child?: FiberLike;
+  sibling?: FiberLike;
+  return?: FiberLike;
+  stateNode?: { current?: FiberLike };
+};
+
+// The FlatList element itself, not the host scroll view it spreads its props
+// onto (whose renderItem is FlatList's own per-render wrapper): walk the
+// current fiber tree from the render root.
+function timelineListProps(view: { root: unknown }): { renderItem: unknown; initialNumToRender: number } {
+  let fiber = (view.root as { unstable_fiber?: FiberLike } | null)?.unstable_fiber;
+  while (fiber?.return) fiber = fiber.return;
+  const stack: (FiberLike | undefined)[] = [fiber?.stateNode?.current ?? fiber];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (node.elementType === FlatList) return node.memoizedProps as { renderItem: unknown; initialNumToRender: number };
+    stack.push(node.sibling, node.child);
+  }
+  throw new Error('The timeline list is not rendered.');
+}
 
 function conversation(overrides: Record<string, unknown> = {}) {
   return {
@@ -1133,6 +1158,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('chat.unreadMessages')).toBeTruthy();
     const list = view.root!.queryAll((node) => node.props.inverted === true && typeof node.props.onScroll === 'function')[0];
     expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+    // One phone screen of compact bubbles mounts with the push transition; the rest fills in small batches.
+    expect(list.props.initialNumToRender).toBeLessThanOrEqual(16);
+    expect(list.props.maxToRenderPerBatch).toBeLessThanOrEqual(8);
+    const renderItem = timelineListProps(view).renderItem;
     mockWorkspace.markConversationRead.mockClear();
 
     // Scrolled into history: an arrival shows the jump pill instead of moving the view.
@@ -1149,6 +1178,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       onSend={noopSend}
     />);
     await waitFor(() => expect(screen.getByText(/1 chat\.newMessages/)).toBeTruthy());
+    // Rows keep their renderer across pane re-renders, so arrivals and typing never re-render every bubble.
+    expect(timelineListProps(view).renderItem).toBe(renderItem);
     expect(mockWorkspace.markConversationRead).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText(/1 chat\.newMessages/));
     expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main');
@@ -1302,18 +1333,26 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         mentionUserIds: [], edited: false, pinned: false, forwarded: false, replyTo: undefined, reactions: [],
       }),
     ];
-    await render(<ConversationPane
+    // The list mounts one screen of rows first (the rest fills in batches the
+    // test renderer never triggers), so the system rows get their own render.
+    const systemView = await render(<ConversationPane
       conversation={conversation({ kind: 'announcement', unreadCount: 0, lastReadMessageId: null })}
-      messages={[...systemMessages, ...variantMessages]}
+      messages={systemMessages}
       onSend={noopSend}
     />);
-
     expect(screen.getByText('chat.systemPostingAdminsOnly')).toBeTruthy();
     expect(screen.getByText('chat.systemPostingAllMembers')).toBeTruthy();
     expect(screen.getByText(/chat\.systemJoinApproved/)).toBeTruthy();
     expect(screen.getByText('chat.systemConversationCreated')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarChanged')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarRemoved')).toBeTruthy();
+    await systemView.unmount();
+
+    await render(<ConversationPane
+      conversation={conversation({ kind: 'announcement', unreadCount: 0, lastReadMessageId: null })}
+      messages={variantMessages}
+      onSend={noopSend}
+    />);
     // Bubbles carry no provenance; language details sit behind "Show details" in the sheet.
     expect(screen.queryByText('quality.reportSubmitted')).toBeNull();
     expect(screen.queryByText(/chat\.detectedLanguage|chat\.originalUpper|chat\.translationUpper/)).toBeNull();

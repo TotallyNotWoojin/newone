@@ -206,7 +206,7 @@ describe('root application boundary', () => {
     const view = await render(<RootLayout />);
 
     expect(screen.getByTestId('controlled-workspace-provider')).toBeTruthy();
-    expect(mockStackProps?.screenOptions).toEqual({ headerShown: false, animation: 'fade' });
+    expect(mockStackProps?.screenOptions).toEqual({ headerShown: false, animation: 'fade', animationDuration: 150 });
     expect(mockStackScreens.map(({ name }) => name)).toEqual([
       'index',
       'conversation/[id]',
@@ -221,7 +221,7 @@ describe('root application boundary', () => {
       'sign-in',
     ]);
     expect(mockStackScreens.find(({ name }) => name === 'conversation/[id]')?.options)
-      .toEqual({ animation: 'slide_from_right' });
+      .toEqual({ animation: 'simple_push', animationDuration: 220 });
     await waitFor(() => expect(mockUseNotificationNavigation).toHaveBeenLastCalledWith({
       enabled: true,
       organizationId: 'organization-controlled',

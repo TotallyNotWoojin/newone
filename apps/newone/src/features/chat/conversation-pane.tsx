@@ -11,7 +11,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -278,6 +278,53 @@ export function ConversationPane({
     setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 }), 120);
   };
 
+  // Rows are memoized: the row renderer and the two bubble callbacks keep
+  // their identity across pane re-renders (typing a draft, the jump pill, a
+  // sheet opening), so opening at the newest message and typing do not
+  // re-render every visible bubble.
+  const clearActionError = workspace.clearActionError;
+  const downloadAttachment = workspace.downloadAttachment;
+  const openActions = useCallback((message: Message) => {
+    clearActionError();
+    setEditDraft(message.originalText);
+    setSelectedMessage(message);
+  }, [clearActionError]);
+  const downloadMessageAttachment = useCallback((message: Message) => {
+    void downloadAttachment(message);
+  }, [downloadAttachment]);
+  const translatedOnly = preferences.translatedOnly;
+  const unreadDividerLabel = t('chat.unreadMessages');
+  const renderRow = useCallback(({ item }: { item: TimelineRow }) => {
+    const { message } = item;
+    return (
+      <View style={(message.serverId ?? message.id) === focusMessageId ? styles.searchTarget : undefined}>
+        {item.showUnreadDivider ? (
+          <View style={styles.unreadDivider}>
+            <View style={styles.unreadDividerLine} />
+            <Text style={styles.unreadDividerText}>{unreadDividerLabel}</Text>
+            <View style={styles.unreadDividerLine} />
+          </View>
+        ) : null}
+        {item.showDateSeparator ? (
+          <View style={styles.dateSeparator}>
+            <View style={styles.dateSeparatorLine} />
+            <Text style={styles.dateSeparatorText}>{message.dayLabel}</Text>
+            <View style={styles.dateSeparatorLine} />
+          </View>
+        ) : null}
+        {message.systemEvent ? <SystemEventRow message={message} /> : (
+          <MessageBubble
+            message={message}
+            onDownload={downloadMessageAttachment}
+            onOpenActions={openActions}
+            showSender={item.showSender}
+            translatedOnly={translatedOnly}
+          />
+        )}
+      </View>
+    );
+  }, [downloadMessageAttachment, focusMessageId, openActions, translatedOnly, unreadDividerLabel]);
+
   if (!currentUserId) {
     return (
       <View style={styles.emptyPane}>
@@ -405,43 +452,6 @@ export function ConversationPane({
     );
   }
 
-  const openActions = (message: Message) => {
-    workspace.clearActionError();
-    setEditDraft(message.originalText);
-    setSelectedMessage(message);
-  };
-
-  const renderRow = ({ item }: { item: TimelineRow }) => {
-    const { message } = item;
-    return (
-      <View style={(message.serverId ?? message.id) === focusMessageId ? styles.searchTarget : undefined}>
-        {item.showUnreadDivider ? (
-          <View style={styles.unreadDivider}>
-            <View style={styles.unreadDividerLine} />
-            <Text style={styles.unreadDividerText}>{t('chat.unreadMessages')}</Text>
-            <View style={styles.unreadDividerLine} />
-          </View>
-        ) : null}
-        {item.showDateSeparator ? (
-          <View style={styles.dateSeparator}>
-            <View style={styles.dateSeparatorLine} />
-            <Text style={styles.dateSeparatorText}>{message.dayLabel}</Text>
-            <View style={styles.dateSeparatorLine} />
-          </View>
-        ) : null}
-        {message.systemEvent ? <SystemEventRow message={message} /> : (
-          <MessageBubble
-            message={message}
-            onDownload={() => void workspace.downloadAttachment(message)}
-            onOpenActions={() => openActions(message)}
-            showSender={item.showSender}
-            translatedOnly={preferences.translatedOnly}
-          />
-        )}
-      </View>
-    );
-  };
-
   return (
     <KeyboardAvoidingScreen extraOffset={mobile ? 0 : 24} style={styles.container}>
       <ConversationHeader
@@ -520,7 +530,10 @@ export function ConversationPane({
           <FlatList
             contentContainerStyle={[styles.messageList, mobile && styles.messageListMobile]}
             data={rows}
-            initialNumToRender={24}
+            // One screen of compact bubbles mounts with the push transition;
+            // the rest fills in small batches, so opening at the newest
+            // message does not drop frames.
+            initialNumToRender={14}
             inverted
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
@@ -540,7 +553,7 @@ export function ConversationPane({
               </Pressable>
             ) : null}
             maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
-            maxToRenderPerBatch={12}
+            maxToRenderPerBatch={8}
             onEndReached={loadOlder}
             onEndReachedThreshold={0.6}
             onScroll={handleScroll}
@@ -549,7 +562,8 @@ export function ConversationPane({
             renderItem={renderRow}
             scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
-            windowSize={9}
+            updateCellsBatchingPeriod={32}
+            windowSize={7}
           />
         ) : (
           <View style={styles.timelineEmpty}>
@@ -947,7 +961,7 @@ function SystemEventRow({ message }: { message: Message }) {
   );
 }
 
-function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   message,
   showSender,
   translatedOnly,
@@ -957,8 +971,8 @@ function MessageBubble({
   message: Message;
   showSender: boolean;
   translatedOnly: boolean;
-  onOpenActions: () => void;
-  onDownload: () => void;
+  onOpenActions: (message: Message) => void;
+  onDownload: (message: Message) => void;
 }) {
   const workspace = useWorkspace();
   const { locale, t } = useI18n();
@@ -1153,7 +1167,7 @@ function MessageBubble({
           // Not an accessibility element itself: iOS would otherwise flatten the whole
           // bubble into one node and hide the controls inside it from VoiceOver.
           accessible={false}
-          onLongPress={onOpenActions}
+          onLongPress={() => onOpenActions(message)}
           style={[
             styles.bubble,
             message.isOwn ? styles.bubbleOwn : styles.bubbleIncoming,
@@ -1207,12 +1221,12 @@ function MessageBubble({
                 footer={mediaOnly ? meta(true) : undefined}
                 maxWidth={maxMedia}
                 message={message}
-                onDownload={onDownload}
+                onDownload={() => onDownload(message)}
               />
             ) : inlineVideo ? (
-              <VideoMessageAttachment maxWidth={maxMedia} message={message} onDownload={onDownload} />
+              <VideoMessageAttachment maxWidth={maxMedia} message={message} onDownload={() => onDownload(message)} />
             ) : (
-              <AttachmentCard message={message} onDownload={onDownload} />
+              <AttachmentCard message={message} onDownload={() => onDownload(message)} />
             )
           ) : null}
 
@@ -1269,7 +1283,7 @@ function MessageBubble({
       </View>
     </View>
   );
-}
+});
 
 /** Language and translation provenance, reachable from the actions sheet. */
 function TranslationDetails({ message }: { message: Message }) {
