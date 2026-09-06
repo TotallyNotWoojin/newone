@@ -6,8 +6,25 @@ appId: com.totallynotwoojin.newone
 # the preview has to update live (v3.1: quick reconciles after a message event
 # until the translation lands) — the original may show first, then the
 # translation replaces it within TIMEOUT ms.
+# "Chats" also names the tab-bar item, so it proves nothing about the screen.
+# The previous step can leave A on People with the keyboard up (trans-19,
+# run-2026-09-06T15-15-58): settle the keyboard, then open the Chats tab and
+# wait for its search box before reading the row.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- runFlow:
+    when:
+      notVisible: "Search people and messages"
+    commands:
+      - tapOn: "Chats"
 - extendedWaitUntil:
-    visible: "Chats"
+    visible: "Search people and messages"
     timeout: 30000
 - extendedWaitUntil:
     visible: ".*${PEER}.*"
