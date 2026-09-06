@@ -16,6 +16,10 @@ const functionsBase = `${projectUrl}/functions/v1`;
 test('native Edge routing inserts the exact function for auth, read, and command paths', () => {
   const cases = [
     ['/v2/auth/invitations/redeem', 'newone-auth'],
+    // v3 passwords: missing from the table they routed to the API function (defect AC).
+    ['/v2/auth/password/verify', 'newone-auth'],
+    ['/v2/auth/native/password/verify', 'newone-auth'],
+    ['/v2/auth/password/set', 'newone-auth'],
     ['/v2/auth/recovery/otp/request', 'newone-auth'],
     ['/v2/auth/native/recovery/otp/verify', 'newone-auth'],
     ['/v2/auth/recovery/cases', 'newone-auth'],

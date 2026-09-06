@@ -19,6 +19,11 @@ const AUTH_PATHS = new Set([
   '/v2/auth/sign-out',
   '/v2/auth/realtime-token',
   '/v2/auth/invitations/redeem',
+  // Password sign-in and set-password (v3). Missing from this table they
+  // routed to the API function and answered 404 — found by the device suite.
+  '/v2/auth/password/verify',
+  '/v2/auth/native/password/verify',
+  '/v2/auth/password/set',
   '/v2/auth/mfa/factors',
   '/v2/auth/mfa/enroll',
   '/v2/auth/mfa/challenge',
