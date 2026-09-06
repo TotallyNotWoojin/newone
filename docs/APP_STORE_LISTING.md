@@ -44,7 +44,7 @@ First release: private chats and groups with automatic English/Spanish/Korean tr
 - Support: mailto:totallynotwoojin@gmail.com (a support page on newonechat.com can replace this)
 
 ## App Review information
-- Sign-in required: yes. Demo account: `review@newonechat.com`; the one-time code for that account is fixed and configured server-side (value in the owner's secrets store, not in this document). Enter it on the "Returning member" screen.
+- Sign-in required: yes. Demo account: `review@newonechat.com` with the password in the owner's secrets store (`~/.config/newone/review-account-password.txt`, entered in the App Store Connect demo-account field). The "Email me a code" route also works for it: the one-time code for that account is fixed and configured server-side (value in the owner's secrets store, not in this document). Enter it on the "Returning member" screen.
 - Notes for reviewer: Messaging between users requires two accounts; the reviewer may create a second account with any email address to exercise message requests and translation. Translation of a message into the reader's language happens automatically within seconds.
 - Contact: Woojin Lee, +1 770 686 8414, totallynotwoojin@gmail.com
 
