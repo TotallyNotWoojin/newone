@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
+import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 import { RepositoryError } from '@/data/repositories/contracts';
 import { WebReadRepository } from '@/data/repositories/web-read-repository';
 
@@ -964,6 +965,20 @@ describe('authoritative web read repository', () => {
       expect.objectContaining({ myJoinRequest: expect.objectContaining({ status: 'expired', version: 1 }) }),
     ]));
     expect(workspace.cursors['conversation-managed']).toBe('201');
+  });
+
+  test('leaves a handoff site blank in the personal realm and keeps the workplace placeholder', async () => {
+    mockFetch.mockImplementationOnce(async () => response({ data: alternateBootstrapPayload() }));
+    const workplace = await repository().loadWorkspace(currentUserId, 'conversation-managed');
+    // Two handoffs come from an author who is no longer in the directory.
+    expect(workplace.handoffs.slice(1).map((handoff) => handoff.site)).toEqual(['Company site', 'Company site']);
+
+    const personal = alternateBootstrapPayload();
+    personal.organization.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockFetch.mockImplementationOnce(async () => response({ data: personal }));
+    const consumer = await repository().loadWorkspace(currentUserId, 'conversation-managed');
+    expect(consumer.handoffs.map((handoff) => handoff.site)).toEqual(['', '', '']);
+    expect(JSON.stringify(consumer.handoffs)).not.toContain('Company site');
   });
 
   test('rejects malformed bootstrap DTO boundaries without reflecting upstream data', async () => {

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Real hosted account-deletion smoke: sign a user up through the deployed
 // gateway, delete the account through the deployed route, and verify the
-// tombstone, username quarantine, auth soft-delete, and sign-in refusal.
+// tombstone, immediate username release, auth soft-delete, and that the
+// released handle can be registered again (v3.2, backlog 27).
 //
 // Usage: NEWONE_HOSTED_E2E=1 node tests/hosted/deletion-smoke.mjs
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -61,15 +62,15 @@ const evidenceRows = await managementSql(accessToken, `
 const evidence = Array.isArray(evidenceRows) ? evidenceRows[0] : evidenceRows?.result?.[0];
 if (evidence?.display_name !== 'Deleted account') fail('profile not anonymized', evidence);
 if (evidence?.username !== null) fail('username not released', evidence);
-if (Number(evidence?.quarantined) !== 1) fail('username not quarantined', evidence);
+// v3.2: usernames are freed immediately; no quarantine row may exist.
+if (Number(evidence?.quarantined) !== 0) fail('username still quarantined', evidence);
 if (Number(evidence?.live_memberships) !== 0) fail('memberships still active', evidence);
 if (Number(evidence?.devices) !== 0) fail('device registrations remain', evidence);
 if (evidence?.auth_soft_deleted !== true) fail('auth user not soft-deleted', evidence);
 steps.push('tombstone_verified');
 
-// Step 4: the deleted account can no longer request sign-in codes (generic
-// envelope, but the deleted user is refused by the database authorizer) and
-// the quarantined username is refused to new signups.
+// Step 4: the released username is accepted by a fresh signup request (the
+// reserved-name check no longer holds it; the code is never redeemed here).
 const reuse = await gatewayPost('newone-auth', '/v2/auth/native/signup/request', keys, {
   installationId: user.installationId,
   body: {
@@ -81,10 +82,11 @@ const reuse = await gatewayPost('newone-auth', '/v2/auth/native/signup/request',
     captchaToken: 'hosted-smoke-captcha-placeholder',
   },
 });
-if (reuse.status !== 409) {
-  fail(`quarantined username was not refused (${reuse.status})`, reuse.payload);
+const reuseStatus = reuse.payload?.data?.status ?? reuse.payload?.status;
+if (reuse.status !== 202 || reuseStatus !== 'code_sent') {
+  fail(`released username was not accepted for signup (${reuse.status})`, reuse.payload);
 }
-steps.push('quarantined_username_refused');
+steps.push('released_username_accepted');
 
 const artifact = {
   runId,
