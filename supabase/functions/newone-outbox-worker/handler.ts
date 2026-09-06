@@ -488,7 +488,17 @@ function validatePushPayload(organizationId: string, raw: Record<string, unknown
     'reminder_number',
     'scheduler_worker_id',
     'source_state',
+    // The database annotates a push job with its fan-out on the first
+    // attempt; a job claimed again (after a translation hold or a provider
+    // retry) carries these keys, and rejecting them killed every retried
+    // push as invalid_payload (job 3261, Sep 6 2026).
+    'fanout_count',
+    'fanout_resolved',
   ]);
+  if (raw.fanout_count !== undefined) integer(raw.fanout_count, 0, 1_000_000);
+  if (raw.fanout_resolved !== undefined && typeof raw.fanout_resolved !== 'boolean') {
+    throw new ApiError(503, 'dependency_unavailable');
+  }
   if (raw.organization_id !== undefined && uuid(raw.organization_id) !== organizationId) {
     throw new ApiError(503, 'dependency_unavailable');
   }

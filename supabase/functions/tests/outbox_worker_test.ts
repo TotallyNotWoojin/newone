@@ -939,3 +939,32 @@ Deno.test('claimed payload shapes: targeted session revoke with owner, membershi
   }
   assertEquals(revoked.payload.revocationGeneration, 1);
 });
+
+Deno.test('a push job claimed again after the database annotated its fan-out is still a valid job', () => {
+  // The first attempt writes fanout_count / fanout_resolved into the job
+  // payload; a translation hold or provider retry then claims the same job
+  // again. Rejecting the annotated shape failed every retried push as
+  // invalid_payload (job 3261, Sep 6 2026), so no held push ever went out.
+  const annotated = {
+    organization_id: organizationId,
+    conversation_id: conversationId,
+    message_id: 658,
+    fanout_count: 1,
+    fanout_resolved: true,
+  };
+  const claimed = parseClaimedJobs({
+    topics: ['push'],
+    jobs: [
+      { id: 3261, organization_id: organizationId, topic: 'push', attempts: 2, payload: annotated },
+      {
+        id: 3262,
+        organization_id: organizationId,
+        topic: 'push',
+        attempts: 2,
+        payload: { ...annotated, fanout_resolved: 'yes' },
+      },
+    ],
+  }, ['push'], 3);
+  assertEquals(claimed.jobs.map((job) => job.id), ['3261']);
+  assertEquals(claimed.invalid.map((job) => job.id), ['3262']);
+});
