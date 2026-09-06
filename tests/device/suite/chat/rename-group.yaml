@@ -17,7 +17,14 @@ appId: com.totallynotwoojin.newone
 # The keyboard covers the Description field after typing the name; the tap then
 # lands on the keys and the description is appended to the name (chat-33,
 # run-2026-09-04T15-47-18). Hide it first, and again before Save.
-- hideKeyboard
+# Drag the sheet a little to dismiss the keyboard (hideKeyboard fails on iOS
+# while a spelling callout is up).
+- swipe:
+    start: "50%, 40%"
+    end: "50%, 50%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
 - scrollUntilVisible:
     element:
       text: "Description"
@@ -28,7 +35,14 @@ appId: com.totallynotwoojin.newone
     text: "Description"
     index: 1
 - inputText: ${DESCRIPTION}
-- hideKeyboard
+# Drag the sheet a little to dismiss the keyboard (hideKeyboard fails on iOS
+# while a spelling callout is up).
+- swipe:
+    start: "50%, 40%"
+    end: "50%, 50%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
 - scrollUntilVisible:
     element:
       text: "Save conversation"
