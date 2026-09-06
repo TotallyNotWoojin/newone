@@ -712,6 +712,20 @@ describe('BFF command transport security and parsing', () => {
       organizationId, query: '  Jordan  ', limit: 1,
     })).resolves.toMatchObject({ limit: 1 });
 
+    // @usernames (v3.1): tolerated as a handle or null, and passed through; junk is refused.
+    const jordan = {
+      userId: membershipId, displayName: 'Jordan Candidate', avatarPath: null, jobTitle: 'Shift lead',
+      membershipRole: 'member', membershipType: 'employee', accessExpiresAt: null,
+    };
+    mockFetch.mockImplementationOnce(async () => response({ data: { candidates: [{ ...jordan, username: 'jordan_c' }], limit: 1 } }));
+    await expect(repo.listGroupCreationCandidates({ organizationId, limit: 1 }))
+      .resolves.toMatchObject({ candidates: [{ userId: membershipId, username: 'jordan_c' }] });
+    mockFetch.mockImplementationOnce(async () => response({ data: { candidates: [{ ...jordan, username: null }], limit: 1 } }));
+    await expect(repo.listGroupCreationCandidates({ organizationId, limit: 1 }))
+      .resolves.toMatchObject({ candidates: [{ userId: membershipId, username: null }] });
+    mockFetch.mockImplementationOnce(async () => response({ data: { candidates: [{ ...jordan, username: 7 }], limit: 1 } }));
+    await expect(repo.listGroupCreationCandidates({ organizationId, limit: 1 })).rejects.toMatchObject({ code: 'invalid_response' });
+
     mockFetch.mockImplementationOnce(async () => response({ data: {
       candidates: [{
         userId: membershipId,
@@ -1757,6 +1771,14 @@ describe('BFF command transport security and parsing', () => {
       nextCursor: `cursor.${'a'.repeat(64)}`,
     });
 
+    // @usernames (v3.1): the key may be absent or a handle and is passed through for the picker row.
+    mockFetch.mockImplementationOnce(async () => response({ data: {
+      candidates: [{ ...candidate, username: 'jordan_c' }], nextCursor: null,
+    } }));
+    await expect(repo.listConversationMemberCandidates({
+      organizationId, conversationId, query: '', limit: 2,
+    })).resolves.toEqual({ candidates: [{ ...candidate, username: 'jordan_c' }], nextCursor: null });
+
     for (const payload of [
       { candidates: 'not-an-array', nextCursor: null },
       { candidates: [candidate, candidate], nextCursor: null },
@@ -1767,6 +1789,9 @@ describe('BFF command transport security and parsing', () => {
       { candidates: [{ ...candidate, avatarPath: null }], nextCursor: null },
       { candidates: [{ ...candidate, roleLabel: ' ' }], nextCursor: null },
       { candidates: [{ ...candidate, membershipType: 'external' }], nextCursor: null },
+      { candidates: [{ ...candidate, username: ' jordan' }], nextCursor: null },
+      { candidates: [{ ...candidate, username: 7 }], nextCursor: null },
+      { candidates: [{ ...candidate, username: '' }], nextCursor: null },
       { candidates: [candidate], nextCursor: '' },
       { candidates: [candidate], nextCursor: `cursor.${'a'.repeat(64)}` },
     ]) {

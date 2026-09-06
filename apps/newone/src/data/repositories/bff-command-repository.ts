@@ -163,7 +163,14 @@ function parseConversationMemberCandidatePage(value: unknown, requestedLimit: nu
         row.roleLabel.trim() !== row.roleLabel || row.roleLabel.normalize('NFC') !== row.roleLabel
       )) ||
       ('membershipType' in row &&
-        !['employee', 'contractor', 'guest'].includes(String(row.membershipType)))
+        !['employee', 'contractor', 'guest'].includes(String(row.membershipType))) ||
+      // The @handle is optional (a row without one omits the key); a present
+      // handle is a single token. Shipped clients tolerate the key before the
+      // service returns it (defect AD).
+      ('username' in row && row.username !== null && (
+        typeof row.username !== 'string' || row.username.length < 1 || row.username.length > 64 ||
+        /\s/.test(row.username)
+      ))
     ) {
       throw new RepositoryError(
         'The service returned an invalid conversation member candidate.',
@@ -174,6 +181,7 @@ function parseConversationMemberCandidatePage(value: unknown, requestedLimit: nu
     return {
       userId: String(userId).toLowerCase(),
       displayName,
+      ...(typeof row.username === 'string' ? { username: row.username } : {}),
       ...(typeof row.avatarPath === 'string' ? { avatarPath: row.avatarPath } : {}),
       ...(typeof row.roleLabel === 'string' ? { roleLabel: row.roleLabel } : {}),
       ...(typeof row.membershipType === 'string'

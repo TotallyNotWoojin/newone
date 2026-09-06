@@ -882,6 +882,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     }) : ({
       candidates: [{
         userId: 'user-external-one', membershipId: 'membership-external-one', displayName: 'Casey Wright',
+        username: 'casey_w',
         initials: 'CW', avatarColor: null, avatarPath: null, roleLabel: 'Engineer', department: 'Maintenance',
         site: 'Denver', suspended: false,
       }],
@@ -930,6 +931,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.changeText(screen.getByLabelText('chat.memberSearchLabel'), 'casey');
     await fireEvent.press(screen.getByLabelText('chat.memberSearchAction'));
     await waitFor(() => expect(screen.getByText('Casey Wright')).toBeTruthy());
+    // v3.1: the candidate row shows the @handle under the name.
+    expect(screen.getByText('@casey_w')).toBeTruthy();
     await fireEvent.press(screen.getByText('Casey Wright'));
     await fireEvent.press(screen.getAllByLabelText('chat.adminRole').at(-1)!);
     await fireEvent.press(screen.getByLabelText('chat.loadMoreMembers'));

@@ -451,6 +451,8 @@ export interface IssuedInvitation {
 export interface ConversationMemberCandidate {
   userId: string;
   displayName: string;
+  /** The @handle, once the service returns it (absent for rows without one). */
+  username?: string;
   avatarPath?: string;
   roleLabel?: string;
   membershipType?: 'employee' | 'contractor' | 'guest';

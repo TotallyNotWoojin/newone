@@ -617,7 +617,10 @@ export default function NewGroupScreen() {
                           ) : null
                         ) : (
                           <Text numberOfLines={1} style={styles.personMeta}>
-                            {candidate.jobTitle ?? candidate.membershipRole}
+                            {[
+                              candidate.jobTitle ?? candidate.membershipRole,
+                              candidate.username ? `@${candidate.username}` : null,
+                            ].filter(Boolean).join(' · ')}
                           </Text>
                         )}
                         {expiresAt ? (

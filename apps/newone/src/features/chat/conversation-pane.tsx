@@ -2795,7 +2795,10 @@ function ConversationControlsModal({
                     .join('') || 'M'}
                   size={34}
                 />
-                <Text style={styles.candidateName}>{person.displayName}</Text>
+                <View style={styles.candidateCopy}>
+                  <Text style={styles.candidateName}>{person.displayName}</Text>
+                  {person.username ? <Text style={styles.candidateHandle}>{`@${person.username}`}</Text> : null}
+                </View>
                 {person.roleLabel ? <Text style={styles.memberControlRole}>{person.roleLabel}</Text> : null}
                 {selectedCandidateId === person.userId ? <Ionicons name="checkmark-circle" color={colors.mintDark} size={18} /> : null}
               </Pressable>
@@ -3531,7 +3534,9 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   candidateRowSelected: { borderColor: colors.mint, backgroundColor: colors.mintSoft },
-  candidateName: { flex: 1, color: colors.ink, fontSize: 12, fontWeight: '800' },
+  candidateCopy: { flex: 1, minWidth: 0 },
+  candidateName: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  candidateHandle: { color: colors.inkSubtle, fontSize: 10, marginTop: 1 },
   attachmentChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   selectedFile: {
     minHeight: 58,

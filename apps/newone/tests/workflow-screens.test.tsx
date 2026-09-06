@@ -330,7 +330,7 @@ function groupCandidate(overrides: Record<string, unknown>) {
 describe('group creation workflow screen', () => {
   test('creates an incident with exact roles and recovers a real avatar upload failure', async () => {
     const candidates = [
-      groupCandidate({ userId: 'membership-employee', displayName: 'Employee Candidate' }),
+      groupCandidate({ userId: 'membership-employee', displayName: 'Employee Candidate', username: 'employee_c' }),
       groupCandidate({
         userId: 'membership-guest', displayName: 'Guest Candidate', membershipType: 'guest',
         accessExpiresAt: '2026-08-30T12:00:00.000Z',
@@ -354,6 +354,8 @@ describe('group creation workflow screen', () => {
 
     const view = await render(<NewGroupScreen />);
     await waitFor(() => expect(screen.getByText('Employee Candidate')).toBeTruthy());
+    // v3.1: the picker row carries the @handle next to the job title.
+    expect(screen.getByText('Operator · @employee_c')).toBeTruthy();
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Employee Candidate' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.admin' }));
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Guest Candidate' }));
