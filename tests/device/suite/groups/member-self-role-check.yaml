@@ -1,25 +1,27 @@
 appId: com.totallynotwoojin.newone
 ---
 # A plain member opens the controls: no role chips for anyone (including
-# self), no Remove buttons, no Add a member section.
+# self), no Remove buttons, no "Add people" section ("Add to group" button).
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Members"
+      text: "People"
     direction: DOWN
     timeout: 30000
-- takeScreenshot: ${SHOT}-members-as-member
+- takeScreenshot: ${SHOT}-people-as-member
 - assertNotVisible: "Owner · ${SELF}"
 - assertNotVisible: "Admin · ${SELF}"
 - assertNotVisible: "Member · ${SELF}"
 - assertNotVisible: "Remove ${OTHER}"
-- assertNotVisible: "Add selected member"
+- assertNotVisible: "Add to group"
+# "Report this group privately" was removed with the Sep 2026 chat stream; the
+# sheet ends with Leave this group (members) or Archive conversation (managers).
 - scrollUntilVisible:
     element:
-      text: ".*(Leave this group|Archive conversation|Report this group privately).*"
+      text: ".*(Leave this group|Archive conversation).*"
     direction: DOWN
     timeout: 20000
 - takeScreenshot: ${SHOT}-bottom-as-member

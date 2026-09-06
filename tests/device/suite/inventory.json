@@ -5,7 +5,7 @@
     "method": "static read of screen sources, feature components and the English catalog block (catalog.ts lines 1-1047); no runtime execution",
     "consumerModel": "personal realm = isPersonalRealm(workspace.organizationId); consumerIosReachable reflects what a plain consumer account on a physical iPhone can reach given the JSX gating recorded per control",
     "sourceFileNote": "controls carry 'sourceFile' only when the JSX lives outside the screen's own file",
-    "revised": "2026-09-05: applied the v3 summary and settings streams by hand (Summary sheet replaces the briefing card; compact settings with pickers, Edit profile sheet, Allow notifications switch, Devices group, consumer sign-out dialog, first-launch notification card)"
+    "revised": "2026-09-05: applied the v3 summary and settings streams by hand (Summary sheet replaces the briefing card; compact settings with pickers, Edit profile sheet, Allow notifications switch, Devices group, consumer sign-out dialog, first-launch notification card); 2026-09-06: applied the v3 chat, social, terminology and auth streams by hand (compact bubbles without translation labels, 'Show details'/'Propose correction' in the long-press sheet, report actions removed, inline photos, no message requests, invite-anyone people picker, consumer search without filters, 'Sign in' chip + code/password methods + 'Add a password' step, consumer wording: people/Everyone/Add people/Add to group/Show more/New owner/I understand)"
   },
   "screens": [
     {
@@ -167,13 +167,33 @@
         },
         {
           "id": "sign-in.mode-returning",
-          "label": "Returning member",
+          "label": "Sign in",
           "catalogKey": "auth.returning",
           "kind": "chip",
           "gating": "authStep === 'identity'",
           "consumerIosReachable": true,
-          "note": "chooseAccessMode('returning'); email or phone OTP",
+          "note": "chooseAccessMode('returning'); was 'Returning member' before the Sep 2026 terminology pass. On the password method the primary button also reads 'Sign in', so flows tap the chip by index 0",
           "sourceLine": 414
+        },
+        {
+          "id": "sign-in.method-code",
+          "label": "Email me a code",
+          "catalogKey": "auth.methodCode",
+          "kind": "chip",
+          "gating": "authStep === 'identity' && accessMode === 'returning'",
+          "consumerIosReachable": true,
+          "note": "chooseSignInMethod('code'); the default returning method (Sep 2026 auth stream)",
+          "sourceLine": 525
+        },
+        {
+          "id": "sign-in.method-password",
+          "label": "Use password",
+          "catalogKey": "auth.methodPassword",
+          "kind": "chip",
+          "gating": "authStep === 'identity' && accessMode === 'returning'",
+          "consumerIosReachable": true,
+          "note": "chooseSignInMethod('password'); reveals the password field and makes the primary button read 'Sign in' (auth.signIn); 'Forgot your password? Email me a code instead' link switches back",
+          "sourceLine": 530
         },
         {
           "id": "sign-in.mode-enrollment",
@@ -247,7 +267,7 @@
         },
         {
           "id": "sign-in.destination-phone",
-          "label": "Verified phone",
+          "label": "Phone number",
           "catalogKey": "auth.phoneLabel",
           "kind": "input",
           "gating": "authStep === 'identity' && destinationType === 'phone' (only selectable when !signupMode)",
@@ -264,6 +284,16 @@
           "consumerIosReachable": true,
           "note": "Visible label 'One-time code' (auth.codeLabel); placeholder '000000'; maxLength 6; textContentType oneTimeCode; onSubmitEditing=verifyCode",
           "sourceLine": 492
+        },
+        {
+          "id": "sign-in.password",
+          "label": "Password",
+          "catalogKey": "auth.passwordLabel",
+          "kind": "input",
+          "gating": "authStep === 'identity' && passwordMode (returning + 'Use password')",
+          "consumerIosReachable": true,
+          "note": "PasswordField; submit runs signInWithPassword",
+          "sourceLine": 665
         },
         {
           "id": "sign-in.resend-code",
@@ -307,13 +337,33 @@
         },
         {
           "id": "sign-in.continue",
-          "label": "Continue securely",
+          "label": "Continue",
           "catalogKey": "auth.continue",
           "kind": "button",
           "gating": "disabled={isWebAuthBlocked}; label switches on verify step",
           "consumerIosReachable": true,
-          "note": "Identity step: sendLink. Verify step label: 'Verify and create account' (auth.verifySignup) / 'Verify and sign in' (auth.verifySignIn) / 'Verify and secure account' (auth.verifyRecovery); web-blocked label 'Web sign-in not configured' (auth.webNotConfigured)",
+          "note": "Identity step: sendLink ('Continue', was 'Continue securely'); password method: 'Sign in' (auth.signIn). Verify step label: 'Verify and create account' (auth.verifySignup) / 'Sign in' (auth.verifySignIn, was 'Verify and sign in') / 'Verify and secure account' (auth.verifyRecovery)",
           "sourceLine": 614
+        },
+        {
+          "id": "sign-in.password-prompt-save",
+          "label": "Save password",
+          "catalogKey": "auth.savePassword",
+          "kind": "button",
+          "gating": "authStep === 'password-prompt': shown once after a code sign-in on a returning account without a password",
+          "consumerIosReachable": true,
+          "note": "'Add a password' step (auth.passwordPromptTitle); saves the new password then lands on Chats",
+          "sourceLine": 437
+        },
+        {
+          "id": "sign-in.password-prompt-skip",
+          "label": "Not now",
+          "catalogKey": "auth.skipPassword",
+          "kind": "button",
+          "gating": "authStep === 'password-prompt'",
+          "consumerIosReachable": true,
+          "note": "Skips the password step; the common verify flows wait for '(Not now|Ahora no|나중에|Chats|채팅)' and tap it",
+          "sourceLine": 446
         },
         {
           "id": "sign-in.different-identity",
@@ -385,12 +435,12 @@
         },
         {
           "id": "index.state-panel",
-          "label": "Loading your private workspace… / Newone could not load this workspace. / No conversations yet",
+          "label": "Loading… / Newone could not load this workspace. / No chats yet",
           "catalogKey": "status.emptyChats",
           "kind": "list-item",
           "gating": "workspace.status === 'loading' || 'error' || ordinaryConversations.length === 0",
           "consumerIosReachable": "conditional",
-          "note": "WorkspaceStatePanel replaces the list; 'Try again' retry button lives in app-shell.retry; consumer empty body uses status.emptyChatsBodyConsumer",
+          "note": "WorkspaceStatePanel replaces the list ('Loading…' was 'Loading your private workspace…', 'No chats yet' was 'No conversations yet'); 'Try again' retry button lives in app-shell.retry; consumer empty body uses status.emptyChatsBodyConsumer",
           "sourceLine": 79
         },
         {
@@ -506,36 +556,6 @@
           "sourceLine": 145
         },
         {
-          "id": "conversation-list.request-row",
-          "label": "{counterpart.displayName}",
-          "catalogKey": null,
-          "kind": "list-item",
-          "gating": "incomingRequests.length > 0: direct thread whose counterpart.connectionState === 'pending' && connectionRequestDirection === 'incoming'",
-          "consumerIosReachable": "conditional",
-          "note": "'Requests' section (chat.requests / chat.requestsHint); pressing opens the request thread like any conversation",
-          "sourceLine": 265
-        },
-        {
-          "id": "conversation-list.request-accept",
-          "label": "Accept",
-          "catalogKey": "people.accept",
-          "kind": "button",
-          "gating": "incoming request row; disabled while workspace.actionBusy === 'connection-respond'",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.respondConnection(counterpart.id, 'accepted')",
-          "sourceLine": 282
-        },
-        {
-          "id": "conversation-list.request-decline",
-          "label": "Decline",
-          "catalogKey": "people.decline",
-          "kind": "button",
-          "gating": "incoming request row; disabled while actionBusy === 'connection-respond'",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.respondConnection(counterpart.id, 'declined')",
-          "sourceLine": 292
-        },
-        {
           "id": "conversation-list.discover-join",
           "label": "Request to join",
           "catalogKey": "chat.requestToJoin",
@@ -560,9 +580,9 @@
           "label": "{conversation.title}",
           "catalogKey": null,
           "kind": "list-item",
-          "gating": "visible.length > 0 (filterConversations excludes managementOnly and incoming-request threads)",
+          "gating": "visible.length > 0 (filterConversations excludes managementOnly)",
           "consumerIosReachable": true,
-          "note": "Pressable row; onSelect -> workspace.selectConversation + router.push('/conversation/[id]') on mobile; shows pin icon (pinned), warning (priority safety) or notifications-off (muted)",
+          "note": "Pressable row; onSelect -> workspace.selectConversation + router.push('/conversation/[id]') on mobile; shows pin icon (pinned), warning (priority safety) or notifications-off (muted); message-request rows are gone for consumers (Sep 2026 chat stream): a stranger's first message is an ordinary row",
           "sourceLine": 329
         },
         {
@@ -592,11 +612,11 @@
       "file": "apps/newone/src/app/conversation/[id].tsx",
       "route": "/conversation/[id]",
       "reachableByConsumer": true,
-      "how": "Pushed from a conversation-list row, a people 'Message' / 'Send request' action, a search result, or a notification tap. Renders ConversationPane with mobile=true and hideMobileTabs.",
+      "how": "Pushed from a conversation-list row, a people 'Message' action (search result or Your people row), a search result, or a notification tap. Renders ConversationPane with mobile=true and hideMobileTabs.",
       "controls": [
         {
           "id": "conversation.state-panel",
-          "label": "Loading your private workspace… / Newone could not load this workspace.",
+          "label": "Loading… / Newone could not load this workspace.",
           "catalogKey": "status.loading",
           "kind": "list-item",
           "gating": "workspace.status === 'loading' || 'error'",
@@ -611,7 +631,7 @@
       "file": "apps/newone/src/features/chat/conversation-pane.tsx",
       "route": "/conversation/[id] (mobile) and / desktop split pane",
       "reachableByConsumer": true,
-      "how": "ConversationPane; requires workspace.currentUser and a selected conversation. Personal-realm direct threads add message-request banners; composer is disabled when conversation.isReadOnly or canPost === false (unless the viewer is the pending requester).",
+      "how": "ConversationPane; requires workspace.currentUser and a selected conversation. Sep 2026 chat stream: compact bubbles (no ORIGINAL/TRANSLATION labels, no 'Machine translation' or detected-language line; the translation is plain text under the original with a hairline), inverted timeline (older messages load on scroll up), photos render inline, Enter sends, the header subtitle is the peer's @handle (direct) or '{n} people' (groups) with the language pair ('EN ↔ ES') as a tiny tag, the 'Translation available' bar and message-request banners are gone (the composer always renders for consumers); composer is disabled when conversation.isReadOnly or canPost === false.",
       "controls": [
         {
           "id": "pane.back",
@@ -632,6 +652,16 @@
           "consumerIosReachable": true,
           "note": "IconButton ellipsis-horizontal; opens ConversationControlsModal (seeds name/description)",
           "sourceLine": 1369
+        },
+        {
+          "id": "pane.header-subtitle",
+          "label": "@{handle} / {count} people / {name} is typing…",
+          "catalogKey": "chat.memberCount",
+          "kind": "list-item",
+          "gating": "none",
+          "consumerIosReachable": true,
+          "note": "Header meta line: the counterpart's @handle for direct chats ('Active now' when no handle), '{count} people' for groups (was '{count} members'), the typing label while someone types; the language pair ('EN ↔ ES') follows as a tag",
+          "sourceLine": 856
         },
         {
           "id": "pane.management-open",
@@ -675,12 +705,12 @@
         },
         {
           "id": "pane.translation-boundary",
-          "label": "Automated translation is a derived aid…",
+          "label": "Automated translation is a derived aid, not the sole authority for emergency, safety, medical, legal, payroll, disciplinary, immigration, or other high-impact decisions. Confirm the original with a qualified person.",
           "catalogKey": "chat.translationBoundary",
           "kind": "list-item",
-          "gating": "translationMode !== 'off' && (translationPair || any message.translationState !== 'not_requested')",
-          "consumerIosReachable": "conditional",
-          "note": "Non-interactive alert banner above the message list",
+          "gating": "translationMode !== 'off' && !isPersonalRealm(workspace.organizationId) && (translationPair || any message.translationState !== 'not_requested')",
+          "consumerIosReachable": false,
+          "note": "Workplace-only disclaimer banner above the message list; consumer threads never carry it",
           "sourceLine": 516
         },
         {
@@ -690,7 +720,7 @@
           "kind": "button",
           "gating": "pagination.hasMore; disabled while pagination.loading (label 'Loading history…' chat.loadingOlder)",
           "consumerIosReachable": "conditional",
-          "note": "Top-of-list pill; anchors scroll offset after prepend",
+          "note": "ListFooterComponent of the inverted FlatList, i.e. at the oldest end; older pages also load automatically through onEndReached while scrolling up, so flows scroll instead of tapping it",
           "sourceLine": 532
         },
         {
@@ -704,6 +734,16 @@
           "sourceLine": 555
         },
         {
+          "id": "pane.loading-messages",
+          "label": "Loading messages…",
+          "catalogKey": "chat.loadingMessages",
+          "kind": "list-item",
+          "gating": "awaitingFirstPage (no page loaded yet)",
+          "consumerIosReachable": "conditional",
+          "note": "Progressbar placeholder that replaces the timeline until the first page arrives",
+          "sourceLine": 516
+        },
+        {
           "id": "pane.new-message-jump",
           "label": "{count} new messages",
           "catalogKey": "chat.newMessages",
@@ -712,36 +752,6 @@
           "consumerIosReachable": "conditional",
           "note": "Floating pill; scrollToEnd + markConversationRead",
           "sourceLine": 603
-        },
-        {
-          "id": "pane.request-accept",
-          "label": "Accept",
-          "catalogKey": "people.accept",
-          "kind": "button",
-          "gating": "incomingRequest: personal realm && kind === 'direct' && counterpart.connectionState === 'pending' && direction === 'incoming'",
-          "consumerIosReachable": "conditional",
-          "note": "Incoming message-request banner ('{name} wants to message you', chat.messageRequestIncoming) replaces the composer; workspace.respondConnection(id,'accepted')",
-          "sourceLine": 630
-        },
-        {
-          "id": "pane.request-decline",
-          "label": "Decline",
-          "catalogKey": "people.decline",
-          "kind": "button",
-          "gating": "same as pane.request-accept",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.respondConnection(id,'declined')",
-          "sourceLine": 637
-        },
-        {
-          "id": "pane.request-pending-banner",
-          "label": "Request pending — you can send up to 3 messages until {name} accepts",
-          "catalogKey": "chat.messageRequestPending",
-          "kind": "list-item",
-          "gating": "outgoingRequest (personal realm direct thread, counterpart pending outgoing)",
-          "consumerIosReachable": "conditional",
-          "note": "Non-interactive amber banner; composer stays enabled (service enforces the 3-message cap)",
-          "sourceLine": 648
         },
         {
           "id": "pane.empty-state",
@@ -778,9 +788,9 @@
           "label": "Show details",
           "catalogKey": "chat.showProvenance",
           "kind": "button",
-          "gating": "hasTranslation: translationEnabled (conversation.translationMode !== 'off') && message.translatedText && translation.status === 'completed' (also on the state card whenever a translation row exists, line 1770)",
+          "gating": "Message actions sheet (long-press): hasDetails = translationEnabled (conversation.translationMode !== 'off') && (message.translation || message.languageDetection)",
           "consumerIosReachable": "conditional",
-          "note": "Toggles to 'Hide details' (chat.hideProvenance); reveals processor route, languages, detector, fingerprint, policy version",
+          "note": "Moved off the bubble into the long-press sheet (Sep 2026 chat stream); toggles to 'Hide details' (chat.hideProvenance) and reveals the details block: detected language, state ('Machine translation' etc.), 'Source language · XX · Target language · YY', route, detector, fingerprint, policy version",
           "sourceLine": 1671
         },
         {
@@ -788,27 +798,17 @@
           "label": "Propose correction",
           "catalogKey": "chat.proposeCorrection",
           "kind": "button",
-          "gating": "hasTranslation: translationEnabled (conversation.translationMode !== 'off') && message.translatedText && translation.status === 'completed' && translation.status === 'completed'",
+          "gating": "Message actions sheet: canCorrect = message.translatedText && translation.status === 'completed'",
           "consumerIosReachable": "conditional",
-          "note": "Opens correction ActionModal seeded with translatedText",
+          "note": "In the long-press sheet (moved off the bubble); opens the correction ActionModal seeded with translatedText",
           "sourceLine": 1681
-        },
-        {
-          "id": "pane.report-translation-error",
-          "label": "Report translation error",
-          "catalogKey": "chat.reportTranslationError",
-          "kind": "button",
-          "gating": "hasTranslation: translationEnabled (conversation.translationMode !== 'off') && message.translatedText && translation.status === 'completed' && !translationErrorReport (workspace.aiOutputErrorReports)",
-          "consumerIosReachable": "conditional",
-          "note": "Opens AiOutputErrorReportModal(outputKind='translation'); replaced by 'Quality report submitted' text once filed",
-          "sourceLine": 1699
         },
         {
           "id": "pane.review-correction",
           "label": "Review correction",
           "catalogKey": "chat.reviewCorrection",
           "kind": "button",
-          "gating": "correction?.status === 'pending' && workspace.hasCapability('language.review')",
+          "gating": "Message actions sheet: correction?.status === 'pending' && workspace.hasCapability('language.review')",
           "consumerIosReachable": false,
           "note": "Language-reviewer capability only",
           "sourceLine": 1712
@@ -822,6 +822,26 @@
           "consumerIosReachable": "conditional",
           "note": "workspace.requestTranslation(message)",
           "sourceLine": 1794
+        },
+        {
+          "id": "pane.retry-translation",
+          "label": "Retry translation",
+          "catalogKey": "chat.retryTranslation",
+          "kind": "button",
+          "gating": "translationUnavailable && canRequestTranslation; disabled while the retry gate holds",
+          "consumerIosReachable": "conditional",
+          "note": "Visible text 'Retry' (chat.retry) after 'Translation unavailable'; label carries the wait/limit copy while gated",
+          "sourceLine": 1109
+        },
+        {
+          "id": "pane.show-original",
+          "label": "Show original",
+          "catalogKey": "chat.showOriginal",
+          "kind": "button",
+          "gating": "translated-only device preference && hasTranslation (bubble shows the translation first)",
+          "consumerIosReachable": "conditional",
+          "note": "Visible text 'Original' (chat.originalToggle); label flips to 'Hide original' (chat.hideOriginal) and the original text expands under the translation",
+          "sourceLine": 1076
         },
         {
           "id": "pane.correction-text",
@@ -898,8 +918,8 @@
           "label": "Incorrect meaning / Omitted context / Terminology / Unsafe wording / Wrong language / Other (translation) — Unsupported claim / Missing source / Incorrect action / Omitted context / Unsafe wording / Other (summary)",
           "catalogKey": "quality.categoryIncorrectMeaning",
           "kind": "chip",
-          "gating": "AiOutputErrorReportModal visible: opened by 'Report translation error' (translation.status === 'completed' && no prior report) or 'Report summary error' (summary.outputFingerprint && no prior report)",
-          "consumerIosReachable": "conditional",
+          "gating": "AiOutputErrorReportModal: opened only by 'Report summary error' in the Summary sheet (workplace organizations); 'Report translation error' was removed",
+          "consumerIosReachable": false,
           "note": "Category chips (quality.category*)",
           "sourceLine": 1986
         },
@@ -908,8 +928,8 @@
           "label": "Describe what went wrong",
           "catalogKey": "quality.whatWentWrong",
           "kind": "input",
-          "gating": "AiOutputErrorReportModal visible: opened by 'Report translation error' (translation.status === 'completed' && no prior report) or 'Report summary error' (summary.outputFingerprint && no prior report)",
-          "consumerIosReachable": "conditional",
+          "gating": "AiOutputErrorReportModal: opened only by 'Report summary error' in the Summary sheet (workplace organizations); 'Report translation error' was removed",
+          "consumerIosReachable": false,
           "note": "Multiline FormField; submit needs >= 3 chars",
           "sourceLine": 1989
         },
@@ -918,8 +938,8 @@
           "label": "This could affect safety, security, legal, financial, or operational decisions.",
           "catalogKey": "quality.highConsequence",
           "kind": "checkbox",
-          "gating": "AiOutputErrorReportModal visible: opened by 'Report translation error' (translation.status === 'completed' && no prior report) or 'Report summary error' (summary.outputFingerprint && no prior report)",
-          "consumerIosReachable": "conditional",
+          "gating": "AiOutputErrorReportModal: opened only by 'Report summary error' in the Summary sheet (workplace organizations); 'Report translation error' was removed",
+          "consumerIosReachable": false,
           "note": "Pressable checkbox",
           "sourceLine": 1990
         },
@@ -928,8 +948,8 @@
           "label": "Allow a human-deidentified version to be used in future quality evaluations.",
           "catalogKey": "quality.consentOptional",
           "kind": "checkbox",
-          "gating": "AiOutputErrorReportModal visible: opened by 'Report translation error' (translation.status === 'completed' && no prior report) or 'Report summary error' (summary.outputFingerprint && no prior report)",
-          "consumerIosReachable": "conditional",
+          "gating": "AiOutputErrorReportModal: opened only by 'Report summary error' in the Summary sheet (workplace organizations); 'Report translation error' was removed",
+          "consumerIosReachable": false,
           "note": "Optional consent checkbox",
           "sourceLine": 1998
         },
@@ -938,8 +958,8 @@
           "label": "Submit quality report",
           "catalogKey": "quality.submitReport",
           "kind": "button",
-          "gating": "AiOutputErrorReportModal visible: opened by 'Report translation error' (translation.status === 'completed' && no prior report) or 'Report summary error' (summary.outputFingerprint && no prior report); disabled details < 3 chars",
-          "consumerIosReachable": "conditional",
+          "gating": "AiOutputErrorReportModal: opened only by 'Report summary error' in the Summary sheet (workplace organizations); 'Report translation error' was removed",
+          "consumerIosReachable": false,
           "note": "workspace.reportAiOutputError",
           "sourceLine": 2008
         },
@@ -960,8 +980,30 @@
           "kind": "button",
           "gating": "canDownload: attachment.status === 'clean' && (!transfer || transfer.state === 'uploaded'); hint 'Opens an expiring secure download' (chat.fileDownloadHint)",
           "consumerIosReachable": "conditional",
-          "note": "AttachmentCard main pressable; workspace.downloadAttachment(message)",
+          "note": "AttachmentCard main pressable for files (photos and ready videos render inline instead: pane.image-open / pane.video-inline); consumer status label 'Ready' (chat.fileReady), workplace 'Scanned and safe'; workspace.downloadAttachment(message)",
           "sourceLine": 2126
+        },
+        {
+          "id": "pane.image-open",
+          "label": "Open image full screen",
+          "catalogKey": "chat.imageOpen",
+          "kind": "imagebutton",
+          "gating": "attachment.kind === 'image' && attachmentReady (status clean, upload finished); while uploading the label is 'Uploading' (chat.attachmentUploading) under a progress ring",
+          "consumerIosReachable": "conditional",
+          "note": "A photo is just the photo (no file card, no name/status text); tap opens ImageViewerModal (\"Close image\"); a photo without a caption carries its time on the image",
+          "sourceLine": 84,
+          "sourceFile": "apps/newone/src/features/chat/media-attachment.tsx"
+        },
+        {
+          "id": "pane.video-inline",
+          "label": "Video · {attachment.name}",
+          "catalogKey": "chat.videoAttachment",
+          "kind": "list-item",
+          "gating": "isVideoAttachment && attachmentReady && a granted source",
+          "consumerIosReachable": "conditional",
+          "note": "Inline VideoAttachment; its download control is labelled '{name}, Ready'",
+          "sourceLine": 155,
+          "sourceFile": "apps/newone/src/features/chat/media-attachment.tsx"
         },
         {
           "id": "pane.attachment-retry",
@@ -1010,7 +1052,7 @@
           "kind": "button",
           "gating": "!disabled && memberUserIds.length > 1 (groups only) && mentionablePeople() non-empty",
           "consumerIosReachable": "conditional",
-          "note": "MentionSelector toggle (mention-copy button/close 'Close mentions'); shows selected count badge and 'Up to 50 people per message'",
+          "note": "MentionSelector toggle (mention-copy button/close 'Close mentions'); shows selected count badge; the 'Up to 50 people per message' line is gone",
           "sourceLine": 2443
         },
         {
@@ -1025,12 +1067,12 @@
         },
         {
           "id": "pane.mention-search",
-          "label": "Search conversation members to mention",
+          "label": "Search people to mention",
           "catalogKey": null,
           "kind": "input",
           "gating": "mention panel open",
           "consumerIosReachable": "conditional",
-          "note": "placeholder 'Search members' (mention-copy)",
+          "note": "placeholder 'Search people' (mention-copy; was 'Search conversation members to mention' / 'Search members')",
           "sourceLine": 2480
         },
         {
@@ -1040,7 +1082,7 @@
           "kind": "checkbox",
           "gating": "mention panel open && filtered.length; disabled when 50 already selected",
           "consumerIosReachable": "conditional",
-          "note": "Candidate row (avatar, name, department · role); 'No matching conversation members.' when empty",
+          "note": "Candidate row under the 'People' heading (mention-copy available; was 'Available members'); 'No one matches.' when empty",
           "sourceLine": 2500
         },
         {
@@ -1060,7 +1102,7 @@
           "kind": "input",
           "gating": "!composerDisabled && !recording",
           "consumerIosReachable": true,
-          "note": "placeholder 'Write a message…' (chat.placeholder); multiline; onSubmitEditing sends; typing notifies realtime peers",
+          "note": "placeholder 'Write a message…' (chat.placeholder); multiline; Enter/onSubmitEditing sends (Sep 2026 chat stream), so inputText payloads must not carry newlines; typing notifies realtime peers",
           "sourceLine": 2368
         },
         {
@@ -1195,73 +1237,13 @@
           "sourceLine": 2640
         },
         {
-          "id": "pane.action-report-category",
-          "label": "Harassment / Threat / Spam / Privacy / Misinformation / Other",
-          "catalogKey": "chat.reportHarassment",
-          "kind": "chip",
-          "gating": "!message.isOwn && message.serverId && !message.deleted",
-          "consumerIosReachable": "conditional",
-          "note": "'Report privately' section chips (chat.report*); choosing a chip resets consent",
-          "sourceLine": 2654
-        },
-        {
-          "id": "pane.action-report-details",
-          "label": "Details (optional)",
-          "catalogKey": "chat.reportDetails",
-          "kind": "input",
-          "gating": "!message.isOwn && message.serverId && !message.deleted",
-          "consumerIosReachable": "conditional",
-          "note": "Multiline FormField",
-          "sourceLine": 2665
-        },
-        {
-          "id": "pane.action-report-context-before",
-          "label": "None / 1 message / 2 messages",
-          "catalogKey": null,
-          "kind": "chip",
-          "gating": "!message.isOwn && message.serverId && !message.deleted",
-          "consumerIosReachable": "conditional",
-          "note": "'Share context before' chips (moderation-copy reportContextBefore)",
-          "sourceLine": 2685
-        },
-        {
-          "id": "pane.action-report-context-after",
-          "label": "None / 1 message / 2 messages",
-          "catalogKey": null,
-          "kind": "chip",
-          "gating": "!message.isOwn && message.serverId && !message.deleted",
-          "consumerIosReachable": "conditional",
-          "note": "'Share context after' chips (moderation-copy reportContextAfter)",
-          "sourceLine": 2701
-        },
-        {
-          "id": "pane.action-report-consent",
-          "label": "I understand and consent to this limited disclosure.",
-          "catalogKey": null,
-          "kind": "checkbox",
-          "gating": "!message.isOwn && message.serverId && !message.deleted",
-          "consumerIosReachable": "conditional",
-          "note": "moderation-copy reportConsentLabel; 'Consent is required…' hint until checked",
-          "sourceLine": 2714
-        },
-        {
-          "id": "pane.action-report-submit",
-          "label": "Submit report",
-          "catalogKey": "chat.submitReport",
-          "kind": "button",
-          "gating": "!message.isOwn && message.serverId && !message.deleted; disabled !reportConsent",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.reportMessage with contextBefore/After and noticeVersion moderation-report-v2",
-          "sourceLine": 2736
-        },
-        {
           "id": "pane.action-queued-note",
-          "label": "Queued messages can be edited after the server confirms delivery.",
+          "label": "You can edit this message once it’s sent.",
           "catalogKey": "chat.queuedEdit",
           "kind": "list-item",
           "gating": "!message.serverId",
           "consumerIosReachable": "conditional",
-          "note": "Non-interactive note replacing edit/report/forward sections for unsent messages",
+          "note": "Non-interactive note replacing edit/forward sections for unsent messages",
           "sourceLine": 2752
         },
         {
@@ -1271,7 +1253,7 @@
           "kind": "chip",
           "gating": "message.serverId && !message.deleted (server-confirmed message) && !message.attachment; up to 20 non-archived, non-managementOnly other conversations",
           "consumerIosReachable": "conditional",
-          "note": "'Forward to a conversation' chips (chat.forwardTo); attachments show 'Forward · unavailable' (chat.forwardUnavailable) instead",
+          "note": "'Forward to a chat' chips (chat.forwardTo; was 'Forward to a conversation'); attachments show 'Forward · unavailable' (chat.forwardUnavailable) instead",
           "sourceLine": 2773
         },
         {
@@ -1734,53 +1716,13 @@
         },
         {
           "id": "pane.controls-history-disclosure",
-          "label": "Your history access",
+          "label": "Chat history",
           "catalogKey": "chat.historyAccess",
           "kind": "list-item",
           "gating": "!managementOnly && kind !== 'direct' && conversation.historyDisclosure",
           "consumerIosReachable": "conditional",
           "note": "Non-interactive disclosure (conversation.history.all / since_join)",
           "sourceLine": 3160
-        },
-        {
-          "id": "pane.controls-group-report-category",
-          "label": "Harassment / Threat / Spam / Privacy / Misinformation / Other",
-          "catalogKey": "chat.reportHarassment",
-          "kind": "chip",
-          "gating": "!managementOnly && kind !== 'direct'",
-          "consumerIosReachable": "conditional",
-          "note": "'Report this group privately' section (chat.reportGroup)",
-          "sourceLine": 3180
-        },
-        {
-          "id": "pane.controls-group-report-details",
-          "label": "Details (optional)",
-          "catalogKey": "chat.reportDetails",
-          "kind": "input",
-          "gating": "!managementOnly && kind !== 'direct'",
-          "consumerIosReachable": "conditional",
-          "note": "Multiline FormField",
-          "sourceLine": 3191
-        },
-        {
-          "id": "pane.controls-group-report-consent",
-          "label": "I understand and consent to this limited disclosure.",
-          "catalogKey": null,
-          "kind": "checkbox",
-          "gating": "!managementOnly && kind !== 'direct'",
-          "consumerIosReachable": "conditional",
-          "note": "moderation-copy reportConsentLabel",
-          "sourceLine": 3208
-        },
-        {
-          "id": "pane.controls-group-report-submit",
-          "label": "Submit report",
-          "catalogKey": "chat.submitReport",
-          "kind": "button",
-          "gating": "!managementOnly && kind !== 'direct'; disabled !groupReportConsent",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.reportGroup",
-          "sourceLine": 3225
         },
         {
           "id": "pane.controls-name",
@@ -1814,12 +1756,12 @@
         },
         {
           "id": "pane.controls-posting-all",
-          "label": "All members",
+          "label": "Everyone",
           "catalogKey": "chat.allMembers",
           "kind": "chip",
           "gating": "conversation.canManageConversation && !conversation.policyManaged && kind in ['group','team']",
           "consumerIosReachable": "conditional",
-          "note": "'Who can post' (chat.whoCanPost) under 'Access and posting controls' (chat.accessControls)",
+          "note": "'Who can post' (chat.whoCanPost); 'Everyone' was 'All members'; the 'Access and posting controls' heading is workplace-only",
           "sourceLine": 3263
         },
         {
@@ -1869,17 +1811,17 @@
           "kind": "input",
           "gating": "conversation.canManageConversation && !conversation.policyManaged && kind in ['group','team']",
           "consumerIosReachable": "conditional",
-          "note": "placeholder 'Explain why this access policy is changing' (chat.changeReasonPlaceholder)",
+          "note": "placeholder 'Why are you changing this?' (chat.changeReasonPlaceholder)",
           "sourceLine": 3272
         },
         {
           "id": "pane.controls-save-access",
-          "label": "Save access controls",
+          "label": "Save changes",
           "catalogKey": "chat.saveAccessControls",
           "kind": "button",
           "gating": "conversation.canManageConversation && !conversation.policyManaged && kind in ['group','team']; disabled reason < 3 chars",
           "consumerIosReachable": "conditional",
-          "note": "workspace.updateConversationControls",
+          "note": "workspace.updateConversationControls; 'Save changes' was 'Save access controls'",
           "sourceLine": 3273
         },
         {
@@ -1949,7 +1891,7 @@
           "kind": "list-item",
           "gating": "kind !== 'direct'",
           "consumerIosReachable": "conditional",
-          "note": "'Members' section (chat.members); role label from chat.{role}Role",
+          "note": "'People' section (chat.members; was 'Members'); role label from chat.{role}Role",
           "sourceLine": 3348
         },
         {
@@ -1974,22 +1916,22 @@
         },
         {
           "id": "pane.controls-member-search",
-          "label": "Search the company directory",
+          "label": "Name or @username",
           "catalogKey": "chat.memberSearchLabel",
           "kind": "input",
           "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly",
           "consumerIosReachable": "conditional",
-          "note": "'Add a member' section (chat.addMember); SearchField; onSubmitEditing runs the search",
+          "note": "'Add people' section (chat.addMember; was 'Add a member'); SearchField placeholder/a11y 'Name or @username' (was 'Search the company directory'); onSubmitEditing runs the search",
           "sourceLine": 3405
         },
         {
           "id": "pane.controls-member-search-action",
-          "label": "Search members",
+          "label": "Search people",
           "catalogKey": "chat.memberSearchAction",
           "kind": "button",
           "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly; disabled while loading",
           "consumerIosReachable": "conditional",
-          "note": "workspace.queryConversationMemberCandidates",
+          "note": "workspace.queryConversationMemberCandidates; 'Search people' was 'Search members'",
           "sourceLine": 3411
         },
         {
@@ -1999,17 +1941,17 @@
           "kind": "picker",
           "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && candidates.length",
           "consumerIosReachable": "conditional",
-          "note": "Radio row (accessibilityRole radio); 'No eligible members matched…' (chat.memberSearchEmpty) when empty",
+          "note": "Radio row (accessibilityRole radio); 'No one matched that search.' (chat.memberSearchEmpty) when empty; consumers can add anyone found by name or @username",
           "sourceLine": 3424
         },
         {
           "id": "pane.controls-load-more-members",
-          "label": "Load more members",
+          "label": "Show more",
           "catalogKey": "chat.loadMoreMembers",
           "kind": "button",
           "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && memberCandidateCursor",
           "consumerIosReachable": "conditional",
-          "note": "Appends the next page",
+          "note": "Appends the next page; 'Show more' was 'Load more members'",
           "sourceLine": 3447
         },
         {
@@ -2034,12 +1976,12 @@
         },
         {
           "id": "pane.controls-add-selected",
-          "label": "Add selected member",
+          "label": "Add to group",
           "catalogKey": "chat.addSelectedMember",
           "kind": "button",
           "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly; disabled !selectedCandidateId",
           "consumerIosReachable": "conditional",
-          "note": "onAddMember(conversationId, userId, role)",
+          "note": "onAddMember(conversationId, userId, role); 'Add to group' was 'Add selected member'; the thread then shows '{name} was added to the group.'",
           "sourceLine": 3463
         },
         {
@@ -2049,17 +1991,17 @@
           "kind": "picker",
           "gating": "!managementOnly && conversation.departure.eligible && departure.requiresOwnershipTransfer && replacementCandidates.length",
           "consumerIosReachable": "conditional",
-          "note": "'Replacement owner' radio rows (departure-copy.replacement)",
+          "note": "'New owner' radio rows (departure-copy.replacement; was 'Replacement owner'); 'Add someone else to the group before leaving.' when none",
           "sourceLine": 3503
         },
         {
           "id": "pane.controls-leave-confirm",
-          "label": "I understand that history is preserved and my future access ends.",
+          "label": "I understand",
           "catalogKey": null,
           "kind": "checkbox",
           "gating": "!managementOnly && conversation.departure.eligible",
           "consumerIosReachable": "conditional",
-          "note": "departure-copy.confirmation; section title 'Leave this group'",
+          "note": "departure-copy.confirmation (was 'I understand that history is preserved and my future access ends.'); section title 'Leave this group'",
           "sourceLine": 3523
         },
         {
@@ -2069,7 +2011,7 @@
           "kind": "button",
           "gating": "!managementOnly && departure.eligible; disabled until confirmed (and replacement chosen when requiresOwnershipTransfer)",
           "consumerIosReachable": "conditional",
-          "note": "departure-copy.confirm; onLeave(replacementOwnerId); direct threads show 'You cannot leave…' + 'Direct-message membership is fixed.'",
+          "note": "departure-copy.confirm; onLeave(replacementOwnerId); direct threads show 'You can’t leave a one-to-one chat.'",
           "sourceLine": 3535
         },
         {
@@ -2144,12 +2086,12 @@
         },
         {
           "id": "pane.attach-send",
-          "label": "Send securely",
-          "catalogKey": "chat.sendSecurely",
+          "label": "Send",
+          "catalogKey": "chat.sendAttachment",
           "kind": "button",
           "gating": "AttachmentPickerModal visible; disabled !selected; label 'Hashing and uploading…' (chat.uploading) while busy === 'attachment-upload'",
           "consumerIosReachable": true,
-          "note": "workspace.sendAttachment with imageMode + caption",
+          "note": "Consumer label 'Send' (chat.sendAttachment); workplace organizations keep 'Send securely' (chat.sendSecurely); 'Uploading…' (chat.uploading, was 'Hashing and uploading…') while busy; workspace.sendAttachment with imageMode + caption",
           "sourceLine": 3640
         }
       ]
@@ -2188,7 +2130,7 @@
           "kind": "list-item",
           "gating": "showDetails",
           "consumerIosReachable": false,
-          "note": "StatusBadge; group kinds add '{n} members' (chat.membersLower)",
+          "note": "StatusBadge; group kinds add '{n} people' (chat.membersLower; was '{n} members')",
           "sourceLine": 42
         }
       ]
@@ -2198,16 +2140,16 @@
       "file": "apps/newone/src/app/people.tsx",
       "route": "/people",
       "reachableByConsumer": true,
-      "how": "People tab. Personal realm shows username search + Requests + Your friends; workspace realm shows the company directory with filters.",
+      "how": "People tab. Personal realm (Sep 2026 social stream): a search field at the top ('Search by name or @username', results as you type), then 'Your people' — compact rows (avatar, name, @handle) with a 'Message' button and a '…' menu; no Connect / Requests / Accept / Decline / 'Send message request' and no request compose modal. Workspace realm shows the company directory with filters.",
       "controls": [
         {
           "id": "people.username-search",
-          "label": "Search by username",
+          "label": "Search by name or @username",
           "catalogKey": "people.usernameSearch",
           "kind": "input",
           "gating": "personalRealm",
           "consumerIosReachable": true,
-          "note": "SearchField; debounced 300 ms after >= 2 chars; results via workspace.searchUsers",
+          "note": "SearchField (placeholder doubles as the a11y label); debounced 300 ms after >= 2 chars; results via workspace.searchUsers (display names and @username prefixes); no submit button",
           "sourceLine": 295
         },
         {
@@ -2222,103 +2164,43 @@
           "sourceFile": "apps/newone/src/components/ui/primitives.tsx"
         },
         {
-          "id": "people.result-send-message-request",
-          "label": "Send message request",
-          "catalogKey": "people.sendMessageRequest",
-          "kind": "button",
-          "gating": "username result card && connectionState 'available' (result.connectionState === 'none') && !blockedByMe",
+          "id": "people.search-empty",
+          "label": "No one matches that name or username.",
+          "catalogKey": "people.usernameNoResults",
+          "kind": "list-item",
+          "gating": "personalRealm && a completed search with no results",
           "consumerIosReachable": "conditional",
-          "note": "Opens the message-request modal",
-          "sourceLine": 639
-        },
-        {
-          "id": "people.result-connect",
-          "label": "Connect",
-          "catalogKey": "people.connect",
-          "kind": "button",
-          "gating": "card in 'available' state && !blockedByMe (light tone on search results, dark elsewhere)",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.updateConnection(userId) -> pending_outgoing",
-          "sourceLine": 647
-        },
-        {
-          "id": "people.result-accept",
-          "label": "Accept",
-          "catalogKey": "people.accept",
-          "kind": "button",
-          "gating": "card pending && connectionRequestDirection === 'incoming'",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.respondConnection(id,'accepted')",
-          "sourceLine": 627
-        },
-        {
-          "id": "people.result-decline",
-          "label": "Decline",
-          "catalogKey": "people.decline",
-          "kind": "button",
-          "gating": "card pending incoming",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.respondConnection(id,'declined')",
-          "sourceLine": 628
-        },
-        {
-          "id": "people.result-cancel-request",
-          "label": "Cancel request",
-          "catalogKey": "people.cancelRequest",
-          "kind": "button",
-          "gating": "card pending && direction outgoing",
-          "consumerIosReachable": "conditional",
-          "note": "onRemove -> workspace.removeConnection",
-          "sourceLine": 633
+          "note": "Plain text under the search field",
+          "sourceLine": 263
         },
         {
           "id": "people.result-message",
           "label": "Message",
           "catalogKey": "people.message",
           "kind": "button",
-          "gating": "card connected",
+          "gating": "every search-result row and every 'Your people' row unless person.blockedByMe (then a 'Blocked' badge sits in its place)",
           "consumerIosReachable": "conditional",
-          "note": "openOrCreateDirectConversation then push /conversation/[id]",
+          "note": "PersonRow PrimaryButton; openOrCreateDirectConversation then push /conversation/[id] — the chat opens at once, no request or approval",
           "sourceLine": 621
-        },
-        {
-          "id": "people.result-remove-connection",
-          "label": "Remove connection",
-          "catalogKey": "people.removeConnection",
-          "kind": "button",
-          "gating": "card connected",
-          "consumerIosReachable": "conditional",
-          "note": "IconButton person-remove-outline (danger); workspace.removeConnection",
-          "sourceLine": 622
         },
         {
           "id": "people.card-manage",
           "label": "Manage contact and privacy",
           "catalogKey": "people.manage",
           "kind": "button",
-          "gating": "onManage provided — only cards in the Requests / Your friends sections (renderPersonCard); username search-result cards pass no onManage",
+          "gating": "PersonRow '…' IconButton: every 'Your people' row; search results only when the person is already known to this account",
           "consumerIosReachable": "conditional",
-          "note": "IconButton ellipsis-horizontal (or PrimaryButton with options icon when blockedByMe); opens manage modal",
+          "note": "IconButton ellipsis-horizontal labelled 'Manage contact and privacy'; opens the 'Contact and privacy' sheet (nickname, favorite, save contact, block/unblock, report this person)",
           "sourceLine": 578
         },
         {
-          "id": "people.request-section",
-          "label": "Requests",
-          "catalogKey": "people.requests",
+          "id": "people.your-people-section",
+          "label": "Your people",
+          "catalogKey": "people.eyebrowConsumer",
           "kind": "list-item",
-          "gating": "personalRealm && consumerRequests.length (connectionState === 'pending')",
-          "consumerIosReachable": "conditional",
-          "note": "Section of PersonCards for pending requests",
-          "sourceLine": 327
-        },
-        {
-          "id": "people.friends-section",
-          "label": "Your friends",
-          "catalogKey": "people.friends",
-          "kind": "list-item",
-          "gating": "personalRealm",
+          "gating": "personalRealm && no search in progress",
           "consumerIosReachable": true,
-          "note": "Section of connected PersonCards; EmptyState 'No friends yet' (people.friendsEmpty) when none",
+          "note": "Section of PersonRows for everyone this account has chatted with (was 'Your friends'); EmptyState 'No one here yet' / 'Search a name or @username to start a chat.' when none",
           "sourceLine": 334
         },
         {
@@ -2343,12 +2225,12 @@
         },
         {
           "id": "people.manage-alias",
-          "label": "Private contact alias (optional)",
+          "label": "Nickname (optional)",
           "catalogKey": "people.alias",
           "kind": "input",
           "gating": "manage modal visible (managePerson set)",
           "consumerIosReachable": "conditional",
-          "note": "placeholder 'Shown only in your saved contacts' (people.aliasPlaceholder)",
+          "note": "placeholder 'Only you see this' (people.aliasPlaceholder)",
           "sourceLine": 410
         },
         {
@@ -2441,26 +2323,6 @@
           "note": "Closes manage modal (setManagePersonId(''))",
           "sourceLine": 49,
           "sourceFile": "apps/newone/src/components/ui/action-modal.tsx"
-        },
-        {
-          "id": "people.request-body",
-          "label": "First message",
-          "catalogKey": "people.messageRequestLabel",
-          "kind": "input",
-          "gating": "request modal visible (requestTarget set from 'Send message request')",
-          "consumerIosReachable": "conditional",
-          "note": "placeholder 'Introduce yourself' (people.messageRequestPlaceholder); capped at 20000 chars",
-          "sourceLine": 530
-        },
-        {
-          "id": "people.request-send",
-          "label": "Send request",
-          "catalogKey": "people.messageRequestSend",
-          "kind": "button",
-          "gating": "request modal; disabled !requestBody.trim(); loading actionBusy === 'message-request'",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.sendMessageRequest then push /conversation/[id]",
-          "sourceLine": 538
         }
       ]
     },
@@ -2469,16 +2331,16 @@
       "file": "apps/newone/src/app/search.tsx",
       "route": "/search",
       "reachableByConsumer": true,
-      "how": "Search tab. All filters render for every realm; only copy changes (search.placeholderConsumer / search.subtitleConsumer).",
+      "how": "Search tab. Personal realm: placeholder 'Search people and messages', hint 'Type a name, @username, or words from a message', results as you type — a People section (compact rows with a 'Message' button) then Messages; no Search button and no filter chips/panel. Workspace realm keeps the submit button and the 'Refine results' panel.",
       "controls": [
         {
           "id": "search.query",
-          "label": "Search your messages",
-          "catalogKey": "search.placeholderConsumer",
+          "label": "Search people and messages",
+          "catalogKey": "search.placeholderPeopleMessages",
           "kind": "input",
           "gating": "none (workspace realm uses search.placeholder 'Search your workspace')",
           "consumerIosReachable": true,
-          "note": "SearchField; onSubmitEditing runs search; requires >= 2 chars ('Enter at least two characters.' search.validation)",
+          "note": "SearchField; consumer search runs as you type (debounced) and needs >= 2 chars; workspace realm uses search.placeholder 'Search your workspace' and submits with the Search button",
           "sourceLine": 352
         },
         {
@@ -2492,12 +2354,52 @@
           "sourceLine": 353
         },
         {
+          "id": "search.start-hint",
+          "label": "Type a name, @username, or words from a message",
+          "catalogKey": "search.startHint",
+          "kind": "list-item",
+          "gating": "personalRealm && query < 2 chars && nothing searched",
+          "consumerIosReachable": true,
+          "note": "Centered hint under the field",
+          "sourceLine": 599
+        },
+        {
+          "id": "search.people-section",
+          "label": "People",
+          "catalogKey": "search.people",
+          "kind": "list-item",
+          "gating": "personalRealm && (peopleResults.length || peopleSearched)",
+          "consumerIosReachable": "conditional",
+          "note": "Section label above the people rows; 'No one matches that name or username.' when the people search is empty",
+          "sourceLine": 569
+        },
+        {
+          "id": "search.person-result-message",
+          "label": "Message",
+          "catalogKey": "people.message",
+          "kind": "button",
+          "gating": "personalRealm && peopleResults.length",
+          "consumerIosReachable": "conditional",
+          "note": "PersonResultRow (avatar, name, @handle): openOrCreateDirectConversation then push /conversation/[id]",
+          "sourceLine": 675
+        },
+        {
+          "id": "search.messages-section",
+          "label": "Messages",
+          "catalogKey": "search.messages",
+          "kind": "list-item",
+          "gating": "personalRealm && (searched || loading)",
+          "consumerIosReachable": "conditional",
+          "note": "Section label above the message results; 'No matches' (search.noMatchesConsumer) when empty",
+          "sourceLine": 586
+        },
+        {
           "id": "search.submit",
           "label": "Search",
           "catalogKey": "search.submit",
           "kind": "button",
-          "gating": "none; loading while request in flight",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (hidden in the personal realm; loading while a request is in flight)",
+          "consumerIosReachable": false,
           "note": "PrimaryButton with search icon",
           "sourceLine": 363
         },
@@ -2506,8 +2408,8 @@
           "label": "Clear filters",
           "catalogKey": null,
           "kind": "button",
-          "gating": "hasFilters (any non-default filter)",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (filter panel hidden in the personal realm); hasFilters (any non-default filter)",
+          "consumerIosReachable": false,
           "note": "search-copy clearFilters in the 'Refine results' panel",
           "sourceLine": 378
         },
@@ -2516,8 +2418,8 @@
           "label": "All",
           "catalogKey": "search.all",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "selectType('all')",
           "sourceLine": 390
         },
@@ -2526,8 +2428,8 @@
           "label": "People",
           "catalogKey": "search.people",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "selectType('people')",
           "sourceLine": 390
         },
@@ -2536,8 +2438,8 @@
           "label": "Conversations",
           "catalogKey": "search.conversations",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "selectType('conversations')",
           "sourceLine": 390
         },
@@ -2546,8 +2448,8 @@
           "label": "Messages",
           "catalogKey": "search.messages",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "selectType('messages')",
           "sourceLine": 390
         },
@@ -2556,8 +2458,8 @@
           "label": "Updates",
           "catalogKey": "search.announcements",
           "kind": "chip",
-          "gating": "none (rendered for every realm; consumers get no announcement results)",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm); none (rendered for every realm; consumers get no announcement results)",
+          "consumerIosReachable": false,
           "note": "selectType('announcements')",
           "sourceLine": 390
         },
@@ -2566,8 +2468,8 @@
           "label": "Handoffs",
           "catalogKey": "search.handoffs",
           "kind": "chip",
-          "gating": "none (rendered for every realm; consumers get no handoff results)",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm); none (rendered for every realm; consumers get no handoff results)",
+          "consumerIosReachable": false,
           "note": "selectType('handoffs')",
           "sourceLine": 390
         },
@@ -2576,8 +2478,8 @@
           "label": "Any authorized conversation",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "search-copy anyConversation; selectConversation(null)",
           "sourceLine": 401
         },
@@ -2586,8 +2488,8 @@
           "label": "{conversation.title}",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "workspace.conversations non-managementOnly",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (filter panel hidden in the personal realm); workspace.conversations non-managementOnly",
+          "consumerIosReachable": false,
           "note": "One chip per conversation",
           "sourceLine": 407
         },
@@ -2596,8 +2498,8 @@
           "label": "Any language",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "search-copy anyLanguage",
           "sourceLine": 418
         },
@@ -2606,8 +2508,8 @@
           "label": "Korean / Spanish / English / Mixed language / Unknown language",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "search-copy languageLabels for searchLanguages",
           "sourceLine": 424
         },
@@ -2616,8 +2518,8 @@
           "label": "Any permitted field",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "search-copy anyMessageField",
           "sourceLine": 435
         },
@@ -2626,8 +2528,8 @@
           "label": "Original text / Approved translation / Sender name / Clean file name",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none; selecting forces type Messages",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm); none; selecting forces type Messages",
+          "consumerIosReachable": false,
           "note": "search-copy sourceLabels",
           "sourceLine": 441
         },
@@ -2636,8 +2538,8 @@
           "label": "Any sender",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "search-copy anySender",
           "sourceLine": 452
         },
@@ -2646,8 +2548,8 @@
           "label": "{person.displayName}",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "workspace.people non-suspended",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (filter panel hidden in the personal realm); workspace.people non-suspended",
+          "consumerIosReachable": false,
           "note": "Selecting forces type Messages",
           "sourceLine": 458
         },
@@ -2656,8 +2558,8 @@
           "label": "From date",
           "catalogKey": null,
           "kind": "input",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "placeholder 'YYYY-MM-DD'; hint 'Dates use this device’s local time zone.'",
           "sourceLine": 470
         },
@@ -2666,8 +2568,8 @@
           "label": "Through date",
           "catalogKey": null,
           "kind": "input",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (filter panel hidden in the personal realm)",
+          "consumerIosReachable": false,
           "note": "placeholder 'YYYY-MM-DD'",
           "sourceLine": 488
         },
@@ -2678,7 +2580,7 @@
           "kind": "list-item",
           "gating": "visibleResults.length (authorization signature must match)",
           "consumerIosReachable": "conditional",
-          "note": "Pressable result row; messages/conversations push /conversation/[id] (with messageId focus); people -> /people; announcements -> /updates; handoffs -> /handoffs",
+          "note": "Pressable result row labelled 'Open {title}'; consumers see no type label or match-source line; messages/conversations push /conversation/[id] (with messageId focus); people -> /people; announcements -> /updates; handoffs -> /handoffs",
           "sourceLine": 523
         },
         {
@@ -2698,7 +2600,7 @@
       "file": "apps/newone/src/app/new-group.tsx",
       "route": "/new-group",
       "reachableByConsumer": true,
-      "how": "Modal pushed from the Chats compose button. Not realm-gated in JSX; candidate list comes from workspace.queryGroupCreationCandidates.",
+      "how": "Modal pushed from the Chats compose button. Personal realm (Sep 2026 social stream): name, description and photo only (no 'GROUP SETUP' heading, no group type / unit scope / posting / join / history controls), then a PEOPLE picker that lists the people this account knows first and finds anyone else through the same people search as the People tab (@handles shown); candidates come from workspace.queryGroupCreationCandidates in workspace organizations.",
       "controls": [
         {
           "id": "group.cancel",
@@ -2795,8 +2697,8 @@
           "label": "Private group",
           "catalogKey": "group.private",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "selectKind('group')",
           "sourceLine": 294
         },
@@ -2805,8 +2707,8 @@
           "label": "Team",
           "catalogKey": "group.team",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "selectKind('team')",
           "sourceLine": 294
         },
@@ -2815,8 +2717,8 @@
           "label": "Shift",
           "catalogKey": "group.shift",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "selectKind('shift'); locks join policy to invite-only",
           "sourceLine": 294
         },
@@ -2825,8 +2727,8 @@
           "label": "Incident room",
           "catalogKey": "group.incident",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "selectKind('incident'); reveals severity + classification",
           "sourceLine": 294
         },
@@ -2835,8 +2737,8 @@
           "label": "Organization-wide",
           "catalogKey": "group.organizationWide",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "setUnitId(null)",
           "sourceLine": 302
         },
@@ -2845,28 +2747,28 @@
           "label": "{unit.name}",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "workspace.units.length (workspace org units; consumers have none)",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); workspace.units.length (workspace org units; consumers have none)",
+          "consumerIosReachable": false,
           "note": "setUnitId(unit.unitId)",
           "sourceLine": 308
         },
         {
           "id": "group.posting-all",
-          "label": "All members",
+          "label": "Everyone",
           "catalogKey": "group.postingAllMembers",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "setPostingMode('all_members')",
           "sourceLine": 323
         },
         {
           "id": "group.posting-admins",
-          "label": "Owners and admins",
+          "label": "Admins only",
           "catalogKey": "group.postingAdminsOnly",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "setPostingMode('admins_only')",
           "sourceLine": 328
         },
@@ -2875,8 +2777,8 @@
           "label": "Use company default",
           "catalogKey": "group.joinInherit",
           "kind": "chip",
-          "gating": "!lockedInviteOnly (kind not shift/incident)",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); !lockedInviteOnly (kind not shift/incident)",
+          "consumerIosReachable": false,
           "note": "setJoinPolicy('inherit')",
           "sourceLine": 341
         },
@@ -2885,8 +2787,8 @@
           "label": "Invite only",
           "catalogKey": "group.joinInviteOnly",
           "kind": "chip",
-          "gating": "!lockedInviteOnly",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); !lockedInviteOnly",
+          "consumerIosReachable": false,
           "note": "setJoinPolicy('invite_only'); shift/incident show a locked badge instead",
           "sourceLine": 346
         },
@@ -2895,18 +2797,18 @@
           "label": "Request approval",
           "catalogKey": "group.joinApproval",
           "kind": "chip",
-          "gating": "!lockedInviteOnly",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); !lockedInviteOnly",
+          "consumerIosReachable": false,
           "note": "setJoinPolicy('approval_required')",
           "sourceLine": 351
         },
         {
           "id": "group.history-since-join",
-          "label": "From join time",
+          "label": "From when they join",
           "catalogKey": "group.historySinceJoin",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "setHistoryPolicy('since_join')",
           "sourceLine": 367
         },
@@ -2915,8 +2817,8 @@
           "label": "Full history",
           "catalogKey": "group.historyAll",
           "kind": "chip",
-          "gating": "none",
-          "consumerIosReachable": true,
+          "gating": "!personalRealm (workplace organizations only)",
+          "consumerIosReachable": false,
           "note": "setHistoryPolicy('all')",
           "sourceLine": 372
         },
@@ -2925,8 +2827,8 @@
           "label": "Low / Medium / High / Critical",
           "catalogKey": "group.incidentSeverityLow",
           "kind": "chip",
-          "gating": "kind === 'incident'",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); kind === 'incident'",
+          "consumerIosReachable": false,
           "note": "group.incidentSeverity{Low,Medium,High,Critical}",
           "sourceLine": 394
         },
@@ -2935,19 +2837,19 @@
           "label": "Incident classification",
           "catalogKey": "group.incidentClassification",
           "kind": "input",
-          "gating": "kind === 'incident'",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (workplace organizations only); kind === 'incident'",
+          "consumerIosReachable": false,
           "note": "placeholder 'Incident classification'; required to enable Create",
           "sourceLine": 403
         },
         {
           "id": "group.member-search",
-          "label": "Search company directory",
-          "catalogKey": "group.search",
+          "label": "Search by name or @username",
+          "catalogKey": "people.usernameSearch",
           "kind": "input",
           "gating": "none",
           "consumerIosReachable": true,
-          "note": "SearchField; debounced 220 ms queryGroupCreationCandidates",
+          "note": "SearchField; personal realm placeholder people.usernameSearch (people search debounced 220 ms for a 2+ character query); workplace placeholder 'Search company directory' (group.search)",
           "sourceLine": 438
         },
         {
@@ -2955,9 +2857,9 @@
           "label": "Add {name} / Remove {name}",
           "catalogKey": "group.addPerson",
           "kind": "checkbox",
-          "gating": "candidates.length ('Loading authorized candidates…' / 'No authorized candidates match this search.' otherwise)",
+          "gating": "visibleCandidates.length: personal realm shows known people (filtered locally) for a short query and people-search results for 2+ characters — hint 'Type a name or @username to add anyone.' (group.pickerHint) / 'No one matches that name or username.'; workplace: 'Loading authorized candidates…' / 'No authorized candidates match this search.'",
           "consumerIosReachable": "conditional",
-          "note": "Pressable row with accessibilityRole checkbox; label prefix group.addPerson / group.removePerson",
+          "note": "Pressable row with accessibilityRole checkbox; label prefix group.addPerson / group.removePerson ('Add {name}' / 'Remove {name}'); the @handle shows under the name for consumers",
           "sourceLine": 470
         },
         {
@@ -2965,8 +2867,8 @@
           "label": "Member",
           "catalogKey": "group.member",
           "kind": "chip",
-          "gating": "candidate selected && membershipType !== 'guest'",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (consumer groups add everyone as a member); candidate selected && membershipType !== 'guest'",
+          "consumerIosReachable": false,
           "note": "setRole(candidate,'member'); guests show a locked 'Member' badge",
           "sourceLine": 510
         },
@@ -2975,8 +2877,8 @@
           "label": "Admin",
           "catalogKey": "group.admin",
           "kind": "chip",
-          "gating": "candidate selected && not guest",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (consumer groups add everyone as a member); candidate selected && not guest",
+          "consumerIosReachable": false,
           "note": "setRole(candidate,'admin')",
           "sourceLine": 515
         },
@@ -2985,8 +2887,8 @@
           "label": "Owner",
           "catalogKey": "group.owner",
           "kind": "chip",
-          "gating": "candidate selected && not guest",
-          "consumerIosReachable": "conditional",
+          "gating": "!personalRealm (consumer groups add everyone as a member); candidate selected && not guest",
+          "consumerIosReachable": false,
           "note": "setRole(candidate,'owner')",
           "sourceLine": 520
         }
@@ -4089,31 +3991,11 @@
       "gating": "any ActionModal open"
     },
     {
-      "key": "auth.firstUse",
-      "en": "First-time enrollment",
-      "usedIn": [
-        "sign-in.tsx:371",
-        "sign-in.tsx:417"
-      ],
-      "consumerIosReachable": true,
-      "gating": "sign-in identity step (mode/language chips always visible)"
-    },
-    {
       "key": "auth.returning",
-      "en": "Returning member",
+      "en": "Sign in",
       "usedIn": [
         "sign-in.tsx:374",
         "sign-in.tsx:414"
-      ],
-      "consumerIosReachable": true,
-      "gating": "sign-in identity step (mode/language chips always visible)"
-    },
-    {
-      "key": "auth.recovery",
-      "en": "Recover access",
-      "usedIn": [
-        "sign-in.tsx:369",
-        "sign-in.tsx:418"
       ],
       "consumerIosReachable": true,
       "gating": "sign-in identity step (mode/language chips always visible)"
@@ -4175,7 +4057,7 @@
     },
     {
       "key": "auth.continue",
-      "en": "Continue securely",
+      "en": "Continue",
       "usedIn": [
         "sign-in.tsx:622"
       ],
@@ -4261,7 +4143,7 @@
     },
     {
       "key": "auth.phoneLabel",
-      "en": "Verified phone",
+      "en": "Phone number",
       "usedIn": [
         "sign-in.tsx:483",
         "sign-in.tsx:525"
@@ -4317,7 +4199,7 @@
     },
     {
       "key": "auth.verifySignIn",
-      "en": "Verify and sign in",
+      "en": "Sign in",
       "usedIn": [
         "sign-in.tsx:621"
       ],
@@ -4422,15 +4304,6 @@
       ],
       "consumerIosReachable": false,
       "gating": "!personalRealm (isPersonalRealm(workspace.organizationId) === false)"
-    },
-    {
-      "key": "search.placeholderConsumer",
-      "en": "Search your messages",
-      "usedIn": [
-        "search.tsx:359"
-      ],
-      "consumerIosReachable": true,
-      "gating": "personalRealm"
     },
     {
       "key": "search.submit",
@@ -4719,7 +4592,7 @@
     },
     {
       "key": "chat.forwardTo",
-      "en": "Forward to a conversation",
+      "en": "Forward to a chat",
       "usedIn": [
         "conversation-pane.tsx:2763"
       ],
@@ -4806,15 +4679,6 @@
       ],
       "consumerIosReachable": "conditional",
       "gating": "message.isOwn && message.serverId && !message.deleted"
-    },
-    {
-      "key": "chat.reportPrivately",
-      "en": "Report privately",
-      "usedIn": [
-        "conversation-pane.tsx:2651"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "message report: !message.isOwn && message.serverId && !message.deleted; also group report (kind !== 'direct') and people manage modal"
     },
     {
       "key": "chat.reportHarassment",
@@ -4938,7 +4802,7 @@
     },
     {
       "key": "chat.queuedEdit",
-      "en": "Queued messages can be edited after the server confirms delivery.",
+      "en": "You can edit this message once it’s sent.",
       "usedIn": [
         "conversation-pane.tsx:2752"
       ],
@@ -5382,7 +5246,7 @@
     },
     {
       "key": "chat.fileDownloadHint",
-      "en": "Opens an expiring secure download",
+      "en": "Opens the file",
       "usedIn": [
         "conversation-pane.tsx:2127"
       ],
@@ -5518,7 +5382,7 @@
     },
     {
       "key": "chat.uploading",
-      "en": "Hashing and uploading…",
+      "en": "Uploading…",
       "usedIn": [
         "conversation-pane.tsx:3643"
       ],
@@ -5622,7 +5486,7 @@
     },
     {
       "key": "chat.addMember",
-      "en": "Add a member",
+      "en": "Add people",
       "usedIn": [
         "conversation-pane.tsx:3403"
       ],
@@ -5631,7 +5495,7 @@
     },
     {
       "key": "chat.memberSearchLabel",
-      "en": "Search the company directory",
+      "en": "Name or @username",
       "usedIn": [
         "conversation-pane.tsx:3408"
       ],
@@ -5640,7 +5504,7 @@
     },
     {
       "key": "chat.memberSearchAction",
-      "en": "Search members",
+      "en": "Search people",
       "usedIn": [
         "conversation-pane.tsx:3414"
       ],
@@ -5649,7 +5513,7 @@
     },
     {
       "key": "chat.loadMoreMembers",
-      "en": "Load more members",
+      "en": "Show more",
       "usedIn": [
         "conversation-pane.tsx:3449"
       ],
@@ -5658,7 +5522,7 @@
     },
     {
       "key": "chat.addSelectedMember",
-      "en": "Add selected member",
+      "en": "Add to group",
       "usedIn": [
         "conversation-pane.tsx:3465"
       ],
@@ -5705,7 +5569,7 @@
     },
     {
       "key": "chat.allMembers",
-      "en": "All members",
+      "en": "Everyone",
       "usedIn": [
         "conversation-pane.tsx:3263"
       ],
@@ -5759,7 +5623,7 @@
     },
     {
       "key": "chat.changeReasonPlaceholder",
-      "en": "Explain why this access policy is changing",
+      "en": "Why are you changing this?",
       "usedIn": [
         "conversation-pane.tsx:3272"
       ],
@@ -5768,7 +5632,7 @@
     },
     {
       "key": "chat.saveAccessControls",
-      "en": "Save access controls",
+      "en": "Save changes",
       "usedIn": [
         "conversation-pane.tsx:3275"
       ],
@@ -5846,15 +5710,6 @@
       ],
       "consumerIosReachable": "conditional",
       "gating": "canManage && kind === 'incident' && !isReadOnly"
-    },
-    {
-      "key": "chat.reportGroup",
-      "en": "Report this group privately",
-      "usedIn": [
-        "conversation-pane.tsx:3175"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "controls modal, kind !== 'direct'"
     },
     {
       "key": "chat.briefing",
@@ -6165,7 +6020,7 @@
     },
     {
       "key": "people.usernameSearch",
-      "en": "Search by username",
+      "en": "Search by name or @username",
       "usedIn": [
         "people.tsx:297"
       ],
@@ -6294,11 +6149,11 @@
         "people.tsx:617"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "onManage provided — only cards in the Requests / Your friends sections (renderPersonCard); username search-result cards pass no onManage"
+      "gating": "personal realm: the '…' IconButton on every 'Your people' row, and on search-result rows when the person is already known (onManage provided); workplace: PersonCard manage button"
     },
     {
       "key": "people.alias",
-      "en": "Private contact alias (optional)",
+      "en": "Nickname (optional)",
       "usedIn": [
         "people.tsx:411"
       ],
@@ -6307,7 +6162,7 @@
     },
     {
       "key": "people.aliasPlaceholder",
-      "en": "Shown only in your saved contacts",
+      "en": "Only you see this",
       "usedIn": [
         "people.tsx:413"
       ],
@@ -6369,49 +6224,6 @@
       "gating": "manage modal"
     },
     {
-      "key": "people.sendMessageRequest",
-      "en": "Send message request",
-      "usedIn": [
-        "people.tsx:641"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "username result card, available state"
-    },
-    {
-      "key": "people.messageRequestLabel",
-      "en": "First message",
-      "usedIn": [
-        "people.tsx:531"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "request modal"
-    },
-    {
-      "key": "people.messageRequestPlaceholder",
-      "en": "Introduce yourself",
-      "usedIn": [
-        "people.tsx:534"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "request modal"
-    },
-    {
-      "key": "people.messageRequestSend",
-      "en": "Send request",
-      "usedIn": [
-        "people.tsx:541"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "request modal"
-    },
-    {
-      "key": "people.requestPending",
-      "en": "Request pending",
-      "usedIn": [],
-      "consumerIosReachable": false,
-      "gating": "not referenced by any screen (legacy key)"
-    },
-    {
       "key": "group.cancel",
       "en": "Cancel group creation",
       "usedIn": [
@@ -6458,7 +6270,7 @@
     },
     {
       "key": "group.descriptionPlaceholder",
-      "en": "Purpose, operating boundary, or expected use",
+      "en": "What’s this group about?",
       "usedIn": [
         "new-group.tsx:220"
       ],
@@ -6522,7 +6334,7 @@
     },
     {
       "key": "group.postingAllMembers",
-      "en": "All members",
+      "en": "Everyone",
       "usedIn": [
         "new-group.tsx:324"
       ],
@@ -6531,7 +6343,7 @@
     },
     {
       "key": "group.postingAdminsOnly",
-      "en": "Owners and admins",
+      "en": "Admins only",
       "usedIn": [
         "new-group.tsx:329"
       ],
@@ -6540,7 +6352,7 @@
     },
     {
       "key": "group.historySinceJoin",
-      "en": "From join time",
+      "en": "From when they join",
       "usedIn": [
         "new-group.tsx:368"
       ],
@@ -7890,7 +7702,7 @@
     },
     {
       "key": "settings.sound",
-      "en": "Notification sound",
+      "en": "Sound",
       "usedIn": [
         "settings.tsx:518",
         "settings.tsx:629"
@@ -7900,7 +7712,7 @@
     },
     {
       "key": "settings.vibration",
-      "en": "Notification vibration",
+      "en": "Vibration",
       "usedIn": [
         "settings.tsx:523",
         "settings.tsx:630"
@@ -8167,6 +7979,144 @@
       ],
       "consumerIosReachable": "conditional",
       "gating": "delete-account modal"
+    },
+    {
+      "key": "auth.methodCode",
+      "en": "Email me a code",
+      "usedIn": [
+        "sign-in.tsx:525"
+      ],
+      "consumerIosReachable": true,
+      "gating": "authStep === 'identity' && accessMode === 'returning'"
+    },
+    {
+      "key": "auth.methodPassword",
+      "en": "Use password",
+      "usedIn": [
+        "sign-in.tsx:530"
+      ],
+      "consumerIosReachable": true,
+      "gating": "authStep === 'identity' && accessMode === 'returning'"
+    },
+    {
+      "key": "auth.signIn",
+      "en": "Sign in",
+      "usedIn": [
+        "sign-in.tsx:758"
+      ],
+      "consumerIosReachable": true,
+      "gating": "primary button on the password method; verify button after a code sign-in"
+    },
+    {
+      "key": "auth.savePassword",
+      "en": "Save password",
+      "usedIn": [
+        "sign-in.tsx:437",
+        "password-section.tsx:93"
+      ],
+      "consumerIosReachable": true,
+      "gating": "'Add a password' step after a code sign-in"
+    },
+    {
+      "key": "auth.skipPassword",
+      "en": "Not now",
+      "usedIn": [
+        "sign-in.tsx:446"
+      ],
+      "consumerIosReachable": true,
+      "gating": "'Add a password' step after a code sign-in"
+    },
+    {
+      "key": "chat.imageOpen",
+      "en": "Open image full screen",
+      "usedIn": [
+        "media-attachment.tsx:86"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "photo attachment ready"
+    },
+    {
+      "key": "chat.videoAttachment",
+      "en": "Video",
+      "usedIn": [
+        "media-attachment.tsx:162"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "video attachment ready"
+    },
+    {
+      "key": "chat.showOriginal",
+      "en": "Show original",
+      "usedIn": [
+        "conversation-pane.tsx:1076"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "translated-only device preference && hasTranslation"
+    },
+    {
+      "key": "chat.hideOriginal",
+      "en": "Hide original",
+      "usedIn": [
+        "conversation-pane.tsx:1076"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "translated-only device preference && original expanded"
+    },
+    {
+      "key": "chat.loadingMessages",
+      "en": "Loading messages…",
+      "usedIn": [
+        "conversation-pane.tsx:516"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "first page not loaded yet"
+    },
+    {
+      "key": "search.placeholderPeopleMessages",
+      "en": "Search people and messages",
+      "usedIn": [
+        "search.tsx:409"
+      ],
+      "consumerIosReachable": true,
+      "gating": "personalRealm"
+    },
+    {
+      "key": "search.startHint",
+      "en": "Type a name, @username, or words from a message",
+      "usedIn": [
+        "search.tsx:599"
+      ],
+      "consumerIosReachable": true,
+      "gating": "personalRealm && short query"
+    },
+    {
+      "key": "group.pickerHint",
+      "en": "Type a name or @username to add anyone.",
+      "usedIn": [
+        "new-group.tsx:570"
+      ],
+      "consumerIosReachable": true,
+      "gating": "personalRealm && short query"
+    },
+    {
+      "key": "people.eyebrowConsumer",
+      "en": "Your people",
+      "usedIn": [
+        "people.tsx:267"
+      ],
+      "consumerIosReachable": true,
+      "gating": "personalRealm && not searching"
+    },
+    {
+      "key": "people.usernameNoResults",
+      "en": "No one matches that name or username.",
+      "usedIn": [
+        "new-group.tsx:570",
+        "search.tsx:581",
+        "people.tsx:263"
+      ],
+      "consumerIosReachable": "conditional",
+      "gating": "a search with no results (People tab, Search tab, group picker)"
     }
   ]
 }

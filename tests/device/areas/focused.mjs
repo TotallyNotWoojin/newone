@@ -16,18 +16,18 @@ export async function run(ctx) {
     return;
   }
   const intro = `Hey Ben, Ana here ${tag}`;
-  await ctx.step({ id: 'foc-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Send message request' }, expected: 'B card', screen: 'people' });
+  await ctx.step({ id: 'foc-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'people' });
   const request = await ctx.step({
-    id: 'foc-00b-message-request', title: 'Setup: A sends a message request', device: devA,
-    flow: 'people/send-message-request.yaml', env: { TEXT: intro }, expected: 'Conversation opens with pending banner', screen: 'people → conversation',
+    id: 'foc-00b-message-request', title: 'Setup: A taps Message and sends the first text (no request)', device: devA,
+    flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'Conversation opens at once; first text sent', screen: 'people → conversation',
     serverTruth: async () => { const w = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
   if (!request.uiOk) return;
   const convId = (await server.directConversation(A.userId, B.userId)).id;
   const accept = await ctx.step({
-    id: 'foc-00c-accept', title: 'Setup: B accepts in the conversation', device: devB,
-    flow: 'chat/accept-in-conversation.yaml', env: { NAME: A.displayName }, expected: 'Composer unlocks', screen: 'chats → conversation',
-    serverTruth: async () => { const w = await server.waitFor(() => server.connection(A.userId, B.userId), (row) => row?.status === 'accepted', { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
+    id: 'foc-00c-accept', title: 'Setup: B sees the first text in Chats → conversation (nothing to accept)', device: devB,
+    flow: 'people/receive-text.yaml', env: { PEER: A.displayName, TEXT: intro }, expected: 'Text visible; composer present', screen: 'chats → conversation',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, intro), (row) => Boolean(row), { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.id ?? 'no row' }; },
   });
   if (!accept.uiOk) return;
   await ctx.step({ id: 'foc-00d-open-a', title: 'Setup: A opens the conversation', device: devA, flow: 'common/open-conversation.yaml', env: { PEER: B.displayName }, expected: 'composer visible', screen: 'chats' });

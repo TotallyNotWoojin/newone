@@ -1,6 +1,10 @@
 appId: com.totallynotwoojin.newone
 ---
-# Chats → Start a conversation → name → add MEMBER(s) → Create.
+# Chats → Start a conversation → name → find the MEMBER(s) through the picker's
+# people search → Create. Anyone can be added (Sep 2026 social stream): the
+# picker lists the people this account already knows and finds everyone else
+# by name or @username, so MEMBERn_QUERY is what gets typed (the @username)
+# and "Add MEMBERn" is the row that must appear.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -19,12 +23,10 @@ appId: com.totallynotwoojin.newone
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
-# Typing the name leaves the keyboard up and the member rows underneath it; tap
-# the GROUP SETUP eyebrow (top of the scroll view, always on screen next to the
-# name field) to dismiss it before choosing members.
-- tapOn: "GROUP SETUP"
-# iOS 26.5 keyboards without the prediction bar defeat the text guard
-# (neg-06, run-2026-09-04T14-27-52); ask iOS to hide it first.
+# Typing the name leaves the keyboard up over the people section (the consumer
+# form has no "GROUP SETUP" eyebrow to tap any more). iOS 26.5 keyboards without
+# the prediction bar defeat the text guard (neg-06, run-2026-09-04T14-27-52);
+# ask iOS to hide it first, then fall back to the drag.
 - hideKeyboard
 - runFlow:
     when:
@@ -43,21 +45,49 @@ appId: com.totallynotwoojin.newone
 - assertNotVisible: "Request approval"
 - scrollUntilVisible:
     element:
-      text: "Add ${MEMBER1}"
+      text: "Search by name or @username"
     direction: DOWN
     timeout: 45000
+- tapOn: "Search by name or @username"
+- inputText: ${MEMBER1_QUERY}
+- hideKeyboard
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER1}"
+    direction: DOWN
+    timeout: 30000
 - tapOn: "Add ${MEMBER1}"
 - runFlow:
     when:
       true: ${HAS_MEMBER2}
     commands:
+      - tapOn: "Clear search"
+      - tapOn: "Search by name or @username"
+      - inputText: ${MEMBER2_QUERY}
+      - hideKeyboard
+      - runFlow:
+          when:
+            visible: "(.*(Typing Predictions|Dictate).*|space)"
+          commands:
+            - swipe:
+                start: "50%, 30%"
+                end: "50%, 88%"
+                duration: 600
       - scrollUntilVisible:
           element:
             text: "Add ${MEMBER2}"
           direction: DOWN
-          timeout: 20000
+          timeout: 30000
       - tapOn: "Add ${MEMBER2}"
-- takeScreenshot: ${SHOT}-members-selected
+- takeScreenshot: ${SHOT}-people-selected
 - tapOn: "Create"
 - extendedWaitUntil:
     visible: ".*Write a message….*"

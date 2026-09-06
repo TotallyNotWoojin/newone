@@ -1,12 +1,18 @@
 appId: com.totallynotwoojin.newone
 ---
-# An existing user comes back: picks "Returning member", enters email, asks
-# for a code.
+# An existing user comes back: picks the "Sign in" mode chip, enters email,
+# asks for a code. The chip was "Returning member" before the Sep 2026
+# terminology pass (older simulator builds still show it, so both are
+# accepted). Code is the default sign-in method, so the primary button reads
+# "Continue" here; only the "Use password" method makes it read "Sign in" too,
+# which is why the chip is addressed by index 0.
 - extendedWaitUntil:
-    visible: "Returning member"
+    visible: "(Returning member|Sign in)"
     timeout: 20000
 - tapOn: "English"
-- tapOn: "Returning member"
+- tapOn:
+    text: "(Returning member|Sign in)"
+    index: 0
 - scrollUntilVisible:
     element:
       text: "you@example.com"
@@ -15,7 +21,12 @@ appId: com.totallynotwoojin.newone
 - tapOn: "you@example.com"
 - eraseText: 120
 - inputText: ${EMAIL}
-- tapOn: "Email address"
+# The label tap after typing commits the field on iOS; on Android the label sits
+# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
+# Tap on "Email address" not found), so it is optional there.
+- tapOn:
+    text: "Email address"
+    optional: true
 # Simulator typing sometimes drops or reorders characters. Check the field holds
 # the exact value; refocus the input (third "Email address" node: two label nodes,
 # then the field) and retype once if not.

@@ -1,10 +1,13 @@
 appId: com.totallynotwoojin.newone
 ---
-# With translation Off for this conversation, no TRANSLATION card renders.
+# With translation Off for this conversation the original renders alone: no
+# translated text (TRANSLATED, a word the translation would contain, never
+# appears) and no "Translating…" line.
 - extendedWaitUntil:
     visible: ".*${TEXT}.*"
     timeout: 45000
 - extendedWaitUntil:
-    notVisible: ".*TRANSLATION · .*"
+    notVisible: ".*${TRANSLATED}.*"
     timeout: 10000
+- assertNotVisible: "Translating…"
 - takeScreenshot: ${SHOT}-no-translation

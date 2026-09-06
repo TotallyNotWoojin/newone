@@ -1,7 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# From the friend's card in People → Your friends, block them via Manage
-# contact and privacy.
+# From the person's row in People → Your people, block them through the row's
+# "…" menu (accessibility label "Manage contact and privacy"). The row then
+# shows a "Blocked" badge in place of its Message button.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"

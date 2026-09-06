@@ -19,7 +19,7 @@ appId: com.totallynotwoojin.newone
 # below it (a request row's Decline button, run-2026-09-04T20-41-40). Let the
 # banner clear and the list settle before touching a row.
 - extendedWaitUntil:
-    notVisible: ".*(Reconnecting and checking|Reconectando y|재연결하고|Offline · |Sin conexión · |오프라인 · |Loading your private|Cargando tu espacio|불러오는 중).*"
+    notVisible: ".*(Reconnecting and checking|Reconectando y|재연결하고|Offline · |Sin conexión · |오프라인 · |Loading…|Cargando…|불러오는 중).*"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000

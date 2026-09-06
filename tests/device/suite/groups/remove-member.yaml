@@ -16,5 +16,5 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-removed
 - tapOn: "Close dialog"
 - extendedWaitUntil:
-    visible: ".*was removed from the conversation.*"
+    visible: ".*was removed from the group.*"
     timeout: 30000

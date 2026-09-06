@@ -1,6 +1,8 @@
 // NEGATIVE on one device: form validation (invalid email/username, taken
-// username), consumed/expired code refused, unknown returning email, group
-// creation with a non-friend prevented, message-request cap enforced.
+// username), consumed/expired code refused, unknown returning email, and the
+// group picker offering a stranger (anyone can be added). The friends-only
+// group refusal and the message-request cap are gone with the Sep 2026
+// social/chat streams (neg-06b, neg-07* removed below).
 // (Messaging a blocked user is covered by people-14.)
 import { waitForCode } from '../lib/mailbox.mjs';
 
@@ -25,13 +27,13 @@ export async function run(ctx) {
   await ctx.step({ id: 'neg-03-taken-username', title: 'Signup with an already-taken username is refused (server)', device, flow: 'negative/signup-expect-error.yaml', env: { EMAIL: `${tag}-taken@example.test`, USERNAME: X.username, DISPLAY_NAME: 'Sim Neg', ERROR: '.*(already taken|reserved|could not).*' }, expected: '"That username is already taken." from the server', screen: 'sign-in' });
   await ctx.step({ id: 'neg-03b-back', title: 'Return to the mode chips', device, flow: 'negative/back-to-modes.yaml', expected: 'Create account visible', screen: 'sign-in' });
 
-  await ctx.step({ id: 'neg-04-unknown-returning-email', title: 'Returning sign-in with an email that has no account', device, flow: 'negative/returning-unknown-email.yaml', env: { EMAIL: `nobody-${tag}@example.test` }, expected: 'Either a generic code screen (enumeration-safe) or a clear error; recorded verbatim', screen: 'sign-in' });
+  await ctx.step({ id: 'neg-04-unknown-returning-email', title: 'Sign in with an email that has no account', device, flow: 'negative/returning-unknown-email.yaml', env: { EMAIL: `nobody-${tag}@example.test` }, expected: 'Either a generic code screen (enumeration-safe) or a clear error; recorded verbatim', screen: 'sign-in (Sign in chip)' });
   await ctx.observe(device, { id: 'neg-04b-unknown-email-screen', title: 'Exact screen after requesting a code for an unknown email', screen: 'sign-in' });
   await ctx.step({ id: 'neg-04c-back', title: 'Return to the mode chips', device, flow: 'negative/back-to-modes.yaml', expected: 'Create account', screen: 'sign-in' });
 
   // Consumed (expired) code: request a fresh returning code for X, then
   // type the OLD signup code.
-  const returning = await ctx.step({ id: 'neg-05a-returning-request', title: 'X requests a returning code', device, flow: 'common/returning-request.yaml', env: { EMAIL: X.email }, expected: 'code screen', screen: 'sign-in' });
+  const returning = await ctx.step({ id: 'neg-05a-returning-request', title: 'X requests a sign-in code', device, flow: 'common/returning-request.yaml', env: { EMAIL: X.email }, expected: 'code screen', screen: 'sign-in' });
   if (returning.uiOk && xCode) {
     const fresh = await waitForCode(X.mailbox);
     await ctx.step({ id: 'neg-05-consumed-code', title: 'Previously used (consumed) signup code is refused', device, flow: 'auth/stale-code-returning.yaml', env: { CODE: xCode, OBSERVE: 'consumed code refused' }, expected: 'Visible rejection; not signed in', screen: 'sign-in (One-time code)' });
@@ -44,27 +46,19 @@ export async function run(ctx) {
   await ctx.step({ id: 'setup-neg-x-signout-2', title: 'Setup: X signs out again', device, flow: 'common/signout.yaml', expected: 'sign-in', screen: 'settings' });
   const Y = await ctx.signup(device, { label: 'neg_y', displayName: `Sim Yara ${tag}` });
   if (!Y.signedIn) return;
-  const nonFriend = await ctx.step({ id: 'neg-06-group-with-non-friend', title: 'Create group: a non-friend must not be offered as a member', device, flow: 'negative/group-non-friend.yaml', env: { NAME: `Illegal ${tag}`, STRANGER: X.displayName }, expected: '"No authorized candidates match this search." for a stranger', screen: 'new-group' });
-  if (!nonFriend.uiOk) {
-    await ctx.step({
-      id: 'neg-06b-group-non-friend-attempt', title: 'Stranger was offered: try to create the group with them', device, flow: 'negative/group-non-friend-attempt.yaml', env: { STRANGER: X.displayName },
-      expected: 'Server must refuse; if a group opens this is a bug', screen: 'new-group',
-      serverTruth: async () => { const row = await server.groupByName(`Illegal ${tag}`); const m = row ? await server.members(row.id) : []; return { ok: !row || !m.some((r) => r.user_id === X.userId), detail: { group: row?.id ?? null, members: m } }; },
-    });
-  }
-
-  // Message-request cap: Y → X (strangers), 3 messages allowed, 4th refused.
-  await ctx.step({ id: 'neg-07a-search-x', title: 'Y finds X', device, flow: 'people/search-user.yaml', env: { USERNAME: X.username, NAME: X.displayName, EXPECT_BUTTON: 'Send message request' }, expected: 'card', screen: 'people' });
-  const first = `Cap test 1 ${tag}`;
-  const req = await ctx.step({ id: 'neg-07b-request', title: 'Y sends a message request to X', device, flow: 'people/send-message-request.yaml', env: { TEXT: first }, expected: 'pending conversation', screen: 'people' });
-  if (req.uiOk) {
-    await ctx.step({
-      id: 'neg-07-request-cap', title: 'Pending request accepts 3 messages and refuses the 4th with the cap error', device, flow: 'negative/request-cap.yaml', env: { TEXT2: `Cap test 2 ${tag}`, TEXT3: `Cap test 3 ${tag}`, TEXT4: `Cap test 4 ${tag}` },
-      expected: '"This request already holds its 3 messages…" on the 4th send; server holds exactly 3 messages from Y', screen: 'conversation',
-      serverTruth: async () => { const c = await server.directConversation(Y.userId, X.userId); const rows = c ? await server.messages(c.id) : []; const mine = rows.filter((r) => r.sender_user_id === Y.userId && r.kind !== 'system'); return { ok: mine.length === 3, detail: { conversation: c?.id, fromY: mine.length } }; },
-    });
-    await ctx.observe(device, { id: 'neg-07c-cap-screen', title: 'Exact composer/banner text after the capped send', screen: 'conversation' });
-  }
+  // The id keeps its history; the check inverted with the social stream: the
+  // picker must offer a stranger found by @username instead of refusing them.
+  const groupName = `Anyone ${tag}`;
+  await ctx.step({
+    id: 'neg-06-group-with-non-friend', title: 'Create group: a stranger found by @username is offered (anyone can be added); form cancelled', device, flow: 'negative/group-stranger-offered.yaml', env: { NAME: groupName, STRANGER: X.displayName, STRANGER_QUERY: X.username },
+    expected: '"Add <stranger>" row appears for a non-contact; the old "No authorized candidates" refusal is gone; no group is created', screen: 'new-group',
+    serverTruth: async () => { const row = await server.groupByName(groupName); return { ok: !row, detail: row ? `group created unexpectedly: ${row.id}` : 'no group row (form cancelled)' }; },
+  });
+  // neg-06b-group-non-friend-attempt: removed — adding a non-contact is the
+  // intended behaviour now, not a refusal to probe.
+  // neg-07a-search-x, neg-07b-request, neg-07-request-cap, neg-07c-cap-screen:
+  // removed — message requests and their 3-message cap no longer exist; a
+  // stranger's first message lands directly (people-04/people-05 prove it).
   ctx.note({ id: 'neg-08-blocked-send', title: 'Message a blocked user', status: 'INFO', observed: 'Covered by people-14-blocked-send-fails / people-16-send-after-unblock in the PEOPLE area.' });
   ctx.accounts = { X, Y };
 }

@@ -1,17 +1,32 @@
 appId: com.totallynotwoojin.newone
 ---
-# Peer sees the attachment card and can open it.
+# Peer sees the photo. Since the Sep 2026 chat stream a photo renders as the
+# image itself (accessibility label "Open image full screen"); there is no
+# "<name>, Ready" file card for photos (files keep theirs). Tap the image: the
+# full-screen viewer opens; close it.
 - extendedWaitUntil:
-    visible: ".*(Scanned and safe|Ready|Security scan in progress|Uploading).*"
+    visible: ".*(Open image full screen|Uploading|Upload progress).*"
     timeout: 90000
 - extendedWaitUntil:
-    visible: ".*(Scanned and safe|Ready).*"
+    visible: "Open image full screen"
     timeout: 120000
 - takeScreenshot: ${SHOT}-peer-sees
+# The freshly arrived bubble sits at the bottom edge next to the composer;
+# Maestro measures against the screen, so nudge the list before tapping.
+- swipe:
+    start: "50%, 70%"
+    end: "50%, 35%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
-    text: ".*(Scanned and safe|Ready).*"
+    text: "Open image full screen"
     index: 0
 - extendedWaitUntil:
-    visible: ".*(Done|Newone|Write a message…|Cancel|Share).*"
+    visible: "Close image"
     timeout: 20000
 - takeScreenshot: ${SHOT}-opened
+- tapOn: "Close image"
+- extendedWaitUntil:
+    notVisible: "Close image"
+    timeout: 10000

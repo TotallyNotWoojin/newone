@@ -1,36 +1,38 @@
 appId: com.totallynotwoojin.newone
 ---
-# Controls → Add a member → search NAME → Search members → pick → Add.
+# Controls → "Add people" → type QUERY (the person's @username) into "Name or
+# @username" → "Search people" → pick the NAME row → "Add to group" → the
+# system row "… was added to the group." appears in the thread.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Search the company directory"
+      text: "Name or @username"
     direction: DOWN
     timeout: 30000
-- tapOn: "Search the company directory"
-- inputText: ${NAME}
-- tapOn: "Add a member"
-- tapOn: "Search members"
+- tapOn: "Name or @username"
+- inputText: ${QUERY}
+- tapOn: "Add people"
+- tapOn: "Search people"
 - extendedWaitUntil:
-    visible: ".*(${NAME}|No eligible members).*"
+    visible: ".*(${NAME}|No one matched that search).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-candidates
-# Candidate rows are merged accessibility nodes (initials + name + role) and the
-# search field above them now holds NAME too, so select the row below the button.
+# Candidate rows are merged accessibility nodes (initials + name); select the
+# row below the search button so the search field itself is never the target.
 - tapOn:
     text: ".*${NAME}.*"
-    below: "Search members"
-- tapOn: "Add selected member"
+    below: "Search people"
+- tapOn: "Add to group"
 - extendedWaitUntil:
-    notVisible: "Add selected member"
+    notVisible: "Add to group"
     timeout: 20000
     optional: true
 - takeScreenshot: ${SHOT}-added
 - tapOn: "Close dialog"
 - extendedWaitUntil:
-    visible: ".*was added to the conversation.*"
+    visible: ".*was added to the group.*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-system-row

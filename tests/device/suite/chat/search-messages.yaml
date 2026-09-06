@@ -1,26 +1,27 @@
 appId: com.totallynotwoojin.newone
 ---
-# Search tab → type QUERY → Search → a Messages result with the text.
+# Search tab → type QUERY → results arrive as you type (consumers have no
+# Search button and no filter chips) → a Messages result ("Open <title>")
+# appears under the MESSAGES section.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
 - tapOn: "Search"
 - extendedWaitUntil:
-    visible: "Search your messages"
+    visible: "Search people and messages"
     timeout: 15000
-- tapOn: "Search your messages"
+- tapOn: "Search people and messages"
 - inputText: ${QUERY}
-- tapOn:
-    text: "Search"
-    index: 1
 - extendedWaitUntil:
-    visible: ".*${QUERY}.*"
+    visible: ".*Open .*"
     timeout: 30000
+- hideKeyboard
 - scrollUntilVisible:
     element:
       text: ".*Open .*"
     direction: DOWN
     timeout: 30000
 - assertVisible: "(?i).*messages.*"
+- assertVisible: ".*${QUERY}.*"
 - takeScreenshot: ${SHOT}-results

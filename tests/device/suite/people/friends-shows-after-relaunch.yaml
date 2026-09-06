@@ -1,7 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
-# Fallback: force-quit + relaunch, then check the People tab lists the new
-# friend (used when the live update did not arrive on its own in time).
+# Fallback: force-quit + relaunch, then check the People tab lists NAME under
+# "Your people" (used when the live update did not arrive on its own in time).
 - stopApp
 - launchApp
 - extendedWaitUntil:
@@ -9,13 +9,12 @@ appId: com.totallynotwoojin.newone
     timeout: 40000
 - tapOn: "People"
 - extendedWaitUntil:
-    visible: "Your friends"
+    visible: "Your people"
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Message"
+      text: ".*${NAME}.*"
     direction: DOWN
     timeout: 30000
-- assertVisible: ${NAME}
 - assertVisible: "Message"
-- takeScreenshot: ${SHOT}-friend-after-relaunch
+- takeScreenshot: ${SHOT}-person-after-relaunch

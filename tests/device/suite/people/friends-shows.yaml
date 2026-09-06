@@ -1,7 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# The requester's People tab must show the new friend (no relaunch first —
-# the app should learn of the acceptance on its own).
+# The People tab lists NAME under "Your people" (everyone this account has
+# chatted with) with a Message button — no relaunch first, the app should
+# learn of the new chat on its own. The friends/requests sections are gone
+# since the Sep 2026 social stream.
 # The device may still be inside a conversation from the previous step
 # (people-12c, run-2026-09-04T07-43-xx): leave it before using the tabs.
 - runFlow:
@@ -12,13 +14,12 @@ appId: com.totallynotwoojin.newone
 - tapOn: "Chats"
 - tapOn: "People"
 - extendedWaitUntil:
-    visible: "Your friends"
+    visible: "Your people"
     timeout: 15000
-# The friend card sits below the Requests section; scroll to its Message button.
 - scrollUntilVisible:
     element:
-      text: "Message"
+      text: ".*${NAME}.*"
     direction: DOWN
     timeout: 45000
-- assertVisible: ${NAME}
-- takeScreenshot: ${SHOT}-friend-visible
+- assertVisible: "Message"
+- takeScreenshot: ${SHOT}-person-visible

@@ -15,16 +15,30 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Save profile"
     timeout: 15000
-# Each field exposes two nodes: the label text, then the input carrying the
-# same accessibility label.
+# The display-name field exposes two nodes: the label text, then the input
+# carrying the same accessibility label.
 - tapOn:
     text: "Display name"
     index: 1
 - eraseText: 60
 - inputText: ${DISPLAY_NAME}
-- tapOn:
-    text: "Status message"
-    index: 1
+# The status field carries a placeholder ("What are you up to?"), and iOS
+# exposes a placeholder as the field's text instead of its accessibility label
+# (run-2026-09-06T01-11-11: "Status message" had a single node, the label).
+# Tap the placeholder while the status is empty, the label's second node once
+# a status exists.
+- runFlow:
+    when:
+      visible: "What are you up to?"
+    commands:
+      - tapOn: "What are you up to?"
+- runFlow:
+    when:
+      notVisible: "What are you up to?"
+    commands:
+      - tapOn:
+          text: "Status message"
+          index: 1
 - eraseText: 40
 - inputText: ${STATUS}
 - hideKeyboard

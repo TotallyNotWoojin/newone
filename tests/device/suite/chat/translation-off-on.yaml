@@ -1,6 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Controls → Automatic translation: Off, then Automatic again.
+# Controls → Automatic translation: Off, then Automatic again. The hints are
+# the consumer copy ("You’ll see messages as they were written." / "Messages
+# are translated to your language as they arrive.").
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -12,12 +14,12 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - tapOn: "Off"
 - extendedWaitUntil:
-    visible: ".*You will not request or see derived translations.*"
+    visible: ".*see messages as they were written.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-off
 - tapOn: "Automatic"
 - extendedWaitUntil:
-    visible: ".*can contribute a translation target.*"
+    visible: ".*translated to your language as they arrive.*"
     timeout: 20000
 - takeScreenshot: ${SHOT}-automatic
 - tapOn: "Close dialog"

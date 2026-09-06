@@ -1,6 +1,7 @@
-// CHAT + MEDIA on two devices (A ↔ B). A opens the relationship with a
-// message request, B accepts in the conversation; then every message action
-// is performed for real on one device and observed on the other, with the
+// CHAT + MEDIA on two devices (A ↔ B). A messages B straight from a People
+// search (consumers have no message requests since the Sep 2026 social
+// stream), B opens the chat from Chats; then every message action is
+// performed for real on one device and observed on the other, with the
 // database row consulted after each durable effect.
 import { openUrl, backgroundApp, launchApp } from '../lib/devices.mjs';
 
@@ -20,12 +21,13 @@ export async function run(ctx) {
     return;
   }
 
-  // Relationship via message request (Messenger-style path).
+  // Relationship: A messages B directly from the People search (the message
+  // request / accept path is gone; the step ids keep their history).
   const intro = `Hey Ben, Ana here ${tag}`;
-  await ctx.step({ id: 'chat-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Send message request' }, expected: 'B card', screen: 'people' });
+  await ctx.step({ id: 'chat-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'people' });
   const request = await ctx.step({
-    id: 'chat-00b-message-request', title: 'A sends a message request with a first message', device: devA,
-    flow: 'people/send-message-request.yaml', env: { TEXT: intro }, expected: 'Conversation opens with pending banner', screen: 'people → conversation',
+    id: 'chat-00b-message-request', title: 'A taps Message and sends the first text (the chat opens directly, no request)', device: devA,
+    flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'Conversation opens at once; first text renders as sent; server: direct conversation row', screen: 'people → conversation',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       return { ok: wait.ok, detail: wait.row };
@@ -35,11 +37,11 @@ export async function run(ctx) {
   const conversation = await server.directConversation(A.userId, B.userId);
   const convId = conversation.id;
   const accept = await ctx.step({
-    id: 'chat-00c-accept', title: 'B sees the request in Chats and accepts it in the conversation', device: devB,
-    flow: 'chat/accept-in-conversation.yaml', env: { NAME: A.displayName }, expected: 'Composer unlocks after Accept; server connection accepted', screen: 'chats → conversation',
+    id: 'chat-00c-accept', title: 'B sees the first text in Chats → conversation (nothing to accept)', device: devB,
+    flow: 'people/receive-text.yaml', env: { PEER: A.displayName, TEXT: intro }, expected: 'Text visible on B; composer present, no Accept/Decline banner; server message row', screen: 'chats → conversation',
     serverTruth: async () => {
-      const wait = await server.waitFor(() => server.connection(A.userId, B.userId), (row) => row?.status === 'accepted', { timeoutMs: 20_000 });
-      return { ok: wait.ok, detail: wait.row };
+      const wait = await server.waitFor(() => server.messageByBody(convId, intro), (row) => Boolean(row), { timeoutMs: 20_000 });
+      return { ok: wait.ok, detail: wait.row?.id ?? 'no row' };
     },
   });
   if (!accept.uiOk) return;
@@ -137,7 +139,7 @@ export async function run(ctx) {
   // Forward: A needs a second conversation → a small group with B.
   const groupName = `Fwd ${tag}`;
   const group = await ctx.step({
-    id: 'chat-17a-create-group', title: 'A creates a group with B (forward target)', device: devA, flow: 'groups/create-group.yaml', env: { NAME: groupName, MEMBER1: B.displayName, HAS_MEMBER2: 'false', MEMBER2: '' },
+    id: 'chat-17a-create-group', title: 'A creates a group with B (forward target)', device: devA, flow: 'groups/create-group.yaml', env: { NAME: groupName, MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'false', MEMBER2: '', MEMBER2_QUERY: '' },
     expected: 'Group opens; server conversations row + 2 members', screen: 'new-group',
     serverTruth: async () => { const w = await server.waitFor(() => server.groupByName(groupName), (r) => Boolean(r), { timeoutMs: 20_000 }); const m = w.row ? await server.members(w.row.id) : []; return { ok: w.ok && m.length === 2, detail: { group: w.row?.id, members: m } }; },
   });
@@ -145,7 +147,7 @@ export async function run(ctx) {
   if (group.uiOk) {
     await openA();
     await ctx.step({
-      id: 'chat-17-forward', title: 'A forwards the edited text to the group', device: devA, flow: 'chat/forward.yaml', env: { TARGET: t1e, DEST: groupName },
+      id: 'chat-17-forward', title: 'A forwards the edited text to the group ("Forward to a chat")', device: devA, flow: 'chat/forward.yaml', env: { TARGET: t1e, DEST: groupName },
       expected: 'Sheet closes; server message_forward_provenance row in the group', screen: 'conversation → Message actions',
       // Defect K (Sep 4 2026): the forwarded copy must also get language
       // detection like a typed message; the row's detection state proves it.
@@ -155,8 +157,10 @@ export async function run(ctx) {
   }
 
   const query = `zebra${tag}`;
-  await ctx.step({ id: 'chat-19-search', title: 'Message search finds the text', device: devA, flow: 'chat/search-messages.yaml', env: { QUERY: query }, expected: 'A Messages result containing the token', screen: 'search' });
-  await ctx.step({ id: 'chat-20-search-filter', title: 'Search with the Messages filter and open the result', device: devA, flow: 'chat/search-filter-messages.yaml', env: { QUERY: query }, expected: 'Filtered result; tapping opens the conversation', screen: 'search' });
+  await ctx.step({ id: 'chat-19-search', title: 'Message search finds the text (results as you type; no Search button or filter chips for consumers)', device: devA, flow: 'chat/search-messages.yaml', env: { QUERY: query }, expected: 'A Messages result ("Open …") containing the token', screen: 'search' });
+  // The Messages filter chip is workplace-only; the step id keeps its history
+  // and now proves the result opens the conversation.
+  await ctx.step({ id: 'chat-20-search-filter', title: 'Open the Messages result from Search', device: devA, flow: 'chat/search-filter-messages.yaml', env: { QUERY: query }, expected: 'Tapping "Open …" opens the conversation with the text', screen: 'search' });
 
   // Unread badge: A on the Chats list, B sends.
   await ctx.step({ id: 'chat-21a-a-back', title: 'A returns to the Chats list', device: devA, flow: 'chat/back-to-chats.yaml', expected: 'Chats', screen: 'chats' });
@@ -181,20 +185,20 @@ export async function run(ctx) {
     serverTruth: async () => { const row = await server.preferences(convId, A.userId); return { ok: true, detail: row }; },
   });
 
-  await openB();
-  await ctx.step({ id: 'chat-25-report-message', title: 'B reports A\'s message privately (Spam)', device: devB, flow: 'chat/report-message.yaml', env: { TARGET: t1e }, expected: 'Report submits and the sheet closes', screen: 'conversation → Message actions' });
-  await ctx.observe(devB, { id: 'chat-25b-after-report', title: 'Screen after report submission', screen: 'conversation' });
+  // chat-25-report-message / chat-25b-after-report: removed — "Report
+  // privately" left the Message actions sheet with the Sep 2026 chat stream
+  // (the feature is gone by design; blocking from People remains, people-13).
 
   // MEDIA
   await openA();
   await openB();
   await ctx.step({
     id: 'media-01-photo', title: 'A sends a photo from the simulator photo library', device: devA, flow: 'media/photo-library.yaml',
-    expected: 'Attachment card reaches "Scanned and safe"; server message_attachments row scan_status clean', screen: 'conversation → Add attachment',
+    expected: 'The photo renders inline (dimmed under a progress ring, then labelled "Open image full screen"; no file card); server message_attachments row scan_status clean', screen: 'conversation → Add attachment',
     serverTruth: async () => { const w = await server.waitFor(() => server.attachments(convId), (rows) => rows.some((r) => r.mime_type?.startsWith('image/') && r.scan_status === 'clean'), { timeoutMs: 90_000 }); return { ok: w.ok, detail: w.row }; },
     timeoutMs: 420_000,
   });
-  await ctx.step({ id: 'media-02-b-opens-photo', title: 'B sees the photo card and opens it', device: devB, flow: 'media/see-attachment.yaml', expected: 'Card "Scanned and safe" on B; tap opens the secure download', screen: 'conversation', timeoutMs: 420_000 });
+  await ctx.step({ id: 'media-02-b-opens-photo', title: 'B sees the photo and opens it full screen', device: devB, flow: 'media/see-attachment.yaml', expected: 'Image labelled "Open image full screen" on B; tap opens the viewer ("Close image"), then back to the conversation', screen: 'conversation', timeoutMs: 420_000 });
   await openB();
   await ctx.step({
     id: 'media-03-voice-note', title: 'A records and sends a 2s voice note', device: devA, flow: 'media/voice-note.yaml',

@@ -7,11 +7,26 @@
 //   Returning sign-in: request → resend (cooldown + confirmation) → second
 //     email → stale code refused → new code accepted.
 //   Delete account → tombstone truth.
+//   Mail: the server sinks mail for the throwaway test domains
+//   (NEWONE_TEST_MAIL_SINK_DOMAINS) and the suite mints codes through the
+//   admin API (NEWONE_DEVICE_MINT_CODES=1), so no real email can arrive; the
+//   "email arrives" checks are INFO rows in that mode (run-2026-09-06T01-11-11
+//   reported them as failures and the cascade left the device signed out).
 import { randomBytes } from 'node:crypto';
-import { createMailbox, waitForCode } from '../lib/mailbox.mjs';
+import { createMailbox, mintingEnabled } from '../lib/mailbox.mjs';
 
 export const meta = { id: 'auth', devices: 1, title: 'AUTH + PROFILE/SETTINGS' };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const MINTED = 'mail sinked for test domains (NEWONE_TEST_MAIL_SINK_DOMAINS); code minted through the admin API (NEWONE_DEVICE_MINT_CODES=1)';
+
+// Reports a code delivery: PASS/FAIL on a real inbox, INFO when codes are minted.
+function mailNote(ctx, { id, title, code, expected, arrived, missing }) {
+  if (mintingEnabled()) {
+    ctx.note({ id, title, status: code ? 'INFO' : 'FAIL', expected: 'code minted (mail is sinked for test domains)', observed: code ? MINTED : `${MINTED}; but no code could be minted` });
+    return;
+  }
+  ctx.note({ id, title, status: code ? 'PASS' : 'FAIL', expected, observed: code ? arrived : missing });
+}
 
 async function signupWithWrongCodeFirst(ctx, device, { username, displayName, mailbox }) {
   const { server } = ctx;
@@ -22,9 +37,10 @@ async function signupWithWrongCodeFirst(ctx, device, { username, displayName, ma
   });
   if (!form.uiOk) return { ok: false };
   const requestedAt = Date.now();
-  const first = await waitForCode(mailbox);
-  ctx.note({ id: 'auth-02-signup-email', title: 'Signup code email arrives in the real inbox', status: first ? 'PASS' : 'FAIL',
-    expected: 'six-digit code email within 150s', observed: first ? `arrived after ${Math.round((Date.now() - requestedAt) / 1000)}s (subject: ${first.subject})` : 'no email arrived' });
+  // ctx.waitForCode mints the code when NEWONE_DEVICE_MINT_CODES=1.
+  const first = await ctx.waitForCode(mailbox);
+  mailNote(ctx, { id: 'auth-02-signup-email', title: 'Signup code email arrives in the real inbox', code: first,
+    expected: 'six-digit code email within 150s', arrived: `arrived after ${Math.round((Date.now() - requestedAt) / 1000)}s (subject: ${first?.subject})`, missing: 'no email arrived' });
   if (!first) return { ok: false };
   const wrongCode = first.code === '123456' ? '654321' : '123456';
   await ctx.step({
@@ -96,23 +112,24 @@ export async function run(ctx) {
   await ctx.step({ id: 'auth-06-sign-out', title: 'Sign out from Settings', device, flow: 'common/signout.yaml', expected: 'Back at the sign-in screen ("Create account")', screen: 'settings' });
 
   // Returning sign-in with resend.
-  const returning = await ctx.step({ id: 'auth-07-returning-request', title: 'Returning sign-in: request code', device, flow: 'common/returning-request.yaml', env: { EMAIL: activeMailbox.email }, expected: '"One-time code" screen', screen: 'sign-in (Returning member)' });
+  const returning = await ctx.step({ id: 'auth-07-returning-request', title: 'Returning sign-in ("Sign in" chip): request code', device, flow: 'common/returning-request.yaml', env: { EMAIL: activeMailbox.email }, expected: '"One-time code" screen', screen: 'sign-in (Sign in chip)' });
   if (returning.uiOk) {
     const at = Date.now();
-    const first = await waitForCode(activeMailbox);
-    ctx.note({ id: 'auth-08-returning-email', title: 'Returning sign-in code arrives', status: first ? 'PASS' : 'FAIL', expected: 'code email within 150s', observed: first ? `arrived after ${Math.round((Date.now() - at) / 1000)}s` : 'no email arrived' });
+    const first = await ctx.waitForCode(activeMailbox);
+    mailNote(ctx, { id: 'auth-08-returning-email', title: 'Returning sign-in code arrives', code: first, expected: 'code email within 150s', arrived: `arrived after ${Math.round((Date.now() - at) / 1000)}s`, missing: 'no email arrived' });
     const since = Date.now() - at;
     if (since < 65_000) await sleep(65_000 - since);
     const resend = await ctx.step({
       id: 'auth-09-resend-code', title: 'Resend code: confirmation + disabled link during cooldown', device,
-      flow: 'auth/resend-code.yaml', env: { OBSERVE: '"We sent a new one-time code…" and the link disabled with a countdown' },
-      expected: 'Confirmation text; Resend link disabled with "(NNs)" countdown (screenshot)', screen: 'sign-in (One-time code)',
+      flow: 'auth/resend-code.yaml', env: { OBSERVE: '"We sent you a new code." and the link disabled with a countdown' },
+      expected: '"We sent you a new code." confirmation; Resend link disabled with "(NNs)" countdown (screenshot)', screen: 'sign-in (One-time code)',
     });
     const resendAt = Date.now();
-    const second = resend.uiOk ? await waitForCode(activeMailbox, { timeoutMs: 180_000 }) : null;
-    ctx.note({ id: 'auth-10-resend-email', title: 'Resent code email arrives in the real inbox', status: second ? 'PASS' : 'FAIL',
+    const second = resend.uiOk ? await ctx.waitForCode(activeMailbox, { timeoutMs: 180_000 }) : null;
+    mailNote(ctx, { id: 'auth-10-resend-email', title: 'Resent code email arrives in the real inbox', code: second,
       expected: 'a second six-digit code email arrives after the app confirmed the resend',
-      observed: second ? `arrived after ${Math.round((Date.now() - resendAt) / 1000)}s; ${second.code === first?.code ? 'IDENTICAL code to the first email' : 'different code from the first email'}` : `no second email within 180s although the app said "We sent a new one-time code" (first email: ${first ? 'present' : 'absent'})` });
+      arrived: `arrived after ${Math.round((Date.now() - resendAt) / 1000)}s; ${second?.code === first?.code ? 'IDENTICAL code to the first email' : 'different code from the first email'}`,
+      missing: `no second email within 180s although the app said "We sent you a new code." (first email: ${first ? 'present' : 'absent'})` });
     let code = second?.code ?? first?.code ?? null;
     if (first && second && second.code !== first.code) {
       const stale = await ctx.step({

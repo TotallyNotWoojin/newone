@@ -1,8 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# Clear whatever draft sits in the composer. With a draft present the
-# placeholder is gone, so match the field by placeholder or by the draft text.
+# Clear whatever draft sits in the composer, then put the keyboard away. (The
+# "Original is always preserved" hint this flow used to tap is gone with the
+# translation bar.)
 - tapOn:
     id: "composer-input"
 - eraseText: 60
-- tapOn: "Original is always preserved"
+- hideKeyboard
