@@ -57,10 +57,14 @@ appId: com.totallynotwoojin.newone
     commands:
       - tapOn:
           id: "attachment-send"
+# Text fallback only for builds without the id: both conditions must hold,
+# otherwise this ran after a successful id tap had already closed the sheet
+# (v3-06a, run-2026-09-06T18-03-43) and failed on the missing text.
 - runFlow:
     when:
       notVisible:
         id: "attachment-send"
+      visible: "(Send securely|Send)"
     commands:
       - tapOn: "(Send securely|Send)"
 - extendedWaitUntil:
