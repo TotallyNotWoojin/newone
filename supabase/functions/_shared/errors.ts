@@ -100,6 +100,11 @@ interface DatabaseErrorLike {
 
 export function fromDatabaseError(error: unknown): ApiError {
   const value = (error ?? {}) as DatabaseErrorLike;
+  // A database rejection carries the SQL state and the raise message; both are
+  // safe (they are our own strings) and they are the only way to tell which
+  // guard fired. Carried on the ApiError message for the rejection log only.
+  const origin = [value.code, typeof value.message === 'string' ? value.message : '']
+    .filter(Boolean).join(' ').slice(0, 160);
 
   switch (value.code) {
     case '40001':
@@ -109,7 +114,7 @@ export function fromDatabaseError(error: unknown): ApiError {
     case '22000':
     case '22023':
     case '23514':
-      return new ApiError(400, 'bad_request');
+      return new ApiError(400, 'bad_request', `db: ${origin}`);
     case '42501':
       // The database names the permission cases the client has copy for: a
       // pending message request that already holds its three messages, and a
