@@ -63,7 +63,10 @@ export function PasswordField({
           secureTextEntry={!visible}
           style={styles.input}
           testID={testID}
-          textContentType={autoComplete === 'new-password' ? 'newPassword' : 'password'}
+          // 'newPassword' makes iOS present a blocking "Use Strong Password?"
+          // sheet the moment the field is focused, which swallowed typing for the
+          // first users; the plain type keeps AutoFill available without the sheet.
+          textContentType="password"
           value={value}
         />
         <Pressable
