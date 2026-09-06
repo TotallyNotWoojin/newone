@@ -46,18 +46,36 @@ appId: com.totallynotwoojin.newone
 # moving button misses (chat area, third pass). Let it settle, then retry once.
 - waitForAnimationToEnd:
     timeout: 3000
-- tapOn: "(Send securely|Send)"
+# "Send" by text can resolve to the composer's own send button behind the
+# sheet when a draft is present (v3-06a, run-2026-09-06T16-16-36), and that
+# tap does nothing. The sheet's button carries an id from v3.1 on; text is
+# the fallback for older builds.
+- runFlow:
+    when:
+      visible:
+        id: "attachment-send"
+    commands:
+      - tapOn:
+          id: "attachment-send"
+- runFlow:
+    when:
+      notVisible:
+        id: "attachment-send"
+    commands:
+      - tapOn: "(Send securely|Send)"
 - extendedWaitUntil:
     notVisible: "(Send securely|Send)"
     timeout: 8000
     optional: true
 - runFlow:
     when:
-      visible: "(Send securely|Send)"
+      visible:
+        id: "attachment-send"
     commands:
       - waitForAnimationToEnd:
           timeout: 2000
-      - tapOn: "(Send securely|Send)"
+      - tapOn:
+          id: "attachment-send"
 - extendedWaitUntil:
     notVisible: "(Send securely|Send)"
     timeout: 60000

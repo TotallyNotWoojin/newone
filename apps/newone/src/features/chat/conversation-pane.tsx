@@ -3004,6 +3004,7 @@ function AttachmentPickerModal({
       <PrimaryButton
         disabled={!selected}
         icon="shield-checkmark-outline"
+        testID="attachment-send"
         label={busy ? t('chat.uploading') : isPersonalRealm(workspace.organizationId) ? t('chat.sendAttachment') : t('chat.sendSecurely')}
         loading={busy}
         onPress={onSend}

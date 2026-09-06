@@ -248,6 +248,7 @@ export function PrimaryButton({
   loading,
   tone = 'accent',
   style,
+  testID,
 }: {
   label: string;
   onPress?: () => void;
@@ -256,6 +257,7 @@ export function PrimaryButton({
   loading?: boolean;
   tone?: 'accent' | 'dark' | 'light' | 'danger';
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   const palette = {
     accent: { background: colors.mint, foreground: colors.forest },
@@ -266,6 +268,7 @@ export function PrimaryButton({
   const isDisabled = disabled || loading || !onPress;
   return (
     <Pressable
+      testID={testID}
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
