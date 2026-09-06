@@ -42,7 +42,22 @@ appId: com.totallynotwoojin.newone
     visible: "(Send securely|Send)"
     timeout: 30000
 - takeScreenshot: ${SHOT}-staged
+# The sheet is still settling when Send first reports visible; a tap on a
+# moving button misses (chat area, third pass). Let it settle, then retry once.
+- waitForAnimationToEnd:
+    timeout: 3000
 - tapOn: "(Send securely|Send)"
+- extendedWaitUntil:
+    notVisible: "(Send securely|Send)"
+    timeout: 8000
+    optional: true
+- runFlow:
+    when:
+      visible: "(Send securely|Send)"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn: "(Send securely|Send)"
 - extendedWaitUntil:
     notVisible: "(Send securely|Send)"
     timeout: 60000
