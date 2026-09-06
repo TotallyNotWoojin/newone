@@ -196,7 +196,14 @@ describe('people workflow screen', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
 
     await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
+    // Decline asks first: Keep leaves the request alone, a second deliberate tap declines.
     await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    expect(screen.getByText('people.declineConfirmTitle')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'people.keepRequest' }));
+    expect(mockWorkspace.respondConnection).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('people.declineConfirmTitle')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'people.declineConfirm' }));
     expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(1, 'user-incoming', 'accepted');
     expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(2, 'user-incoming', 'declined');
     await fireEvent.press(screen.getByRole('button', { name: 'people.cancelRequest' }));
