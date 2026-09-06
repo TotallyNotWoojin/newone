@@ -27,6 +27,7 @@ export function PasswordField({
   onSubmitEditing,
   autoComplete = 'current-password',
   placeholder,
+  testID,
   returnKeyType = 'done',
   style,
 }: {
@@ -36,6 +37,8 @@ export function PasswordField({
   onSubmitEditing?: () => void;
   autoComplete?: 'current-password' | 'new-password';
   placeholder?: string;
+  /** Stable identifier for UI drivers (the label text also names the field's caption). */
+  testID?: string;
   returnKeyType?: ReturnKeyTypeOptions;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -59,6 +62,7 @@ export function PasswordField({
           returnKeyType={returnKeyType}
           secureTextEntry={!visible}
           style={styles.input}
+          testID={testID}
           textContentType={autoComplete === 'new-password' ? 'newPassword' : 'password'}
           value={value}
         />

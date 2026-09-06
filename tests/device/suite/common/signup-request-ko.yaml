@@ -112,11 +112,11 @@ appId: com.totallynotwoojin.newone
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "8자 이상이면 됩니다."
+      id: "signup-password"
     direction: DOWN
     timeout: 15000
-# The label Text and the input share the word; the placeholder is the input.
-- tapOn: "8자 이상이면 됩니다."
+- tapOn:
+    id: "signup-password"
 - inputText: Newone-test-2026
 - hideKeyboard
 - assertVisible: "${DISPLAY_NAME}"

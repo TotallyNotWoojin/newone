@@ -38,7 +38,8 @@ appId: com.totallynotwoojin.newone
     when:
       visible: "(Save password|Guardar contraseña|비밀번호 저장)"
     commands:
-      - tapOn: "(New password|Nueva contraseña|새 비밀번호)"
+      - tapOn:
+          id: "new-password"
       - inputText: Newone-test-2026
       - hideKeyboard
       - tapOn: "(Save password|Guardar contraseña|비밀번호 저장)"

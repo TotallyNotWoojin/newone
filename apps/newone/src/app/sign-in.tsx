@@ -424,6 +424,7 @@ export default function SignInScreen() {
               <PasswordField
                 autoComplete="new-password"
                 label={t('auth.newPasswordLabel')}
+                testID="new-password"
                 onChangeText={setPassword}
                 onSubmitEditing={savePassword}
                 returnKeyType="go"
@@ -728,6 +729,7 @@ export default function SignInScreen() {
               <PasswordField
                 autoComplete="new-password"
                 label={t('auth.signupPasswordLabel')}
+                testID="signup-password"
                 onChangeText={setPassword}
                 placeholder={t('auth.passwordRule')}
                 value={password}
