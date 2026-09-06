@@ -27,7 +27,14 @@ appId: com.totallynotwoojin.newone
 # form has no "GROUP SETUP" eyebrow to tap any more). iOS 26.5 keyboards without
 # the prediction bar defeat the text guard (neg-06, run-2026-09-04T14-27-52);
 # ask iOS to hide it first, then fall back to the drag.
-- hideKeyboard
+# Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
+# spelling callout is up).
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 55%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -50,7 +57,14 @@ appId: com.totallynotwoojin.newone
     timeout: 45000
 - tapOn: "Search by name or @username"
 - inputText: ${MEMBER1_QUERY}
-- hideKeyboard
+# Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
+# spelling callout is up).
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 55%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
@@ -72,7 +86,14 @@ appId: com.totallynotwoojin.newone
       - tapOn: "Clear search"
       - tapOn: "Search by name or @username"
       - inputText: ${MEMBER2_QUERY}
-      - hideKeyboard
+      # Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
+# spelling callout is up).
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 55%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
       - runFlow:
           when:
             visible: "(.*(Typing Predictions|Dictate).*|space)"
