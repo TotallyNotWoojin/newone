@@ -28,8 +28,8 @@ Paused until the owner says go. Items are in rough priority order.
 
 ## v3.1: summaries (owner decision, Sep 6 2026) — start after v3.0 ships
 
-15. Range choice on the Summary sheet: Unread · Since last summary (default) · Today · Last 7 days · Everything. The server fetches the range itself instead of relying on the client's loaded window (today the first summary covers only the loaded page, 50–100 messages).
-16. Optional focus line ("What should this cover?") passed to the model as the reader's instruction; chat text stays untrusted data.
+15. The reader defines each summary's scope; this REPLACES the "since last summary" boundary (owner, Sep 6 2026). Range chips: Unread (default when there are unread messages) · Today · Yesterday · Last 7 days · Everything; every request is independent, nothing is disqualified because an earlier summary covered it, and no covering-summary state is kept. The server fetches the range itself instead of relying on the client's loaded window (today the first summary covers only the loaded page, 50–100 messages).
+16. Optional subject line ("What should this cover?") next to the range, passed to the model as the reader's instruction; chat text stays untrusted data. Scope line on the sheet and in the export reads e.g. "Last 7 days · 143 messages · about the trip".
 17. Server-side chunking for long ranges (summarize in slices, merge), lifting the 500-message / 20,000-character single-request caps and keeping the 15 s model timeout safe; a clear "too long, pick a shorter range" message instead of "Summary unavailable".
 18. Show the stored Decisions and To-do lists under the prose when non-empty. Never show source citations (s0001-style refs or "open the cited original") — sleek, prose-first.
 19. Remove the leftover workplace warning copy from consumer screens: the summary disclaimer (`chat.summaryBoundary`), "authorized …" wording in search/member-search/actions descriptions, and the sign-in security note; keep the strings only where the workplace realm still uses them.
