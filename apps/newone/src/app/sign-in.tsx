@@ -227,10 +227,6 @@ export default function SignInScreen() {
     }
   };
 
-  const skipPassword = () => {
-    auth.dismissPasswordPrompt();
-    router.replace('/');
-  };
 
   const sendLink = async () => {
     if (isWebAuthBlocked) {
@@ -258,6 +254,10 @@ export default function SignInScreen() {
     }
     if (signupMode && !normalizedDisplayName) {
       setMessage(t('auth.displayNameInvalid'));
+      return;
+    }
+    if (signupMode && password.length < PASSWORD_MIN_LENGTH) {
+      setMessage(t('auth.passwordRule'));
       return;
     }
     const normalizedInvitationToken = invitationToken.trim().toLocaleLowerCase();
@@ -365,6 +365,7 @@ export default function SignInScreen() {
         outcome = await auth.verifySignup({
           destination: normalizeDestination('email', destination),
           code: normalizedCode,
+          password,
         });
       } else if (recoveryMode) {
         outcome = await auth.verifyRecoveryOtp({
@@ -439,12 +440,6 @@ export default function SignInScreen() {
                 onPress={savePassword}
                 style={styles.fullButton}
               />
-              <Pressable
-                accessibilityRole="button"
-                onPress={skipPassword}
-                style={({ pressed }) => [styles.secondaryLink, pressed && styles.pressed]}>
-                <Text style={styles.secondaryLinkText}>{t('auth.skipPassword')}</Text>
-              </Pressable>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -729,6 +724,14 @@ export default function SignInScreen() {
                   value={displayName}
                 />
               </View>
+              {/* Every account is created with a password (owner rule). */}
+              <PasswordField
+                autoComplete="new-password"
+                label={t('auth.signupPasswordLabel')}
+                onChangeText={setPassword}
+                placeholder={t('auth.passwordRule')}
+                value={password}
+              />
             </View>
           ) : null}
           {authStep === 'identity' && captchaConfigured && !isWebAuthBlocked && !passwordMode ? (

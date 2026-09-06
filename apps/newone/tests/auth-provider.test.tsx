@@ -593,11 +593,13 @@ describe('native authentication state machine', () => {
       await currentAuth().verifySignup({
         destination: 'new.person@example.test',
         code: '123456',
+        password: 'correct horse battery',
       });
     });
     expect(mockVerifyNativeSignup).toHaveBeenCalledWith({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     });
     expect(screen.getByText('signed-in')).toBeTruthy();
     expect(currentAuth().user?.id).toBe(userId);
@@ -619,6 +621,7 @@ describe('native authentication state machine', () => {
     await expect(currentAuth().verifySignup({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     })).rejects.toMatchObject({ code: 'invalid_response' });
     expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(screen.getByText('signed-out')).toBeTruthy();

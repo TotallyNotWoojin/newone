@@ -32,11 +32,16 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "Verify and create account"
 - extendedWaitUntil:
-    visible: "(Not now|Ahora no|나중에|Chats|채팅)"
+    visible: "(Save password|Guardar contraseña|비밀번호 저장|Chats|채팅)"
     timeout: 45000
-- tapOn:
-    text: "(Not now|Ahora no|나중에)"
-    optional: true
+- runFlow:
+    when:
+      visible: "(Save password|Guardar contraseña|비밀번호 저장)"
+    commands:
+      - tapOn: "(New password|Nueva contraseña|새 비밀번호)"
+      - inputText: Newone-test-2026
+      - hideKeyboard
+      - tapOn: "(Save password|Guardar contraseña|비밀번호 저장)"
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 40000

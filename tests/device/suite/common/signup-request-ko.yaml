@@ -109,6 +109,17 @@ appId: com.totallynotwoojin.newone
       - eraseText: 120
       - inputText: ${DISPLAY_NAME}
       - tapOn: "표시 이름"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "비밀번호"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "비밀번호"
+    index: 0
+- inputText: Newone-test-2026
+- hideKeyboard
 - assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:

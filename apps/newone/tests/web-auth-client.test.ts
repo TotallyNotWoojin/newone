@@ -314,6 +314,7 @@ describe('native identity gateway client', () => {
     await expect(verifyNativeSignup({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     })).resolves.toMatchObject({
       user: { id: 'user-new' },
       signup: { username: 'river_runner_7', organizationId: 'org-personal' },
@@ -324,6 +325,7 @@ describe('native identity gateway client', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
       installationId: '20000000-0000-4000-8000-000000000002',
     });
 
@@ -340,6 +342,7 @@ describe('native identity gateway client', () => {
     const silentSignIn = await verifyNativeSignup({
       destination: 'existing.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     });
     expect(silentSignIn.user.id).toBe('user-existing');
     expect(silentSignIn).not.toHaveProperty('signup');
@@ -353,12 +356,14 @@ describe('native identity gateway client', () => {
     await expect(verifyNativeSignup({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     })).rejects.toMatchObject({ code: 'invalid_response' });
 
     jsonResponse({ error: { code: 'signup_expired' } }, 410);
     await expect(verifyNativeSignup({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     })).rejects.toMatchObject({ code: 'signup_expired' });
   });
 
@@ -620,6 +625,7 @@ describe('same-origin web identity client', () => {
       await expect(verifyWebSignup({
         destination: 'new.person@example.test',
         code: '123456',
+        password: 'correct horse battery',
       })).resolves.toMatchObject({
         user: { id: 'user-new' },
         sessionId: 'session-new',
@@ -637,6 +643,7 @@ describe('same-origin web identity client', () => {
       const silentSignIn = await verifyWebSignup({
         destination: 'existing.person@example.test',
         code: '123456',
+        password: 'correct horse battery',
       });
       expect(silentSignIn.user.id).toBe('user-existing');
       expect(silentSignIn).not.toHaveProperty('signup');
@@ -651,6 +658,7 @@ describe('same-origin web identity client', () => {
       await expect(verifyWebSignup({
         destination: 'new.person@example.test',
         code: '123456',
+        password: 'correct horse battery',
       })).rejects.toMatchObject({ code: 'signup_expired' });
     } finally {
       platform.restore();

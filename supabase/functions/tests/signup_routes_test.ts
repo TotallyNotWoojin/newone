@@ -627,6 +627,86 @@ Deno.test('signup verification redeems the reservation before issuing session co
   );
 });
 
+Deno.test('signup verification sets the chosen password before inspecting the session', async () => {
+  const calls: string[] = [];
+  const handler = createAuthHandler(() =>
+    dependencies({
+      authorizeSignupOtp: async () => ({
+        allowed: true,
+        reason: 'ok',
+        existingMember: false,
+        channelConfigured: true,
+        retryAfterSeconds: 0,
+      }),
+      verifyOtp: async () => {
+        calls.push('verify');
+        return session;
+      },
+      redeemSignup: async () => {
+        calls.push('redeem');
+        return {
+          organizationId: personalRealmId,
+          username: 'new_member',
+          displayName: 'New Member',
+          preferredLanguage: 'en',
+        };
+      },
+      completeSignupUser: async () => {
+        calls.push('complete-user');
+      },
+      setPassword: async (userId, password) => {
+        calls.push(`set-password:${userId}:${password.length}`);
+      },
+      bindSessionInstallation: async () => {
+        calls.push('bind');
+        return { sessionId };
+      },
+      inspect: async () => {
+        calls.push('inspect');
+        return {
+          userId: session.userId,
+          destinationType: session.destinationType,
+          destination: session.destination,
+          email: session.email,
+          phone: session.phone,
+          sessionId,
+          expiresAt: 9999999999,
+          issuedAt: Math.floor(Date.now() / 1000),
+          aal: 'aal1',
+          memberships,
+          // The password landed before inspection, so the session already
+          // reports it and the client shows no add-a-password step.
+          hasPassword: true,
+        };
+      },
+    })
+  );
+  const response = await handler(
+    post('/v2/auth/signup/verify', { ...verifyBody, password: 'correct horse battery' }),
+  );
+  assertEquals(response.status, 200);
+  // Password is set after the account is complete and before the session is inspected.
+  assertEquals(calls, ['verify', 'redeem', 'complete-user', `set-password:${session.userId}:21`, 'bind', 'inspect']);
+  const body = await response.json();
+  assertEquals(body.user.hasPassword, true);
+});
+
+Deno.test('signup verification rejects a short password before touching the account', async () => {
+  let touched = false;
+  const handler = createAuthHandler(() =>
+    dependencies({
+      verifyOtp: async () => {
+        touched = true;
+        return session;
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/signup/verify', { ...verifyBody, password: 'short' }));
+  assertEquals(response.status, 400);
+  assertEquals((await response.json()).error.code, 'weak_password');
+  assertEquals(touched, false);
+});
+
 Deno.test('signup verification with an existing account completes plain member sign-in', async () => {
   const calls: string[] = [];
   const handler = createAuthHandler(() =>

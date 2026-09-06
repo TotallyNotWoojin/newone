@@ -101,6 +101,8 @@ interface AuthState {
   verifySignup: (input: {
     destination: string;
     code: string;
+    /** Chosen at signup; every new account is created with a password. */
+    password: string;
   }) => Promise<{ hasPassword: boolean }>;
   requestRecoveryOtp: (input: {
     destinationType: 'email' | 'phone';
@@ -659,6 +661,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           const webSession = await verifyWebSignup({
             destination: input.destination,
             code: input.code,
+            password: input.password,
           });
           setWebUser(webSession.user);
           setWebSessionId(webSession.sessionId ?? null);

@@ -437,11 +437,13 @@ describe('web authentication security state machine', () => {
       await currentAuth().verifySignup({
         destination: 'new.person@example.test',
         code: '123456',
+        password: 'correct horse battery',
       });
     });
     expect(mockVerifyWebSignup).toHaveBeenCalledWith({
       destination: 'new.person@example.test',
       code: '123456',
+      password: 'correct horse battery',
     });
     expect(currentAuth().sessionId).toBeNull();
     expect(currentAuth().assuranceLevel).toBeNull();
@@ -450,6 +452,7 @@ describe('web authentication security state machine', () => {
       await currentAuth().verifySignup({
         destination: 'new.person@example.test',
         code: '654321',
+        password: 'correct horse battery',
       });
     });
     expect(currentAuth().sessionId).toBe('session-web');

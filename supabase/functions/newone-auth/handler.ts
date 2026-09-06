@@ -1435,6 +1435,7 @@ async function completeSignupAuthentication(
   code: string,
   correlationId: string,
   installation: SessionInstallationInput,
+  password: string | null = null,
 ): Promise<CompletedSignupAuthentication> {
   const session = await dependencies.verifyOtp(
     identity.destinationType,
@@ -1461,6 +1462,9 @@ async function completeSignupAuthentication(
       correlationId,
     );
     await dependencies.completeSignupUser(session.userId);
+    // The chosen password lands before the session is inspected, so the
+    // response already reports hasPassword and no client prompt follows.
+    if (password !== null) await dependencies.setPassword(session.userId, password);
   } catch (error) {
     try {
       await dependencies.revoke(session.accessToken);
@@ -2165,8 +2169,14 @@ export function createAuthHandler(
         try {
           const native = path === '/v2/auth/native/signup/verify';
           const body = asObject((await parseJson(request, config)).value);
-          onlyKeys(body, ['destination', 'installationId', 'appVersion', 'locale', 'code']);
+          onlyKeys(body, ['destination', 'installationId', 'appVersion', 'locale', 'code', 'password']);
           const identity = parseSignupIdentity(body);
+          // Accounts are created with a password. Clients older than v3 do not
+          // send one, so the field stays optional at the edge; the v3 client
+          // always sends it and refuses to proceed without it.
+          const signupPassword = body.password === undefined || body.password === null
+            ? null
+            : parsePassword(body.password, 'weak_password');
           if (native && identity.installationId !== nativeInstallationId(request)) {
             throw new ApiError(400, 'bad_request');
           }
@@ -2216,6 +2226,7 @@ export function createAuthHandler(
             code,
             meta.requestId,
             installation,
+            signupPassword,
           );
           return completedAuthResponse(meta, config, native, session, active, {
             signup: { username: signup.username, organizationId: signup.organizationId },

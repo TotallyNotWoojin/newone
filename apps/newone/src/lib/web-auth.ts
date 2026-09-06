@@ -311,13 +311,14 @@ export async function requestWebSignup(input: SignupIdentity & { captchaToken?: 
   );
 }
 
-export async function verifyWebSignup(input: { destination: string; code: string }) {
+export async function verifyWebSignup(input: { destination: string; code: string; password: string }) {
   const client = await webClientBinding();
   const payload = await webRequest('/v2/auth/signup/verify', {
     method: 'POST',
     body: {
       destination: input.destination,
       code: input.code,
+      password: input.password,
       installationId: client.installationId,
       locale: client.locale,
       appVersion: client.appVersion,
@@ -484,10 +485,11 @@ export async function requestNativeSignup(input: SignupIdentity & { captchaToken
   return parseSignupRequest(payload);
 }
 
-export async function verifyNativeSignup(input: { destination: string; code: string }) {
+export async function verifyNativeSignup(input: { destination: string; code: string; password: string }) {
   const payload = await nativeAuthRequest('/v2/auth/native/signup/verify', {
     destination: input.destination,
     code: input.code,
+    password: input.password,
   });
   const parsed = parseSession(payload);
   const nativeSession = objectValue(payload.session);

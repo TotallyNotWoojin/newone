@@ -187,6 +187,7 @@ describe('sign-in and account recovery screen', () => {
     expect(screen.getByLabelText('auth.usernameLabel').props.value).toBe('river_runner_7');
     expect(screen.getByText('auth.usernameHelp')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), ' River Runner ');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
     await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
@@ -203,6 +204,7 @@ describe('sign-in and account recovery screen', () => {
     await waitFor(() => expect(mockAuth.verifySignup).toHaveBeenCalledWith({
       destination: 'new.person@example.com',
       code: '246810',
+      password: 'correct horse battery',
     }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
     await view.unmount();
@@ -238,6 +240,7 @@ describe('sign-in and account recovery screen', () => {
 
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), '   ');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     expect(screen.getByText('auth.displayNameInvalid')).toBeTruthy();
 
@@ -260,6 +263,7 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
 
     await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
@@ -297,6 +301,7 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'nueva.persona@example.com');
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'nueva_persona');
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'Nueva Persona');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
     await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(mockAuth.requestSignup).toHaveBeenCalledWith(
@@ -345,6 +350,7 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
     expect(mockAuth.requestSignup).toHaveBeenCalledWith({
@@ -360,6 +366,7 @@ describe('sign-in and account recovery screen', () => {
     await waitFor(() => expect(mockAuth.verifySignup).toHaveBeenCalledWith({
       destination: 'new.person@example.com',
       code: '246810',
+      password: 'correct horse battery',
     }));
     await view.unmount();
   });
@@ -424,6 +431,7 @@ describe('sign-in and account recovery screen', () => {
       await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
       await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
       await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), ' River Runner ');
+      await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
       await solveCaptcha();
       await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
       await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
@@ -617,7 +625,21 @@ describe('password sign-in', () => {
     await view.unmount();
   });
 
-  test('the password offer can be skipped and a returning member with a password never sees it', async () => {
+  test('signup refuses to request a code until the password has at least 8 characters', async () => {
+    mockTurnstileSiteKey = null;
+    mockAuth = authState();
+    const view = await render(<SignInScreen />);
+    await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
+    await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
+    await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'short');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.passwordRule')).toBeTruthy());
+    expect(mockAuth.requestSignup).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('the password step cannot be skipped, and a returning member with a password never sees it', async () => {
     mockTurnstileSiteKey = null;
     mockAuth = authState({
       verifySignup: jest.fn(async (..._args: unknown[]) => {
@@ -632,16 +654,20 @@ describe('password sign-in', () => {
     await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
     await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
     await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '246810');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignup' }));
     await waitFor(() => expect(screen.getByText('auth.passwordPromptTitle')).toBeTruthy());
 
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.skipPassword' }));
-    expect(mockAuth.dismissPasswordPrompt).toHaveBeenCalledTimes(1);
-    expect(mockAuth.setPassword).not.toHaveBeenCalled();
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    // No skip control: the account must end up with a password.
+    expect(screen.queryByRole('button', { name: 'auth.skipPassword' })).toBeNull();
+    expect(mockAuth.dismissPasswordPrompt).not.toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
+    await waitFor(() => expect(mockAuth.setPassword).toHaveBeenLastCalledWith('correct horse battery'));
     await view.unmount();
 
     mockAuth = authState();

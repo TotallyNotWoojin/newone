@@ -109,6 +109,17 @@ appId: com.totallynotwoojin.newone
       - eraseText: 120
       - inputText: ${DISPLAY_NAME}
       - tapOn: "Nombre para mostrar"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Contraseña"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "Contraseña"
+    index: 0
+- inputText: Newone-test-2026
+- hideKeyboard
 - assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
