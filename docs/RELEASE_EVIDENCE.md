@@ -606,3 +606,4 @@ See [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) for the complete verification con
 | 22:40 | First full pass complete. Second pass started on a rebuilt simulator app (test ids, leave-checkbox label, routing fix): auth, chat, people, groups, v3, negative, reviewcheck. |
 | 22:50 | Second pass: auth 14 pass / 0 fail / 4 info on the rebuilt app (Edit profile status by id; signup password by id; add-a-password step handled). |
 | 23:40 | Second pass: chat 63 pass / 4 fail / 3 unreachable (by design: no pinned view, no report) / 3 info. All four failures are harness mechanics on iOS 26 — hideKeyboard failing while a spelling callout is up (clear-draft, rename-group) and a 100%-visibility scroll for a result already on screen (message search ×2). Flows switched to drag-to-dismiss and dropped the redundant scroll; a third chat pass runs after the current queue. |
+| 23:57 | Second pass: people 24 pass / 0 fail / 3 info. |
