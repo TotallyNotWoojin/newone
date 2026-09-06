@@ -46,8 +46,7 @@ import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-win
 
 type PeopleFilter = 'all' | 'connected' | 'online' | 'my_site' | 'pending';
 
-const USERNAME_SEARCH_DEBOUNCE_MS = 300;
-const MESSAGE_REQUEST_MAX_LENGTH = 20_000;
+const PEOPLE_SEARCH_DEBOUNCE_MS = 300;
 
 function displayInitials(displayName: string) {
   return displayName.trim().split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toLocaleUpperCase() || 'N';
@@ -71,49 +70,40 @@ export default function PeopleScreen() {
   const [reportConsent, setReportConsent] = useState(false);
   const managePerson = workspace.people.find((person) => person.id === managePersonId);
   const personalRealm = isPersonalRealm(workspace.organizationId);
-  const [usernameQuery, setUsernameQuery] = useState('');
-  const [usernameResults, setUsernameResults] = useState<UserSearchResult[]>([]);
-  const [usernameSearched, setUsernameSearched] = useState(false);
-  const [requestTarget, setRequestTarget] = useState<UserSearchResult | null>(null);
-  const [requestBody, setRequestBody] = useState('');
-  const usernameSequenceRef = useRef(0);
+  const [peopleQuery, setPeopleQuery] = useState('');
+  const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
+  const [peopleSearched, setPeopleSearched] = useState(false);
+  const peopleSequenceRef = useRef(0);
   const searchUsers = workspace.searchUsers;
+  const searching = peopleQuery.trim().length >= 2;
 
-  const handleUsernameQueryChange = (value: string) => {
+  const handlePeopleQueryChange = (value: string) => {
     // Search matches names as well as handles and the service is
-    // case-insensitive, so show people exactly what they typed.
-    const next = value;
-    // Invalidate any in-flight search and clear settled results synchronously
-    // in the event handler so the debounce effect only schedules fetches.
-    usernameSequenceRef.current += 1;
-    setUsernameQuery(next);
-    if (next.trim().length < 2) {
-      setUsernameResults([]);
-      setUsernameSearched(false);
+    // case-insensitive, so send exactly what was typed. Invalidate any
+    // in-flight search and clear settled results synchronously here so the
+    // debounce effect only schedules fetches.
+    peopleSequenceRef.current += 1;
+    setPeopleQuery(value);
+    if (value.trim().length < 2) {
+      setPeopleResults([]);
+      setPeopleSearched(false);
     }
   };
 
   useEffect(() => {
-    const normalized = usernameQuery.trim();
+    const normalized = peopleQuery.trim();
     if (!personalRealm || normalized.length < 2) return;
-    const sequence = ++usernameSequenceRef.current;
+    const sequence = ++peopleSequenceRef.current;
     const timer = setTimeout(() => {
       void searchUsers(normalized).then((results) => {
-        if (usernameSequenceRef.current !== sequence) return;
-        setUsernameSearched(true);
-        setUsernameResults(results ?? []);
+        if (peopleSequenceRef.current !== sequence) return;
+        setPeopleSearched(true);
+        setPeopleResults(results ?? []);
       });
-    }, USERNAME_SEARCH_DEBOUNCE_MS);
+    }, PEOPLE_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [personalRealm, searchUsers, usernameQuery]);
+  }, [personalRealm, searchUsers, peopleQuery]);
 
-  const patchUsernameResult = (
-    userId: string,
-    connectionState: UserSearchResult['connectionState'],
-  ) => {
-    setUsernameResults((current) => current.map((result) =>
-      result.userId === userId ? { ...result, connectionState } : result));
-  };
   const safetyCopy = moderationCopy(locale);
   const reportCategoryLabels = {
     harassment: t('chat.reportHarassment'),
@@ -143,26 +133,32 @@ export default function PeopleScreen() {
       return true;
     });
   }, [currentSite, filter, search, workspace.people]);
-  // Consumer accounts get a plain friends-and-requests list instead of the
-  // workplace directory; strangers only appear through username search.
-  const consumerFriends = useMemo(
-    () => workspace.people.filter((person) => person.connectionState === 'connected'),
-    [workspace.people],
-  );
-  const consumerRequests = useMemo(
-    () => workspace.people.filter((person) => person.connectionState === 'pending'),
+  // Consumer accounts list everyone they have chatted with or connected to;
+  // anyone else is one search away.
+  const consumerPeople = useMemo(
+    () => workspace.people.filter((person) => person.connectionState !== 'self'),
     [workspace.people],
   );
 
-  const openMessage = async (person: Person) => {
-    const conversationId = await workspace.openOrCreateDirectConversation(person.id);
-    if (!conversationId) return;
-
+  const openConversation = (conversationId: string) => {
     if (desktop) {
       router.replace('/');
     } else {
       router.push({ pathname: '/conversation/[id]', params: { id: conversationId } });
     }
+  };
+
+  const openMessage = async (person: Person) => {
+    const conversationId = await workspace.openOrCreateDirectConversation(person.id);
+    if (conversationId) openConversation(conversationId);
+  };
+
+  const openSearchResult = async (result: UserSearchResult) => {
+    const conversationId = await workspace.openOrCreateDirectConversation(result.userId, {
+      displayName: result.displayName ?? result.username,
+      username: result.username,
+    });
+    if (conversationId) openConversation(conversationId);
   };
 
   const openManage = (person: Person) => {
@@ -185,7 +181,7 @@ export default function PeopleScreen() {
       onMessage={() => void openMessage(person)}
       onManage={() => openManage(person)}
       onRemove={() => void workspace.removeConnection(person.id)}
-      person={personalRealm && person.username ? { ...person, roleLabel: `@${person.username}` } : person}
+      person={person}
     />
   );
 
@@ -196,6 +192,7 @@ export default function PeopleScreen() {
       id: result.userId,
       membershipId: result.userId,
       displayName: name,
+      username: result.username,
       initials: displayInitials(name),
       roleLabel: `@${result.username}`,
       role: 'employee',
@@ -203,60 +200,10 @@ export default function PeopleScreen() {
       department: '',
       preferredLanguage: known?.preferredLanguage ?? 'en',
       presence: known?.presence ?? 'offline',
-      connectionState: result.connectionState === 'accepted'
-        ? 'connected'
-        : result.connectionState === 'none'
-          ? 'available'
-          : 'pending',
-      connectionRequestDirection: result.connectionState === 'pending_incoming'
-        ? 'incoming'
-        : result.connectionState === 'pending_outgoing'
-          ? 'outgoing'
-          : undefined,
+      connectionState: known?.connectionState ?? 'available',
+      blockedByMe: known?.blockedByMe,
       avatarColor: known?.avatarColor ?? colors.forest,
     };
-  };
-
-  const connectFromSearch = async (result: UserSearchResult) => {
-    if (await workspace.updateConnection(result.userId)) {
-      patchUsernameResult(result.userId, 'pending_outgoing');
-    }
-  };
-
-  const respondFromSearch = async (result: UserSearchResult, decision: 'accepted' | 'declined') => {
-    if (await workspace.respondConnection(result.userId, decision)) {
-      patchUsernameResult(result.userId, decision === 'accepted' ? 'accepted' : 'none');
-    }
-  };
-
-  const cancelFromSearch = async (result: UserSearchResult) => {
-    if (await workspace.removeConnection(result.userId)) {
-      patchUsernameResult(result.userId, 'none');
-    }
-  };
-
-  const openRequestCompose = (result: UserSearchResult) => {
-    workspace.clearActionError();
-    setRequestBody('');
-    setRequestTarget(result);
-  };
-
-  const sendRequest = async () => {
-    if (!requestTarget) return;
-    const conversationId = await workspace.sendMessageRequest(
-      requestTarget.userId,
-      requestBody,
-      requestTarget.displayName ?? requestTarget.username,
-    );
-    if (!conversationId) return;
-    patchUsernameResult(requestTarget.userId, 'pending_outgoing');
-    setRequestTarget(null);
-    setRequestBody('');
-    if (desktop) {
-      router.replace('/');
-    } else {
-      router.push({ pathname: '/conversation/[id]', params: { id: conversationId } });
-    }
   };
 
   return (
@@ -273,78 +220,71 @@ export default function PeopleScreen() {
         || (workspace.people.length <= 1 && !personalRealm) ? (
         <WorkspaceStatePanel resource="people" />
       ) : (
-      // Keeps the username search field and its first results above the iOS
-      // keyboard; taps on results must not be swallowed by keyboard dismissal.
+      // Keeps the search field and its first results above the iOS keyboard;
+      // taps on results must not be swallowed by keyboard dismissal.
       <KeyboardAvoidingScreen style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {desktop ? (
+        {desktop && !personalRealm ? (
           <DesktopPageHeader
-            description={t(personalRealm ? 'people.descriptionConsumer' : 'people.description')}
-            eyebrow={t(personalRealm ? 'people.eyebrowConsumer' : 'people.eyebrow')}
+            description={t('people.description')}
+            eyebrow={t('people.eyebrow')}
             title={t('people.heading')}
           />
         ) : null}
 
         <View style={[styles.content, desktop && styles.contentDesktop]}>
           {personalRealm ? (
-            <View style={[styles.usernameSearch, shadow]}>
-              <Text style={styles.usernameTitle}>{t('people.usernameSearchTitle')}</Text>
-              <SearchField
-                onChangeText={handleUsernameQueryChange}
-                placeholder={t('people.usernameSearch')}
-                value={usernameQuery}
-              />
-              <Text style={styles.usernameHint}>{t('people.usernameSearchHint')}</Text>
-              {usernameResults.length ? (
-                <View style={styles.peopleGrid}>
-                  {usernameResults.map((result) => (
-                    <PersonCard
-                      desktop={desktop}
-                      key={result.userId}
-                      usernameResult
-                      onAccept={() => void respondFromSearch(result, 'accepted')}
-                      onConnect={() => void connectFromSearch(result)}
-                      onDecline={() => void respondFromSearch(result, 'declined')}
-                      onMessage={() => void openMessage(searchResultPerson(result))}
-                      onMessageRequest={() => openRequestCompose(result)}
-                      onRemove={() => void cancelFromSearch(result)}
-                      person={searchResultPerson(result)}
-                    />
-                  ))}
-                </View>
-              ) : usernameSearched ? (
-                <Text style={styles.usernameEmpty}>{t('people.usernameNoResults')}</Text>
-              ) : null}
-            </View>
-          ) : null}
-          {personalRealm ? (
             <View style={styles.consumerSections}>
-              {consumerRequests.length ? (
+              <SearchField
+                onChangeText={handlePeopleQueryChange}
+                placeholder={t('people.usernameSearch')}
+                value={peopleQuery}
+              />
+              {searching ? (
+                peopleResults.length ? (
+                  <View style={styles.rows}>
+                    {peopleResults.map((result) => {
+                      const known = workspace.people.find((person) => person.id === result.userId);
+                      return (
+                        <PersonRow
+                          key={result.userId}
+                          onManage={known ? () => openManage(known) : undefined}
+                          onMessage={() => void openSearchResult(result)}
+                          person={searchResultPerson(result)}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : peopleSearched ? (
+                  <Text style={styles.rowsEmpty}>{t('people.usernameNoResults')}</Text>
+                ) : null
+              ) : (
                 <View style={styles.consumerSection}>
-                  <Text style={styles.directoryEyebrow}>{t('people.requests')}</Text>
-                  <View style={styles.peopleGrid}>
-                    {consumerRequests.map(renderPersonCard)}
-                  </View>
+                  <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
+                  {consumerPeople.length ? (
+                    <View style={styles.rows}>
+                      {consumerPeople.map((person) => (
+                        <PersonRow
+                          key={person.id}
+                          onManage={() => openManage(person)}
+                          onMessage={() => void openMessage(person)}
+                          person={person}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <EmptyState
+                      body={t('people.emptyConsumerBody')}
+                      icon="people-outline"
+                      title={t('people.emptyConsumer')}
+                    />
+                  )}
                 </View>
-              ) : null}
-              <View style={styles.consumerSection}>
-                <Text style={styles.directoryEyebrow}>{t('people.friends')}</Text>
-                {consumerFriends.length ? (
-                  <View style={styles.peopleGrid}>
-                    {consumerFriends.map(renderPersonCard)}
-                  </View>
-                ) : (
-                  <EmptyState
-                    body={t('people.friendsEmptyBody')}
-                    icon="people-outline"
-                    title={t('people.friendsEmpty')}
-                  />
-                )}
-              </View>
+              )}
             </View>
           ) : (
             <>
@@ -404,7 +344,7 @@ export default function PeopleScreen() {
       </KeyboardAvoidingScreen>
       )}
       <ActionModal
-        description={t('people.manageDescription')}
+        description={personalRealm ? undefined : t('people.manageDescription')}
         onClose={() => setManagePersonId('')}
         title={managePerson ? `${t('people.manageTitle')} · ${managePerson.displayName}` : t('people.manageTitle')}
         visible={Boolean(managePerson)}>
@@ -420,12 +360,12 @@ export default function PeopleScreen() {
           onPress={() => setFavoriteContact((current) => !current)}
           tone={favoriteContact ? 'dark' : 'light'}
         />
-        <View style={styles.privacyNote}>
-          <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />
-          <Text style={styles.privacyNoteText}>
-            {t(personalRealm ? 'people.blockNoticeConsumer' : 'people.blockNotice')}
-          </Text>
-        </View>
+        {personalRealm ? null : (
+          <View style={styles.privacyNote}>
+            <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />
+            <Text style={styles.privacyNoteText}>{t('people.blockNotice')}</Text>
+          </View>
+        )}
         <ActionError message={workspace.actionError} />
         <PrimaryButton
           icon="bookmark-outline"
@@ -521,31 +461,49 @@ export default function PeopleScreen() {
           />
         </View>
       </ActionModal>
-      <ActionModal
-        description={t('people.messageRequestDescription')}
-        onClose={() => setRequestTarget(null)}
-        title={requestTarget
-          ? `${t('people.messageRequestTitle')} · ${requestTarget.displayName ?? requestTarget.username}`
-          : t('people.messageRequestTitle')}
-        visible={Boolean(requestTarget)}>
-        <FormField
-          label={t('people.messageRequestLabel')}
-          multiline
-          onChangeText={(value) => setRequestBody(value.slice(0, MESSAGE_REQUEST_MAX_LENGTH))}
-          placeholder={t('people.messageRequestPlaceholder')}
-          value={requestBody}
-        />
-        <ActionError message={workspace.actionError} />
-        <PrimaryButton
-          disabled={!requestBody.trim()}
-          icon="paper-plane-outline"
-          label={t('people.messageRequestSend')}
-          loading={workspace.actionBusy === 'message-request'}
-          onPress={() => void sendRequest()}
-          tone="dark"
-        />
-      </ActionModal>
     </AppScaffold>
+  );
+}
+
+/**
+ * Compact consumer row: avatar, name, @handle, one action. The container is
+ * not itself accessible so the button and the manage control stay separate
+ * targets for VoiceOver and for the test driver.
+ */
+function PersonRow({
+  person,
+  onMessage,
+  onManage,
+}: {
+  person: Person;
+  onMessage: () => void;
+  onManage?: () => void;
+}) {
+  const personAvatarUrl = useProfileAvatar(person.id);
+  const { t } = useI18n();
+  return (
+    <View accessible={false} style={styles.personRow}>
+      <Avatar
+        color={person.avatarColor}
+        imageUri={personAvatarUrl}
+        initials={person.initials}
+        size={40}
+      />
+      <View style={styles.personRowCopy}>
+        <Text numberOfLines={1} style={styles.personRowName}>{person.displayName}</Text>
+        {person.username ? (
+          <Text numberOfLines={1} style={styles.personRowHandle}>{`@${person.username}`}</Text>
+        ) : null}
+      </View>
+      {person.blockedByMe ? (
+        <StatusBadge icon="ban-outline" label={t('people.blocked')} tone="danger" />
+      ) : (
+        <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+      )}
+      {onManage ? (
+        <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
+      ) : null}
+    </View>
   );
 }
 
@@ -556,29 +514,25 @@ function PersonCard({
   onDecline,
   onMessage,
   onManage,
-  onMessageRequest,
   onRemove,
   desktop,
-  usernameResult = false,
 }: {
   person: Person;
   onConnect: () => void;
   onAccept: () => void;
   onDecline: () => void;
   onMessage: () => void;
-  onManage?: () => void;
-  onMessageRequest?: () => void;
+  onManage: () => void;
   onRemove: () => void;
   desktop: boolean;
-  usernameResult?: boolean;
 }) {
   const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
   const connected = person.connectionState === 'connected';
   const pending = person.connectionState === 'pending';
-  const manageButton = onManage
-    ? <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
-    : null;
+  const manageButton = (
+    <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
+  );
   return (
     <View style={[styles.personCard, !desktop && styles.personCardMobile, shadow]}>
       <View style={styles.personTopline}>
@@ -592,12 +546,10 @@ function PersonCard({
         <View style={styles.personStatus}>
           {person.blockedByMe ? <StatusBadge icon="ban-outline" label={t('people.blocked')} tone="danger" /> : null}
           {person.favoriteContact ? <StatusBadge icon="star" label={t('people.favorite')} tone="warning" /> : person.savedContact ? <StatusBadge icon="bookmark" label={t('people.saved')} tone="success" /> : null}
-          {usernameResult ? null : (
-            <StatusBadge
-              label={person.preferredLanguage === 'ko' ? '한국어' : person.preferredLanguage === 'es' ? 'Español' : 'English'}
-              tone={person.preferredLanguage === 'ko' ? 'purple' : 'warning'}
-            />
-          )}
+          <StatusBadge
+            label={person.preferredLanguage === 'ko' ? '한국어' : person.preferredLanguage === 'es' ? 'Español' : 'English'}
+            tone={person.preferredLanguage === 'ko' ? 'purple' : 'warning'}
+          />
         </View>
       </View>
       <Text style={styles.personName}>{person.displayName}</Text>
@@ -616,9 +568,7 @@ function PersonCard({
       ) : null}
       <View style={styles.personActions}>
         {person.blockedByMe ? (
-          onManage
-            ? <PrimaryButton icon="options-outline" label={t('people.manage')} onPress={onManage} tone="light" />
-            : null
+          <PrimaryButton icon="options-outline" label={t('people.manage')} onPress={onManage} tone="light" />
         ) : connected ? (
           <>
             <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} />
@@ -638,21 +588,12 @@ function PersonCard({
           </>
         ) : (
           <>
-            {onMessageRequest ? (
-              <PrimaryButton
-                icon="paper-plane-outline"
-                label={t('people.sendMessageRequest')}
-                onPress={onMessageRequest}
-                tone="dark"
-                style={styles.connectButton}
-              />
-            ) : null}
             <PrimaryButton
               icon="person-add-outline"
               label={t('people.connect')}
               onPress={onConnect}
-              tone={onMessageRequest ? 'light' : 'dark'}
-              style={onMessageRequest ? undefined : styles.connectButton}
+              tone="dark"
+              style={styles.connectButton}
             />
             {manageButton}
           </>
@@ -683,10 +624,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
   },
   consumerSections: {
-    gap: spacing.xl,
+    gap: spacing.md,
   },
   consumerSection: {
+    gap: spacing.xs,
+  },
+  rows: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.paper,
+    overflow: 'hidden',
+  },
+  rowsEmpty: {
+    color: colors.inkMuted,
+    fontSize: 12,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  personRow: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  personRowCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  personRowName: {
+    color: colors.ink,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  personRowHandle: {
+    color: colors.inkSubtle,
+    fontSize: 12,
+    marginTop: 1,
   },
   directoryTools: {
     padding: spacing.md,
@@ -695,31 +673,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.line,
-  },
-  usernameSearch: {
-    padding: spacing.md,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    backgroundColor: colors.paper,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-  },
-  usernameTitle: {
-    color: colors.ink,
-    fontFamily: type.display,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  usernameHint: {
-    color: colors.inkSubtle,
-    fontSize: 10,
-    lineHeight: 15,
-  },
-  usernameEmpty: {
-    color: colors.inkMuted,
-    fontSize: 12,
-    paddingVertical: spacing.sm,
   },
   filters: {
     gap: spacing.xs,

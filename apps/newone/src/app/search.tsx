@@ -18,9 +18,9 @@ import {
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
 import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
-import { Chip, EmptyState, PrimaryButton, SearchField } from '@/components/ui/primitives';
+import { Avatar, Chip, EmptyState, PrimaryButton, SearchField } from '@/components/ui/primitives';
 import { BffSearchRepository } from '@/data/repositories/bff-search-repository';
-import { RepositoryError } from '@/data/repositories/contracts';
+import { RepositoryError, type UserSearchResult } from '@/data/repositories/contracts';
 import {
   mergeSearchResults,
   searchDateBoundary,
@@ -38,6 +38,7 @@ import { useI18n } from '@/i18n/provider';
 import { errorMessageKey } from '@/i18n/errors';
 import { getSupabaseClient } from '@/lib/supabase';
 import { isPersonalRealm } from '@/constants/personal-realm';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
@@ -49,6 +50,12 @@ const allTypes: SearchResultType[] = [
   'announcements',
   'handoffs',
 ];
+
+const CONSUMER_SEARCH_DEBOUNCE_MS = 350;
+
+function displayInitials(displayName: string) {
+  return displayName.trim().split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toLocaleUpperCase() || 'N';
+}
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -74,6 +81,14 @@ export default function SearchScreen() {
   const [lastFingerprint, setLastFingerprint] = useState('');
   const [resultsAuthorizationSignature, setResultsAuthorizationSignature] = useState('');
   const requestGeneration = useRef(0);
+  const personalRealm = isPersonalRealm(workspace.organizationId);
+  // Consumer search also finds people, through the same search as the People
+  // tab, and runs as you type.
+  const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
+  const [peopleSearched, setPeopleSearched] = useState(false);
+  const peopleSequence = useRef(0);
+  const searchUsers = workspace.searchUsers;
+  const runSearchRef = useRef<(append?: boolean) => Promise<void>>(async () => undefined);
 
   const repository = useMemo(
     () => new BffSearchRepository({
@@ -208,7 +223,9 @@ export default function SearchScreen() {
       const page = await repository.search({
         organizationId: workspace.organizationId,
         query: normalized,
-        types: selectedType === 'all' ? undefined : [selectedType],
+        types: personalRealm
+          ? ['conversations', 'messages']
+          : selectedType === 'all' ? undefined : [selectedType],
         cursor: append ? nextCursor : null,
         limit: 20,
         senderMembershipId: selectedSenderId,
@@ -238,6 +255,36 @@ export default function SearchScreen() {
     } finally {
       if (generation === requestGeneration.current) setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    runSearchRef.current = runSearch;
+  });
+
+  useEffect(() => {
+    if (!personalRealm) return;
+    const normalized = query.trim();
+    if (normalized.length < 2) return;
+    const sequence = ++peopleSequence.current;
+    const timer = setTimeout(() => {
+      void searchUsers(normalized).then((results) => {
+        if (peopleSequence.current !== sequence) return;
+        setPeopleResults(results ?? []);
+        setPeopleSearched(true);
+      });
+      void runSearchRef.current(false);
+    }, CONSUMER_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [personalRealm, query, searchUsers]);
+
+  const openPerson = async (result: UserSearchResult) => {
+    const conversationId = await workspace.openOrCreateDirectConversation(result.userId, {
+      displayName: result.displayName ?? result.username,
+      username: result.username,
+    });
+    if (!conversationId) return;
+    if (desktop) router.replace('/');
+    else router.push({ pathname: '/conversation/[id]', params: { id: conversationId } });
   };
 
   const openResult = (result: WorkspaceSearchResult) => {
@@ -319,8 +366,6 @@ export default function SearchScreen() {
     [locale],
   );
 
-  const personalRealm = isPersonalRealm(workspace.organizationId);
-
   return (
     <AppScaffold
       current="search"
@@ -337,10 +382,10 @@ export default function SearchScreen() {
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled">
-        {desktop ? (
+        {desktop && !personalRealm ? (
           <DesktopPageHeader
-            description={t(personalRealm ? 'search.descriptionConsumer' : 'search.description')}
-            eyebrow={t(personalRealm ? 'search.eyebrowConsumer' : 'search.eyebrow')}
+            description={t('search.description')}
+            eyebrow={t('search.eyebrow')}
             title={t('search.heading')}
           />
         ) : null}
@@ -352,20 +397,30 @@ export default function SearchScreen() {
                 onChangeText={(value) => {
                   setQuery(value);
                   resetResults();
+                  // Invalidate any in-flight people search; the debounce effect
+                  // only schedules fetches for a real query.
+                  peopleSequence.current += 1;
+                  if (value.trim().length < 2) {
+                    setPeopleResults([]);
+                    setPeopleSearched(false);
+                  }
                 }}
                 onSubmitEditing={() => void runSearch(false)}
-                placeholder={t(personalRealm ? 'search.placeholderConsumer' : 'search.placeholder')}
+                placeholder={t(personalRealm ? 'search.placeholderPeopleMessages' : 'search.placeholder')}
                 value={query}
               />
             </View>
-            <PrimaryButton
-              icon="search"
-              label={t('search.submit')}
-              loading={loading}
-              onPress={() => void runSearch(false)}
-            />
+            {personalRealm ? null : (
+              <PrimaryButton
+                icon="search"
+                label={t('search.submit')}
+                loading={loading}
+                onPress={() => void runSearch(false)}
+              />
+            )}
           </View>
 
+          {personalRealm ? null : (
           <View accessibilityLabel={copy.filters} style={styles.filterPanel}>
             <View style={styles.filterHeadingRow}>
               <View style={styles.filterHeadingCopy}>
@@ -507,14 +562,43 @@ export default function SearchScreen() {
               </Text>
             ) : null}
           </View>
+          )}
+
+          {personalRealm && (peopleResults.length || peopleSearched) ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>{t('search.people')}</Text>
+              {peopleResults.length ? (
+                <View accessibilityRole="list" style={styles.personRows}>
+                  {peopleResults.map((result) => (
+                    <PersonResultRow
+                      key={result.userId}
+                      onMessage={() => void openPerson(result)}
+                      result={result}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.sectionEmpty}>{t('people.usernameNoResults')}</Text>
+              )}
+            </View>
+          ) : null}
+          {personalRealm && (searched || loading) ? (
+            <Text style={styles.sectionLabel}>{t('search.messages')}</Text>
+          ) : null}
 
           {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
           {loading && !visibleResults.length ? <ActivityIndicator color={colors.mintDark} style={styles.loader} /> : null}
           {!loading && searched && !visibleResults.length ? (
-            <EmptyState icon="search-outline" title={t('search.empty')} body={t('search.emptyBody')} />
+            personalRealm
+              ? <Text style={styles.sectionEmpty}>{t('search.noMatchesConsumer')}</Text>
+              : <EmptyState icon="search-outline" title={t('search.empty')} body={t('search.emptyBody')} />
           ) : null}
           {!searched && !loading ? (
-            <EmptyState icon="shield-checkmark-outline" title={t('search.privateTitle')} body={t('search.privateBody')} />
+            personalRealm
+              ? (query.trim().length < 2
+                ? <Text style={styles.startHint}>{t('search.startHint')}</Text>
+                : null)
+              : <EmptyState icon="shield-checkmark-outline" title={t('search.privateTitle')} body={t('search.privateBody')} />
           ) : null}
           <View accessibilityRole="list" style={styles.results}>
             {visibleResults.map((result) => (
@@ -532,14 +616,16 @@ export default function SearchScreen() {
                   />
                 </View>
                 <View style={styles.resultCopy}>
-                  <Text style={styles.resultType}>{typeLabels[result.type]}</Text>
+                  {personalRealm ? null : <Text style={styles.resultType}>{typeLabels[result.type]}</Text>}
                   <Text style={styles.resultTitle}>{result.title}</Text>
                   {result.snippet ? <Text numberOfLines={2} style={styles.resultSnippet}>{result.snippet}</Text> : null}
                   <View style={styles.resultMetadata}>
-                    <Text style={styles.resultMatch}>
-                      {copy.resultMatchLabels[result.matchedSource]}
-                      {result.matchedLanguage ? ` · ${result.matchedLanguage.toLocaleUpperCase()}` : ''}
-                    </Text>
+                    {personalRealm ? null : (
+                      <Text style={styles.resultMatch}>
+                        {copy.resultMatchLabels[result.matchedSource]}
+                        {result.matchedLanguage ? ` · ${result.matchedLanguage.toLocaleUpperCase()}` : ''}
+                      </Text>
+                    )}
                     <Text style={styles.resultTime}>
                       {dateFormatter.format(new Date(result.occurredAt))}
                     </Text>
@@ -565,8 +651,47 @@ export default function SearchScreen() {
   );
 }
 
+/**
+ * Compact people result: avatar, name, @handle, one Message button. The
+ * container is not itself accessible so the button stays its own target.
+ */
+function PersonResultRow({
+  result,
+  onMessage,
+}: {
+  result: UserSearchResult;
+  onMessage: () => void;
+}) {
+  const { t } = useI18n();
+  const avatarUrl = useProfileAvatar(result.userId);
+  const name = result.displayName ?? result.username;
+  return (
+    <View accessible={false} style={styles.personRow}>
+      <Avatar color={colors.forest} imageUri={avatarUrl} initials={displayInitials(name)} size={40} />
+      <View style={styles.personCopy}>
+        <Text numberOfLines={1} style={styles.personName}>{name}</Text>
+        <Text numberOfLines={1} style={styles.personHandle}>{`@${result.username}`}</Text>
+      </View>
+      <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   keyboard: { flex: 1 },
+  section: { gap: spacing.xs },
+  sectionLabel: { color: colors.mintDark, fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
+  sectionEmpty: { color: colors.inkMuted, fontSize: 12, paddingVertical: spacing.xs },
+  startHint: { color: colors.inkSubtle, fontSize: 13, textAlign: 'center', paddingVertical: spacing.xl },
+  personRows: { gap: spacing.xs },
+  personRow: {
+    minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.md,
+    backgroundColor: colors.paperMuted,
+  },
+  personCopy: { flex: 1, minWidth: 0 },
+  personName: { color: colors.ink, fontSize: 15, fontWeight: '700' },
+  personHandle: { color: colors.inkSubtle, fontSize: 12, marginTop: 1 },
   page: { flexGrow: 1, paddingBottom: spacing.xxxl },
   pageMobile: { padding: spacing.md, paddingBottom: 100 },
   content: {

@@ -500,39 +500,92 @@ describe('group creation workflow screen', () => {
     await view.unmount();
   });
 
-  test('gates group creation to consumer kinds, friends-only candidates, and hides role promotion in the personal realm', async () => {
-    const friendCandidate = groupCandidate({ userId: 'membership-friend', displayName: 'Friend Candidate' });
-    const strangerCandidate = groupCandidate({ userId: 'membership-stranger', displayName: 'Stranger Candidate' });
+  test('lets a consumer add anyone: known people first, then people search, with consumer-only controls', async () => {
     const createGroupConversation = successfulAction('conversation-personal');
+    const searchUsers = jest.fn(async (..._mockArgs: unknown[]) => [
+      {
+        userId: 'user-stranger', username: 'sam_stranger', displayName: 'Sam Stranger',
+        avatarPath: null, connectionState: 'none',
+      },
+      {
+        userId: 'user-friend', username: 'ana_friend', displayName: 'Ana Friend',
+        avatarPath: null, connectionState: 'accepted',
+      },
+    ] as unknown[]);
+    const queryGroupCreationCandidates = jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]);
     mockWorkspace = baseWorkspace({
       organizationId: PERSONAL_REALM_ORGANIZATION_ID,
-      people: [self, person({ id: 'membership-friend', connectionState: 'connected' })],
-      queryGroupCreationCandidates: jest.fn(async () => [friendCandidate, strangerCandidate]),
+      people: [
+        self,
+        person({ id: 'user-friend', displayName: 'Ana Friend', username: 'ana_friend', connectionState: 'connected' }),
+        person({
+          id: 'user-pending', displayName: 'Pat Pending', username: 'pat_pending',
+          connectionState: 'pending', connectionRequestDirection: 'incoming',
+        }),
+        person({ id: 'user-blocked', displayName: 'Bailey Blocked', blockedByMe: true }),
+      ],
+      queryGroupCreationCandidates,
+      searchUsers,
       createGroupConversation,
     });
 
     await render(<NewGroupScreen />);
-    await waitFor(() => expect(screen.getByText('Friend Candidate')).toBeTruthy());
+    // The people this account already knows fill the empty picker, whatever
+    // their connection state (blocked people excepted); the workplace
+    // candidate directory is never consulted.
+    await waitFor(() => expect(screen.getByText('Ana Friend')).toBeTruthy());
+    expect(screen.getByText('@ana_friend')).toBeTruthy();
+    expect(screen.getByText('Pat Pending')).toBeTruthy();
+    expect(screen.queryByText('Bailey Blocked')).toBeNull();
+    expect(screen.queryByText('Jordan Lee')).toBeNull();
+    expect(queryGroupCreationCandidates).not.toHaveBeenCalled();
 
-    // Only the accepted connection is offered — a non-friend never appears.
-    expect(screen.queryByText('Stranger Candidate')).toBeNull();
+    // Consumer-only controls: no workplace kinds, scope, or join policy, and
+    // none of the explanatory boxes.
+    for (const gone of [
+      'group.private', 'group.organizationWide', 'group.joinInherit', 'group.joinApproval',
+      'group.team', 'group.shift', 'group.incident',
+    ]) {
+      expect(screen.queryByRole('button', { name: gone })).toBeNull();
+    }
+    for (const absent of [
+      'group.detailsEyebrow', 'group.detailsTitle', 'group.candidatePrivacy', 'group.atomicTitle',
+      'group.atomicDisclosure', 'group.historySinceJoinDisclosure', 'group.avatarRequirements',
+      'group.avatarDescriptionConsumer', 'group.joinInviteOnly', 'group.employee',
+    ]) {
+      expect(screen.queryByText(absent)).toBeNull();
+    }
+    expect(screen.queryByLabelText('group.searchConsumer')).toBeNull();
 
-    // Only the consumer group kind is offered; every workplace kind is gone.
-    // Consumer groups are private and invite-only: no type, unit scope, or join policy controls.
-    expect(screen.queryByRole('button', { name: 'group.private' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.organizationWide' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.joinInherit' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.joinApproval' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.team' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.shift' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'group.incident' })).toBeNull();
+    // One character narrows the known list locally without a service call.
+    const input = screen.getByLabelText('people.usernameSearch');
+    await fireEvent.changeText(input, 'p');
+    await waitFor(() => expect(screen.queryByText('Ana Friend')).toBeNull());
+    expect(screen.getByText('Pat Pending')).toBeTruthy();
+    expect(searchUsers).not.toHaveBeenCalled();
 
-    // Selecting the friend never offers owner/admin promotion.
-    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Friend Candidate' }));
+    // Two characters reach the people search; a stranger is offered like anyone.
+    await fireEvent.changeText(input, 'sa');
+    await waitFor(() => expect(searchUsers).toHaveBeenCalledWith('sa'));
+    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
+    expect(screen.getByText('@sam_stranger')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Sam Stranger' }));
+    // No owner/admin promotion for consumer groups.
     expect(screen.queryByRole('button', { name: 'group.member' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'group.admin' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'group.owner' })).toBeNull();
-    expect(screen.getByRole('checkbox', { name: 'group.removePerson Friend Candidate' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'group.removePerson Sam Stranger' })).toBeTruthy();
+
+    // No results reads as the people-search empty line; clearing the query
+    // restores the known list, and the earlier selection survives.
+    searchUsers.mockResolvedValueOnce([]);
+    await fireEvent.changeText(input, 'zz');
+    await waitFor(() => expect(screen.getByText('people.usernameNoResults')).toBeTruthy());
+    expect(screen.queryByText('group.noCandidates')).toBeNull();
+    await fireEvent.changeText(input, '');
+    await waitFor(() => expect(screen.getByText('Ana Friend')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    expect(screen.getByText('2 group.selectedSuffix')).toBeTruthy();
 
     await fireEvent.changeText(screen.getByLabelText('group.name'), 'Weekend Trip');
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
@@ -546,8 +599,25 @@ describe('group creation workflow screen', () => {
       joinPolicy: 'invite_only',
       incidentSeverity: undefined,
       incidentClassification: undefined,
-      members: [{ membershipId: 'membership-friend', role: 'member' }],
+      members: [
+        { membershipId: 'user-stranger', role: 'member' },
+        { membershipId: 'user-friend', role: 'member' },
+      ],
     }));
+  });
+
+  test('shows the picker hint when a consumer knows no one yet', async () => {
+    mockWorkspace = baseWorkspace({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      people: [self],
+      queryGroupCreationCandidates: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
+      searchUsers: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
+      createGroupConversation: successfulAction(null),
+    });
+    await render(<NewGroupScreen />);
+    await waitFor(() => expect(screen.getByText('group.pickerHint')).toBeTruthy());
+    expect(screen.queryByText('group.noCandidates')).toBeNull();
+    expect(screen.queryByText('group.loadingCandidates')).toBeNull();
   });
 });
 
