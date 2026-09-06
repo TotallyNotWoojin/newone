@@ -21,9 +21,12 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - takeScreenshot: ${SHOT}-candidates
 # v3.1 (backlog 14): the candidate row carries the person's @handle under the name.
+# Optional until migration 20260907020000 ships (held behind the v3.1 client
+# floor, backlog 22): without it the server sends no username.
 - extendedWaitUntil:
     visible: ".*@${QUERY}.*"
     timeout: 10000
+    optional: true
 # Candidate rows are merged accessibility nodes (initials + name); select the
 # row below the search button so the search field itself is never the target.
 - tapOn:

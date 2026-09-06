@@ -17,17 +17,21 @@ appId: com.totallynotwoojin.newone
     text: "Summarize conversation"
     optional: true
 - extendedWaitUntil:
-    visible: ".*(Generating|No new messages since the last summary|Summary unavailable|Source changed|could not|cannot|failed).*"
+    visible: ".*(Generating|Too long|No messages in this range|Could not summarize|Source changed|Summary unavailable).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-after-request
-# Ready: the new summary covers every loaded message, so the sheet says there
-# is nothing new to summarize and Copy/Share become enabled. Failure: "Summary
-# unavailable" (consumers see no other status badge).
+# v3.1: the sheet has no "since the last summary" state any more. Ready means
+# the prose is on screen and Copy/Share are enabled; failure copy is explicit.
 - extendedWaitUntil:
-    visible: ".*(No new messages since the last summary|Summary unavailable|Source changed|could not|cannot|failed).*"
-    timeout: 120000
+    notVisible: "Generating"
+    timeout: 180000
 - takeScreenshot: ${SHOT}-final
-- assertVisible: "No new messages since the last summary."
+- assertNotVisible: "Summary unavailable"
+- assertNotVisible: "Too long — pick a shorter range."
+- assertNotVisible: "Could not summarize right now. Try again."
+- assertVisible:
+    text: "Copy"
+    enabled: true
 - tapOn: "Copy"
 - extendedWaitUntil:
     visible: "Copied"
