@@ -149,12 +149,12 @@ export async function run(ctx) {
   await ctx.step({
     id: 'auth-13-delete-account', title: 'Delete account (type username, confirm) → back at sign-in', device,
     flow: 'auth/delete-account.yaml', env: { USERNAME: username },
-    expected: 'Sign-in screen returns; server: profile tombstoned (display_name "Deleted account", username released + quarantined, auth user soft-deleted)', screen: 'settings / Danger → Delete account',
+    expected: 'Sign-in screen returns; server: profile tombstoned (display_name "Deleted account", username released (free to reuse), auth user soft-deleted)', screen: 'settings / Danger → Delete account',
     serverTruth: async () => {
       if (!userId) return { ok: false, detail: 'no user id resolved before deletion' };
       const wait = await server.waitFor(() => server.tombstone(userId, username), (row) => row?.auth_soft_deleted === true && row?.display_name === 'Deleted account', { timeoutMs: 30_000 });
       const row = wait.row;
-      const ok = row?.display_name === 'Deleted account' && row?.username === null && Number(row?.quarantined) === 1 && Number(row?.live_memberships) === 0 && row?.auth_soft_deleted === true;
+      const ok = row?.display_name === 'Deleted account' && row?.username === null && Number(row?.quarantined) === 0 && Number(row?.live_memberships) === 0 && row?.auth_soft_deleted === true;
       return { ok, detail: row };
     },
   });
