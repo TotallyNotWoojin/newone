@@ -15,10 +15,10 @@ appId: com.totallynotwoojin.newone
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "Verify and sign in"
+      text: "(Verify and sign in|Sign in)"
     direction: DOWN
     timeout: 15000
-- tapOn: "Verify and sign in"
+- tapOn: "(Verify and sign in|Sign in)"
 - waitForAnimationToEnd:
     timeout: 4000
 - takeScreenshot: ${SHOT}-android-after-verify

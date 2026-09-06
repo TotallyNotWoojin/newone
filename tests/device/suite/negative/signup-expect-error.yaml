@@ -49,10 +49,10 @@ appId: com.totallynotwoojin.newone
 - tapOn: "Display name"
 - scrollUntilVisible:
     element:
-      text: "Continue securely"
+      text: "(Continue securely|Continue)"
     direction: DOWN
     timeout: 15000
-- tapOn: "Continue securely"
+- tapOn: "(Continue securely|Continue)"
 - extendedWaitUntil:
     visible: ${ERROR}
     timeout: 30000

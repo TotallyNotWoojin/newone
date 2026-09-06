@@ -104,10 +104,10 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
     element:
-      text: "Continuar de forma segura"
+      text: "(Continuar de forma segura|Continuar)"
     direction: DOWN
     timeout: 15000
-- tapOn: "Continuar de forma segura"
+- tapOn: "(Continuar de forma segura|Continuar)"
 - extendedWaitUntil:
     visible: "Código de un solo uso"
     timeout: 30000
