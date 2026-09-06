@@ -982,7 +982,9 @@ function updateFromDto(row: JsonRecord, current: Person, peopleById: Map<string,
   };
 }
 
-function handoffFromDto(row: JsonRecord, current: Person, peopleById: Map<string, Person>): ShiftHandoff {
+function handoffFromDto(
+  row: JsonRecord, current: Person, peopleById: Map<string, Person>, personalRealm: boolean,
+): ShiftHandoff {
   const authorId = requiredString(row.authorUserId, 'handoff author');
   const acknowledgedAt = optionalString(row.acknowledgedAt);
   const status = String(row.status);
@@ -993,7 +995,9 @@ function handoffFromDto(row: JsonRecord, current: Person, peopleById: Map<string
     versionNumber: Math.max(1, integer(row.versionNumber, 1)),
     sourceLanguage: supportedLanguage(row.sourceLanguage, 'handoff source language'),
     title: requiredString(row.title, 'handoff title'),
-    site: peopleById.get(authorId)?.site ?? 'Company site',
+    // Consumers carry no site; the workplace placeholder stays only for an
+    // author who has left the directory.
+    site: peopleById.get(authorId)?.site ?? (personalRealm ? '' : 'Company site'),
     outgoingShift: dateTimeLabel(row.shiftStartedAt),
     incomingShift: dateTimeLabel(row.shiftEndedAt),
     window: `${dateTimeLabel(row.shiftStartedAt)} – ${dateTimeLabel(row.shiftEndedAt)}`,
@@ -1405,7 +1409,7 @@ export class WebReadRepository implements ReadRepository {
       people,
       units,
       updates: values(payload.updates).map((row) => updateFromDto(row, currentUser, peopleById)),
-      handoffs: values(payload.handoffs).map((row) => handoffFromDto(row, currentUser, peopleById)),
+      handoffs: values(payload.handoffs).map((row) => handoffFromDto(row, currentUser, peopleById, personalRealm)),
       summaries: values(payload.summaries).map(summaryFromDto),
       actions: values(payload.actions).map((row) => actionFromDto(row, peopleById)),
       moderationReports: values(payload.moderationReports).map(moderationFromDto),
