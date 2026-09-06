@@ -1,7 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Android variant of common/returning-request.yaml: no retype-if-not-visible
-# hack (the typed email sits behind the keyboard on Android), just the plain path.
+# Android variant of common/returning-request.yaml (v3.2 flow): no
+# retype-if-not-visible hack (the typed email sits behind the keyboard on
+# Android), just the plain path to the password step.
 - extendedWaitUntil:
     visible: "(Returning member|Sign in)"
     timeout: 30000
@@ -10,9 +11,12 @@ appId: com.totallynotwoojin.newone
     text: "(Returning member|Sign in)"
     index: 0
 - extendedWaitUntil:
-    visible: "you@example.com"
+    visible:
+      id: "sign-in-destination"
     timeout: 15000
-- tapOn: "you@example.com"
+- tapOn:
+    id: "sign-in-destination"
+- eraseText: 120
 - inputText: ${EMAIL}
 - hideKeyboard
 - scrollUntilVisible:
@@ -22,5 +26,6 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "(Continue securely|Continue)"
 - extendedWaitUntil:
-    visible: "One-time code"
+    visible:
+      id: "password"
     timeout: 30000

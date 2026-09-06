@@ -1,8 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Returning sign-in ("Sign in" mode chip — "Returning member" on older builds;
-# index 0 because the primary button also reads "Sign in" on the password
-# method) with an email that has no account.
+# Returning sign-in ("Sign in" mode chip — "Returning member" on older builds)
+# with an email that has no account: the lookup says so plainly and offers to
+# create one instead. No code screen, no password field. Env: EMAIL.
 - launchApp
 - extendedWaitUntil:
     visible: "(Returning member|Sign in)"
@@ -13,17 +13,21 @@ appId: com.totallynotwoojin.newone
     index: 0
 - scrollUntilVisible:
     element:
-      text: "you@example.com"
+      id: "sign-in-destination"
     direction: DOWN
     timeout: 15000
-- tapOn: "you@example.com"
+- tapOn:
+    id: "sign-in-destination"
+- tapOn:
+    text: "Clear text"
+    optional: true
 - eraseText: 120
 - inputText: ${EMAIL}
-# The label tap after typing commits the field on iOS; on Android the label sits
-# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
-# Tap on "Email address" not found), so it is optional there.
+# The caption tap after typing commits the field on iOS; on Android the caption
+# sits behind the keyboard and is not in the accessibility tree, so it is optional.
 - tapOn:
     text: "Email address"
+    index: 0
     optional: true
 - scrollUntilVisible:
     element:
@@ -32,6 +36,12 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - tapOn: "(Continue securely|Continue)"
 - extendedWaitUntil:
-    visible: ".*(One-time code|could not|cannot|unavailable|invalid|Too many|not found|no account|does not).*"
+    visible: ".*(no account|could not|cannot|unavailable|Too many).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-result
+- assertVisible: "There’s no account with that email."
+- assertVisible:
+    id: "create-account-shortcut"
+- assertNotVisible: "One-time code"
+- assertNotVisible:
+    id: "password"

@@ -1,5 +1,11 @@
 appId: com.totallynotwoojin.newone
 ---
+# From the password or code step, "Use a different email" (id different-email;
+# "Use a different email or phone" on older builds) returns to the email. The
+# identity step itself has nothing to leave.
+- tapOn:
+    id: "different-email"
+    optional: true
 - tapOn:
     text: "Use a different email or phone"
     optional: true

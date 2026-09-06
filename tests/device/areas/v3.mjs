@@ -1,15 +1,17 @@
 // v3 CONSUMER FEATURES on two devices (A en ↔ B ko): everything the Sep 2026
 // v3 streams added is exercised for real on a simulator against the live
 // backend, one step per feature, with the database row consulted wherever the
-// feature leaves one. A signs up and saves a password at the add-a-password
-// step (and keeps the first-launch notification card for v3-01); B signs up in
+// feature leaves one. A signs up with a password typed on the signup form
+// (v3.2: every account is created with one; the add-a-password step is gone)
+// and keeps the first-launch notification card for v3-01; B signs up in
 // Korean (server language ko, UI switched back to English) so A's Spanish
 // reaches B as a Korean translation for the translated-only bubble.
 import { randomBytes } from 'node:crypto';
+import { SIGNUP_PASSWORD } from '../lib/harness.mjs';
 import { createMailbox } from '../lib/mailbox.mjs';
 
 export const meta = { id: 'v3', devices: 2, title: 'v3 consumer features' };
-const PASSWORD = 'Newone-test-2026';
+const PASSWORD = SIGNUP_PASSWORD;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Server contract for "this account has a password": the auth gateway stamps
@@ -21,10 +23,10 @@ async function passwordState(server, userId) {
   return { hasPassword: typeof row?.password_set_at === 'string', passwordSetAt: row?.password_set_at ?? null };
 }
 
-// Like ctx.signup (lib/harness.mjs), but the verify flow saves PASSWORD at the
-// one-time "Add a password" step and leaves the first-launch notification card
-// unanswered so v3-01 can exercise it. Reported as setup actions like the
-// harness's own signup.
+// Like ctx.signup (lib/harness.mjs), but proves the password typed on the
+// signup form (PASSWORD) was stamped on the account, and leaves the
+// first-launch notification card for v3-01 to exercise. Reported as setup
+// actions like the harness's own signup.
 async function signupWithPassword(ctx, device, { label, displayName }) {
   const { server } = ctx;
   const mailbox = await createMailbox();
@@ -46,10 +48,10 @@ async function signupWithPassword(ctx, device, { label, displayName }) {
   ctx.note({ id: `setup-${label}-signup-email`, title: `Setup: signup email for ${displayName}`, status: 'PASS', expected: 'verification code available', observed: `code arrived after ${Math.round((Date.now() - requestedAt) / 1000)}s (subject: ${code.subject})` });
   account.code = code.code;
   const verify = await ctx.step({
-    id: `setup-${label}-signup-verify`, title: `Setup: verify the code for ${displayName}, then save a password at the "Add a password" step`, device,
-    flow: 'common/signup-verify.yaml', env: { CODE: code.code, PASSWORD },
-    expected: 'Code accepted → "Add a password" → "New password" typed → "Save password" → Chats (notification card left in place); server: profile row + app_metadata.newone_password_set_at stamped',
-    screen: 'sign-in (One-time code → Add a password)',
+    id: `setup-${label}-signup-verify`, title: `Setup: verify the code for ${displayName} (password already typed on the form)`, device,
+    flow: 'common/signup-verify.yaml', env: { CODE: code.code },
+    expected: 'Code accepted → Chats (no add-a-password step); server: profile row + app_metadata.newone_password_set_at stamped at signup',
+    screen: 'sign-in (One-time code)',
     serverTruth: async () => {
       const row = await server.profileByUsername(username);
       if (!row) return { ok: false, detail: 'no profile row for the new username' };
@@ -97,24 +99,30 @@ export async function run(ctx) {
   await ctx.step({ id: 'v3-02a-signout', title: 'A signs out (Settings → Sign out of Newone)', device: devA, flow: 'common/signout.yaml', expected: 'Sign-in screen with the Create account / Sign in chips', screen: 'settings → sign-in' });
   const sessionsBefore = new Set((await server.sessions(A.userId).catch(() => [])).map((row) => row.id));
   const signin = await ctx.step({
-    id: 'v3-02-password-signin', title: 'A signs back in with the password ("Sign in" chip → "Use password" → email + password → Sign in)', device: devA,
+    id: 'v3-02-password-signin', title: 'A signs back in with the password ("Sign in" chip → email → Continue → password → Sign in)', device: devA,
     flow: 'v3/password-signin.yaml', env: { EMAIL: A.email, PASSWORD },
-    expected: 'Chats, without the add-a-password offer; server: a new unrevoked private.session_installations row for A', screen: 'sign-in',
+    expected: 'Chats (no code screen, no method chips); server: a new unrevoked private.session_installations row for A', screen: 'sign-in',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.sessions(A.userId), (rows) => rows.some((row) => !sessionsBefore.has(row.id) && !row.revoked_at), { timeoutMs: 30_000 });
       return { ok: wait.ok, detail: (wait.row ?? []).map((row) => ({ id: row.id, platform: row.platform, app_version: row.app_version, revoked_at: row.revoked_at, new: !sessionsBefore.has(row.id) })) };
     },
   });
   if (!signin.uiOk) {
-    // Keep the rest of the area alive: sign A in with a code instead and say so.
-    ctx.note({ id: 'v3-02b-code-fallback', title: 'Password sign-in failed; the remaining steps continue after a code sign-in', status: 'INFO', observed: 'see v3-02-password-signin' });
-    await ctx.step({ id: 'setup-v3_a-code-method', title: 'Setup: back to the code method', device: devA, flow: 'v3/back-to-code-method.yaml', expected: 'sign-in form in the code method', screen: 'sign-in' });
-    const request = await ctx.step({ id: 'setup-v3_a-returning-request', title: 'Setup: A requests a returning code', device: devA, flow: 'common/returning-request.yaml', env: { EMAIL: A.email }, expected: 'code screen', screen: 'sign-in' });
+    // Keep the rest of the area alive: take the forgot-password road (code →
+    // new password) instead and say so. signout.yaml relaunches the app, which
+    // puts the sign-in screen back on its first step wherever the failure left it.
+    ctx.note({ id: 'v3-02b-forgot-fallback', title: 'Password sign-in failed; the remaining steps continue after a forgot-password recovery', status: 'INFO', observed: 'see v3-02-password-signin' });
+    await ctx.step({ id: 'setup-v3_a-signin-screen', title: 'Setup: back to the sign-in screen', device: devA, flow: 'common/signout.yaml', expected: 'sign-in screen', screen: 'settings' });
+    const request = await ctx.step({ id: 'setup-v3_a-returning-request', title: 'Setup: A enters the email; password step', device: devA, flow: 'common/returning-request.yaml', env: { EMAIL: A.email }, expected: 'password step', screen: 'sign-in' });
     if (!request.uiOk) return;
+    const forgot = await ctx.step({ id: 'setup-v3_a-forgot-password', title: 'Setup: A asks for a recovery code', device: devA, flow: 'auth/forgot-password.yaml', expected: 'code screen', screen: 'sign-in' });
+    if (!forgot.uiOk) return;
     const code = await ctx.waitForCode(A.mailbox);
     if (!code) return;
-    const verify = await ctx.step({ id: 'setup-v3_a-returning-verify', title: 'Setup: A signs in with the code', device: devA, flow: 'common/returning-verify.yaml', env: { CODE: code.code }, expected: 'Chats', screen: 'sign-in' });
-    if (!verify.uiOk) return;
+    const verified = await ctx.step({ id: 'setup-v3_a-forgot-verify', title: 'Setup: A enters the recovery code', device: devA, flow: 'auth/forgot-verify.yaml', env: { CODE: code.code }, expected: '"Set a new password"', screen: 'sign-in' });
+    if (!verified.uiOk) return;
+    const reset = await ctx.step({ id: 'setup-v3_a-new-password', title: 'Setup: A sets the password again and is signed in', device: devA, flow: 'auth/new-password.yaml', env: { PASSWORD }, expected: 'Chats', screen: 'sign-in' });
+    if (!reset.uiOk) return;
   }
 
   // 3. Invite anyone: A messages B straight from the People search with no

@@ -1,11 +1,11 @@
 appId: com.totallynotwoojin.newone
 ---
-# An existing user comes back: picks the "Sign in" mode chip, enters email,
-# asks for a code. The chip was "Returning member" before the Sep 2026
-# terminology pass (older simulator builds still show it, so both are
-# accepted). Code is the default sign-in method, so the primary button reads
-# "Continue" here; only the "Use password" method makes it read "Sign in" too,
-# which is why the chip is addressed by index 0.
+# An existing member comes back (v3.2 flow): the "Sign in" mode chip, the
+# email, Continue. The service looks the account up; for an account with a
+# password the password step appears (common/returning-verify.yaml types the
+# password). Starts on the signed-out screen. The chip was "Returning member"
+# before the Sep 2026 terminology pass (older builds still show it). The chip
+# is addressed by index 0 in case an older build also labels the button that way.
 - extendedWaitUntil:
     visible: "(Returning member|Sign in)"
     timeout: 20000
@@ -15,10 +15,11 @@ appId: com.totallynotwoojin.newone
     index: 0
 - scrollUntilVisible:
     element:
-      text: "you@example.com"
+      id: "sign-in-destination"
     direction: DOWN
     timeout: 15000
-- tapOn: "you@example.com"
+- tapOn:
+    id: "sign-in-destination"
 # The field keeps whatever the previous step typed, and a tap lands the cursor
 # mid-text, so erasing alone leaves a tail. The iOS clear button empties it.
 - tapOn:
@@ -26,34 +27,21 @@ appId: com.totallynotwoojin.newone
     optional: true
 - eraseText: 120
 - inputText: ${EMAIL}
-# The label tap after typing commits the field on iOS; on Android the label sits
-# behind the keyboard and is not in the accessibility tree (android-v3-composer5:
-# Tap on "Email address" not found), so it is optional there.
+# The caption tap after typing commits the field and puts the keyboard away on
+# iOS; on Android the caption sits behind the keyboard and is not in the
+# accessibility tree, so it is optional there.
 - tapOn:
     text: "Email address"
+    index: 0
     optional: true
 # Simulator typing sometimes drops or reorders characters. Check the field holds
-# the exact value; refocus the input (third "Email address" node: two label nodes,
-# then the field) and retype once if not.
+# the exact value; refocus the input by id and retype once if not.
 - runFlow:
     when:
       notVisible: "${EMAIL}"
     commands:
-      - runFlow:
-          when:
-            visible:
-              id: "sign-in-destination"
-          commands:
-            - tapOn:
-                id: "sign-in-destination"
-      - runFlow:
-          when:
-            notVisible:
-              id: "sign-in-destination"
-          commands:
-            - tapOn:
-                text: "Email address"
-                index: 2
+      - tapOn:
+          id: "sign-in-destination"
       - waitForAnimationToEnd:
           timeout: 2000
       - tapOn:
@@ -63,6 +51,7 @@ appId: com.totallynotwoojin.newone
       - inputText: ${EMAIL}
       - tapOn:
           text: "Email address"
+          index: 0
           optional: true
 - assertVisible: "${EMAIL}"
 - takeScreenshot: ${SHOT}-returning-form
@@ -72,7 +61,9 @@ appId: com.totallynotwoojin.newone
     direction: DOWN
     timeout: 15000
 - tapOn: "(Continue securely|Continue)"
+# The lookup answers: an account with a password shows the password field.
 - extendedWaitUntil:
-    visible: "One-time code"
+    visible:
+      id: "password"
     timeout: 30000
-- takeScreenshot: ${SHOT}-returning-code-screen
+- takeScreenshot: ${SHOT}-returning-password-step

@@ -1,39 +1,26 @@
 appId: com.totallynotwoojin.newone
 ---
-# Android variant of common/returning-verify.yaml: the one-time-code field does
-# not expose its typed value as visible text on Android, so type the code, tap
-# the button, and let the Chats screen prove the sign-in.
-- assertVisible: "One-time code"
-- scrollUntilVisible:
-    element:
-      text: "000000"
-    direction: DOWN
+# Android variant of common/returning-verify.yaml (v3.2 flow): the password
+# field does not expose its typed value as visible text on Android, so type the
+# password, tap Sign in, and let the Chats screen prove the sign-in. Env: PASSWORD.
+- extendedWaitUntil:
+    visible:
+      id: "password"
     timeout: 15000
-- tapOn: "000000"
-- eraseText: 8
-- inputText: ${CODE}
+- tapOn:
+    id: "password"
+- eraseText: 60
+- inputText: ${PASSWORD}
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "(Verify and sign in|Sign in)"
+      text: "Sign in"
     direction: DOWN
     timeout: 15000
-- tapOn: "(Verify and sign in|Sign in)"
-- extendedWaitUntil:
-    visible: "(Save password|Guardar contraseña|비밀번호 저장|Chats|채팅)"
-    timeout: 45000
-- runFlow:
-    when:
-      visible: "(Save password|Guardar contraseña|비밀번호 저장)"
-    commands:
-      - tapOn:
-          id: "new-password"
-      - inputText: Newone-test-2026
-      - hideKeyboard
-      - tapOn: "(Save password|Guardar contraseña|비밀번호 저장)"
+- tapOn: "Sign in"
 - waitForAnimationToEnd:
     timeout: 4000
-- takeScreenshot: ${SHOT}-android-after-verify
+- takeScreenshot: ${SHOT}-android-after-sign-in
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 60000

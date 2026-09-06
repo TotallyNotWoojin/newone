@@ -11,6 +11,9 @@ import { createMailbox, waitForCode, mintCode, mintingEnabled } from './mailbox.
 import * as server from './server.mjs';
 
 export const SUITE_DIR = new URL('../suite/', import.meta.url).pathname;
+// The password common/signup-request.yaml types for every simulated signup
+// (v3.2: every account is created with one); areas sign back in with it.
+export const SIGNUP_PASSWORD = 'Newone-test-2026';
 
 export function createAreaContext({ area, devices, report, runDir }) {
   const areaDir = join(runDir, area);

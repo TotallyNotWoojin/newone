@@ -1,0 +1,49 @@
+appId: com.totallynotwoojin.newone
+---
+# Forgot password, code step: type the emailed code (field id "sign-in-code")
+# and Continue; the "Set a new password" screen follows. Nobody is signed in
+# yet: the code only unlocks the new-password step. Env: CODE.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      id: "sign-in-code"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "sign-in-code"
+- eraseText: 8
+- inputText: ${CODE}
+# The caption tap commits the field on iOS; optional on Android.
+- tapOn:
+    text: "One-time code"
+    optional: true
+# Typing occasionally lands before the keyboard is up and the field stays
+# empty. Check the field holds the code; retype once if not.
+- runFlow:
+    when:
+      notVisible: "${CODE}"
+    commands:
+      - tapOn:
+          id: "sign-in-code"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - eraseText: 8
+      - inputText: ${CODE}
+      - tapOn:
+          text: "One-time code"
+          optional: true
+- assertVisible: "${CODE}"
+- takeScreenshot: ${SHOT}-forgot-code-typed
+# On the code step the mode chips are hidden; the button reads "Continue".
+- scrollUntilVisible:
+    element:
+      text: "Continue"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "(Set a new password|.*could not be verified.*|.*could not.*|.*expired.*|.*Too many.*)"
+    timeout: 45000
+- takeScreenshot: ${SHOT}-forgot-verified
+- assertVisible: "Set a new password"
+- assertNotVisible: "Chats"

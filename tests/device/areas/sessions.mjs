@@ -1,8 +1,9 @@
 // SESSIONS on two devices: the same human signs in on a second phone
-// (returning sign-in with a real code), sees it under Devices on the first,
-// signs it out there (the second phone must be signed out), then ends the
-// first device's own session. Also: Help screen and the read-receipts /
+// (returning sign-in with the password, v3.2), sees it under Devices on the
+// first, signs it out there (the second phone must be signed out), then ends
+// the first device's own session. Also: Help screen and the read-receipts /
 // sound settings (Settings surfaces without a durable conversation effect).
+import { SIGNUP_PASSWORD } from '../lib/harness.mjs';
 
 export const meta = { id: 'sessions', devices: 2, title: 'SESSIONS + SETTINGS extras' };
 
@@ -22,14 +23,10 @@ export async function run(ctx) {
   // Second device: returning sign-in as A.
   await ctx.step({ id: 'sessions-01-second-device-prepare', title: 'Second device at the sign-in screen', device: dev2, flow: 'negative/signup-expect-error.yaml', env: { EMAIL: 'x', USERNAME: 'x', DISPLAY_NAME: 'x', ERROR: '.*(Enter a valid email|Usernames must).*' }, expected: 'sign-in screen (any prior session signed out)', screen: 'sign-in' });
   await ctx.step({ id: 'sessions-01b-back', title: 'Back to mode chips on device 2', device: dev2, flow: 'negative/back-to-modes.yaml', expected: 'Create account', screen: 'sign-in' });
-  const request = await ctx.step({ id: 'sessions-02-returning-on-second-device', title: 'A requests a returning code on the second device', device: dev2, flow: 'common/returning-request.yaml', env: { EMAIL: A.email }, expected: 'code screen', screen: 'sign-in' });
+  const request = await ctx.step({ id: 'sessions-02-returning-on-second-device', title: 'A signs in on the second device: email → password step', device: dev2, flow: 'common/returning-request.yaml', env: { EMAIL: A.email }, expected: 'password step', screen: 'sign-in' });
   if (!request.uiOk) return;
-  // ctx.waitForCode mints the code when NEWONE_DEVICE_MINT_CODES=1 (no mail dependency).
-  const code = await ctx.waitForCode(A.mailbox);
-  ctx.note({ id: 'sessions-02b-email', title: 'Returning code email arrives', status: code ? 'PASS' : 'FAIL', observed: code ? 'arrived' : 'no email' });
-  if (!code) return;
   const verify = await ctx.step({
-    id: 'sessions-03-second-device-signed-in', title: 'A is signed in on both devices', device: dev2, flow: 'common/returning-verify.yaml', env: { CODE: code.code },
+    id: 'sessions-03-second-device-signed-in', title: 'A is signed in on both devices (password sign-in)', device: dev2, flow: 'common/returning-verify.yaml', env: { PASSWORD: SIGNUP_PASSWORD },
     expected: 'Chats on device 2; server shows two live session installations', screen: 'sign-in',
     serverTruth: async () => { const w = await server.waitFor(() => server.sessions(A.userId), (rows) => rows.filter((r) => !r.revoked_at).length >= 2, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
   });
