@@ -112,12 +112,11 @@ appId: com.totallynotwoojin.newone
 - hideKeyboard
 - scrollUntilVisible:
     element:
-      text: "Password"
+      text: "At least 8 characters."
     direction: DOWN
     timeout: 15000
-- tapOn:
-    text: "Password"
-    index: 0
+# The label Text and the input share the word; the placeholder is the input.
+- tapOn: "At least 8 characters."
 - inputText: Newone-test-2026
 - hideKeyboard
 - assertVisible: "${DISPLAY_NAME}"
