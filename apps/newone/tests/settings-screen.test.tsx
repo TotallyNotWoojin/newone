@@ -159,6 +159,7 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     conversations: [{ id: 'conversation-a', title: 'Operations' }],
     organizationPreferences,
     deviceNotificationPreferences: devicePreferences,
+    deviceNotificationsMuted: false,
     accountSessions: [otherSession, {
       sessionId: 'session-revoked',
       current: false,
@@ -175,6 +176,7 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     loadAccountSettings: successfulAction(),
     saveOrganizationPreferences: successfulAction(true),
     enableNotifications: successfulAction(),
+    setDeviceNotificationsMuted: successfulAction(true),
     loadDeviceNotificationPreferences: successfulAction(),
     saveDeviceNotificationPreferences: successfulAction(),
     updateProfile: successfulAction(true),
@@ -828,8 +830,8 @@ describe('settings screen', () => {
     expect(screen.getByLabelText('settings.sound').props.accessibilityState?.disabled).toBe(true);
     expect(screen.getByRole('button', { name: 'settings.quietHours' }).props.accessibilityState?.disabled).toBe(true);
     // Permission granted but no device binding: the switch is off.
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
-    expect(switchValue('settings.allowNotifications')).toBe(false);
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.notifications')).toBe(false);
     await pressEnabled('settings.mfaEnroll');
     expect(screen.queryByText('settings.mfaEnrollDialog')).toBeNull();
     await view.unmount();
@@ -837,13 +839,74 @@ describe('settings screen', () => {
 });
 
 describe('notifications switch', () => {
-  test('is on when the OS allows and the device is bound, and turning it off opens the system settings', async () => {
+  test('is on when the OS allows and the device is bound, and turning it off mutes this device on the server', async () => {
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
-    expect(switchValue('settings.allowNotifications')).toBe(true);
-    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', false);
-    await waitFor(() => expect(mockOpenNotificationSettings).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.notifications')).toBe(true);
+    expect(screen.queryByText('settings.notificationsMuted')).toBeNull();
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', false);
+    await waitFor(() => expect(mockWorkspace.setDeviceNotificationsMuted).toHaveBeenCalledWith(true));
+    expect(mockOpenNotificationSettings).not.toHaveBeenCalled();
     expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('is off with a "Muted" hint while the server mutes this device; turning it on unmutes without re-binding', async () => {
+    mockWorkspace = baseWorkspace({ deviceNotificationsMuted: true });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.notifications')).toBe(false);
+    expect(screen.getByText('settings.notificationsMuted')).toBeTruthy();
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.setDeviceNotificationsMuted).toHaveBeenCalledWith(false));
+    expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    expect(mockOpenNotificationSettings).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('stays off and does not bind when the unmute fails', async () => {
+    mockWorkspace = baseWorkspace({
+      deviceNotificationsMuted: true,
+      setDeviceNotificationsMuted: successfulAction(false),
+    });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.setDeviceNotificationsMuted).toHaveBeenCalledWith(false));
+    expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    expect(switchValue('settings.notifications')).toBe(false);
+    await view.unmount();
+  });
+
+  test('a denied OS permission still goes to the system settings, muted or not', async () => {
+    mockPermission = 'denied';
+    mockWorkspace = baseWorkspace({ deviceNotificationsMuted: true });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.notifications')).toBe(false);
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
+    await waitFor(() => expect(mockOpenNotificationSettings).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.setDeviceNotificationsMuted).not.toHaveBeenCalled();
+    expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('unmutes first, then binds the device while the OS permission is still undetermined', async () => {
+    mockPermission = 'undetermined';
+    mockWorkspace = baseWorkspace({ deviceNotificationsMuted: true });
+    const view = await renderAndHydrate();
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
+    await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.setDeviceNotificationsMuted).toHaveBeenCalledWith(false);
+    expect(mockOpenNotificationSettings).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('is busy while the mute is being saved', async () => {
+    mockWorkspace = baseWorkspace({ actionBusy: 'device-mute-save' });
+    const view = await renderAndHydrate();
+    expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(true);
     await view.unmount();
   });
 
@@ -851,9 +914,9 @@ describe('notifications switch', () => {
     mockPermission = 'undetermined';
     mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
-    expect(switchValue('settings.allowNotifications')).toBe(false);
-    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    expect(switchValue('settings.notifications')).toBe(false);
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
     await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
     expect(mockOpenNotificationSettings).not.toHaveBeenCalled();
     await view.unmount();
@@ -863,8 +926,8 @@ describe('notifications switch', () => {
     mockPermission = 'denied';
     mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
-    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
     await waitFor(() => expect(mockOpenNotificationSettings).toHaveBeenCalledTimes(1));
     expect(mockWorkspace.enableNotifications).not.toHaveBeenCalled();
     await view.unmount();
@@ -874,7 +937,7 @@ describe('notifications switch', () => {
     mockPermission = 'denied';
     mockWorkspace = baseWorkspace({ deviceNotificationPreferences: null });
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
     // React Native's test setup already mocks AppState; read the registered
     // listener from it rather than spying (a restore would wipe the mock).
     const addListener = AppState.addEventListener as unknown as { mock: { calls: unknown[][] } };
@@ -897,13 +960,13 @@ describe('notifications switch', () => {
       enableNotifications: successfulAction(false),
     });
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByLabelText('settings.allowNotifications').props.accessibilityState?.disabled).toBe(false));
-    await fireEvent(screen.getByLabelText('settings.allowNotifications'), 'valueChange', true);
+    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
+    await fireEvent(screen.getByLabelText('settings.notifications'), 'valueChange', true);
     await waitFor(() => expect(mockWorkspace.enableNotifications).toHaveBeenCalledTimes(1));
 
     mockWorkspace = { ...mockWorkspace, actionError: 'errors.pushNeedsDevice' };
     await view.rerender(<SettingsScreen />);
-    expect(switchValue('settings.allowNotifications')).toBe(false);
+    expect(switchValue('settings.notifications')).toBe(false);
     expect(screen.getAllByText('errors.pushNeedsDevice').length).toBeGreaterThan(0);
     await view.unmount();
   });
@@ -911,7 +974,7 @@ describe('notifications switch', () => {
   test('is absent where the platform cannot receive pushes', async () => {
     mockPermission = 'unavailable';
     const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.queryByLabelText('settings.allowNotifications')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('settings.notifications')).toBeNull());
     expect(screen.getByLabelText('settings.sound')).toBeTruthy();
     await view.unmount();
   });

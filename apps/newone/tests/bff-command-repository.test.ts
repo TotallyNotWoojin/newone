@@ -1528,6 +1528,43 @@ describe('BFF command transport security and parsing', () => {
       expectedVersion: 4,
       patch: { notificationPreview: null, soundEnabled: true, vibrationEnabled: false },
     })).resolves.toMatchObject({ preferenceVersion: 5 });
+
+    // Server-side mute: a later server field must not break the parse.
+    mockFetch.mockImplementationOnce(async () => response({ data: {
+      registered: true,
+      deviceId,
+      installationId,
+      notificationsMuted: true,
+      updatedAt: '2026-09-07T03:00:00.000Z',
+      laterField: 'ignored',
+    } }));
+    await expect(repo.getDeviceNotificationsMuted({ organizationId, installationId })).resolves.toEqual({
+      registered: true,
+      deviceId,
+      installationId,
+      notificationsMuted: true,
+      updatedAt: '2026-09-07T03:00:00.000Z',
+    });
+    const muteQuery = mockFetch.mock.calls.at(-1) as unknown as [string, RequestInit];
+    expect(String(muteQuery[0])).toMatch(new RegExp(`/v2/devices/${installationId}/mute/query$`));
+
+    mockFetch.mockImplementationOnce(async () => response({ data: {
+      registered: true,
+      deviceId,
+      installationId,
+      notificationsMuted: false,
+      updatedAt: null,
+    } }));
+    await expect(repo.setDeviceNotificationsMuted({ ...base, installationId, muted: false }))
+      .resolves.toMatchObject({ registered: true, notificationsMuted: false, updatedAt: null });
+    const muteUpdate = mockFetch.mock.calls.at(-1) as unknown as [string, RequestInit];
+    expect(String(muteUpdate[0])).toMatch(new RegExp(`/v2/devices/${installationId}/mute$`));
+    expect(muteUpdate[1].method).toBe('PATCH');
+    expect(JSON.parse(String(muteUpdate[1].body))).toMatchObject({ muted: false });
+
+    mockFetch.mockImplementationOnce(async () => response({ data: { registered: 'yes', installationId } }));
+    await expect(repo.getDeviceNotificationsMuted({ organizationId, installationId }))
+      .rejects.toMatchObject({ code: 'invalid_response' });
   });
 
   test('accepts exact successful message, moderation, attachment, update, admin, and preference receipts', async () => {
@@ -2498,6 +2535,8 @@ describe('BFF command transport security and parsing', () => {
       })],
       ['listSessions', () => repo.listSessions(base)],
       ['getDeviceNotificationPreferences', () => repo.getDeviceNotificationPreferences({ organizationId, installationId: 'installation-a' })],
+      ['getDeviceNotificationsMuted', () => repo.getDeviceNotificationsMuted({ organizationId, installationId: 'installation-a' })],
+      ['setDeviceNotificationsMuted', () => repo.setDeviceNotificationsMuted({ ...base, installationId: 'installation-a', muted: true })],
     ];
 
     const unsafeErrors: string[] = [];

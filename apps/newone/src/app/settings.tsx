@@ -102,6 +102,8 @@ export default function SettingsScreen() {
   const [permission, setPermission] = useState<NotificationPermissionState | null>(null);
   const previousPermissionRef = useRef<NotificationPermissionState | null>(null);
   const devicePreferences = workspace.deviceNotificationPreferences;
+  const deviceMuted = workspace.deviceNotificationsMuted;
+  const setDeviceMuted = workspace.setDeviceNotificationsMuted;
   // Profile picture (owner backlog v2): the current user's photo, chosen from
   // the library and uploaded through the profile avatar grant.
   const ownAvatarUrl = useProfileAvatar(currentUser?.id ?? null);
@@ -414,18 +416,30 @@ export default function SettingsScreen() {
     }
   };
 
-  // The switch is the real state: the OS allows notifications and this device
-  // is bound to the account. Turning it off (or on after an OS-level denial)
-  // goes to the system settings, which is where the OS-level switch lives.
-  const notificationsOn = permission === 'granted' && Boolean(devicePreferences);
-  const notificationsBusy = permission === null || workspace.actionBusy === 'device-register';
+  // The switch is the real state: the OS allows notifications, this device is
+  // bound to the account, and the server is not muting it. Off mutes the
+  // registration on the server (the worker skips it, nothing is sent); on
+  // unmutes it and binds the device if it is not bound yet. An OS-level denial
+  // still goes to the system settings, the only place it can be undone.
+  const deviceRegistered = Boolean(devicePreferences);
+  const notificationsOn = permission === 'granted' && deviceRegistered && !deviceMuted;
+  const notificationsBusy = permission === null
+    || workspace.actionBusy === 'device-register'
+    || workspace.actionBusy === 'device-mute-save';
   const toggleNotifications = async (next: boolean) => {
-    if (!next || permission === 'denied') {
+    if (permission === 'denied') {
       await openNotificationSettings();
       return;
     }
-    await enableNotifications();
-    await refreshPermission();
+    if (!next) {
+      await setDeviceMuted(true);
+      return;
+    }
+    if (deviceMuted && !(await setDeviceMuted(false))) return;
+    if (!deviceRegistered || permission !== 'granted') {
+      await enableNotifications();
+      await refreshPermission();
+    }
   };
 
   const openRevoke = (sessionId: string) => {
@@ -565,8 +579,9 @@ export default function SettingsScreen() {
           {permission !== 'unavailable' ? (
             <SwitchRow
               disabled={notificationsBusy}
+              hint={deviceRegistered && deviceMuted ? t('settings.notificationsMuted') : undefined}
               icon="notifications-outline"
-              label={t('settings.allowNotifications')}
+              label={t('settings.notifications')}
               onValueChange={(value) => void toggleNotifications(value)}
               testID="setting-allow-notifications"
               value={notificationsOn}

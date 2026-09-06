@@ -226,5 +226,36 @@ export async function run(ctx) {
     expected: 'The composer rides above the keyboard and the home indicator; never hidden behind either',
     observed: 'iOS uses KeyboardAvoidingScreen; the v3-04b-return-breaks-line and v3-04-enter-sends screenshots (composer with the keyboard up) are the visual evidence. The Android inset check is separate: tests/device/android/composer-check.sh.',
   });
+  // 9. Notifications switch = server-side mute (backlog 13). Off writes
+  //    device_registrations.notifications_muted = true for this registration
+  //    (the outbox worker then settles its deliveries as skipped); on writes
+  //    false. Only a bound device has a registration row: a simulator never
+  //    obtains a push token (Device.isDevice is false), so the switch cannot
+  //    be turned on there and the server write is proven by
+  //    tests/hosted/mute-smoke.mjs instead. On a phone the switch starts on.
+  const registration = (await server.devices(A.userId).catch(() => [])).find((row) => !row.revoked_at);
+  if (!registration) {
+    ctx.note({
+      id: 'v3-09-mute-not-exercised', title: 'Notifications switch (server-side mute) not exercised on this simulator', status: 'INFO',
+      expected: 'Settings → "Notifications" switch off shows the "Muted" hint and writes device_registrations.notifications_muted = true; on clears the hint and writes false',
+      observed: `No device registration for A (${A.username}): a simulator cannot obtain a push token, so the switch stays off and there is no row to mute. The server write and the worker skip are covered by tests/hosted/mute-smoke.mjs; run this area on a physical device to exercise the switch itself.`,
+      screen: 'settings → Notifications group',
+    });
+  } else {
+    const muteRow = () => server.one(`select notifications_muted, updated_at from public.device_registrations
+      where user_id = ${server.lit(A.userId)}::uuid and revoked_at is null order by updated_at desc limit 1`);
+    await ctx.step({
+      id: 'v3-09a-mute', title: 'Settings → "Notifications" switch off (mutes this device on the server)', device: devA,
+      flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Notifications', ID: 'setting-allow-notifications' },
+      expected: 'Switch off with the "Muted" hint; back to Chats; server: device_registrations.notifications_muted = true', screen: 'settings → Notifications group',
+      serverTruth: async () => { const wait = await server.waitFor(muteRow, (row) => row?.notifications_muted === true, { timeoutMs: 30_000 }); return { ok: wait.ok, detail: wait.row ?? 'no registration row' }; },
+    });
+    await ctx.step({
+      id: 'v3-09b-unmute', title: 'Settings → "Notifications" switch back on (unmutes)', device: devA,
+      flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Notifications', ID: 'setting-allow-notifications' },
+      expected: 'Switch on, no "Muted" hint; back to Chats; server: notifications_muted = false', screen: 'settings → Notifications group',
+      serverTruth: async () => { const wait = await server.waitFor(muteRow, (row) => row?.notifications_muted === false, { timeoutMs: 30_000 }); return { ok: wait.ok, detail: wait.row ?? 'no registration row' }; },
+    });
+  }
   ctx.accounts = { A, B };
 }
