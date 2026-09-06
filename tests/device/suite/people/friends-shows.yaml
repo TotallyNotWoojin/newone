@@ -13,6 +13,22 @@ appId: com.totallynotwoojin.newone
       - tapOn: "(Back to chats|Volver a chats)"
 - tapOn: "Chats"
 - tapOn: "People"
+# A search left over from an earlier step hides the list; clear it first.
+- tapOn:
+    text: "Clear text"
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "people-search"
+    commands:
+      - tapOn:
+          id: "people-search"
+      - eraseText: 80
+      - tapOn:
+          text: "People"
+          index: 0
+          optional: true
 - extendedWaitUntil:
     visible: "Your people"
     timeout: 15000

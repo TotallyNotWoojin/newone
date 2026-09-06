@@ -130,6 +130,7 @@ export function SearchField({
   compact = false,
   clearLabel,
   onSubmitEditing,
+  testID,
 }: {
   value: string;
   onChangeText: (value: string) => void;
@@ -137,6 +138,8 @@ export function SearchField({
   compact?: boolean;
   clearLabel?: string;
   onSubmitEditing?: () => void;
+  /** Stable identifier for UI drivers. */
+  testID?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -151,6 +154,7 @@ export function SearchField({
         placeholder={placeholder}
         placeholderTextColor={colors.inkSubtle}
         style={styles.searchInput}
+        testID={testID}
         value={value}
       />
       {value ? (

@@ -242,6 +242,7 @@ export default function PeopleScreen() {
               <SearchField
                 onChangeText={handlePeopleQueryChange}
                 placeholder={t('people.usernameSearch')}
+                testID="people-search"
                 value={peopleQuery}
               />
               {searching ? (

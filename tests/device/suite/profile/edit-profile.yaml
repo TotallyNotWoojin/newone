@@ -22,10 +22,13 @@ appId: com.totallynotwoojin.newone
     index: 1
 - eraseText: 60
 - inputText: ${DISPLAY_NAME}
-# Let the sheet settle before looking for the status field: the visibility
-# check ran mid-animation with the keyboard up and picked the wrong branch
-# (run-2026-09-06T02-48-10).
-- hideKeyboard
+# A caption tap dismisses the keyboard and any spelling callout; hideKeyboard
+# fails on iOS while a callout is up (run-2026-09-06T03-31-00). Then let the
+# sheet settle before looking for the status field.
+- tapOn:
+    text: "Display name"
+    index: 0
+    optional: true
 - waitForAnimationToEnd:
     timeout: 2000
 # Prefer the input's stable id; older builds fall back to the placeholder
@@ -56,7 +59,12 @@ appId: com.totallynotwoojin.newone
                 index: 1
 - eraseText: 40
 - inputText: ${STATUS}
-- hideKeyboard
+- tapOn:
+    text: "Status message"
+    index: 0
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
 - takeScreenshot: ${SHOT}-profile-filled
 - scrollUntilVisible:
     element:
