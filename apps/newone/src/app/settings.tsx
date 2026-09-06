@@ -1049,7 +1049,11 @@ function SwitchRow({
           accessibilityState={{ disabled }}
           disabled={disabled}
           onValueChange={onValueChange}
-          trackColor={{ true: colors.mint }}
+          // The default off track is near-invisible on the card background
+          // (owner, Sep 6 2026); both states get real contrast.
+          ios_backgroundColor={colors.switchOff}
+          thumbColor={colors.white}
+          trackColor={{ false: colors.switchOff, true: colors.mintDark }}
           value={value}
         />
       )}

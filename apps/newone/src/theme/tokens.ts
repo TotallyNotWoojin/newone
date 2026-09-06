@@ -14,6 +14,8 @@ export const colors = {
   mint: '#35C48D',
   mintDark: '#167854',
   mintSoft: '#DDF7EC',
+  /** Off-state switch track: visible against the card, still clearly "off". */
+  switchOff: '#A7B4AE',
   blue: '#2A61C9',
   blueSoft: '#EAF1FF',
   amber: '#874A08',
