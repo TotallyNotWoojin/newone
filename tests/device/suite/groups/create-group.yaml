@@ -23,26 +23,24 @@ appId: com.totallynotwoojin.newone
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
-# Typing the name leaves the keyboard up over the people section (the consumer
-# form has no "GROUP SETUP" eyebrow to tap any more). iOS 26.5 keyboards without
-# the prediction bar defeat the text guard (neg-06, run-2026-09-04T14-27-52);
-# ask iOS to hide it first, then fall back to the drag.
-# Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
-# spelling callout is up).
-- swipe:
-    start: "50%, 45%"
-    end: "50%, 55%"
-    duration: 300
+# Typing the name leaves the keyboard up over the people section. The form is
+# a sheet: a downward drag pulls it closed (chat-17a, run-2026-09-06T08-42-36),
+# so the keyboard goes away with a tap on the "Group name" caption, and
+# hideKeyboard is the fallback.
+- tapOn:
+    text: "Group name"
+    index: 0
 - waitForAnimationToEnd:
     timeout: 1500
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
-      - swipe:
-          start: "50%, 30%"
-          end: "50%, 88%"
-          duration: 600
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- assertVisible: "Create a group"
 - takeScreenshot: ${SHOT}-details
 # Consumer groups are private and invite-only (owner backlog v2): no group
 # type, unit scope, or join policy controls on the form.
@@ -57,22 +55,22 @@ appId: com.totallynotwoojin.newone
     timeout: 45000
 - tapOn: "Search by name or @username"
 - inputText: ${MEMBER1_QUERY}
-# Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
-# spelling callout is up).
-- swipe:
-    start: "50%, 45%"
-    end: "50%, 55%"
-    duration: 300
+# No drags on this sheet (they pull it closed): a caption tap puts the
+# keyboard away, hideKeyboard is the fallback.
+- tapOn:
+    text: "Group name"
+    index: 0
+    optional: true
 - waitForAnimationToEnd:
     timeout: 1500
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"
     commands:
-      - swipe:
-          start: "50%, 30%"
-          end: "50%, 88%"
-          duration: 600
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
 - scrollUntilVisible:
     element:
       text: "Add ${MEMBER1}"
@@ -86,22 +84,21 @@ appId: com.totallynotwoojin.newone
       - tapOn: "Clear search"
       - tapOn: "Search by name or @username"
       - inputText: ${MEMBER2_QUERY}
-      # Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
-      # spelling callout is up).
-      - swipe:
-          start: "50%, 45%"
-          end: "50%, 55%"
-          duration: 300
+      # No drags on this sheet (they pull it closed): caption tap, then hideKeyboard.
+      - tapOn:
+          text: "Group name"
+          index: 0
+          optional: true
       - waitForAnimationToEnd:
           timeout: 1500
       - runFlow:
           when:
             visible: "(.*(Typing Predictions|Dictate).*|space)"
           commands:
-            - swipe:
-                start: "50%, 30%"
-                end: "50%, 88%"
-                duration: 600
+            - hideKeyboard:
+                optional: true
+            - waitForAnimationToEnd:
+                timeout: 1500
       - scrollUntilVisible:
           element:
             text: "Add ${MEMBER2}"
