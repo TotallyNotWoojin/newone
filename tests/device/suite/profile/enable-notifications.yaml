@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Notifications → "Allow notifications" switch on this (simulator)
+# Settings → Notifications → "(Allow notifications|Notifications)" switch on this (simulator)
 # device. The row is not pressable: the label text comes first in the
 # hierarchy, the Switch (same accessibility label) second.
 - launchApp
@@ -11,15 +11,16 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
+# The switch carries an id; its label is "Notifications" from v3.1 on, which
+# would also match the section eyebrow by text, so the id is the selector.
 - scrollUntilVisible:
     element:
-      text: "Allow notifications"
+      id: "setting-allow-notifications"
     direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-before
 - tapOn:
-    text: "Allow notifications"
-    index: 1
+    id: "setting-allow-notifications"
 # The OS permission alert.
 - tapOn:
     text: "Allow"
@@ -36,4 +37,5 @@ appId: com.totallynotwoojin.newone
       visible: ".*(physical device|could not|cannot|unavailable|failed|not configured|did not answer|not set up).*"
     commands:
       - takeScreenshot: ${SHOT}-error-text
-- assertVisible: "Allow notifications"
+- assertVisible:
+    id: "setting-allow-notifications"
