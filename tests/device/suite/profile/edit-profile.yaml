@@ -22,23 +22,38 @@ appId: com.totallynotwoojin.newone
     index: 1
 - eraseText: 60
 - inputText: ${DISPLAY_NAME}
-# The status field carries a placeholder ("What are you up to?"), and iOS
-# exposes a placeholder as the field's text instead of its accessibility label
-# (run-2026-09-06T01-11-11: "Status message" had a single node, the label).
-# Tap the placeholder while the status is empty, the label's second node once
-# a status exists.
+# Let the sheet settle before looking for the status field: the visibility
+# check ran mid-animation with the keyboard up and picked the wrong branch
+# (run-2026-09-06T02-48-10).
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 2000
+# Prefer the input's stable id; older builds fall back to the placeholder
+# ("What are you up to?") while the status is empty, else the label's second node.
 - runFlow:
     when:
-      visible: "What are you up to?"
-    commands:
-      - tapOn: "What are you up to?"
-- runFlow:
-    when:
-      notVisible: "What are you up to?"
+      visible:
+        id: "profile-status"
     commands:
       - tapOn:
-          text: "Status message"
-          index: 1
+          id: "profile-status"
+- runFlow:
+    when:
+      notVisible:
+        id: "profile-status"
+    commands:
+      - runFlow:
+          when:
+            visible: "What are you up to?"
+          commands:
+            - tapOn: "What are you up to?"
+      - runFlow:
+          when:
+            notVisible: "What are you up to?"
+          commands:
+            - tapOn:
+                text: "Status message"
+                index: 1
 - eraseText: 40
 - inputText: ${STATUS}
 - hideKeyboard

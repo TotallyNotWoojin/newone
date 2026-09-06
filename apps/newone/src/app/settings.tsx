@@ -754,6 +754,7 @@ export default function SettingsScreen() {
           multiline
           onChangeText={(value) => setProfileDraft((current) => ({ ...current, statusMessage: value }))}
           placeholder={t('settings.statusMessagePlaceholder')}
+          testID="profile-status"
           value={draftStatusMessage}
         />
         <ActionError message={workspace.actionError} />
