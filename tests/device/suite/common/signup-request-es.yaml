@@ -109,7 +109,12 @@ appId: com.totallynotwoojin.newone
       - eraseText: 120
       - inputText: ${DISPLAY_NAME}
       - tapOn: "Nombre para mostrar"
-- hideKeyboard
+# A tap on the caption dismisses the keyboard and any spelling callout the
+# earlier typing left behind (hideKeyboard fails while a callout is up).
+- tapOn:
+    text: "Contraseña"
+    index: 0
+    optional: true
 - scrollUntilVisible:
     element:
       id: "signup-password"
@@ -118,7 +123,12 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     id: "signup-password"
 - inputText: Newone-test-2026
-- hideKeyboard
+- tapOn:
+    text: "Contraseña"
+    index: 0
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
 - assertVisible: "${DISPLAY_NAME}"
 - takeScreenshot: ${SHOT}-form
 - scrollUntilVisible:
