@@ -424,6 +424,7 @@ describe('web authentication security state machine', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'es' as const,
+    password: 'correct horse battery',
       captchaToken: 'controlled-captcha-token',
     };
     await expect(currentAuth().requestSignup(signupInput)).resolves.toBeUndefined();

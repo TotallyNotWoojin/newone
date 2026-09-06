@@ -241,6 +241,31 @@ Deno.test('signup request authorizes, provisions the pending user, and returns a
   ]);
 });
 
+Deno.test('signup request stores the chosen password on the pending user before any session exists', async () => {
+  type Ensured = { destination: string; displayName: string; password: string | null | undefined };
+  let ensured = null as Ensured | null;
+  const handler = createAuthHandler(() =>
+    dependencies({
+      authorizeSignupOtp: async () => ({
+        allowed: true,
+        reason: 'ok',
+        existingMember: false,
+        channelConfigured: true,
+        retryAfterSeconds: 0,
+      }),
+      ensureSignupUser: async (destination, displayName, password) => {
+        ensured = { destination, displayName, password };
+      },
+    })
+  );
+  const response = await handler(post('/v2/auth/signup/request', { ...requestBody, password: 'correct horse battery' }));
+  assertEquals(response.status, 202);
+  assertEquals(ensured?.password, 'correct horse battery');
+  const weak = await handler(post('/v2/auth/signup/request', { ...requestBody, password: 'short' }));
+  assertEquals(weak.status, 400);
+  assertEquals((await weak.json()).error.code, 'weak_password');
+});
+
 Deno.test('signup request sends the branded code email in the requested language', async () => {
   for (const language of ['en', 'es', 'ko'] as const) {
     const sent: Array<Record<string, unknown>> = [];
@@ -627,7 +652,7 @@ Deno.test('signup verification redeems the reservation before issuing session co
   );
 });
 
-Deno.test('signup verification sets the chosen password before inspecting the session', async () => {
+Deno.test('signup verification leaves the password alone (it was stored at request time) and reports it', async () => {
   const calls: string[] = [];
   const handler = createAuthHandler(() =>
     dependencies({
@@ -654,8 +679,8 @@ Deno.test('signup verification sets the chosen password before inspecting the se
       completeSignupUser: async () => {
         calls.push('complete-user');
       },
-      setPassword: async (userId, password) => {
-        calls.push(`set-password:${userId}:${password.length}`);
+      setPassword: async () => {
+        calls.push('unexpected-set-password');
       },
       bindSessionInstallation: async () => {
         calls.push('bind');
@@ -685,26 +710,11 @@ Deno.test('signup verification sets the chosen password before inspecting the se
     post('/v2/auth/signup/verify', { ...verifyBody, password: 'correct horse battery' }),
   );
   assertEquals(response.status, 200);
-  // Password is set after the account is complete and before the session is inspected.
-  assertEquals(calls, ['verify', 'redeem', 'complete-user', `set-password:${session.userId}:21`, 'bind', 'inspect']);
+  // Setting a password through the admin API logs every session out, so it
+  // must never happen here, after verification created the session.
+  assertEquals(calls, ['verify', 'redeem', 'complete-user', 'bind', 'inspect']);
   const body = await response.json();
   assertEquals(body.user.hasPassword, true);
-});
-
-Deno.test('signup verification rejects a short password before touching the account', async () => {
-  let touched = false;
-  const handler = createAuthHandler(() =>
-    dependencies({
-      verifyOtp: async () => {
-        touched = true;
-        return session;
-      },
-    })
-  );
-  const response = await handler(post('/v2/auth/signup/verify', { ...verifyBody, password: 'short' }));
-  assertEquals(response.status, 400);
-  assertEquals((await response.json()).error.code, 'weak_password');
-  assertEquals(touched, false);
 });
 
 Deno.test('signup verification with an existing account completes plain member sign-in', async () => {

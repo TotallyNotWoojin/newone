@@ -203,6 +203,8 @@ interface SignupIdentity {
   username: string;
   displayName: string;
   language: SignupLanguage;
+  /** Chosen at signup; the gateway stores it before any session exists. */
+  password: string;
 }
 
 function parseSignupRequest(payload: Record<string, unknown>) {
@@ -302,6 +304,7 @@ export async function requestWebSignup(input: SignupIdentity & { captchaToken?: 
         username: input.username,
         displayName: input.displayName,
         language: input.language,
+        password: input.password,
         ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
         installationId: client.installationId,
         locale: client.locale,
@@ -480,6 +483,7 @@ export async function requestNativeSignup(input: SignupIdentity & { captchaToken
     username: input.username,
     displayName: input.displayName,
     language: input.language,
+    password: input.password,
     ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
   });
   return parseSignupRequest(payload);

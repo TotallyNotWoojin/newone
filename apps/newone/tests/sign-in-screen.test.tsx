@@ -196,6 +196,7 @@ describe('sign-in and account recovery screen', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'en',
+      password: 'correct horse battery',
       captchaToken: 'controlled-captcha-token-value',
     });
 
@@ -358,6 +359,7 @@ describe('sign-in and account recovery screen', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'en',
+      password: 'correct horse battery',
     });
     expect(mockAuth.requestSignup.mock.calls[0][0]).not.toHaveProperty('captchaToken');
 
@@ -445,6 +447,7 @@ describe('sign-in and account recovery screen', () => {
         username: 'river_runner_7',
         displayName: 'River Runner',
         language: 'en',
+        password: 'correct horse battery',
       });
       expect(screen.getByText('(60s)')).toBeTruthy();
 

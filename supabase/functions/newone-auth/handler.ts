@@ -223,7 +223,12 @@ export interface AuthDependencies {
     requestId: string,
     purpose: OtpPurpose,
   ): Promise<SignupAuthorization>;
-  ensureSignupUser(destination: string, displayName: string): Promise<void>;
+  /**
+   * Provision (or top up) the pending auth user. The chosen password is set here,
+   * before any session exists: setting it later through the admin API logs the
+   * user out of every session, including the one verification just created.
+   */
+  ensureSignupUser(destination: string, displayName: string, password?: string | null): Promise<void>;
   redeemSignup(
     userId: string,
     destinationType: DestinationType,
@@ -624,19 +629,43 @@ export function defaultAuthDependencies(): AuthDependencies {
       );
       return signupAuthorization(result);
     },
-    async ensureSignupUser(destination, displayName) {
+    async ensureSignupUser(destination, displayName, password = null) {
       // Public GoTrue signup stays disabled; the trusted gateway provisions the
       // pending auth user through the admin API only after signup authorization.
-      const { error } = await createAdminClient(clientEnvironment).auth.admin.createUser({
+      const admin = createAdminClient(clientEnvironment);
+      const passwordStamp = password ? { newone_password_set_at: new Date().toISOString() } : {};
+      const { error } = await admin.auth.admin.createUser({
         email: destination,
         email_confirm: false,
-        app_metadata: { newone_signup_state: 'pending' },
+        ...(password ? { password } : {}),
+        app_metadata: { newone_signup_state: 'pending', ...passwordStamp },
         user_metadata: { display_name: displayName },
       });
       // A prior abandoned signup leaves an unconfirmed auth user behind;
       // recreating it must stay indistinguishable from first creation.
       if (error && error.code !== 'email_exists' && error.status !== 422) {
         throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      }
+      if (error && password) {
+        // The pending user already exists (an earlier abandoned attempt); give
+        // it this attempt's password. generateLink never creates users and
+        // returns the existing id; the pending user holds no sessions, so the
+        // admin password write cannot log anyone out.
+        const { data: linked, error: linkError } = await admin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: destination,
+        });
+        if (linkError || !linked?.user?.id) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+        const { error: updateError } = await admin.auth.admin.updateUserById(linked.user.id, {
+          password,
+          app_metadata: passwordStamp,
+        });
+        if (updateError) {
+          if (updateError.code === 'weak_password' || updateError.status === 422) {
+            throw new ApiError(400, 'weak_password');
+          }
+          throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+        }
       }
     },
     async redeemSignup(userId, destinationType, destination, correlationId) {
@@ -1435,7 +1464,6 @@ async function completeSignupAuthentication(
   code: string,
   correlationId: string,
   installation: SessionInstallationInput,
-  password: string | null = null,
 ): Promise<CompletedSignupAuthentication> {
   const session = await dependencies.verifyOtp(
     identity.destinationType,
@@ -1462,9 +1490,6 @@ async function completeSignupAuthentication(
       correlationId,
     );
     await dependencies.completeSignupUser(session.userId);
-    // The chosen password lands before the session is inspected, so the
-    // response already reports hasPassword and no client prompt follows.
-    if (password !== null) await dependencies.setPassword(session.userId, password);
   } catch (error) {
     try {
       await dependencies.revoke(session.accessToken);
@@ -2093,6 +2118,7 @@ export function createAuthHandler(
             'appVersion',
             'locale',
             'captchaToken',
+            'password',
           ]);
           const identity = parseSignupIdentity(body);
           if (native && identity.installationId !== nativeInstallationId(request)) {
@@ -2146,7 +2172,12 @@ export function createAuthHandler(
             return jsonResponse(meta, 202, { status: 'code_sent' });
           }
           requireSignupAuthorization(authorization);
-          await dependencies.ensureSignupUser(identity.destination, profile.displayName);
+          // Accounts are created with a password (owner rule). Clients older
+          // than v3 do not send one, so the field stays optional at the edge.
+          const signupPassword = body.password === undefined || body.password === null
+            ? null
+            : parsePassword(body.password, 'weak_password');
+          await dependencies.ensureSignupUser(identity.destination, profile.displayName, signupPassword);
           // Mid-signup users are unconfirmed, so GoTrue's public /otp endpoint
           // would reject them with signup_disabled. The gateway owns
           // signup-code delivery end to end instead.
@@ -2171,12 +2202,8 @@ export function createAuthHandler(
           const body = asObject((await parseJson(request, config)).value);
           onlyKeys(body, ['destination', 'installationId', 'appVersion', 'locale', 'code', 'password']);
           const identity = parseSignupIdentity(body);
-          // Accounts are created with a password. Clients older than v3 do not
-          // send one, so the field stays optional at the edge; the v3 client
-          // always sends it and refuses to proceed without it.
-          const signupPassword = body.password === undefined || body.password === null
-            ? null
-            : parsePassword(body.password, 'weak_password');
+          // A v3 client also sends the password here; it was already stored at
+          // request time, so it is accepted for compatibility and ignored.
           if (native && identity.installationId !== nativeInstallationId(request)) {
             throw new ApiError(400, 'bad_request');
           }
@@ -2226,7 +2253,6 @@ export function createAuthHandler(
             code,
             meta.requestId,
             installation,
-            signupPassword,
           );
           return completedAuthResponse(meta, config, native, session, active, {
             signup: { username: signup.username, organizationId: signup.organizationId },

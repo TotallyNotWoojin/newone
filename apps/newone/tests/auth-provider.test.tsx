@@ -584,6 +584,7 @@ describe('native authentication state machine', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'ko' as const,
+    password: 'correct horse battery',
       captchaToken: 'controlled-captcha-input',
     };
     await expect(currentAuth().requestSignup(signupInput)).resolves.toBeUndefined();

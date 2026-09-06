@@ -275,6 +275,7 @@ describe('native identity gateway client', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'es',
+      password: 'correct horse battery',
       captchaToken: 'controlled-captcha-input',
     })).resolves.toEqual({ status: 'code_sent' });
 
@@ -285,6 +286,7 @@ describe('native identity gateway client', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'es',
+      password: 'correct horse battery',
       captchaToken: 'controlled-captcha-input',
       installationId: '20000000-0000-4000-8000-000000000002',
     });
@@ -295,6 +297,7 @@ describe('native identity gateway client', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'es',
+      password: 'correct horse battery',
       captchaToken: 'controlled-captcha-input',
     })).rejects.toMatchObject({ code: 'invalid_response' });
   });
@@ -572,6 +575,7 @@ describe('same-origin web identity client', () => {
         username: 'river_runner_7',
         displayName: 'River Runner',
         language: 'en',
+        password: 'correct horse battery',
         captchaToken: 'controlled-captcha-input',
       })).rejects.toMatchObject({ code: 'bad_request', correlationId: 'corr-web-5678' });
     } finally {
@@ -605,6 +609,7 @@ describe('same-origin web identity client', () => {
         username: 'river_runner_7',
         displayName: 'River Runner',
         language: 'ko',
+        password: 'correct horse battery',
         captchaToken: 'controlled-captcha-input',
       })).resolves.toEqual({ status: 'code_sent' });
       const [requestUrl, requestInit] = controlledFetch.mock.calls[0] as [string, RequestInit];
@@ -653,6 +658,7 @@ describe('same-origin web identity client', () => {
         username: 'river_runner_7',
         displayName: 'River Runner',
         language: 'en',
+        password: 'correct horse battery',
         captchaToken: 'controlled-captcha-input',
       })).rejects.toMatchObject({ code: 'username_taken' });
       await expect(verifyWebSignup({

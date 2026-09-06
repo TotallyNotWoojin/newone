@@ -241,6 +241,7 @@ describe('web identity response and security contracts', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'en',
+      password: 'correct horse battery',
     })).resolves.toEqual({ status: 'code_sent' });
 
     expect(controlledFetch).toHaveBeenCalledTimes(3);
@@ -561,6 +562,7 @@ describe('native identity response and security contracts', () => {
       username: 'river_runner_7',
       displayName: 'River Runner',
       language: 'en',
+      password: 'correct horse battery',
       captchaToken: null,
     })).resolves.toEqual({ status: 'code_sent' });
 

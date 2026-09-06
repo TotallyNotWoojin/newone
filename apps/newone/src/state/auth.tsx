@@ -96,6 +96,8 @@ interface AuthState {
     username: string;
     displayName: string;
     language: SignupLanguage;
+    /** Chosen at signup; stored on the account before the code is verified. */
+    password: string;
     captchaToken?: string | null;
   }) => Promise<void>;
   verifySignup: (input: {
@@ -648,6 +650,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             username: input.username,
             displayName: input.displayName,
             language: input.language,
+            password: input.password,
             captchaToken: input.captchaToken,
           });
           return;

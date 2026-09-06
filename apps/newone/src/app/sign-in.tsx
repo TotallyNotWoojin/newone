@@ -275,6 +275,7 @@ export default function SignInScreen() {
           username,
           displayName: normalizedDisplayName,
           language: locale,
+          password,
           ...(captchaToken ? { captchaToken } : {}),
         });
         setAuthStep('verify');
@@ -323,6 +324,7 @@ export default function SignInScreen() {
           username,
           displayName: displayName.trim(),
           language: locale,
+          password,
         });
         setMessage(t('auth.codeResent'));
         return;
