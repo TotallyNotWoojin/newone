@@ -87,13 +87,13 @@ appId: com.totallynotwoojin.newone
       - tapOn: "Search by name or @username"
       - inputText: ${MEMBER2_QUERY}
       # Drag a little to dismiss the keyboard (hideKeyboard fails on iOS while a
-# spelling callout is up).
-- swipe:
-    start: "50%, 45%"
-    end: "50%, 55%"
-    duration: 300
-- waitForAnimationToEnd:
-    timeout: 1500
+      # spelling callout is up).
+      - swipe:
+          start: "50%, 45%"
+          end: "50%, 55%"
+          duration: 300
+      - waitForAnimationToEnd:
+          timeout: 1500
       - runFlow:
           when:
             visible: "(.*(Typing Predictions|Dictate).*|space)"
