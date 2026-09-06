@@ -116,7 +116,7 @@ function ProtectedNavigator() {
   }, []);
 
   if (auth.loading || redirectingToSignIn || redirectingToWorkspace) {
-    return <AuthLoadingScreen label={auth.loading ? 'Securing your workspace…' : 'Redirecting securely…'} />;
+    return <AuthLoadingScreen label={auth.loading ? 'Loading…' : 'One moment…'} />;
   }
 
   const navigator = (

@@ -282,8 +282,8 @@ export function ConversationPane({
     return (
       <View style={styles.emptyPane}>
         <EmptyState
-          body={t('auth.securityNote')}
-          icon="shield-checkmark-outline"
+          body={t('status.loading')}
+          icon="hourglass-outline"
           title={t('status.loading')}
         />
       </View>
@@ -2613,7 +2613,7 @@ function ConversationControlsModal({
               {joinRequests.map((request) => (
                 <View key={request.requestId} style={styles.memberControlRow}>
                   <View style={styles.memberControlCopy}>
-                    <Text style={styles.memberControlName}>{request.requesterDisplayName ?? t('chat.companyMember')}</Text>
+                    <Text style={styles.memberControlName}>{request.requesterDisplayName ?? t(personalRealm ? 'chat.companyMemberConsumer' : 'chat.companyMember')}</Text>
                     <Text style={styles.memberControlRole}>{new Date(request.requestedAt).toLocaleString()}</Text>
                   </View>
                   <PrimaryButton

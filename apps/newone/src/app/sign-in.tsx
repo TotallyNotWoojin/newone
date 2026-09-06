@@ -792,12 +792,6 @@ export default function SignInScreen() {
             <Text style={styles.secondaryLinkText}>{t('auth.help')}</Text>
           </Pressable>
 
-          <View style={styles.securityNote}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.inkSubtle} />
-            <Text style={styles.securityNoteText}>
-              {t('auth.securityNote')}
-            </Text>
-          </View>
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1081,21 +1075,6 @@ const styles = StyleSheet.create({
     color: colors.mintDark,
     fontSize: 11,
     fontWeight: '900',
-  },
-  securityNote: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.line,
-  },
-  securityNoteText: {
-    flex: 1,
-    color: colors.inkSubtle,
-    fontSize: 9,
-    lineHeight: 14,
   },
   pressed: {
     opacity: 0.72,

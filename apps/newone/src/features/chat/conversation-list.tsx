@@ -86,6 +86,11 @@ export function ConversationList({
     conversation.managementOnly ? sum : sum + conversation.unreadCount
   ), 0);
   const { t } = useI18n();
+  // The "Official" chip only earns its place when there is something official
+  // to filter; a texting inbox with no announcements shows four chips.
+  const visibleFilters = conversations.some((conversation) => conversation.kind === 'announcement')
+    ? filters
+    : filters.filter((item) => item !== 'announcements');
   const filterLabels: Record<InboxFilter, string> = {
     all: t('chat.filterAll'),
     unread: t('chat.filterUnread'),
@@ -123,7 +128,7 @@ export function ConversationList({
         contentContainerStyle={styles.filterRow}
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}>
-        {filters.map((item) => (
+        {visibleFilters.map((item) => (
           <Chip
             count={
               item === 'unread'
