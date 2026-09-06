@@ -135,6 +135,12 @@ function fallbackMeta(request: Request): RequestMeta {
   return { requestId: requestId(request), origin: null, corsHeaders: new Headers() };
 }
 
+function whereThrown(error: unknown): string {
+  const stack = error instanceof Error && typeof error.stack === 'string' ? error.stack : '';
+  const frames = stack.split('\n').slice(1).map((line) => line.trim()).filter((line) => line.startsWith('at '));
+  return frames.slice(0, 3).map((line) => line.replace(/^at /, '').replace(/file:\/\/\/[^\s]*\/functions\//, '')).join(' < ').slice(0, 300);
+}
+
 function logSafeFailure(meta: RequestMeta, route: MatchedRoute | null, error: unknown): void {
   const safe = asApiError(error);
   // Client-caused rejections carry no payload but are logged too: a 400 on
@@ -146,6 +152,8 @@ function logSafeFailure(meta: RequestMeta, route: MatchedRoute | null, error: un
     code: safe.code,
     status: safe.status,
     ...(safe.status < 500 && safe.message && safe.message !== DEFAULT_MESSAGES[safe.code] ? { detail: safe.message.slice(0, 200) } : {}),
+    // The throw site, so a generic 400 can be traced without guessing.
+    ...(safe.status === 400 ? { where: whereThrown(error) } : {}),
   }));
 }
 
