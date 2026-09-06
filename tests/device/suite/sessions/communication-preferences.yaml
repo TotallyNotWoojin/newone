@@ -1,7 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Communication preferences: read receipts → Nobody, sound off,
-# save; then back to Everyone.
+# Settings → General → Read receipts picker → Nobody; Notifications → Sound
+# off. Account settings save themselves (no Save button, no "saved" text): the
+# picker's selected state on reopen and the absence of the error banner are
+# the evidence. Then both are restored.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -10,23 +12,59 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
+# The rows stay disabled until the account settings have loaded.
+- extendedWaitUntil:
+    visible:
+      text: "Read receipts"
+      enabled: true
+    timeout: 30000
+- takeScreenshot: ${SHOT}-preferences
+- tapOn: "Read receipts"
+- extendedWaitUntil:
+    visible: "Read receipts: Nobody"
+    timeout: 15000
+- tapOn: "Read receipts: Nobody"
+- extendedWaitUntil:
+    notVisible: "Read receipts: Nobody"
+    timeout: 10000
 - scrollUntilVisible:
     element:
-      text: ".*(Changes are saved automatically|Saving…).*"
+      text: "Sound"
     direction: DOWN
-    timeout: 45000
-- takeScreenshot: ${SHOT}-preferences
-- tapOn: ".*Read receipt visibility: Nobody.*"
-- tapOn: ".*Notification preview: Hidden and silent.*"
-- extendedWaitUntil:
-    visible: ".*(Changes are saved automatically|Saving…).*"
-    timeout: 15000
+    timeout: 30000
+# Label text first in the hierarchy, then the Switch with the same label.
+- tapOn:
+    text: "Sound"
+    index: 1
 - extendedWaitUntil:
     notVisible: ".*(could not|cannot|failed).*"
     timeout: 10000
-- takeScreenshot: ${SHOT}-saved
-- tapOn: ".*Read receipt visibility: Everyone.*"
+- scrollUntilVisible:
+    element:
+      text: "Read receipts"
+    direction: UP
+    timeout: 30000
+- tapOn: "Read receipts"
 - extendedWaitUntil:
-    visible: ".*(Changes are saved automatically|Saving…).*"
+    visible: "Read receipts: Nobody"
     timeout: 15000
+- assertVisible:
+    text: "Read receipts: Nobody"
+    selected: true
+- takeScreenshot: ${SHOT}-saved
+- tapOn: "Read receipts: Everyone"
+- extendedWaitUntil:
+    notVisible: "Read receipts: Everyone"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Sound"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: "Sound"
+    index: 1
+- extendedWaitUntil:
+    notVisible: ".*(could not|cannot|failed).*"
+    timeout: 10000
 - tapOn: "Close settings"

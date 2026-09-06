@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Display language → Español: the chrome must switch to Spanish.
+# Settings → Language → Español: the chrome must switch to Spanish.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -9,16 +9,21 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Display language: Español"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Display language: Español"
+# "Language" is a row in the General group at the top of the screen; it opens a
+# picker whose options are labelled "Language: <name>" in the CURRENT UI copy.
+- extendedWaitUntil:
+    visible: "Language"
+    timeout: 15000
+- tapOn: "Language"
+- extendedWaitUntil:
+    visible: "Language: Español"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-language-picker
+- tapOn: "Language: Español"
 - extendedWaitUntil:
     visible: "Cerrar configuración"
     timeout: 15000
-- assertVisible: "Idioma de la interfaz"
+- assertVisible: "Idioma"
 - scrollUntilVisible:
     element:
       text: "Cerrar sesión en Newone"

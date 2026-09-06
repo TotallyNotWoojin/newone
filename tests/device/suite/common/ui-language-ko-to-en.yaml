@@ -10,12 +10,17 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "설정 닫기"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "표시 언어: English"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "표시 언어: English"
+# "언어" is a row in the General group at the top of the screen; it opens a
+# picker whose options are labelled "<picker title>: <language>" in the
+# CURRENT (Korean) UI copy.
+- extendedWaitUntil:
+    visible: "언어"
+    timeout: 15000
+- tapOn: "언어"
+- extendedWaitUntil:
+    visible: "언어: English"
+    timeout: 15000
+- tapOn: "언어: English"
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000

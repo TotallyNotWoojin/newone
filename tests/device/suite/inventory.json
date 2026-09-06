@@ -4,7 +4,8 @@
     "app": "apps/newone",
     "method": "static read of screen sources, feature components and the English catalog block (catalog.ts lines 1-1047); no runtime execution",
     "consumerModel": "personal realm = isPersonalRealm(workspace.organizationId); consumerIosReachable reflects what a plain consumer account on a physical iPhone can reach given the JSX gating recorded per control",
-    "sourceFileNote": "controls carry 'sourceFile' only when the JSX lives outside the screen's own file"
+    "sourceFileNote": "controls carry 'sourceFile' only when the JSX lives outside the screen's own file",
+    "revised": "2026-09-05: applied the v3 summary and settings streams by hand (Summary sheet replaces the briefing card; compact settings with pickers, Edit profile sheet, Allow notifications switch, Devices group, consumer sign-out dialog, first-launch notification card)"
   },
   "screens": [
     {
@@ -341,7 +342,7 @@
       "file": "apps/newone/src/app/help.tsx",
       "route": "/help",
       "reachableByConsumer": true,
-      "how": "Public route (no auth needed). From sign-in 'Need help…' link or Settings 'Help, recovery, and safety' button. Modal presentation.",
+      "how": "Public route (no auth needed). From sign-in 'Need help…' link or Settings 'Help' row. Modal presentation.",
       "controls": [
         {
           "id": "help.close",
@@ -391,6 +392,28 @@
           "consumerIosReachable": "conditional",
           "note": "WorkspaceStatePanel replaces the list; 'Try again' retry button lives in app-shell.retry; consumer empty body uses status.emptyChatsBodyConsumer",
           "sourceLine": 79
+        },
+        {
+          "id": "index.notifications-prompt-dismiss",
+          "label": "Not now",
+          "catalogKey": "settings.notificationsPromptDismiss",
+          "kind": "button",
+          "gating": "first signed-in launch on a native device: devicePreferences.notificationsPromptedAt === null and the OS permission is neither granted nor unavailable (card 'Turn on notifications', settings.notificationsPromptTitle, rendered above the list)",
+          "consumerIosReachable": true,
+          "note": "Records notificationsPromptedAt so the card never returns; flows landing on Chats for a fresh install tap it (optional step in common/*-verify.yaml)",
+          "sourceLine": 85,
+          "sourceFile": "apps/newone/src/features/notifications/notification-prompt.tsx"
+        },
+        {
+          "id": "index.notifications-prompt-accept",
+          "label": "Turn on",
+          "catalogKey": "settings.notificationsPromptAccept",
+          "kind": "button",
+          "gating": "first signed-in launch on a native device: devicePreferences.notificationsPromptedAt === null and the OS permission is neither granted nor unavailable (card 'Turn on notifications', settings.notificationsPromptTitle, rendered above the list)",
+          "consumerIosReachable": true,
+          "note": "Requests OS permission then registers the device (workspace.enableNotifications); when already denied, opens the system settings",
+          "sourceLine": 94,
+          "sourceFile": "apps/newone/src/features/notifications/notification-prompt.tsx"
         }
       ]
     },
@@ -1302,84 +1325,102 @@
           "sourceLine": 2806
         },
         {
-          "id": "pane.briefing-toggle",
-          "label": "Conversation briefing",
-          "catalogKey": "chat.briefing",
+          "id": "pane.summarize",
+          "label": "Summarize",
+          "catalogKey": "chat.summarize",
           "kind": "button",
-          "gating": "none (ConversationBriefing is always rendered at the top of the list)",
+          "gating": "none (header IconButton; the same button also sits inside the Conversation settings sheet)",
           "consumerIosReachable": true,
-          "note": "Expandable header with summary status badge (chat.summary* labels)",
-          "sourceLine": 932
+          "note": "Opens the Summary sheet (ActionModal titled 'Summary', chat.summarySheetTitle; description = scope line 'Since {time} · {count} messages'). Replaced the in-list 'Conversation briefing' card.",
+          "sourceLine": 988
         },
         {
-          "id": "pane.briefing-request-summary",
-          "label": "Request summary draft",
-          "catalogKey": "chat.requestSummary",
+          "id": "pane.summary-request",
+          "label": "Summarize conversation / Summarize new messages",
+          "catalogKey": "chat.summarizeAll",
           "kind": "button",
-          "gating": "briefing expanded && (!summary || hasNewSummarySources && status not queued/generating); disabled !sourceMessageIds.length",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.requestConversationSummary(conversationId, sourceMessageIds); not realm-gated in JSX",
-          "sourceLine": 963
+          "gating": "Summary sheet; label is chat.summarizeNew once the requester has a covering summary; disabled while queued/generating or when no loaded message is newer than the last summary",
+          "consumerIosReachable": true,
+          "note": "workspace.requestConversationSummary(conversationId, newSourceIds); 'No new messages since the last summary.' (chat.summaryNoNewMessages) once everything is covered; 'Nothing summarized yet.' (chat.summaryEmpty) before the first summary; 'Generating' while it runs",
+          "sourceLine": 191,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.briefing-manual-handoff",
           "label": "Create manual shift handoff",
           "catalogKey": "chat.createManualHandoff",
           "kind": "button",
-          "gating": "briefing expanded && summary.status in failed/superseded/queued/generating",
-          "consumerIosReachable": "conditional",
-          "note": "router.push('/handoffs') — a workspace-only surface",
-          "sourceLine": 981
+          "gating": "Summary sheet && !consumer && summary.status in failed/superseded",
+          "consumerIosReachable": false,
+          "note": "router.push('/handoffs'); workplace organizations only",
+          "sourceLine": 177,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
-          "id": "pane.briefing-source-link",
-          "label": "Open source message #{id}",
-          "catalogKey": "chat.openSource",
-          "kind": "link",
-          "gating": "summary present with sourceMessageIds / item.sourceMessageIds",
-          "consumerIosReachable": "conditional",
-          "note": "SourceMessageLink; scrolls to or loads the cited message; 'This source is outside…' (chat.sourceUnavailable) on failure",
-          "sourceLine": 1309
+          "id": "pane.summary-copy",
+          "label": "Copy",
+          "catalogKey": "chat.copy",
+          "kind": "button",
+          "gating": "Summary sheet; disabled until a ready summary exists",
+          "consumerIosReachable": true,
+          "note": "Copies title + scope + prose to the clipboard; 'Copied' (chat.summaryCopied) appears under the buttons. The 'Open source message #…' links and provenance text were removed: citations stay in provenance only.",
+          "sourceLine": 199,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
+        },
+        {
+          "id": "pane.summary-share",
+          "label": "Share",
+          "catalogKey": "chat.summaryShare",
+          "kind": "button",
+          "gating": "Summary sheet; disabled until a ready summary exists",
+          "consumerIosReachable": true,
+          "note": "Native share sheet with a .txt file; 'Could not share the summary.' (chat.summaryShareFailed) on failure",
+          "sourceLine": 206,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.briefing-report-summary-error",
           "label": "Report summary error",
           "catalogKey": "chat.reportSummaryError",
           "kind": "button",
-          "gating": "summary.outputFingerprint && !summaryErrorReport",
-          "consumerIosReachable": "conditional",
-          "note": "Opens AiOutputErrorReportModal(outputKind='summary')",
-          "sourceLine": 1066
+          "gating": "Summary sheet && !consumer && readySummary.outputFingerprint && !summaryErrorReport",
+          "consumerIosReachable": false,
+          "note": "Opens AiOutputErrorReportModal(outputKind='summary'); workplace organizations only",
+          "sourceLine": 230,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.briefing-correct-summary",
           "label": "Correct this version",
           "catalogKey": "chat.correctSummary",
           "kind": "button",
-          "gating": "briefing expanded && canManageSummary (conversation.canManage === true) && summary.sourceState === 'current'",
-          "consumerIosReachable": "conditional",
-          "note": "Consumer must be a group owner/admin (canManage); opens correction modal",
-          "sourceLine": 1079
+          "gating": "Summary sheet && !consumer && conversation.canManage === true && sourceState === 'current'",
+          "consumerIosReachable": false,
+          "note": "Workplace organizations only; opens the correction dialog",
+          "sourceLine": 242,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.briefing-review-summary",
           "label": "Review exact version",
           "catalogKey": "chat.reviewSummary",
           "kind": "button",
-          "gating": "briefing expanded && canManageSummary (conversation.canManage === true) && summary.status in ready_for_review/corrected",
-          "consumerIosReachable": "conditional",
-          "note": "Opens review modal",
-          "sourceLine": 1091
+          "gating": "Summary sheet && !consumer && conversation.canManage === true && sourceState === 'current' && status in ready_for_review/corrected",
+          "consumerIosReachable": false,
+          "note": "Workplace organizations only; opens the review dialog",
+          "sourceLine": 257,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.briefing-schedule",
           "label": "Summary schedule",
           "catalogKey": "chat.summarySchedule",
           "kind": "button",
-          "gating": "briefing expanded && canManageSummary (conversation.canManage === true)",
-          "consumerIosReachable": "conditional",
-          "note": "Opens schedule modal",
-          "sourceLine": 1107
+          "gating": "Summary sheet && !consumer && conversation.canManage === true",
+          "consumerIosReachable": false,
+          "note": "Workplace organizations only; opens the schedule dialog",
+          "sourceLine": 271,
+          "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
           "id": "pane.op-action-confirm",
@@ -2956,7 +2997,7 @@
       "file": "apps/newone/src/app/settings.tsx",
       "route": "/settings",
       "reachableByConsumer": true,
-      "how": "Modal pushed from the Settings bottom tab (or desktop rail avatar). Requires workspace.currentUser; personalRealm hides MFA, self-recovery, shift suppression and the private-DM footer.",
+      "how": "Modal pushed from the Settings bottom tab (or desktop rail avatar). Requires workspace.currentUser; personalRealm hides MFA, self-recovery, shift suppression and the private-DM footer. Profile row opens the Edit profile sheet; General rows (Language, Translate to, Read receipts) open pickers whose options are labelled '<row>: <value>'; account settings auto-save (no Save button).",
       "controls": [
         {
           "id": "settings.close",
@@ -2966,157 +3007,197 @@
           "gating": "none",
           "consumerIosReachable": true,
           "note": "IconButton close; router.back()",
-          "sourceLine": 335
+          "sourceLine": 476
+        },
+        {
+          "id": "settings.edit-profile",
+          "label": "Edit profile",
+          "catalogKey": "settings.profileTitle",
+          "kind": "button",
+          "gating": "none",
+          "consumerIosReachable": true,
+          "note": "Profile row (avatar, name, @handle · status) is one Pressable with accessibilityLabel 'Edit profile'; its child texts are not separately accessible. Opens the Edit profile sheet: Choose photo, Remove photo, Display name, Status message, Save profile.",
+          "sourceLine": 489
         },
         {
           "id": "settings.display-name",
           "label": "Display name",
           "catalogKey": "settings.displayName",
           "kind": "input",
-          "gating": "none",
+          "gating": "Edit profile sheet",
           "consumerIosReachable": true,
-          "note": "FormField; 1–120 chars",
-          "sourceLine": 374
+          "note": "FormField inside the sheet: label text first, then the input with the same accessibility label (tap index 1); 1–120 chars",
+          "sourceLine": 747
         },
         {
           "id": "settings.status-message",
           "label": "Status message",
           "catalogKey": "settings.statusMessage",
           "kind": "input",
-          "gating": "none",
+          "gating": "Edit profile sheet",
           "consumerIosReachable": true,
           "note": "placeholder 'What are you up to?' (settings.statusMessagePlaceholder); up to 280 chars",
-          "sourceLine": 379
+          "sourceLine": 752
         },
         {
           "id": "settings.save-profile",
           "label": "Save profile",
           "catalogKey": "settings.saveProfile",
           "kind": "button",
-          "gating": "disabled !profileDirty || !profileValid; loading actionBusy === 'profile-update'",
+          "gating": "Edit profile sheet; disabled !profileDirty || !profileValid; loading actionBusy === 'profile-update'",
           "consumerIosReachable": true,
-          "note": "workspace.updateProfile",
-          "sourceLine": 391
+          "note": "workspace.updateProfile; the sheet closes on success",
+          "sourceLine": 762
+        },
+        {
+          "id": "settings.choose-photo",
+          "label": "Choose photo",
+          "catalogKey": "settings.choosePhoto",
+          "kind": "button",
+          "gating": "Edit profile sheet; loading actionBusy === 'profile-avatar-upload'",
+          "consumerIosReachable": true,
+          "note": "expo-image-picker library (square crop) → workspace.uploadProfileAvatar; no separate uploading/hint text any more",
+          "sourceLine": 731
+        },
+        {
+          "id": "settings.remove-photo",
+          "label": "Remove photo",
+          "catalogKey": "settings.removePhoto",
+          "kind": "button",
+          "gating": "Edit profile sheet && ownAvatarUrl",
+          "consumerIosReachable": true,
+          "note": "workspace.removeProfileAvatar",
+          "sourceLine": 739
+        },
+        {
+          "id": "settings.language",
+          "label": "Language",
+          "catalogKey": "settings.displayLanguage",
+          "kind": "button",
+          "gating": "none",
+          "consumerIosReachable": true,
+          "note": "Row in the General group with the current locale as its value; opens the picker (ActionModal titled 'Language'). Replaced the 'Display language: X' chips. Spanish UI: 'Idioma'; Korean UI: '언어'.",
+          "sourceLine": 521
         },
         {
           "id": "settings.language-english",
-          "label": "Display language: English",
+          "label": "Language: English",
           "catalogKey": "settings.english",
           "kind": "button",
-          "gating": "none",
+          "gating": "Language picker open (row settings.displayLanguage)",
           "consumerIosReachable": true,
-          "note": "Pressable option (accessibilityLabel `${displayLanguage}: ${label}`); setLocale('en')",
-          "sourceLine": 416
+          "note": "OptionList option (accessibilityLabel `${pickerTitle}: ${label}` in the CURRENT UI copy: 'Idioma: …' on a Spanish UI, '언어: …' on Korean); setLocale('en')",
+          "sourceLine": 1082
         },
         {
           "id": "settings.language-korean",
-          "label": "Display language: 한국어",
+          "label": "Language: 한국어",
           "catalogKey": "settings.korean",
           "kind": "button",
-          "gating": "none",
+          "gating": "Language picker open (row settings.displayLanguage)",
           "consumerIosReachable": true,
-          "note": "setLocale('ko')",
-          "sourceLine": 416
+          "note": "OptionList option (accessibilityLabel `${pickerTitle}: ${label}` in the CURRENT UI copy: 'Idioma: …' on a Spanish UI, '언어: …' on Korean); setLocale('ko')",
+          "sourceLine": 1082
         },
         {
           "id": "settings.language-spanish",
-          "label": "Display language: Español",
+          "label": "Language: Español",
           "catalogKey": "settings.spanish",
           "kind": "button",
-          "gating": "none",
+          "gating": "Language picker open (row settings.displayLanguage)",
           "consumerIosReachable": true,
-          "note": "setLocale('es')",
-          "sourceLine": 416
+          "note": "OptionList option (accessibilityLabel `${pickerTitle}: ${label}` in the CURRENT UI copy: 'Idioma: …' on a Spanish UI, '언어: …' on Korean); setLocale('es')",
+          "sourceLine": 1082
         },
         {
           "id": "settings.message-language",
-          "label": "Preferred message language: Use profile language / English / 한국어 / Español",
+          "label": "Translate to",
           "catalogKey": "settings.messageLanguage",
           "kind": "button",
           "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
           "consumerIosReachable": true,
-          "note": "Option buttons (settings.messageLanguageAuto / english / korean / spanish); ActivityIndicator while actionBusy === 'account-settings-load'",
-          "sourceLine": 450
-        },
-        {
-          "id": "settings.notification-preview",
-          "label": "Generic activity only / Hidden and silent",
-          "catalogKey": "settings.previewGeneric",
-          "kind": "button",
-          "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
-          "consumerIosReachable": true,
-          "note": "'Notification preview' (settings.notificationPreview) options; settings.previewHidden",
-          "sourceLine": 467
+          "note": "Row → picker; options 'Translate to: Profile language / English / 한국어 / Español' (settings.messageLanguageAuto / english / korean / spanish); auto-saved",
+          "sourceLine": 528
         },
         {
           "id": "settings.read-visibility",
-          "label": "Everyone / Contacts / Nobody",
-          "catalogKey": "settings.readEveryone",
+          "label": "Read receipts",
+          "catalogKey": "settings.readVisibility",
           "kind": "button",
           "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
           "consumerIosReachable": true,
-          "note": "'Read receipt visibility' (settings.readVisibility) options; settings.readContacts / settings.readNobody",
-          "sourceLine": 484
+          "note": "Row → picker; options 'Read receipts: Everyone / Contacts / Nobody' (settings.readEveryone / readContacts / readNobody) carry accessibilityState.selected; auto-saved 500 ms after a change (no Save button, no 'saved' text)",
+          "sourceLine": 539
+        },
+        {
+          "id": "settings.translated-only",
+          "label": "Show only translations",
+          "catalogKey": "settings.translatedOnly",
+          "kind": "switch",
+          "gating": "none",
+          "consumerIosReachable": true,
+          "note": "Device preference SwitchRow in the Chats group (label text first, then the Switch with the same accessibility label)",
+          "sourceLine": 549
+        },
+        {
+          "id": "settings.enter-sends",
+          "label": "Enter key sends",
+          "catalogKey": "settings.enterSends",
+          "kind": "switch",
+          "gating": "none",
+          "consumerIosReachable": true,
+          "note": "Device preference SwitchRow in the Chats group",
+          "sourceLine": 555
         },
         {
           "id": "settings.quiet-start",
           "label": "Quiet hours start",
           "catalogKey": "settings.quietStart",
           "kind": "input",
-          "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
+          "gating": "Quiet hours picker (row settings.quietHours) && preferenceDraft loaded",
           "consumerIosReachable": true,
           "note": "HH:MM; save silently refuses when only one bound is set or format invalid",
-          "sourceLine": 496
+          "sourceLine": 809
         },
         {
           "id": "settings.quiet-end",
           "label": "Quiet hours end",
           "catalogKey": "settings.quietEnd",
           "kind": "input",
-          "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
+          "gating": "Quiet hours picker (row settings.quietHours) && preferenceDraft loaded",
           "consumerIosReachable": true,
           "note": "HH:MM",
-          "sourceLine": 503
+          "sourceLine": 817
         },
         {
           "id": "settings.shift-suppression",
           "label": "Suppress routine alerts off shift",
           "catalogKey": "settings.shiftSuppression",
-          "kind": "toggle",
-          "gating": "preferenceDraft loaded (workspace.organizationPreferences) && !personalRealm",
+          "kind": "switch",
+          "gating": "!personalRealm && preferenceDraft loaded",
           "consumerIosReachable": false,
-          "note": "Switch; workspace organizations only",
-          "sourceLine": 511
+          "note": "SwitchRow (Switch accessibilityLabel = label); auto-saved",
+          "sourceLine": 596
         },
         {
           "id": "settings.sound",
-          "label": "Notification sound",
+          "label": "Sound",
           "catalogKey": "settings.sound",
-          "kind": "toggle",
+          "kind": "switch",
           "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
           "consumerIosReachable": true,
-          "note": "Switch (PreferenceSwitch)",
-          "sourceLine": 517
+          "note": "SwitchRow in Notifications: label text first in the hierarchy, then the Switch with the same accessibility label (tap index 1); auto-saved",
+          "sourceLine": 574
         },
         {
           "id": "settings.vibration",
-          "label": "Notification vibration",
+          "label": "Vibration",
           "catalogKey": "settings.vibration",
-          "kind": "toggle",
+          "kind": "switch",
           "gating": "preferenceDraft loaded (workspace.organizationPreferences)",
           "consumerIosReachable": true,
-          "note": "Switch",
-          "sourceLine": 522
-        },
-        {
-          "id": "settings.save-preferences",
-          "label": "Save communication preferences",
-          "catalogKey": "settings.savePreferences",
-          "kind": "button",
-          "gating": "preferenceDraft loaded (workspace.organizationPreferences); loading actionBusy === 'organization-preferences-save'",
-          "consumerIosReachable": true,
-          "note": "workspace.saveOrganizationPreferences({...draft, uiLanguage: locale})",
-          "sourceLine": 527
+          "note": "SwitchRow in Notifications: label text first in the hierarchy, then the Switch with the same accessibility label (tap index 1); auto-saved",
+          "sourceLine": 581
         },
         {
           "id": "settings.outbox-edit",
@@ -3185,64 +3266,14 @@
           "sourceFile": "apps/newone/src/components/settings/message-outbox-section.tsx"
         },
         {
-          "id": "settings.enable-notifications",
-          "label": "Enable notifications",
-          "catalogKey": "settings.enableNotifications",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && !workspace.deviceNotificationPreferences; loading actionBusy === 'device-register'",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.enableNotifications() registers this device (physical device required: errors.pushNeedsDevice); replaced by 'Current device · IOS' badge once registered",
-          "sourceLine": 577
-        },
-        {
-          "id": "settings.device-preview",
-          "label": "Inherit account setting / Generic activity only / Hide notification preview",
-          "catalogKey": "settings.inheritAccount",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)",
-          "consumerIosReachable": "conditional",
-          "note": "'Overrides for this device' preview options (settings.previewHiddenDevice)",
-          "sourceLine": 604
-        },
-        {
-          "id": "settings.device-sound",
-          "label": "Inherit account setting / On / Off",
-          "catalogKey": "settings.enabled",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)",
-          "consumerIosReachable": "conditional",
-          "note": "Per-device 'Notification sound' override (settings.enabled / settings.disabled)",
-          "sourceLine": 640
-        },
-        {
-          "id": "settings.device-vibration",
-          "label": "Inherit account setting / On / Off",
-          "catalogKey": "settings.enabled",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)",
-          "consumerIosReachable": "conditional",
-          "note": "Per-device 'Notification vibration' override",
-          "sourceLine": 640
-        },
-        {
-          "id": "settings.device-refresh",
-          "label": "Refresh device settings",
-          "catalogKey": "settings.refreshDevicePreferences",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.loadDeviceNotificationPreferences",
-          "sourceLine": 671
-        },
-        {
-          "id": "settings.device-save",
-          "label": "Save for this device",
-          "catalogKey": "settings.saveDevicePreferences",
-          "kind": "button",
-          "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications); disabled when draft equals stored overrides",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.saveDeviceNotificationPreferences",
-          "sourceLine": 678
+          "id": "settings.allow-notifications",
+          "label": "Allow notifications",
+          "catalogKey": "settings.allowNotifications",
+          "kind": "switch",
+          "gating": "permission !== 'unavailable'; disabled while the OS permission is unread or actionBusy === 'device-register'",
+          "consumerIosReachable": true,
+          "note": "Switch = OS permission granted && this device registered. On → workspace.enableNotifications() (OS prompt; a simulator then shows errors.pushNeedsDevice 'Push notifications need a physical device.' in the banner); off, or on after an OS denial → openNotificationSettings(). Replaced 'Enable notifications' / 'Device notifications' / 'Current device · IOS'. Label text first in the hierarchy, then the Switch (tap index 1).",
+          "sourceLine": 566
         },
         {
           "id": "settings.mfa-enroll",
@@ -3345,50 +3376,50 @@
           "label": "Revoke this session",
           "catalogKey": "settings.revokeCurrent",
           "kind": "button",
-          "gating": "auth.sessionId present",
-          "consumerIosReachable": true,
-          "note": "Opens revoke modal targeting the current session (danger)",
-          "sourceLine": 768
+          "gating": "!personalRealm && auth.sessionId (workplace organizations only; hidden for consumer accounts)",
+          "consumerIosReachable": false,
+          "note": "Opens the revoke dialog for the current session; consumers end their own session with 'Sign out of Newone'",
+          "sourceLine": 653
         },
         {
           "id": "settings.revoke-session",
-          "label": "Revoke",
+          "label": "Sign out",
           "catalogKey": "settings.revokeSession",
           "kind": "button",
           "gating": "workspace.accountSessions has another non-current, non-revoked session",
           "consumerIosReachable": "conditional",
-          "note": "Per-session danger button in 'Devices and sessions'; 'No other active sessions…' note otherwise",
-          "sourceLine": 789
+          "note": "Per-device RowAction in the 'Devices' group (settings.sessionsTitle); the 'No other devices' row (settings.noOtherSessions) otherwise",
+          "sourceLine": 670
         },
         {
           "id": "settings.revoke-reason",
           "label": "Reason",
           "catalogKey": "settings.revokeReason",
           "kind": "input",
-          "gating": "revokeVisible modal",
-          "consumerIosReachable": "conditional",
+          "gating": "revoke dialog, workplace organizations only (the consumer dialog has no reason field)",
+          "consumerIosReachable": false,
           "note": "Multiline; >= 3 chars required",
-          "sourceLine": 903
+          "sourceLine": 868
         },
         {
           "id": "settings.revoke-confirm",
-          "label": "Revoke and sign out",
-          "catalogKey": "settings.revokeConfirm",
+          "label": "Yes, sign out / Revoke and sign out",
+          "catalogKey": "settings.signOutDeviceConfirm",
           "kind": "button",
-          "gating": "revokeVisible; disabled reason < 3 chars; loading actionBusy === 'session-revoke'",
+          "gating": "dialog open; consumer: title 'Sign out this device?' (settings.signOutDeviceTitle), no reason; workplace: 'Revoke current session' (settings.revokeTitle) with reason >= 3 chars, label settings.revokeConfirm; loading actionBusy === 'session-revoke'",
           "consumerIosReachable": "conditional",
-          "note": "workspace.revokeSession; current session -> router.replace('/sign-in')",
-          "sourceLine": 910
+          "note": "workspace.revokeSession(target, 'sign_out' | reason); current session → router.replace('/sign-in'); another device → dialog closes and the list reloads",
+          "sourceLine": 878
         },
         {
           "id": "settings.help",
-          "label": "Help, recovery, and safety",
+          "label": "Help",
           "catalogKey": "settings.help",
           "kind": "button",
           "gating": "none",
           "consumerIosReachable": true,
           "note": "router.push('./help')",
-          "sourceLine": 815
+          "sourceLine": 685
         },
         {
           "id": "settings.sign-out",
@@ -3397,8 +3428,8 @@
           "kind": "button",
           "gating": "none",
           "consumerIosReachable": true,
-          "note": "auth.signOut() then router.replace('/sign-in')",
-          "sourceLine": 821
+          "note": "Revokes this session on the server (reason 'sign_out') then router.replace('/sign-in'); the consumer way to end the current session",
+          "sourceLine": 690
         },
         {
           "id": "settings.delete-account",
@@ -3407,8 +3438,8 @@
           "kind": "button",
           "gating": "none",
           "consumerIosReachable": true,
-          "note": "Opens 'Permanently delete this account' modal (danger section)",
-          "sourceLine": 849
+          "note": "Only row of the 'Danger' group (settings.dangerTitle); opens 'Permanently delete this account'. The settings.deleteAccountNote text is no longer rendered.",
+          "sourceLine": 707
         },
         {
           "id": "settings.delete-confirmation",
@@ -4652,7 +4683,8 @@
       "key": "chat.copy",
       "en": "Copy",
       "usedIn": [
-        "conversation-pane.tsx:2609"
+        "conversation-pane.tsx:2609",
+        "summary-sheet.tsx:199"
       ],
       "consumerIosReachable": true,
       "gating": "message actions sheet"
@@ -5827,11 +5859,9 @@
     {
       "key": "chat.briefing",
       "en": "Conversation briefing",
-      "usedIn": [
-        "conversation-pane.tsx:942"
-      ],
-      "consumerIosReachable": true,
-      "gating": "always rendered at top of message list"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "no longer rendered: the in-list briefing card was replaced by the Summary sheet (chat.summarize)"
     },
     {
       "key": "chat.briefingHide",
@@ -5843,12 +5873,9 @@
     {
       "key": "chat.requestSummary",
       "en": "Request summary draft",
-      "usedIn": [
-        "conversation-pane.tsx:966",
-        "conversation-pane.tsx:1120"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "briefing expanded && no summary or new sources"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed with the briefing card; see chat.summarizeAll / chat.summarizeNew"
     },
     {
       "key": "chat.createManualHandoff",
@@ -5863,11 +5890,91 @@
     {
       "key": "chat.openSource",
       "en": "Open source message",
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed; source citations stay in provenance, not in the UI"
+    },
+    {
+      "key": "chat.summarize",
+      "en": "Summarize",
       "usedIn": [
-        "conversation-pane.tsx:1310"
+        "conversation-pane.tsx:988",
+        "conversation-pane.tsx:2747"
       ],
-      "consumerIosReachable": "conditional",
-      "gating": "summary source links"
+      "consumerIosReachable": true,
+      "gating": "conversation header IconButton; also a button inside the Conversation settings sheet"
+    },
+    {
+      "key": "chat.summarySheetTitle",
+      "en": "Summary",
+      "usedIn": [
+        "summary-sheet.tsx:143"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet title"
+    },
+    {
+      "key": "chat.summarizeAll",
+      "en": "Summarize conversation",
+      "usedIn": [
+        "summary-sheet.tsx:191"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet, no covering summary yet"
+    },
+    {
+      "key": "chat.summarizeNew",
+      "en": "Summarize new messages",
+      "usedIn": [
+        "summary-sheet.tsx:191"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet once the requester has a covering summary"
+    },
+    {
+      "key": "chat.summaryNoNewMessages",
+      "en": "No new messages since the last summary.",
+      "usedIn": [
+        "summary-sheet.tsx:213"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet when every loaded message is covered and nothing is generating"
+    },
+    {
+      "key": "chat.summaryEmpty",
+      "en": "Nothing summarized yet.",
+      "usedIn": [
+        "summary-sheet.tsx:184"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet before the first summary"
+    },
+    {
+      "key": "chat.summaryShare",
+      "en": "Share",
+      "usedIn": [
+        "summary-sheet.tsx:206"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet; disabled until a ready summary exists"
+    },
+    {
+      "key": "chat.summaryCopied",
+      "en": "Copied",
+      "usedIn": [
+        "summary-sheet.tsx:217"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet after Copy (or after Share fell back to the clipboard)"
+    },
+    {
+      "key": "chat.summaryShareFailed",
+      "en": "Could not share the summary.",
+      "usedIn": [
+        "summary-sheet.tsx:217"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet after a failed Share"
     },
     {
       "key": "chat.reportSummaryError",
@@ -7580,77 +7687,74 @@
       "key": "settings.displayName",
       "en": "Display name",
       "usedIn": [
-        "settings.tsx:375"
+        "settings.tsx:747"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Edit profile sheet (opened by the profile row, accessibilityLabel settings.profileTitle)"
     },
     {
       "key": "settings.statusMessage",
       "en": "Status message",
       "usedIn": [
-        "settings.tsx:380"
+        "settings.tsx:752"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Edit profile sheet (opened by the profile row, accessibilityLabel settings.profileTitle)"
     },
     {
       "key": "settings.statusMessagePlaceholder",
       "en": "What are you up to?",
       "usedIn": [
-        "settings.tsx:383"
+        "settings.tsx:755"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Edit profile sheet (opened by the profile row, accessibilityLabel settings.profileTitle)"
     },
     {
       "key": "settings.saveProfile",
       "en": "Save profile",
       "usedIn": [
-        "settings.tsx:394"
+        "settings.tsx:762"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Edit profile sheet (opened by the profile row, accessibilityLabel settings.profileTitle)"
     },
     {
       "key": "settings.displayLanguage",
-      "en": "Display language",
+      "en": "Language",
       "usedIn": [
-        "settings.tsx:409",
-        "settings.tsx:417"
+        "settings.tsx:449",
+        "settings.tsx:521"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "General row 'Language' and the picker title; options are labelled '<title>: <language>'"
     },
     {
       "key": "settings.english",
       "en": "English",
       "usedIn": [
-        "settings.tsx:412",
-        "settings.tsx:446"
+        "settings.tsx:438"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Language / Translate to picker options and the row values"
     },
     {
       "key": "settings.korean",
       "en": "한국어",
       "usedIn": [
-        "settings.tsx:413",
-        "settings.tsx:447"
+        "settings.tsx:438"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Language / Translate to picker options and the row values"
     },
     {
       "key": "settings.spanish",
       "en": "Español",
       "usedIn": [
-        "settings.tsx:414",
-        "settings.tsx:448"
+        "settings.tsx:438"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "Language / Translate to picker options and the row values"
     },
     {
       "key": "settings.signOut",
@@ -7663,9 +7767,9 @@
     },
     {
       "key": "settings.help",
-      "en": "Help, recovery, and safety",
+      "en": "Help",
       "usedIn": [
-        "settings.tsx:817"
+        "settings.tsx:685"
       ],
       "consumerIosReachable": true,
       "gating": "settings screen"
@@ -7674,105 +7778,97 @@
       "key": "settings.deleteAccount",
       "en": "Delete account",
       "usedIn": [
-        "settings.tsx:846",
-        "settings.tsx:851"
+        "settings.tsx:707"
       ],
       "consumerIosReachable": true,
-      "gating": "settings screen"
+      "gating": "settings screen ('Danger' group)"
     },
     {
       "key": "settings.revokeCurrent",
       "en": "Revoke this session",
       "usedIn": [
-        "settings.tsx:770"
+        "settings.tsx:653"
       ],
-      "consumerIosReachable": true,
-      "gating": "settings screen"
+      "consumerIosReachable": false,
+      "gating": "!personalRealm && auth.sessionId (workplace organizations only)"
     },
     {
       "key": "settings.messageLanguage",
-      "en": "Preferred message language",
+      "en": "Translate to",
       "usedIn": [
-        "settings.tsx:442",
-        "settings.tsx:451"
+        "settings.tsx:451",
+        "settings.tsx:528"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "General row 'Translate to' and its picker title"
     },
     {
       "key": "settings.messageLanguageAuto",
-      "en": "Use profile language",
+      "en": "Profile language",
       "usedIn": [
-        "settings.tsx:445"
+        "settings.tsx:533",
+        "settings.tsx:788"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "Translate to picker option / row value"
     },
     {
       "key": "settings.notificationPreview",
       "en": "Notification preview",
-      "usedIn": [
-        "settings.tsx:461",
-        "settings.tsx:596"
-      ],
-      "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed from Settings (no notification-preview option any more)"
     },
     {
       "key": "settings.previewGeneric",
       "en": "Generic activity only",
-      "usedIn": [
-        "settings.tsx:464",
-        "settings.tsx:600",
-        "settings.tsx:625"
-      ],
-      "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed from Settings (no notification-preview option any more)"
     },
     {
       "key": "settings.previewHidden",
       "en": "Hidden and silent",
-      "usedIn": [
-        "settings.tsx:465"
-      ],
-      "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed from Settings (no notification-preview option any more)"
     },
     {
       "key": "settings.readVisibility",
-      "en": "Read receipt visibility",
+      "en": "Read receipts",
       "usedIn": [
-        "settings.tsx:477"
+        "settings.tsx:452",
+        "settings.tsx:539"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "General row 'Read receipts' and its picker title"
     },
     {
       "key": "settings.readEveryone",
       "en": "Everyone",
       "usedIn": [
-        "settings.tsx:480"
+        "settings.tsx:442"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "Read receipts picker options ('Read receipts: <value>') and the row value"
     },
     {
       "key": "settings.readContacts",
       "en": "Contacts",
       "usedIn": [
-        "settings.tsx:481"
+        "settings.tsx:443"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "Read receipts picker options ('Read receipts: <value>') and the row value"
     },
     {
       "key": "settings.readNobody",
       "en": "Nobody",
       "usedIn": [
-        "settings.tsx:482"
+        "settings.tsx:443"
       ],
       "consumerIosReachable": true,
-      "gating": "preferenceDraft loaded (workspace.organizationPreferences)"
+      "gating": "Read receipts picker options ('Read receipts: <value>') and the row value"
     },
     {
       "key": "settings.quietStart",
@@ -7833,69 +7929,53 @@
     {
       "key": "settings.enableNotifications",
       "en": "Enable notifications",
-      "usedIn": [
-        "settings.tsx:579"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "native && device not yet registered"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed; replaced by the 'Allow notifications' switch (settings.allowNotifications)"
     },
     {
       "key": "settings.inheritAccount",
       "en": "Inherit account setting",
-      "usedIn": [
-        "settings.tsx:599",
-        "settings.tsx:636"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed: per-device notification overrides are no longer in Settings"
     },
     {
       "key": "settings.previewHiddenDevice",
       "en": "Hide notification preview",
-      "usedIn": [
-        "settings.tsx:601",
-        "settings.tsx:626"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed: per-device notification overrides are no longer in Settings"
     },
     {
       "key": "settings.enabled",
       "en": "On",
-      "usedIn": [
-        "settings.tsx:637",
-        "settings.tsx:661"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed: per-device notification overrides are no longer in Settings"
     },
     {
       "key": "settings.disabled",
       "en": "Off",
       "usedIn": [
-        "settings.tsx:638",
-        "settings.tsx:661"
+        "settings.tsx:447"
       ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "consumerIosReachable": true,
+      "gating": "Quiet hours row value when no window is set ('Off')"
     },
     {
       "key": "settings.refreshDevicePreferences",
       "en": "Refresh device settings",
-      "usedIn": [
-        "settings.tsx:673"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed: per-device notification overrides are no longer in Settings"
     },
     {
       "key": "settings.saveDevicePreferences",
       "en": "Save for this device",
-      "usedIn": [
-        "settings.tsx:683"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "Platform.OS !== 'web' && workspace.deviceNotificationPreferences && devicePreferenceDraft (device registered via Enable notifications)"
+      "usedIn": [],
+      "consumerIosReachable": false,
+      "gating": "removed: per-device notification overrides are no longer in Settings"
     },
     {
       "key": "settings.mfaVerify",
@@ -7935,30 +8015,131 @@
     },
     {
       "key": "settings.revokeSession",
-      "en": "Revoke",
+      "en": "Sign out",
       "usedIn": [
-        "settings.tsx:790"
+        "settings.tsx:670"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "another non-current, non-revoked session listed"
+      "gating": "another non-current, non-revoked session listed under Devices"
     },
     {
       "key": "settings.revokeReason",
       "en": "Reason",
       "usedIn": [
-        "settings.tsx:904"
+        "settings.tsx:868"
       ],
-      "consumerIosReachable": "conditional",
-      "gating": "revoke modal"
+      "consumerIosReachable": false,
+      "gating": "workplace revoke dialog only (consumers get no reason field)"
     },
     {
       "key": "settings.revokeConfirm",
       "en": "Revoke and sign out",
       "usedIn": [
-        "settings.tsx:913"
+        "settings.tsx:878"
       ],
-      "consumerIosReachable": "conditional",
-      "gating": "revoke modal"
+      "consumerIosReachable": false,
+      "gating": "workplace revoke dialog only; consumers see settings.signOutDeviceConfirm"
+    },
+    {
+      "key": "settings.signOutDeviceTitle",
+      "en": "Sign out this device?",
+      "usedIn": [
+        "settings.tsx:864"
+      ],
+      "consumerIosReachable": true,
+      "gating": "consumer revoke dialog title (personalRealm)"
+    },
+    {
+      "key": "settings.signOutDeviceConfirm",
+      "en": "Yes, sign out",
+      "usedIn": [
+        "settings.tsx:878"
+      ],
+      "consumerIosReachable": true,
+      "gating": "consumer revoke dialog confirm button (personalRealm)"
+    },
+    {
+      "key": "settings.noOtherSessions",
+      "en": "No other devices",
+      "usedIn": [
+        "settings.tsx:678"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Devices group when no other live session exists"
+    },
+    {
+      "key": "settings.sessionsTitle",
+      "en": "Devices",
+      "usedIn": [
+        "settings.tsx:647"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Devices group title"
+    },
+    {
+      "key": "settings.currentSession",
+      "en": "This device",
+      "usedIn": [
+        "settings.tsx:650"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Devices group row for the current session (value 'Active now', settings.activeNow)"
+    },
+    {
+      "key": "settings.dangerTitle",
+      "en": "Danger",
+      "usedIn": [
+        "settings.tsx:704"
+      ],
+      "consumerIosReachable": true,
+      "gating": "group title above Delete account"
+    },
+    {
+      "key": "settings.profileTitle",
+      "en": "Edit profile",
+      "usedIn": [
+        "settings.tsx:489",
+        "settings.tsx:720"
+      ],
+      "consumerIosReachable": true,
+      "gating": "profile row accessibilityLabel and the sheet title"
+    },
+    {
+      "key": "settings.allowNotifications",
+      "en": "Allow notifications",
+      "usedIn": [
+        "settings.tsx:566"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Notifications SwitchRow; permission !== 'unavailable'"
+    },
+    {
+      "key": "settings.notificationsPromptTitle",
+      "en": "Turn on notifications",
+      "usedIn": [
+        "notification-prompt.tsx:81"
+      ],
+      "consumerIosReachable": true,
+      "gating": "chats list card on the first signed-in launch (notification-prompt.tsx)"
+    },
+    {
+      "key": "settings.notificationsPromptAccept",
+      "en": "Turn on",
+      "usedIn": [
+        "notification-prompt.tsx:94"
+      ],
+      "consumerIosReachable": true,
+      "gating": "chats list card on the first signed-in launch"
+    },
+    {
+      "key": "settings.notificationsPromptDismiss",
+      "en": "Not now",
+      "usedIn": [
+        "notification-prompt.tsx:85",
+        "notification-prompt.tsx:91"
+      ],
+      "consumerIosReachable": true,
+      "gating": "chats list card on the first signed-in launch; flows tap it (optional) in common/*-verify.yaml"
     },
     {
       "key": "settings.deleteConfirmUsername",

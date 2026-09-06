@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Help, recovery, and safety → back.
+# Settings → Help → back.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -11,10 +11,10 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Help, recovery, and safety"
+      text: "Help"
     direction: DOWN
     timeout: 45000
-- tapOn: "Help, recovery, and safety"
+- tapOn: "Help"
 - extendedWaitUntil:
     visible: "Help and recovery"
     timeout: 15000

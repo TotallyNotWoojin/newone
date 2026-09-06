@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Devices and sessions must list the other device's session.
+# Settings → Devices must list the other device's session.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -11,16 +11,16 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Devices and sessions"
+      text: "Devices"
     direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-sessions
-# The session rows sit below the section header; scroll to the other device's
-# Revoke control rather than waiting for it to appear where the header is.
+# The device rows sit below the group title; scroll to the other device's
+# "Sign out" action rather than waiting for it where the title is.
 - scrollUntilVisible:
     element:
-      text: "Revoke"
+      text: "Sign out"
     direction: DOWN
     timeout: 45000
-- assertNotVisible: "No other active sessions were returned by the authorized session service."
+- assertNotVisible: "No other devices"
 - takeScreenshot: ${SHOT}-other-session-listed

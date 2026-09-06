@@ -9,33 +9,37 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
+# "Delete account" is the one row of the "Danger" group at the bottom of the
+# screen (the explanatory note is gone). Centring the row keeps it clear of the
+# bottom edge (run-2026-09-04T12-04-44: a tap at the edge missed).
 - scrollUntilVisible:
     element:
-      text: "Permanently deletes your account, sign-in, and data from Newone."
+      text: "Delete account"
     direction: DOWN
     timeout: 60000
     centerElement: true
 - takeScreenshot: ${SHOT}-danger-zone
-# "Delete account" appears three times: the section title, the row label, and
-# the button below the note. Centring the note keeps the button on screen
-# (run-2026-09-04T12-04-44: the note sat at the bottom edge and the tap missed).
-- scrollUntilVisible:
-    element:
-      text: "Delete account"
-      index: 2
-    direction: DOWN
-    timeout: 15000
-- tapOn:
-    text: "Delete account"
-    index: 2
+- tapOn: "Delete account"
 - extendedWaitUntil:
     visible: "Permanently delete this account"
     timeout: 15000
 - takeScreenshot: ${SHOT}-delete-dialog
-# The dialog asks for the literal word DELETE (placeholder "DELETE").
-- tapOn: "DELETE"
-- inputText: "DELETE"
-- tapOn: "Type DELETE to enable deletion"
+# The field asks for the account's username (its placeholder is the username)
+# or, when the signed-in identity carries no username, the literal word DELETE.
+- runFlow:
+    when:
+      visible: "Type DELETE to enable deletion"
+    commands:
+      - tapOn: "DELETE"
+      - inputText: "DELETE"
+      - tapOn: "Type DELETE to enable deletion"
+- runFlow:
+    when:
+      visible: "Type your username to enable deletion"
+    commands:
+      - tapOn: "${USERNAME}"
+      - inputText: ${USERNAME}
+      - tapOn: "Type your username to enable deletion"
 - takeScreenshot: ${SHOT}-confirmation-typed
 - tapOn: "Delete account permanently"
 - extendedWaitUntil:

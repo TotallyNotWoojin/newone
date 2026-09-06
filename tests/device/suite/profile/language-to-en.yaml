@@ -1,7 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Display language → English, starting from the Spanish tab bar
-# left behind by profile/language-to-es.yaml: the chrome switches back.
+# Settings → Idioma → English, starting from the Spanish tab bar left behind
+# by profile/language-to-es.yaml: the chrome switches back.
 - launchApp
 - extendedWaitUntil:
     visible: "Ajustes"
@@ -10,17 +10,20 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Cerrar configuración"
     timeout: 15000
-# The chip's accessibility label is built from the CURRENT (Spanish) UI copy.
-- scrollUntilVisible:
-    element:
-      text: "Idioma de la interfaz: English"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Idioma de la interfaz: English"
+# The row label and the picker options are built from the CURRENT (Spanish)
+# UI copy.
+- extendedWaitUntil:
+    visible: "Idioma"
+    timeout: 15000
+- tapOn: "Idioma"
+- extendedWaitUntil:
+    visible: "Idioma: English"
+    timeout: 15000
+- tapOn: "Idioma: English"
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
-- assertVisible: "Display language"
+- assertVisible: "Language"
 - scrollUntilVisible:
     element:
       text: "Sign out of Newone"

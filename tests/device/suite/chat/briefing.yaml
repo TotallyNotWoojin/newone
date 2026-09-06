@@ -1,29 +1,39 @@
 appId: com.totallynotwoojin.newone
 ---
-# Conversation briefing (AI summary): expand the card, request a draft, and
-# record exactly what the status badge and body say afterwards.
+# Conversation summary: the header "Summarize" button (also offered inside
+# Conversation settings) opens the "Summary" sheet. Ask for a summary of the
+# whole conversation, wait for the prose, copy it, close the sheet, and record
+# exactly what the sheet says at each stage.
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
-- scrollUntilVisible:
-    element:
-      text: ".*Conversation briefing.*"
-    direction: UP
-    timeout: 30000
-- tapOn: ".*Conversation briefing.*"
+- tapOn: "Summarize"
 - extendedWaitUntil:
-    visible: ".*(Request summary draft|No summary draft|Queued|Generating|Unapproved draft|Summary unavailable).*"
+    visible: ".*(Summarize conversation|Summarize new messages|Nothing summarized yet|Generating).*"
     timeout: 15000
-- takeScreenshot: ${SHOT}-briefing-expanded
+- takeScreenshot: ${SHOT}-summary-sheet
+# Absent only when an earlier summary already covers every loaded message.
 - tapOn:
-    text: "Request summary draft"
+    text: "Summarize conversation"
     optional: true
 - extendedWaitUntil:
-    visible: ".*(Queued|Generating|Unapproved draft|Summary unavailable|could not|cannot|failed).*"
+    visible: ".*(Generating|No new messages since the last summary|Summary unavailable|Source changed|could not|cannot|failed).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-after-request
+# Ready: the new summary covers every loaded message, so the sheet says there
+# is nothing new to summarize and Copy/Share become enabled. Failure: "Summary
+# unavailable" (consumers see no other status badge).
 - extendedWaitUntil:
-    visible: ".*(Unapproved draft|Not yet approved|AI-generated draft|Summary unavailable|Human approved|Failure code).*"
+    visible: ".*(No new messages since the last summary|Summary unavailable|Source changed|could not|cannot|failed).*"
     timeout: 120000
 - takeScreenshot: ${SHOT}-final
-- assertVisible: ".*(Unapproved draft|Not yet approved|AI-generated draft).*"
+- assertVisible: "No new messages since the last summary."
+- tapOn: "Copy"
+- extendedWaitUntil:
+    visible: "Copied"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-copied
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 15000
