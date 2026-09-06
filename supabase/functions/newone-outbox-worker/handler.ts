@@ -223,6 +223,8 @@ export interface PushDelivery {
   contentBody: string | null;
   /** The recipient reads another language and its translation is still queued. */
   translationPending: boolean;
+  /** The member muted this registration in Settings: settle as skipped, never submit. */
+  notificationsMuted: boolean;
   preferences: {
     notificationPreview: 'generic' | 'hidden' | 'content';
     soundEnabled: boolean;
@@ -652,6 +654,7 @@ function pushDelivery(value: unknown): PushDelivery {
     'content_title',
     'content_body',
     'translation_pending',
+    'notifications_muted',
   ]);
   oneOf(row.dispatch_status, ['pending', 'retry_wait'] as const);
   if (row.dispatchable !== true) throw new ApiError(503, 'dependency_unavailable');
@@ -738,6 +741,7 @@ function pushDelivery(value: unknown): PushDelivery {
       ? null
       : normalizedString(row.content_body, { min: 1, max: 4000, trim: false }) as string,
     translationPending: row.translation_pending === true,
+    notificationsMuted: row.notifications_muted === true,
     preferences: {
       notificationPreview: oneOf(
         preferences.notification_preview,
@@ -1067,6 +1071,22 @@ export function providerPushData(
   };
 }
 
+export const MUTED_DELIVERY_ERROR_CODE = 'notifications_muted';
+
+/**
+ * The settled result for a delivery whose registration is muted. It is
+ * recorded as a permanent outcome so the attempt is never retried and the job
+ * completes like any other.
+ */
+export function mutedSubmissionResult(delivery: PushDelivery): ExpoSubmissionResult {
+  return {
+    attemptId: delivery.attemptId,
+    result: 'permanent_failure',
+    providerTicketId: null,
+    errorCode: MUTED_DELIVERY_ERROR_CODE,
+  };
+}
+
 async function expoMessage(
   job: PushJob,
   event: PushEvent,
@@ -1211,6 +1231,12 @@ export function defaultOutboxWorkerDependencies(): OutboxWorkerDependencies {
         // stops holding after 25 seconds and falls back to the original text).
         let heldForTranslation = 0;
         for (const delivery of page.deliveries) {
+          // A registration muted in Settings is settled as skipped: no
+          // provider submission, no retry, and no translation hold.
+          if (delivery.notificationsMuted) {
+            localResults.push(mutedSubmissionResult(delivery));
+            continue;
+          }
           if (
             delivery.translationPending &&
             delivery.preferences.notificationPreview === 'content'

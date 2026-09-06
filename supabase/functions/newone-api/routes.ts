@@ -161,6 +161,8 @@ export type RouteKind =
   | 'device.register'
   | 'device.preferences.read'
   | 'device.preferences.update'
+  | 'device.mute.read'
+  | 'device.mute.update'
   | 'invite.issue'
   | 'session.list'
   | 'session.revoke.self'
@@ -823,6 +825,19 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     method: 'PATCH',
     kind: 'device.preferences.update',
     template: '/v2/devices/:installationId/preferences',
+    status: 200,
+  },
+  {
+    method: 'POST',
+    kind: 'device.mute.read',
+    template: '/v2/devices/:installationId/mute/query',
+    status: 200,
+    idempotencyRequired: false,
+  },
+  {
+    method: 'PATCH',
+    kind: 'device.mute.update',
+    template: '/v2/devices/:installationId/mute',
     status: 200,
   },
   {
@@ -3153,6 +3168,23 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           installationId: pathUuid(route, 'installationId'),
           expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
           patch,
+        },
+      };
+    }
+    case 'device.mute.read': {
+      onlyKeys(body, ['organizationId']);
+      return {
+        organizationId: organization(body),
+        values: { installationId: pathUuid(route, 'installationId') },
+      };
+    }
+    case 'device.mute.update': {
+      onlyKeys(body, ['organizationId', 'muted']);
+      return {
+        organizationId: organization(body),
+        values: {
+          installationId: pathUuid(route, 'installationId'),
+          muted: bool(body.muted),
         },
       };
     }
@@ -6638,6 +6670,37 @@ export async function executeCommand(
             p_installation_id: values.installationId,
             p_expected_version: values.expectedVersion,
             p_patch: values.patch,
+          },
+        ),
+      };
+    case 'device.mute.read':
+      return {
+        status: 200,
+        body: toPublicJson(
+          await invokeRpc(
+            asRpcClient(actor.adminClient),
+            'bff_get_device_notifications_muted',
+            {
+              p_actor_user_id: actor.user.id,
+              p_organization_id: org,
+              p_session_id: actor.claims.sessionId,
+              p_installation_id: values.installationId,
+            },
+          ),
+        ),
+      };
+    case 'device.mute.update':
+      return {
+        status: 200,
+        body: await businessRpc(
+          actor,
+          org,
+          idempotencyKey,
+          await sha256Hex(`${requestDigest}\ndevice-mute\n${values.installationId}`),
+          'bff_set_device_notifications_muted',
+          {
+            p_installation_id: values.installationId,
+            p_muted: values.muted,
           },
         ),
       };

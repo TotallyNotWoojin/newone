@@ -727,6 +727,7 @@ Deno.test('shift-aware suppression uses authoritative state and only server crit
     contentTitle: null,
     contentBody: null,
     translationPending: false,
+    notificationsMuted: false,
     preferences: {
       notificationPreview: 'generic',
       soundEnabled: true,

@@ -607,6 +607,7 @@ Deno.test('outbox push pages and realtime fanout cover cursor and event variants
     contentTitle: null,
     contentBody: null,
     translationPending: false,
+    notificationsMuted: false,
     preferences: {
       notificationPreview: 'hidden',
       soundEnabled: false,
