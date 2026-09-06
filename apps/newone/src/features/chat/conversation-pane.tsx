@@ -961,6 +961,26 @@ function SystemEventRow({ message }: { message: Message }) {
   );
 }
 
+/** A translation normally lands within seconds. Past this window it is
+ * "delayed" (the provider is down or the worker is backing off; the revive
+ * job re-queues stuck rows), so the bubble says so instead of looking stuck.
+ * The translation still replaces the line whenever it arrives. */
+export const TRANSLATION_DELAYED_AFTER_MS = 45_000;
+
+function useTranslationDelayed(pending: boolean, requestedAt?: string): boolean {
+  const startedAt = requestedAt ? Date.parse(requestedAt) : Number.NaN;
+  const deadline = Number.isNaN(startedAt) ? Number.NaN : startedAt + TRANSLATION_DELAYED_AFTER_MS;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!pending || Number.isNaN(deadline)) return undefined;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), remaining);
+    return () => clearTimeout(timer);
+  }, [deadline, pending]);
+  return pending && !Number.isNaN(deadline) && Math.max(now, Date.now()) >= deadline;
+}
+
 const MessageBubble = memo(function MessageBubble({
   message,
   showSender,
@@ -1036,6 +1056,10 @@ const MessageBubble = memo(function MessageBubble({
       : idle);
   const translationPending = translationEnabled && !hasTranslation
     && (visibleTranslationState === 'queued' || visibleTranslationState === 'translating');
+  const translationDelayed = useTranslationDelayed(
+    translationPending,
+    translation?.createdAt ?? message.createdAt,
+  );
   const translationUnavailable = translationEnabled && !hasTranslation && !translationPending
     && (visibleTranslationState === 'failed'
       || visibleTranslationState === 'blocked'
@@ -1115,7 +1139,7 @@ const MessageBubble = memo(function MessageBubble({
   );
 
   const translationLine = translationPending ? (
-    <Text style={styles.quietLine}>{t('chat.translating')}</Text>
+    <Text style={styles.quietLine}>{t(translationDelayed ? 'chat.translationDelayed' : 'chat.translating')}</Text>
   ) : translationUnavailable ? (
     <View style={styles.quietRow}>
       <Text style={styles.quietLine}>{t('chat.translationUnavailable')}</Text>

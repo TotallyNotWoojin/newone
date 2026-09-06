@@ -5,7 +5,7 @@ import { FlatList, Keyboard } from 'react-native';
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
-import { ConversationPane } from '@/features/chat/conversation-pane';
+import { ConversationPane, TRANSLATION_DELAYED_AFTER_MS } from '@/features/chat/conversation-pane';
 
 const mockPush = jest.fn<(_href: unknown) => void>();
 const mockReplace = jest.fn<(_href: unknown) => void>();
@@ -2471,6 +2471,40 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     await render(<ConversationPane conversation={conversation()} messages={[pending]} onSend={noopSend} />);
     expect(screen.getByText('chat.translating')).toBeTruthy();
     expect(screen.queryByText(/chat\.translationQueued|chat\.translationProcessing/)).toBeNull();
+  });
+
+  test('says a pending translation is delayed once it has outlived the normal window', async () => {
+    const stale = incomingMessage({
+      attachment: undefined, translationState: 'queued', translation: undefined,
+      createdAt: new Date(Date.now() - 2 * TRANSLATION_DELAYED_AFTER_MS).toISOString(),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[stale]} onSend={noopSend} />);
+    expect(screen.getByText('chat.translationDelayed')).toBeTruthy();
+    expect(screen.queryByText('chat.translating')).toBeNull();
+    // The delayed line is quiet: no retry link, the revive path stays server-side.
+    expect(screen.queryByLabelText('chat.retryTranslation')).toBeNull();
+  });
+
+  test('flips a fresh pending translation to delayed only after the window, and drops the line once it lands', async () => {
+    jest.useFakeTimers();
+    try {
+      const fresh = incomingMessage({
+        attachment: undefined, translationState: 'queued', translation: undefined,
+        createdAt: new Date().toISOString(),
+      });
+      const view = await render(<ConversationPane conversation={conversation()} messages={[fresh]} onSend={noopSend} />);
+      expect(screen.getByText('chat.translating')).toBeTruthy();
+      await act(async () => { jest.advanceTimersByTime(TRANSLATION_DELAYED_AFTER_MS - 1_000); });
+      expect(screen.getByText('chat.translating')).toBeTruthy();
+      await act(async () => { jest.advanceTimersByTime(1_500); });
+      expect(screen.getByText('chat.translationDelayed')).toBeTruthy();
+      // The revive path delivered it: the translation replaces the status line.
+      await view.rerender(<ConversationPane conversation={conversation()} messages={[translatedMessage({ isOwn: false })]} onSend={noopSend} />);
+      expect(screen.queryByText('chat.translationDelayed')).toBeNull();
+      expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('sends on the return key when Enter-sends is on and inserts newlines when it is off', async () => {
