@@ -37,6 +37,14 @@ Paused until the owner says go. Items are in rough priority order.
 21. Enqueue a realtime invalidation when a translation job completes (private.bff_complete_translation_job_impl) so bubbles and previews update the moment the translation lands instead of at the 30 s poll; the client follow-ups from stream B become a fallback.
 22. HELD migration 20260907020000_candidate_payload_username.sql: apply only once v3.1 is the installed floor (re-timestamp past 20260907040000 first); v3.0 clients reject the extra key in the workplace group form.
 
-## v3.2: dark mode (owner decision, Sep 6 2026)
+## v3.3: dark mode (owner decision, Sep 6 2026; moved from v3.2 on Sep 6 11:40)
 
 23. Dark mode. Follows the phone's appearance setting first; then a Settings override (System / Light / Dark, stored with the device preferences). Bubbles stay green-tinted in dark (not neutral grey). Scope: dark palette for the 24 tokens with contrast checks, theme provider + converting the 39 static stylesheets to theme-aware styles, status bar / keyboard / modals / splash / tab bar / image viewer chrome, web follows. Tests: unit (hook, override, contrast gate) + a device area that screenshots every main screen in dark for the owner's visual review; the owner reviews the look on their phone (dark contact sheet + TestFlight); the automated unit tests and full device pass still run for functional regressions (agreed Sep 6 2026).
+
+## v3.2: sign-in flow, phone signup removal, status wording, username release (owner, Sep 6 2026 11:40) — right after v3.1 ships
+
+24. Returning sign-in becomes one flow: email first → if the account has a password: password field with a "Forgot password?" recovery link (emailed code → set a new password) → signed in; if the account has no password yet: password setup screen → email verification code → signed in. The "Email me a code / Use password" method chips go away. Server: a destination lookup that says whether a password exists (the app already reveals unknown accounts on this screen, so enumeration posture is unchanged); recovery = code-verified password set.
+25. Remove the phone signup option (the Email / Phone chips); email only. Keep server phone paths inert.
+26. Presence default wording: "On-site" → "Active" (consumer wording; check es/ko).
+27. Deleting an account must free the username: today the deletion tombstone quarantines the released username against re-registration (migration 20260901030000). Owner expects it to free up; decide the release rule (immediate, or a short cooldown) and implement.
+28. Tests for each: unit (sign-in state machine, status label), Deno (lookup + recovery routes), hosted smoke (recovery flow, username release after deletion), device suite (auth area: new sign-in flow with password / without password / forgot password; negative: phone chips absent; sessions/profile: status label), then a full pass and release as 3.2.
