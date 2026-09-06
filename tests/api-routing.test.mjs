@@ -20,6 +20,9 @@ test('native Edge routing inserts the exact function for auth, read, and command
     ['/v2/auth/password/verify', 'newone-auth'],
     ['/v2/auth/native/password/verify', 'newone-auth'],
     ['/v2/auth/password/set', 'newone-auth'],
+    // v3.2 account lookup: the first call of every returning sign-in.
+    ['/v2/auth/account/lookup', 'newone-auth'],
+    ['/v2/auth/native/account/lookup', 'newone-auth'],
     ['/v2/auth/recovery/otp/request', 'newone-auth'],
     ['/v2/auth/native/recovery/otp/verify', 'newone-auth'],
     ['/v2/auth/recovery/cases', 'newone-auth'],

@@ -71,17 +71,17 @@ function successfulAction(value: unknown = undefined) {
 function authState(overrides: Record<string, unknown> = {}) {
   return {
     error: null,
+    lookupAccount: successfulAction({ exists: true, hasPassword: true }),
     requestOtp: successfulAction({ channelConfigured: true }),
-    verifyOtp: successfulAction({ hasPassword: true }),
+    verifyOtp: successfulAction(),
     requestSignup: successfulAction(),
-    verifySignup: successfulAction({ hasPassword: true }),
+    verifySignup: successfulAction(),
     requestRecoveryOtp: successfulAction({ channelConfigured: true }),
-    verifyRecoveryOtp: successfulAction({ otherSessionsRevoked: 1, hasPassword: true }),
+    verifyRecoveryOtp: successfulAction({ otherSessionsRevoked: 1 }),
+    completeRecovery: successfulAction(),
     signInWithPassword: successfulAction(),
     setPassword: successfulAction(),
-    dismissPasswordPrompt: jest.fn(),
-    hasPassword: false,
-    passwordPromptPending: false,
+    hasPassword: true,
     ...overrides,
   };
 }
@@ -106,16 +106,19 @@ async function solveCaptcha() {
   await fireEvent.press(screen.getByLabelText('auth.challengeLabel'));
 }
 
+/** Sign in chip → email → Continue: the lookup answers and the screen moves on. */
+async function continueAsReturning(email = ' Person@Example.COM ') {
+  await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
+  await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), email);
+  if (mockTurnstileSiteKey) await solveCaptcha();
+  await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+}
+
 describe('sign-in and account recovery screen', () => {
-  test('validates returning identity, honors channel availability, and verifies the exact OTP', async () => {
-    mockAuth = authState({
-      requestOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
-        .mockResolvedValueOnce({ channelConfigured: false })
-        .mockResolvedValueOnce({ channelConfigured: true }),
-    });
+  test('validates the returning email, needs the challenge, and looks the account up', async () => {
     const view = await render(<SignInScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.emailChannel' }));
+    expect(screen.getByText('auth.subtitleReturn')).toBeTruthy();
     const emailInput = screen.getByLabelText('auth.emailLabel');
     await fireEvent(emailInput, 'focus');
     await fireEvent(emailInput, 'blur');
@@ -126,28 +129,21 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), ' PERSON@Example.COM ');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     expect(screen.getByText('auth.challengeRequired')).toBeTruthy();
+    expect(mockAuth.lookupAccount).not.toHaveBeenCalled();
+
     await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.channelUnavailable')).toBeTruthy());
-    expect(mockAuth.requestOtp).toHaveBeenNthCalledWith(1, {
+    await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
+    expect(mockAuth.lookupAccount).toHaveBeenCalledWith({
       destinationType: 'email',
       destination: 'person@example.com',
       captchaToken: 'controlled-captcha-token-value',
     });
-
-    await solveCaptcha();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByLabelText('auth.codeA11y')).toBeTruthy());
-    expect(screen.getByText('auth.otpSent')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
-    expect(screen.getByText('auth.codeInvalid')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123 456');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
-    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
-      destinationType: 'email', destination: 'person@example.com', code: '123456',
-    }));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    // The password step names the account and no longer asks for the email.
+    expect(screen.getByText('person@example.com')).toBeTruthy();
+    expect(screen.queryByLabelText('auth.emailLabel')).toBeNull();
+    expect(screen.getByText('auth.subtitlePassword')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'auth.signIn' })).toBeTruthy();
     await view.unmount();
   });
 
@@ -180,7 +176,6 @@ describe('sign-in and account recovery screen', () => {
     }
     const view = await render(<SignInScreen />);
     expect(screen.getByText('auth.titleSignup')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'auth.emailChannel' })).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), ' New.Person@Example.COM ');
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'River_Runner_7');
@@ -214,14 +209,7 @@ describe('sign-in and account recovery screen', () => {
 
   test('validates every signup field locally before any request leaves the device', async () => {
     const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
-    await fireEvent.changeText(screen.getByLabelText('auth.phoneLabel'), '+15555550100');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.modeSignup' }));
-    const emailAfterPhone = screen.getByLabelText('auth.signupEmailLabel');
-    expect(emailAfterPhone.props.value).toBe('');
-
-    await fireEvent.changeText(emailAfterPhone, 'not-an-email');
+    await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'not-an-email');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     expect(screen.getByText('auth.signupEmailInvalid')).toBeTruthy();
 
@@ -247,6 +235,7 @@ describe('sign-in and account recovery screen', () => {
 
     expect(mockAuth.requestSignup).not.toHaveBeenCalled();
     expect(mockAuth.requestOtp).not.toHaveBeenCalled();
+    expect(mockAuth.lookupAccount).not.toHaveBeenCalled();
     await view.unmount();
   });
 
@@ -309,7 +298,7 @@ describe('sign-in and account recovery screen', () => {
       expect.objectContaining({ language: 'es' }),
     ));
 
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.differentIdentity' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.differentEmail' }));
     expect(screen.getByRole('button', { name: 'auth.languageKorean' })).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.languageKorean' }));
     expect(mockSetLocale).toHaveBeenCalledWith('ko');
@@ -317,7 +306,7 @@ describe('sign-in and account recovery screen', () => {
     await view.unmount();
   });
 
-  test('signs in a returning member without any challenge when Turnstile is not configured', async () => {
+  test('signs a returning member in without any challenge when Turnstile is not configured', async () => {
     mockTurnstileSiteKey = null;
     const view = await render(<SignInScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
@@ -326,20 +315,23 @@ describe('sign-in and account recovery screen', () => {
 
     await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), ' Person@Example.COM ');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
     expect(screen.queryByText('auth.challengeRequired')).toBeNull();
-    expect(mockAuth.requestOtp).toHaveBeenCalledWith({
+    expect(mockAuth.lookupAccount).toHaveBeenCalledWith({
       destinationType: 'email',
       destination: 'person@example.com',
     });
-    expect(mockAuth.requestOtp.mock.calls[0][0]).not.toHaveProperty('captchaToken');
+    expect(mockAuth.lookupAccount.mock.calls[0][0]).not.toHaveProperty('captchaToken');
+    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
 
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
-    await waitFor(() => expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
-      destinationType: 'email', destination: 'person@example.com', code: '123456',
+    await fireEvent.changeText(screen.getByLabelText('auth.passwordLabel'), 'correct horse battery');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
+    await waitFor(() => expect(mockAuth.signInWithPassword).toHaveBeenCalledWith({
+      destinationType: 'email', destination: 'person@example.com', password: 'correct horse battery',
     }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    expect(mockAuth.requestOtp).not.toHaveBeenCalled();
+    expect(mockAuth.requestRecoveryOtp).not.toHaveBeenCalled();
     await view.unmount();
   });
 
@@ -373,41 +365,50 @@ describe('sign-in and account recovery screen', () => {
     await view.unmount();
   });
 
-  test('gates code resend behind the cooldown and reuses the returning request without a stale captcha', async () => {
+  test('gates the forgot-password resend behind the cooldown and reuses the recovery request without a stale captcha', async () => {
     jest.useFakeTimers();
     const setIntervalSpy = jest.spyOn(globalThis, 'setInterval');
     const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval');
     try {
       const view = await render(<SignInScreen />);
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-      await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
-      await solveCaptcha();
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-      await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
+      await continueAsReturning('person@example.com');
+      await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
+      // The lookup keeps its challenge token for the recovery request that
+      // "Forgot password?" makes from the password step.
+      expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.forgotPassword' }));
+      await waitFor(() => expect(screen.getByLabelText('auth.codeA11y')).toBeTruthy());
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledWith({
+        destinationType: 'email',
+        destination: 'person@example.com',
+        captchaToken: 'controlled-captcha-token-value',
+      });
+      expect(screen.getByText('auth.otpSent')).toBeTruthy();
 
       expect(screen.getByText('(60s)')).toBeTruthy();
       await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
-      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(1);
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledTimes(1);
 
       await act(async () => { jest.advanceTimersByTime(59_000); });
       expect(screen.getByText('(1s)')).toBeTruthy();
       await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
-      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(1);
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledTimes(1);
 
       await act(async () => { jest.advanceTimersByTime(1_000); });
       expect(screen.queryByText('(0s)')).toBeNull();
       await fireEvent.press(screen.getByRole('button', { name: 'auth.resendCode' }));
       await waitFor(() => expect(screen.getByText('auth.codeResent')).toBeTruthy());
-      expect(mockAuth.requestOtp).toHaveBeenCalledTimes(2);
-      expect(mockAuth.requestOtp).toHaveBeenLastCalledWith({
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledTimes(2);
+      expect(mockAuth.requestRecoveryOtp).toHaveBeenLastCalledWith({
         destinationType: 'email',
         destination: 'person@example.com',
       });
-      expect(mockAuth.requestOtp.mock.calls[1][0]).not.toHaveProperty('captchaToken');
+      expect(mockAuth.requestRecoveryOtp.mock.calls[1][0]).not.toHaveProperty('captchaToken');
       expect(screen.getByText('(60s)')).toBeTruthy();
 
-      await fireEvent.press(screen.getByRole('button', { name: 'auth.differentIdentity' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'auth.differentEmail' }));
       expect(screen.queryByRole('button', { name: 'auth.resendCode' })).toBeNull();
+      expect(screen.getByLabelText('auth.emailLabel').props.value).toBe('person@example.com');
       expect(setIntervalSpy).toHaveBeenCalledTimes(1);
       expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[0]?.value);
       await view.unmount();
@@ -471,12 +472,12 @@ describe('sign-in and account recovery screen', () => {
   test('appends the error code and short correlation id only to generic fallback failures', async () => {
     const correlationId = '1a2b3c4d-9999-4000-8000-000000000000';
     mockAuth = authState({
-      requestOtp: jest.fn<(..._args: unknown[]) => Promise<{ channelConfigured: boolean }>>()
+      lookupAccount: jest.fn<(..._args: unknown[]) => Promise<{ exists: boolean; hasPassword: boolean }>>()
         .mockRejectedValueOnce(new RepositoryError('upstream detail', 'quota_exhausted', false, correlationId))
         .mockRejectedValueOnce(new RepositoryError('upstream detail', 'quota_exhausted', false))
         .mockRejectedValueOnce(new Error('unclassified failure'))
         .mockRejectedValueOnce('not-an-error')
-        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'username_taken', false, correlationId)),
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'rate_limited', true, correlationId)),
     });
     const view = await render(<SignInScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
@@ -487,21 +488,17 @@ describe('sign-in and account recovery screen', () => {
     await waitFor(() => expect(screen.getByText('errors.action (quota_exhausted · 1a2b3c4d)')).toBeTruthy());
     expect(screen.queryByText('upstream detail')).toBeNull();
 
-    await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('errors.action (quota_exhausted)')).toBeTruthy());
 
-    await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('errors.action')).toBeTruthy());
 
-    await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     await waitFor(() => expect(screen.getByText('auth.signInUnavailable')).toBeTruthy());
 
-    await solveCaptcha();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.usernameTaken')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('errors.rateLimit')).toBeTruthy());
     expect(screen.queryByText(/1a2b3c4d/)).toBeNull();
     await view.unmount();
   });
@@ -528,8 +525,8 @@ describe('sign-in and account recovery screen', () => {
   });
 });
 
-describe('password sign-in', () => {
-  test('signs a returning member in with email and password, maps a rejected credential, and keeps codes one tap away', async () => {
+describe('returning sign-in', () => {
+  test('signs a member in with email and password, maps a wrong password, and can step back to the email', async () => {
     mockAuth = authState({
       signInWithPassword: jest.fn<(..._args: unknown[]) => Promise<void>>()
         .mockRejectedValueOnce(new RepositoryError('upstream detail', 'unauthorized', false))
@@ -537,19 +534,14 @@ describe('password sign-in', () => {
         .mockResolvedValueOnce(undefined),
     });
     const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.methodPassword' }));
+    await continueAsReturning();
+    await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
 
-    // A password pairs with the account email: the phone channel and the
-    // challenge (a code-delivery guard) both step aside.
-    expect(screen.queryByRole('button', { name: 'auth.phoneChannel' })).toBeNull();
-    expect(screen.queryByLabelText('auth.challengeLabel')).toBeNull();
-    expect(screen.getByRole('button', { name: 'auth.signIn' })).toBeTruthy();
+    // No code-method chips, no phone chips: one road for everyone.
+    for (const gone of ['auth.methodCode', 'auth.methodPassword', 'auth.emailChannel', 'auth.phoneChannel']) {
+      expect(screen.queryByRole('button', { name: gone })).toBeNull();
+    }
 
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
-    expect(screen.getByText('auth.emailInvalid')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), ' Person@Example.COM ');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.signIn' }));
     expect(screen.getByText('auth.passwordTooShort')).toBeTruthy();
     expect(mockAuth.signInWithPassword).not.toHaveBeenCalled();
@@ -579,52 +571,129 @@ describe('password sign-in', () => {
     }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
     expect(mockAuth.requestOtp).not.toHaveBeenCalled();
+    expect(mockAuth.requestRecoveryOtp).not.toHaveBeenCalled();
 
-    // Forgot password: codes remain the recovery route.
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.forgotPassword' }));
+    // Back to the email keeps what was typed.
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.differentEmail' }));
     expect(screen.queryByLabelText('auth.passwordLabel')).toBeNull();
-    expect(screen.getByRole('button', { name: 'auth.emailChannel' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'auth.continue' })).toBeTruthy();
     expect(screen.getByLabelText('auth.emailLabel').props.value).toBe(' Person@Example.COM ');
+    expect(screen.getByRole('button', { name: 'auth.continue' })).toBeTruthy();
     await view.unmount();
   });
 
-  test('offers a password once after a code sign-in for an account without one, and saves it', async () => {
+  test('an unknown email shows the no-account message and a Create account shortcut that keeps the email', async () => {
+    mockAuth = authState({ lookupAccount: successfulAction({ exists: false, hasPassword: false }) });
+    const view = await render(<SignInScreen />);
+    await continueAsReturning();
+    await waitFor(() => expect(screen.getByText('auth.noAccount')).toBeTruthy());
+    expect(screen.queryByLabelText('auth.passwordLabel')).toBeNull();
+    expect(mockAuth.requestRecoveryOtp).not.toHaveBeenCalled();
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.createAccountShortcut' }));
+    expect(screen.getByText('auth.titleSignup')).toBeTruthy();
+    expect(screen.queryByText('auth.noAccount')).toBeNull();
+    expect(screen.getByLabelText('auth.signupEmailLabel').props.value).toBe(' Person@Example.COM ');
+    expect(screen.getByLabelText('auth.usernameLabel')).toBeTruthy();
+    await view.unmount();
+  });
+
+  test('forgot password: emailed code, a wrong code, then a new password saved through the recovered session', async () => {
     mockTurnstileSiteKey = null;
     mockAuth = authState({
-      verifyOtp: jest.fn(async (..._args: unknown[]) => {
-        mockAuth.passwordPromptPending = true;
-        return { hasPassword: false };
-      }),
-      setPassword: jest.fn<(..._args: unknown[]) => Promise<void>>()
+      verifyRecoveryOtp: jest.fn<(..._args: unknown[]) => Promise<{ otherSessionsRevoked: number }>>()
+        .mockRejectedValueOnce(new RepositoryError('upstream detail', 'unauthorized', false))
+        .mockResolvedValueOnce({ otherSessionsRevoked: 2 }),
+      completeRecovery: jest.fn<(..._args: unknown[]) => Promise<void>>()
         .mockRejectedValueOnce(new RepositoryError('upstream detail', 'weak_password', false))
-        .mockImplementationOnce(async () => {
-          mockAuth.passwordPromptPending = false;
-        }),
+        .mockResolvedValueOnce(undefined),
     });
     const view = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
+    await continueAsReturning('person@example.com');
+    await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
 
-    await waitFor(() => expect(screen.getByText('auth.passwordPromptTitle')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.forgotPassword' }));
+    await waitFor(() => expect(screen.getByLabelText('auth.codeA11y')).toBeTruthy());
+    expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledWith({
+      destinationType: 'email',
+      destination: 'person@example.com',
+    });
+    expect(screen.queryByLabelText('auth.passwordLabel')).toBeNull();
+    expect(screen.getByRole('button', { name: 'auth.continue' })).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '12');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    expect(screen.getByText('auth.codeInvalid')).toBeTruthy();
+    expect(mockAuth.verifyRecoveryOtp).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '111 111');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.verifyFailed')).toBeTruthy());
+    expect(screen.queryByText('upstream detail')).toBeNull();
+    expect(screen.getByLabelText('auth.codeA11y')).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '654321');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByText('auth.newPasswordTitle')).toBeTruthy());
+    expect(mockAuth.verifyRecoveryOtp).toHaveBeenLastCalledWith({
+      destinationType: 'email',
+      destination: 'person@example.com',
+      code: '654321',
+    });
+    // Signed in only once the password is saved.
     expect(mockRouter.replace).not.toHaveBeenCalled();
+    expect(screen.getByText('auth.passwordRule')).toBeTruthy();
+
     await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
     expect(screen.getByText('auth.passwordTooShort')).toBeTruthy();
-    expect(mockAuth.setPassword).not.toHaveBeenCalled();
+    expect(mockAuth.completeRecovery).not.toHaveBeenCalled();
 
     await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
     await waitFor(() => expect(screen.getByText('auth.passwordTooShort')).toBeTruthy());
-    expect(mockAuth.setPassword).toHaveBeenCalledTimes(1);
+    expect(mockAuth.completeRecovery).toHaveBeenCalledTimes(1);
     expect(mockRouter.replace).not.toHaveBeenCalled();
 
+    await fireEvent(screen.getByLabelText('auth.newPasswordLabel'), 'submitEditing');
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
+    expect(mockAuth.completeRecovery).toHaveBeenLastCalledWith('correct horse battery');
+    expect(mockAuth.setPassword).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('an account without a password goes straight to the emailed code and then a new password', async () => {
+    mockTurnstileSiteKey = null;
+    mockAuth = authState({ lookupAccount: successfulAction({ exists: true, hasPassword: false }) });
+    const view = await render(<SignInScreen />);
+    await continueAsReturning('person@example.com');
+    await waitFor(() => expect(screen.getByLabelText('auth.codeA11y')).toBeTruthy());
+    expect(screen.queryByLabelText('auth.passwordLabel')).toBeNull();
+    expect(screen.queryByText('auth.passwordPromptTitle')).toBeNull();
+    expect(mockAuth.requestRecoveryOtp).toHaveBeenCalledWith({
+      destinationType: 'email',
+      destination: 'person@example.com',
+    });
+
+    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '654321');
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
+    await waitFor(() => expect(screen.getByLabelText('auth.newPasswordLabel')).toBeTruthy());
+    await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
-    expect(mockAuth.setPassword).toHaveBeenLastCalledWith('correct horse battery');
+    expect(mockAuth.completeRecovery).toHaveBeenCalledWith('correct horse battery');
+    await view.unmount();
+  });
+
+  test('a recovery channel that is not configured is reported and the member stays on the password step', async () => {
+    mockTurnstileSiteKey = null;
+    mockAuth = authState({ requestRecoveryOtp: successfulAction({ channelConfigured: false }) });
+    const view = await render(<SignInScreen />);
+    await continueAsReturning('person@example.com');
+    await waitFor(() => expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'auth.forgotPassword' }));
+    await waitFor(() => expect(screen.getByText('auth.channelUnavailable')).toBeTruthy());
+    expect(screen.getByLabelText('auth.passwordLabel')).toBeTruthy();
+    expect(screen.queryByLabelText('auth.codeA11y')).toBeNull();
     await view.unmount();
   });
 
@@ -641,54 +710,10 @@ describe('password sign-in', () => {
     expect(mockAuth.requestSignup).not.toHaveBeenCalled();
     await view.unmount();
   });
-
-  test('the password step cannot be skipped, and a returning member with a password never sees it', async () => {
-    mockTurnstileSiteKey = null;
-    mockAuth = authState({
-      verifySignup: jest.fn(async (..._args: unknown[]) => {
-        mockAuth.passwordPromptPending = true;
-        return { hasPassword: false };
-      }),
-      dismissPasswordPrompt: jest.fn(() => {
-        mockAuth.passwordPromptPending = false;
-      }),
-    });
-    const view = await render(<SignInScreen />);
-    await fireEvent.changeText(screen.getByLabelText('auth.signupEmailLabel'), 'new.person@example.com');
-    await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'river_runner_7');
-    await fireEvent.changeText(screen.getByLabelText('auth.displayNameLabel'), 'River Runner');
-    await fireEvent.changeText(screen.getByLabelText('auth.signupPasswordLabel'), 'correct horse battery');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.signupOtpSent')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '246810');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignup' }));
-    await waitFor(() => expect(screen.getByText('auth.passwordPromptTitle')).toBeTruthy());
-
-    // No skip control: the account must end up with a password.
-    expect(screen.queryByRole('button', { name: 'auth.skipPassword' })).toBeNull();
-    expect(mockAuth.dismissPasswordPrompt).not.toHaveBeenCalled();
-    expect(mockRouter.replace).not.toHaveBeenCalled();
-    await fireEvent.changeText(screen.getByLabelText('auth.newPasswordLabel'), 'correct horse battery');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.savePassword' }));
-    await waitFor(() => expect(mockAuth.setPassword).toHaveBeenLastCalledWith('correct horse battery'));
-    await view.unmount();
-
-    mockAuth = authState();
-    const returning = await render(<SignInScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.returning' }));
-    await fireEvent.changeText(screen.getByLabelText('auth.emailLabel'), 'person@example.com');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
-    await waitFor(() => expect(screen.getByText('auth.otpSent')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('auth.codeA11y'), '123456');
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.verifySignIn' }));
-    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
-    expect(screen.queryByText('auth.passwordPromptTitle')).toBeNull();
-    await returning.unmount();
-  });
 });
 
 describe('consumer-neutral sign-in copy', () => {
-  test.each([390, 1280])('uses a neutral email placeholder in every access mode at width %i', async (width) => {
+  test.each([390, 1280])('uses a neutral email placeholder and offers email only at width %i', async (width) => {
     mockWidth = width;
     const view = await render(<SignInScreen />);
 
@@ -697,14 +722,14 @@ describe('consumer-neutral sign-in copy', () => {
     expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
     expect(screen.queryByPlaceholderText('you@company.com')).toBeNull();
 
-    // The phone placeholder is unchanged and comes back to the neutral email one.
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.phoneChannel' }));
-    expect(screen.getByPlaceholderText('+52 81 5555 0192')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'auth.emailChannel' }));
-    expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
+    // Email only (owner, Sep 2026): no channel chips, no phone placeholder.
+    expect(screen.queryByRole('button', { name: 'auth.phoneChannel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'auth.emailChannel' })).toBeNull();
+    expect(screen.queryByPlaceholderText('+52 81 5555 0192')).toBeNull();
+    expect(screen.getByLabelText('auth.emailLabel').props.keyboardType).toBe('email-address');
 
-    // Consumer sign-in offers only "Create account" and "Returning member"
-    // (owner backlog, Sep 4 2026): no enrollment or recovery modes.
+    // Consumer sign-in offers only "Create account" and "Sign in": no
+    // enrollment or recovery modes.
     expect(screen.queryByRole('button', { name: 'auth.firstUse' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'auth.recovery' })).toBeNull();
     for (const mode of ['auth.modeSignup']) {

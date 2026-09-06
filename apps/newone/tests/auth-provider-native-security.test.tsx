@@ -20,6 +20,7 @@ const mockRequestNativeOtp = jest.fn();
 const mockVerifyNativeOtp = jest.fn();
 const mockRequestNativeRecoveryOtp = jest.fn();
 const mockVerifyNativeRecoveryOtp = jest.fn();
+const mockSetNativePassword = jest.fn();
 const mockPurgeUser = jest.fn();
 const mockTranslate = (mockKey: string) => mockKey;
 
@@ -81,6 +82,9 @@ jest.mock('@/lib/web-auth', () => {
     requestNativeRecoveryOtp: (mockInput: unknown) => mockRequestNativeRecoveryOtp(mockInput),
     requestWebOtp: jest.fn(),
     requestWebRecoveryOtp: jest.fn(),
+    lookupNativeAccount: jest.fn(),
+    lookupWebAccount: jest.fn(),
+    setNativePassword: (mockInput: unknown) => mockSetNativePassword(mockInput),
     signOutWebSession: jest.fn(),
     validateNativeMembership: (mockInput: unknown) => mockValidateNativeMembership(mockInput),
     verifyNativeOtp: (mockInput: unknown) => mockVerifyNativeOtp(mockInput),
@@ -209,6 +213,7 @@ beforeEach(() => {
       expiresIn: 3600,
     },
   }));
+  mockSetNativePassword.mockImplementation(async () => ({ passwordSet: true }));
   mockPurgeUser.mockImplementation(async () => undefined);
   jest.spyOn(AppState, 'addEventListener').mockImplementation((
     _mockType: string,
@@ -364,22 +369,10 @@ describe('native authentication security state machine', () => {
     await view.unmount();
   });
 
-  test('rejects each malformed native recovery receipt and preserves the receipt count on success', async () => {
+  test('holds the recovery session until the new password is saved through it, and rejects each malformed activation', async () => {
     const view = await renderProvider();
     await waitFor(() => expect(screen.getByText('signed-in')).toBeTruthy());
-
-    for (const malformed of [
-      { data: { session: nativeSession() }, error: { message: 'set failed' } },
-      { data: { session: null }, error: null },
-      { data: { session: nativeSession('aal2', otherUserId) }, error: null },
-    ]) {
-      mockSetSession.mockImplementationOnce(async () => malformed);
-      await expect(currentAuth().verifyRecoveryOtp({
-        destinationType: 'phone',
-        destination: '+15555550100',
-        code: '654321',
-      })).rejects.toMatchObject({ code: 'invalid_response' });
-    }
+    const activationsBefore = mockSetSession.mock.calls.length;
 
     let result: { otherSessionsRevoked: number } | undefined;
     await act(async () => {
@@ -389,7 +382,32 @@ describe('native authentication security state machine', () => {
         code: '654321',
       });
     });
-    expect(result).toEqual({ otherSessionsRevoked: 4, hasPassword: false });
+    expect(result).toEqual({ otherSessionsRevoked: 4 });
+    // The code alone activates nothing; the session waits for the password.
+    expect(mockSetSession.mock.calls.length).toBe(activationsBefore);
+
+    for (const malformed of [
+      { data: { session: nativeSession() }, error: { message: 'set failed' } },
+      { data: { session: null }, error: null },
+      { data: { session: nativeSession('aal2', otherUserId) }, error: null },
+    ]) {
+      mockSetSession.mockImplementationOnce(async () => malformed);
+      await expect(currentAuth().completeRecovery('correct horse battery'))
+        .rejects.toMatchObject({ code: 'invalid_response' });
+    }
+    // Each malformed activation wrote the password through the held session
+    // (the session-preserving route) and kept the recovery for another try.
+    expect(mockSetNativePassword).toHaveBeenCalledTimes(3);
+    expect(mockSetNativePassword).toHaveBeenLastCalledWith({
+      accessToken: accessToken('aal2'),
+      password: 'correct horse battery',
+    });
+
+    await act(async () => {
+      await currentAuth().completeRecovery('correct horse battery');
+    });
+    expect(mockSetSession.mock.calls.length).toBe(activationsBefore + 4);
+    expect(screen.getByText('signed-in')).toBeTruthy();
     await view.unmount();
   });
 

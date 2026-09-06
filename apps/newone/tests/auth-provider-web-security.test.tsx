@@ -14,6 +14,7 @@ const mockRequestWebRecoveryOtp = jest.fn();
 const mockRequestWebSignup = jest.fn();
 const mockVerifyWebOtp = jest.fn();
 const mockVerifyWebRecoveryOtp = jest.fn();
+const mockSetWebPassword = jest.fn();
 const mockVerifyWebSignup = jest.fn();
 const mockSignOutWebSession = jest.fn();
 const mockDeleteWebAccount = jest.fn();
@@ -79,6 +80,9 @@ jest.mock('@/lib/web-auth', () => {
     requestWebOtp: (...mockArgs: unknown[]) => mockRequestWebOtp(...mockArgs),
     requestWebRecoveryOtp: (...mockArgs: unknown[]) => mockRequestWebRecoveryOtp(...mockArgs),
     requestWebSignup: (...mockArgs: unknown[]) => mockRequestWebSignup(...mockArgs),
+    setWebPassword: (...mockArgs: unknown[]) => mockSetWebPassword(...mockArgs),
+    lookupNativeAccount: jest.fn(),
+    lookupWebAccount: jest.fn(),
     signOutWebSession: (...mockArgs: unknown[]) => mockSignOutWebSession(...mockArgs),
     validateNativeMembership: jest.fn(),
     verifyNativeOtp: jest.fn(),
@@ -411,8 +415,17 @@ describe('web authentication security state machine', () => {
         code: '654321',
       });
     });
-    expect(recovery).toEqual({ otherSessionsRevoked: 6, hasPassword: false });
+    expect(recovery).toEqual({ otherSessionsRevoked: 6 });
+    // The recovery cookies are set, but the app commits the session only
+    // once the new password is saved through them (forgot-password flow).
+    expect(currentAuth().sessionId).toBeNull();
+    mockSetWebPassword.mockImplementationOnce(async () => ({ passwordSet: true }));
+    await act(async () => {
+      await currentAuth().completeRecovery('correct horse battery');
+    });
+    expect(mockSetWebPassword).toHaveBeenCalledWith({ password: 'correct horse battery' });
     expect(currentAuth().sessionId).toBe('session-web');
+    expect(currentAuth().hasPassword).toBe(true);
     await view.unmount();
   });
 

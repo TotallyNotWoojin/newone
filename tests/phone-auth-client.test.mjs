@@ -8,7 +8,9 @@ const webAuth = readFileSync('apps/newone/src/lib/web-auth.ts', 'utf8');
 const catalog = readFileSync('apps/newone/src/i18n/catalog.ts', 'utf8');
 const admin = readFileSync('apps/newone/src/app/admin.tsx', 'utf8');
 
-test('email and phone OTP use one typed identity contract on web and native', () => {
+const catalogCount = (key) => (catalog.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length;
+
+test('the OTP identity contract keeps its destination type, so the server phone paths stay inert but intact', () => {
   assert.match(webAuth, /interface OtpIdentity[\s\S]*destinationType: 'email' \| 'phone'[\s\S]*destination: string/);
   assert.match(webAuth, /requestWebOtp[\s\S]*destinationType: input\.destinationType[\s\S]*destination: input\.destination/);
   assert.match(webAuth, /verifyWebOtp[\s\S]*destinationType: input\.destinationType[\s\S]*destination: input\.destination/);
@@ -20,20 +22,45 @@ test('email and phone OTP use one typed identity contract on web and native', ()
   assert.match(auth, /requestWebOtp\(\{[\s\S]*destinationType: input\.destinationType[\s\S]*destination: input\.destination/);
 });
 
-test('sign-in exposes validated email and E.164 phone choices without account enumeration copy', () => {
-  assert.match(signIn, /useState<'email' \| 'phone'>\('email'\)/);
-  assert.match(signIn, /auth\.emailChannel/);
-  assert.match(signIn, /auth\.phoneChannel/);
-  assert.match(signIn, /\^\\\+\[1-9\]\[0-9\]\{7,14\}\$/);
-  assert.match(signIn, /keyboardType=\{destinationType === 'email' \? 'email-address' : 'phone-pad'\}/);
+test('sign-in is email only (v3.2): no channel or method chips, and every request names the email type', () => {
+  assert.doesNotMatch(signIn, /auth\.emailChannel|auth\.phoneChannel|auth\.methodCode|auth\.methodPassword/);
+  assert.doesNotMatch(signIn, /useState<'email' \| 'phone'>/);
+  assert.doesNotMatch(signIn, /phone-pad|\+52 81 5555 0192/);
+  assert.match(signIn, /keyboardType="email-address"/);
+  // The lookup is the first step of a returning sign-in; the account lookup
+  // and the recovery request both carry the email type explicitly.
+  assert.match(signIn, /auth\.lookupAccount\(\{\s*destinationType: 'email'/);
+  assert.match(signIn, /auth\.requestRecoveryOtp\(\{\s*destinationType: 'email'/);
+  assert.match(signIn, /auth\.signInWithPassword\(\{\s*destinationType: 'email'/);
   assert.match(signIn, /auth\.channelUnavailable/);
-  assert.doesNotMatch(signIn, /const destinationType = 'email'/);
+  assert.match(webAuth, /interface AccountLookupInput[\s\S]*destinationType: 'email'/);
+  // The add-a-password screen is gone with the pre-wipe accounts.
+  assert.doesNotMatch(signIn, /passwordPromptPending|passwordPromptTitle|dismissPasswordPrompt/);
+  assert.doesNotMatch(auth, /passwordPromptPending|passwordSetFor|dismissPasswordPrompt/);
 });
 
-test('email and phone auth copy is localized in all shipped UI locales', () => {
-  assert.equal((catalog.match(/'auth\.phoneLabel':/g) ?? []).length, 3);
-  assert.equal((catalog.match(/'auth\.phoneInvalid':/g) ?? []).length, 3);
-  assert.equal((catalog.match(/'auth\.differentIdentity':/g) ?? []).length, 3);
+test('the removed chips left no copy behind and the email-only flow is localized in every shipped locale', () => {
+  for (const key of [
+    'auth.emailChannel',
+    'auth.phoneChannel',
+    'auth.methodCode',
+    'auth.methodPassword',
+    'auth.passwordPromptTitle',
+    'auth.passwordPromptBody',
+  ]) {
+    assert.equal(catalogCount(key), 0, `${key} should be gone`);
+  }
+  for (const key of [
+    'auth.subtitleReturn',
+    'auth.subtitlePassword',
+    'auth.forgotPassword',
+    'auth.noAccount',
+    'auth.createAccountShortcut',
+    'auth.newPasswordTitle',
+    'auth.differentEmail',
+  ]) {
+    assert.equal(catalogCount(key), 3, `${key} should exist in en, ko, and es`);
+  }
 });
 
 test('administrators can issue an invitation to either an email or E.164 phone identity', () => {
@@ -42,5 +69,5 @@ test('administrators can issue an invitation to either an email or E.164 phone i
   assert.match(admin, /destinationType: inviteDestinationType/);
   assert.match(admin, /\^\\\+\[1-9\]\[0-9\]\{7,14\}\$/);
   assert.doesNotMatch(admin, /destinationType: 'email'/);
-  assert.equal((catalog.match(/'admin\.invitePhone':/g) ?? []).length, 3);
+  assert.equal(catalogCount('admin.invitePhone'), 3);
 });

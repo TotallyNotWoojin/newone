@@ -21,6 +21,7 @@ const mockRequestNativeRecoveryOtp = jest.fn();
 const mockVerifyNativeRecoveryOtp = jest.fn();
 const mockVerifyNativePassword = jest.fn();
 const mockSetNativePassword = jest.fn();
+const mockLookupNativeAccount = jest.fn();
 const mockRequestNativeSignup = jest.fn();
 const mockVerifyNativeSignup = jest.fn();
 const mockDeleteNativeAccount = jest.fn();
@@ -79,6 +80,8 @@ jest.mock('@/lib/web-auth', () => {
     deleteWebAccount: jest.fn(),
     getWebRealtimeToken: jest.fn(),
     getWebSession: jest.fn(),
+    lookupNativeAccount: (mockInput: unknown) => mockLookupNativeAccount(mockInput),
+    lookupWebAccount: jest.fn(),
     refreshWebSession: jest.fn(),
     requestNativeOtp: (mockInput: unknown) => mockRequestNativeOtp(mockInput),
     requestNativeRecoveryOtp: (mockInput: unknown) => mockRequestNativeRecoveryOtp(mockInput),
@@ -213,6 +216,7 @@ beforeEach(() => {
     },
   }));
   mockSetNativePassword.mockImplementation(async () => ({ passwordSet: true }));
+  mockLookupNativeAccount.mockImplementation(async () => ({ exists: true, hasPassword: true }));
   mockPurgeUser.mockImplementation(async () => undefined);
 });
 
@@ -356,7 +360,7 @@ describe('sessions that last', () => {
 });
 
 describe('passwords', () => {
-  test('a code sign-in for an account without a password raises the one-time offer until it is dismissed', async () => {
+  test('lookupAccount asks the native lookup and returns its two facts unchanged', async () => {
     mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
     await render(
       <AuthProvider>
@@ -364,25 +368,94 @@ describe('passwords', () => {
       </AuthProvider>,
     );
     await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
-    expect(currentAuth().passwordPromptPending).toBe(false);
 
-    let outcome: { hasPassword: boolean } | undefined;
+    mockLookupNativeAccount.mockImplementationOnce(async () => ({ exists: true, hasPassword: false }));
+    await expect(currentAuth().lookupAccount({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      captchaToken: 'controlled-captcha-input',
+    })).resolves.toEqual({ exists: true, hasPassword: false });
+    expect(mockLookupNativeAccount).toHaveBeenCalledWith({
+      destinationType: 'email',
+      destination: 'employee@example.test',
+      captchaToken: 'controlled-captcha-input',
+    });
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    expect(mockSetSession).not.toHaveBeenCalled();
+  });
+
+  test('forgot password holds the recovered session, saves the new password through it, and only then signs in', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    // No verified code yet: nothing to complete.
+    await expect(currentAuth().completeRecovery('correct horse battery'))
+      .rejects.toMatchObject({ code: 'authentication_required' });
+
+    let result: { otherSessionsRevoked: number } | undefined;
     await act(async () => {
-      outcome = await currentAuth().verifyOtp({
+      result = await currentAuth().verifyRecoveryOtp({
+        destinationType: 'email',
+        destination: 'employee@example.test',
+        code: '654321',
+      });
+    });
+    expect(result).toEqual({ otherSessionsRevoked: 4 });
+    // The code alone signs nobody in.
+    expect(screen.getByText('signed-out')).toBeTruthy();
+    expect(mockSetSession).not.toHaveBeenCalled();
+
+    mockSetNativePassword.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('too short'), { code: 'weak_password' });
+    });
+    await expect(currentAuth().completeRecovery('short')).rejects.toMatchObject({ code: 'weak_password' });
+    expect(screen.getByText('signed-out')).toBeTruthy();
+
+    await act(async () => {
+      await currentAuth().completeRecovery('correct horse battery');
+    });
+    // The write goes through the recovered session's own token (the
+    // session-preserving route), then that session is activated.
+    expect(mockSetNativePassword).toHaveBeenLastCalledWith({
+      accessToken: accessToken('aal2'),
+      password: 'correct horse battery',
+    });
+    expect(mockSetSession).toHaveBeenCalledWith({
+      access_token: accessToken('aal2'),
+      refresh_token: 'controlled-refresh-token',
+    });
+    expect(screen.getByText('signed-in')).toBeTruthy();
+    expect(mockSignOut).not.toHaveBeenCalled();
+
+    // A completed recovery cannot be replayed.
+    await expect(currentAuth().completeRecovery('correct horse battery'))
+      .rejects.toMatchObject({ code: 'authentication_required' });
+  });
+
+  test('a code sign-in commits the session with no add-a-password detour', async () => {
+    mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
+    await render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('signed-out')).toBeTruthy());
+
+    await act(async () => {
+      await currentAuth().verifyOtp({
         destinationType: 'email',
         destination: 'employee@example.test',
         code: '123456',
       });
     });
-    expect(outcome).toEqual({ hasPassword: false });
     expect(screen.getByText('signed-in')).toBeTruthy();
-    expect(currentAuth().passwordPromptPending).toBe(true);
-    expect(currentAuth().hasPassword).toBe(false);
-
-    await act(async () => {
-      currentAuth().dismissPasswordPrompt();
-    });
-    expect(currentAuth().passwordPromptPending).toBe(false);
+    expect(currentAuth()).not.toHaveProperty('passwordPromptPending');
+    expect(currentAuth()).not.toHaveProperty('dismissPasswordPrompt');
   });
 
   test('setPassword uses the live bearer, marks the account, and pulls the stamped session', async () => {
@@ -412,7 +485,6 @@ describe('passwords', () => {
     });
     expect(mockRefreshSession).toHaveBeenCalledTimes(1);
     expect(currentAuth().hasPassword).toBe(true);
-    expect(currentAuth().passwordPromptPending).toBe(false);
     expect(screen.getByText('signed-in')).toBeTruthy();
   });
 
@@ -434,7 +506,7 @@ describe('passwords', () => {
     expect(mockRefreshSession).not.toHaveBeenCalled();
   });
 
-  test('signInWithPassword activates the gateway session through the same native contract and never raises the offer', async () => {
+  test('signInWithPassword activates the gateway session through the same native contract', async () => {
     mockGetSession.mockImplementationOnce(async () => ({ data: { session: null }, error: null }));
     await render(
       <AuthProvider>
@@ -457,7 +529,6 @@ describe('passwords', () => {
       refresh_token: 'controlled-refresh-token',
     });
     expect(screen.getByText('signed-in')).toBeTruthy();
-    expect(currentAuth().passwordPromptPending).toBe(false);
   });
 
   test('a password activation whose local session does not match the gateway user is refused', async () => {
@@ -567,7 +638,18 @@ describe('native authentication state machine', () => {
         code: '654321',
       });
     });
-    expect(recoveryResult).toEqual({ otherSessionsRevoked: 4, hasPassword: false });
+    expect(recoveryResult).toEqual({ otherSessionsRevoked: 4 });
+    // The recovered session waits for the new password before it is used.
+    expect(mockSetSession).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await currentAuth().completeRecovery('correct horse battery');
+    });
+    expect(mockSetNativePassword).toHaveBeenCalledWith({
+      accessToken: accessToken('aal2'),
+      password: 'correct horse battery',
+    });
+    expect(mockSetSession).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('signed-in')).toBeTruthy();
   });
 
   test('activates a consumer signup session through the same native activation contract', async () => {
