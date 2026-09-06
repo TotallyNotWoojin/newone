@@ -11,12 +11,15 @@ appId: com.totallynotwoojin.newone
           start: "50%, 30%"
           end: "50%, 88%"
           duration: 600
-- hideKeyboard
-- scrollUntilVisible:
-    element:
-      text: ".*Open .*"
-    direction: DOWN
-    timeout: 30000
+# The result is already on screen (waited for above); scrolling for 100%
+# visibility fails when the row sits under the tab bar. Dismiss the keyboard
+# with a short drag instead of hideKeyboard (flaky while a callout is up).
+- swipe:
+    start: "50%, 55%"
+    end: "50%, 65%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
 - takeScreenshot: ${SHOT}-result
 - tapOn:
     text: ".*Open .*"

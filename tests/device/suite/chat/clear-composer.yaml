@@ -6,4 +6,11 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     id: "composer-input"
 - eraseText: 60
-- hideKeyboard
+# A short drag on the list dismisses the keyboard (interactive dismiss);
+# hideKeyboard fails on iOS while a spelling callout is up.
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 60%"
+    duration: 300
+- waitForAnimationToEnd:
+    timeout: 1500
