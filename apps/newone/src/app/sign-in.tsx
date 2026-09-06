@@ -643,6 +643,7 @@ export default function SignInScreen() {
                 onChangeText={setDestination}
                 onFocus={() => setDestinationFocused(true)}
                 onSubmitEditing={passwordMode ? undefined : sendLink}
+                testID="sign-in-destination"
                 placeholder={
                   destinationType === 'email'
                     ? 'you@example.com'
@@ -661,6 +662,7 @@ export default function SignInScreen() {
               <PasswordField
                 autoComplete="current-password"
                 label={t('auth.passwordLabel')}
+                testID="password"
                 onChangeText={setPassword}
                 onSubmitEditing={signInWithPassword}
                 placeholder={t('auth.passwordPlaceholder')}
