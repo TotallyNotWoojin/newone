@@ -103,12 +103,10 @@ describe('consumer-surface catalog copy', () => {
     'status.emptyChatsBodyConsumer', 'status.emptyPeopleConsumer', 'status.emptyPeopleBodyConsumer',
     'chat.chooseBodyConsumer', 'chat.privateConsumer', 'chat.companyMemberConsumer',
     'people.subtitleConsumer', 'people.eyebrowConsumer', 'people.descriptionConsumer',
-    'people.friends', 'people.requests', 'people.friendsEmpty', 'people.friendsEmptyBody',
-    'people.blockNoticeConsumer',
+    'people.blockNoticeConsumer', 'people.reportNoticeConsumer', 'people.reportConsentConsumer',
     'settings.accountVerified', 'settings.preferencesDescriptionConsumer',
     'settings.deviceNotificationsNoteConsumer', 'settings.devicePreferencesBoundaryConsumer',
-    'search.subtitleConsumer', 'search.eyebrowConsumer', 'search.descriptionConsumer',
-    'search.placeholderConsumer',
+    'search.subtitleConsumer',
   ];
 
   test('English consumer copy carries no workplace wording', () => {

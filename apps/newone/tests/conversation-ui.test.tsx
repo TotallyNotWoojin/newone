@@ -899,7 +899,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.addSelectedMember'));
 
     await fireEvent.press(screen.getAllByText('Ana Torres').at(-1)!);
-    await fireEvent.press(screen.getByText('I understand that history is preserved and my future access ends.'));
+    await fireEvent.press(screen.getByText('I understand'));
     await fireEvent.press(screen.getByLabelText('Leave group'));
     await fireEvent.press(screen.getByLabelText('chat.archiveConversation'));
 
@@ -949,13 +949,13 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText('Mention people')).toBeNull();
     await fireEvent.changeText(screen.getByLabelText('chat.message'), '@');
     await fireEvent.press(screen.getByText('Mention people'));
-    await fireEvent.changeText(screen.getByLabelText('Search conversation members to mention'), 'Ana');
+    await fireEvent.changeText(screen.getByLabelText('Search people to mention'), 'Ana');
     await fireEvent.press(screen.getByText(colleague.displayName));
     expect(screen.getByLabelText('Selected: Ana Torres')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('Remove mention: Ana Torres'));
-    await fireEvent.changeText(screen.getByLabelText('Search conversation members to mention'), 'no matching member');
-    expect(screen.getByText('No matching conversation members.')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Search conversation members to mention'), 'Morgan');
+    await fireEvent.changeText(screen.getByLabelText('Search people to mention'), 'no matching member');
+    expect(screen.getByText('No one matches.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Search people to mention'), 'Morgan');
     await fireEvent.press(screen.getByText(candidate.displayName));
     await fireEvent.press(screen.getByText('Close mentions'));
     await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Please inspect the valve.');
@@ -1826,7 +1826,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     });
     const controls = await render(<ConversationPane conversation={defaults} messages={[]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    expect(screen.getByText('No active replacement is available. Add an active member before leaving.')).toBeTruthy();
+    expect(screen.getByText('Add someone else to the group before leaving.')).toBeTruthy();
     expect(screen.getByLabelText('All activity').props.accessibilityState.disabled).toBeFalsy();
     await controls.unmount();
 
@@ -1854,7 +1854,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
     await fireEvent.press(screen.getAllByText(colleague.displayName).at(-1)!);
-    await fireEvent.press(screen.getByText('I understand that history is preserved and my future access ends.'));
+    await fireEvent.press(screen.getByText('I understand'));
     await fireEvent.press(screen.getByLabelText('Leave group'));
     await waitFor(() => expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(current.id, colleague.id));
   });
@@ -1950,7 +1950,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.rejectJoin'));
     expect(screen.getByLabelText('chat.approveJoin')).toBeTruthy();
 
-    await fireEvent.press(screen.getByText('I understand that history is preserved and my future access ends.'));
+    await fireEvent.press(screen.getByText('I understand'));
     await fireEvent.press(screen.getByLabelText('Leave group'));
     expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(noTransfer.id, undefined);
   });

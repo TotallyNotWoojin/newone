@@ -853,7 +853,7 @@ function ConversationHeader({
     : undefined;
   const meta = typingLabel
     ?? (conversation.kind === 'direct'
-      ? handle ? `@${handle}` : conversation.activeNowLabel ?? conversation.subtitle
+      ? handle ? `@${handle}` : conversation.presence === 'online' ? t('chat.activeNow') : conversation.subtitle
       : memberCount
         ? t('chat.memberCount').replace('{count}', String(memberCount))
         : conversation.subtitle);
@@ -1965,6 +1965,10 @@ function MentionSelector({
                 {filtered.map((person) => {
                   const selected = selectedUserIds.includes(person.id);
                   const disabled = !selected && selectedUserIds.length >= MAX_MESSAGE_MENTIONS;
+                  // Consumers are identified by @handle; the workplace shows department · role.
+                  const meta = person.username
+                    ? `@${person.username}`
+                    : [person.department, person.roleLabel].filter(Boolean).join(' · ');
                   return (
                     <Pressable
                       accessibilityRole="checkbox"
@@ -1981,7 +1985,7 @@ function MentionSelector({
                       <Avatar color={person.avatarColor} initials={person.initials} size={30} />
                       <View style={styles.mentionCandidateCopy}>
                         <Text numberOfLines={1} style={styles.mentionCandidateName}>{person.displayName}</Text>
-                        <Text numberOfLines={1} style={styles.mentionCandidateMeta}>{person.department} · {person.roleLabel}</Text>
+                        {meta ? <Text numberOfLines={1} style={styles.mentionCandidateMeta}>{meta}</Text> : null}
                       </View>
                       <Ionicons
                         name={selected ? 'checkmark-circle' : 'ellipse-outline'}
@@ -2257,6 +2261,8 @@ function ConversationControlsModal({
 }) {
   const { locale, t } = useI18n();
   const workspace = useWorkspace();
+  // Workplace-only notes and discovery controls stay out of the personal realm.
+  const personalRealm = isPersonalRealm(workspace.organizationId);
   const notification = notificationCopy(locale);
   const translationPreference = translationPreferenceCopy(locale);
   const departureCopy = conversationDepartureCopy(locale);
@@ -2559,19 +2565,27 @@ function ConversationControlsModal({
         && !conversation.policyManaged
         && ['group', 'team'].includes(conversation.kind) ? (
         <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('chat.accessControls')}</Text>
-          <Text style={styles.modalNote}>{t('chat.accessControlsDescription')}</Text>
+          {personalRealm ? null : (
+            <>
+              <Text style={styles.modalLabel}>{t('chat.accessControls')}</Text>
+              <Text style={styles.modalNote}>{t('chat.accessControlsDescription')}</Text>
+            </>
+          )}
           <Text style={styles.modalLabel}>{t('chat.whoCanPost')}</Text>
           <View style={styles.modalRow}>
             <Chip label={t('chat.allMembers')} onPress={() => setPostingMode('all_members')} selected={postingMode === 'all_members'} />
             <Chip label={t('chat.adminsOnly')} onPress={() => setPostingMode('admins_only')} selected={postingMode === 'admins_only'} />
           </View>
-          <Text style={styles.modalLabel}>{t('chat.groupDiscovery')}</Text>
-          <View style={styles.modalRow}>
-            <Chip label={t('chat.inviteOnly')} onPress={() => { setVisibility('invite_only'); setJoinPolicy('invite_only'); }} selected={visibility === 'invite_only'} />
-            <Chip label={t('chat.organizationVisible')} onPress={() => { setVisibility('organization'); setJoinPolicy('approval_required'); }} selected={visibility === 'organization'} />
-            {conversation.visibility === 'unit' ? <Chip label={t('chat.unitVisible')} onPress={() => { setVisibility('unit'); setJoinPolicy('approval_required'); }} selected={visibility === 'unit'} /> : null}
-          </View>
+          {personalRealm ? null : (
+            <>
+              <Text style={styles.modalLabel}>{t('chat.groupDiscovery')}</Text>
+              <View style={styles.modalRow}>
+                <Chip label={t('chat.inviteOnly')} onPress={() => { setVisibility('invite_only'); setJoinPolicy('invite_only'); }} selected={visibility === 'invite_only'} />
+                <Chip label={t('chat.organizationVisible')} onPress={() => { setVisibility('organization'); setJoinPolicy('approval_required'); }} selected={visibility === 'organization'} />
+                {conversation.visibility === 'unit' ? <Chip label={t('chat.unitVisible')} onPress={() => { setVisibility('unit'); setJoinPolicy('approval_required'); }} selected={visibility === 'unit'} /> : null}
+              </View>
+            </>
+          )}
           <FormField label={t('chat.changeReason')} multiline onChangeText={setControlReason} placeholder={t('chat.changeReasonPlaceholder')} value={controlReason} />
           <PrimaryButton
             disabled={controlReason.trim().length < 3}
@@ -2643,7 +2657,7 @@ function ConversationControlsModal({
           {conversation.policyManaged ? (
             <Text style={styles.modalNote}>{t('chat.policyManagedMembers')}</Text>
           ) : conversation.canManage ? (
-            <Text style={styles.modalNote}>{t('chat.memberRoleSecurity')}</Text>
+            personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberRoleSecurity')}</Text>
           ) : conversation.canManageConversation ? (
             <Text style={styles.modalNote}>{t('chat.delegatedMemberSecurity')}</Text>
           ) : null}
@@ -2704,7 +2718,7 @@ function ConversationControlsModal({
         && !conversation.isReadOnly ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>
-          <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>
+          {personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>}
           <SearchField
             onChangeText={setCandidateQuery}
             onSubmitEditing={() => void loadMemberCandidates(false)}

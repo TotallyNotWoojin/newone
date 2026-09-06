@@ -353,7 +353,6 @@ export interface Conversation {
   mutedUntil?: string | null;
   translationMode?: 'automatic' | 'off';
   presence?: Presence;
-  activeNowLabel?: string;
   translationPair?: string;
   priority?: MessagePriority;
   description?: string;
