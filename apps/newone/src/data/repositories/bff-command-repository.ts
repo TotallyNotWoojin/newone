@@ -9,6 +9,7 @@ import type {
   CommandRepository,
   CreateDirectInput,
   CreateGroupInput,
+  DeviceNotificationsMuted,
   RegisterDeviceInput,
   IssuedInvitation,
   ManagedUpdate,
@@ -116,6 +117,29 @@ function parsePrivateReportResponse(
       true,
     );
   }
+}
+
+function parseDeviceNotificationsMuted(value: unknown): DeviceNotificationsMuted {
+  const data = dataValue(value);
+  if (
+    typeof data.registered !== 'boolean'
+    || typeof data.notificationsMuted !== 'boolean'
+    || typeof data.installationId !== 'string'
+    || data.installationId.length === 0
+  ) {
+    throw new RepositoryError(
+      'The service returned an invalid current-device mute state.',
+      'invalid_response',
+      true,
+    );
+  }
+  return {
+    registered: data.registered,
+    deviceId: typeof data.deviceId === 'string' && data.deviceId.length > 0 ? data.deviceId : null,
+    installationId: data.installationId,
+    notificationsMuted: data.notificationsMuted,
+    updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+  };
 }
 
 function requiredString(value: unknown, label: string) {
@@ -3257,6 +3281,34 @@ export class BffCommandRepository implements CommandRepository {
         true,
       );
     }
+  }
+
+  async getDeviceNotificationsMuted(
+    input: Parameters<CommandRepository['getDeviceNotificationsMuted']>[0],
+  ) {
+    const payload = await this.request(
+      `/v2/devices/${encodeURIComponent(input.installationId)}/mute/query`,
+      {
+        organizationId: input.organizationId,
+        body: {},
+      },
+    );
+    return parseDeviceNotificationsMuted(payload);
+  }
+
+  async setDeviceNotificationsMuted(
+    input: Parameters<CommandRepository['setDeviceNotificationsMuted']>[0],
+  ) {
+    const payload = await this.request(
+      `/v2/devices/${encodeURIComponent(input.installationId)}/mute`,
+      {
+        organizationId: input.organizationId,
+        idempotencyKey: input.idempotencyKey,
+        method: 'PATCH',
+        body: { muted: input.muted },
+      },
+    );
+    return parseDeviceNotificationsMuted(payload);
   }
 
   async registerDevice(input: RegisterDeviceInput) {

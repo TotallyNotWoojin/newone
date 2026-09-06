@@ -959,6 +959,15 @@ function controlledCommandResponse(method: string, input?: unknown): unknown {
     case 'getDeviceNotificationPreferences':
     case 'updateDeviceNotificationPreferences':
       return devicePreferences;
+    case 'getDeviceNotificationsMuted':
+    case 'setDeviceNotificationsMuted':
+      return {
+        registered: true,
+        deviceId: devicePreferences.deviceId,
+        installationId: devicePreferences.installationId,
+        notificationsMuted: commandInput.muted === true,
+        updatedAt: '2026-09-07T03:00:00.000Z',
+      };
     default:
       return { ok: true };
   }
@@ -2628,6 +2637,24 @@ describe('authoritative workspace provider', () => {
     expect(mockCommand).toHaveBeenCalledWith('issueInvitation', expect.objectContaining({
       destination: 'member@example.com',
     }));
+
+    // Server-side mute: written for the current registration, mirrored in state.
+    expect(currentWorkspace().deviceNotificationsMuted).toBe(false);
+    let muted: boolean | undefined;
+    await act(async () => {
+      muted = await currentWorkspace().setDeviceNotificationsMuted(true);
+    });
+    expect(muted).toBe(true);
+    expect(mockCommand).toHaveBeenCalledWith('setDeviceNotificationsMuted', expect.objectContaining({
+      installationId: devicePreferences.installationId,
+      muted: true,
+    }));
+    expect(currentWorkspace().deviceNotificationsMuted).toBe(true);
+    await act(async () => {
+      muted = await currentWorkspace().setDeviceNotificationsMuted(false);
+    });
+    expect(muted).toBe(true);
+    expect(currentWorkspace().deviceNotificationsMuted).toBe(false);
     await view.unmount();
   });
 

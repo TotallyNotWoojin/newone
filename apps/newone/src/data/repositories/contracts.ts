@@ -421,6 +421,19 @@ export interface AttachmentScanState {
 
 export type ReportCategory = 'harassment' | 'threat' | 'spam' | 'privacy' | 'misinformation' | 'other';
 
+/**
+ * The server-side mute of the caller's current device registration (the
+ * Settings "Notifications" switch). registered=false means this installation
+ * has no live registration, so there is nothing to mute.
+ */
+export interface DeviceNotificationsMuted {
+  registered: boolean;
+  deviceId: string | null;
+  installationId: string;
+  notificationsMuted: boolean;
+  updatedAt: string | null;
+}
+
 export interface RegisterDeviceInput {
   organizationId: string;
   installationId: string;
@@ -1144,6 +1157,16 @@ export interface CommandRepository {
     patch: DeviceNotificationPreferencePatch;
     idempotencyKey: string;
   }): Promise<DeviceNotificationPreferences>;
+  getDeviceNotificationsMuted(input: {
+    organizationId: string;
+    installationId: string;
+  }): Promise<DeviceNotificationsMuted>;
+  setDeviceNotificationsMuted(input: {
+    organizationId: string;
+    installationId: string;
+    muted: boolean;
+    idempotencyKey: string;
+  }): Promise<DeviceNotificationsMuted>;
   registerDevice(input: RegisterDeviceInput): Promise<void>;
 }
 

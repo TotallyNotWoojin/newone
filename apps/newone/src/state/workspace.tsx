@@ -179,6 +179,8 @@ interface WorkspaceState {
   outboxDegradedReason: string | null;
   organizationPreferences: OrganizationPreferences | null;
   deviceNotificationPreferences: DeviceNotificationPreferences | null;
+  /** Server-side mute of this device registration (Settings "Notifications" switch). */
+  deviceNotificationsMuted: boolean;
   accountSessions: AccountSession[];
   roleAssignments: AdminRoleAssignment[];
   roleAssignmentsPersonId: string | null;
@@ -524,6 +526,7 @@ interface WorkspaceState {
     patch: DeviceNotificationPreferencePatch,
   ) => Promise<boolean>;
   enableNotifications: () => Promise<boolean>;
+  setDeviceNotificationsMuted: (muted: boolean) => Promise<boolean>;
   clearActionError: () => void;
   hasCapability: (capability: WorkspaceCapability, unitId?: string | null) => boolean;
 }
@@ -723,6 +726,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const [organizationAiPolicy, setOrganizationAiPolicy] = useState<OrganizationAiPolicy | null>(null);
   const [deviceNotificationPreferences, setDeviceNotificationPreferences] =
     useState<DeviceNotificationPreferences | null>(null);
+  const [deviceNotificationsMuted, setDeviceNotificationsMutedState] = useState(false);
   const [accountSessions, setAccountSessions] = useState<AccountSession[]>([]);
   const [roleAssignments, setRoleAssignments] = useState<AdminRoleAssignment[]>([]);
   const [roleAssignmentsPersonId, setRoleAssignmentsPersonId] = useState<string | null>(null);
@@ -5392,6 +5396,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         setSelectedConversationId('');
         setAccountSessions([]);
         setDeviceNotificationPreferences(null);
+        setDeviceNotificationsMutedState(false);
         return true;
       }
       setAccountSessions((current) => current.filter((item) => item.sessionId !== sessionId));
@@ -5410,12 +5415,22 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     });
   }, [repositories.commands, snapshot]);
 
+  const queryCurrentDeviceNotificationsMuted = useCallback(async () => {
+    if (!snapshot) return null;
+    const installationId = await getCurrentInstallationId();
+    if (!installationId) return null;
+    return repositories.commands.getDeviceNotificationsMuted({
+      organizationId: snapshot.organizationId,
+      installationId,
+    });
+  }, [repositories.commands, snapshot]);
+
   const loadAccountSettings = useCallback(async () => {
     if (!snapshot) return;
     setActionBusy('account-settings-load');
     setActionError(null);
     try {
-      const [preferences, sessions, currentDevicePreferences] = await Promise.all([
+      const [preferences, sessions, currentDevicePreferences, currentDeviceMute] = await Promise.all([
         repositories.commands.loadOrganizationPreferences({
           organizationId: snapshot.organizationId,
           idempotencyKey: createClientId(),
@@ -5431,17 +5446,23 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           ) return null;
           throw deviceError;
         }),
+        // The mute flag is secondary to the registration itself: a failed
+        // read keeps the last known value instead of blocking the screen.
+        queryCurrentDeviceNotificationsMuted().catch(() => null),
       ]);
       setOrganizationPreferences(preferences);
       setAccountSessions(sessions);
       setDeviceNotificationPreferences(currentDevicePreferences);
+      if (currentDeviceMute) {
+        setDeviceNotificationsMutedState(currentDeviceMute.registered && currentDeviceMute.notificationsMuted);
+      }
     } catch (settingsError) {
       setActionError(t(errorMessageKey(settingsError)));
       if (isOfflineError(settingsError)) setConnectivity('offline');
     } finally {
       setActionBusy((current) => current === 'account-settings-load' ? null : current);
     }
-  }, [queryCurrentDeviceNotificationPreferences, repositories.commands, snapshot, t]);
+  }, [queryCurrentDeviceNotificationPreferences, queryCurrentDeviceNotificationsMuted, repositories.commands, snapshot, t]);
 
   const saveOrganizationPreferences = useCallback(async (patch: Partial<OrganizationPreferences>) => {
     if (!snapshot) return false;
@@ -5632,6 +5653,24 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return true;
   }, [deviceNotificationPreferences, executeImmediate, repositories.commands, snapshot]);
 
+  // The Settings "Notifications" switch: off mutes this registration on the
+  // server (the worker then skips it), on unmutes it. Only a bound device has
+  // anything to mute.
+  const setDeviceNotificationsMuted = useCallback(async (muted: boolean) => {
+    if (!snapshot || !deviceNotificationPreferences) return false;
+    const result = await executeImmediate('device-mute-save', () =>
+      repositories.commands.setDeviceNotificationsMuted({
+        organizationId: snapshot.organizationId,
+        installationId: deviceNotificationPreferences.installationId,
+        muted,
+        idempotencyKey: createClientId(),
+      }),
+    );
+    if (!result) return false;
+    setDeviceNotificationsMutedState(result.registered && result.notificationsMuted);
+    return true;
+  }, [deviceNotificationPreferences, executeImmediate, repositories.commands, snapshot]);
+
   const enableNotifications = useCallback(async () => {
     if (!snapshot) return false;
     setActionBusy('device-register');
@@ -5652,6 +5691,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       });
       // The device state only flips once the service confirmed the binding.
       setDeviceNotificationPreferences(result);
+      // Re-registering keeps an earlier mute; show it rather than a switch
+      // that looks on while the server still skips this device.
+      const mute = await repositories.commands.getDeviceNotificationsMuted({
+        organizationId: snapshot.organizationId,
+        installationId: registration.installationId,
+      }).catch(() => null);
+      if (mute) setDeviceNotificationsMutedState(mute.registered && mute.notificationsMuted);
       setConnectivity('online');
       return true;
     } catch (registrationError) {
@@ -5723,6 +5769,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       messageOutbox,
       organizationPreferences,
       deviceNotificationPreferences,
+      deviceNotificationsMuted,
       accountSessions,
       roleAssignments,
       roleAssignmentsPersonId,
@@ -5839,6 +5886,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       loadDeviceNotificationPreferences,
       saveDeviceNotificationPreferences,
       enableNotifications,
+      setDeviceNotificationsMuted,
       clearActionError: () => setActionError(null),
       hasCapability,
     }),
@@ -5879,6 +5927,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       ensureMessageLoaded,
       enableNotifications,
       deviceNotificationPreferences,
+      deviceNotificationsMuted,
+      setDeviceNotificationsMuted,
       error,
       failedOutboxCount,
       outboxDegradedReason,
