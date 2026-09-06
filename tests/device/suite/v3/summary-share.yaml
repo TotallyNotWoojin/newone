@@ -30,7 +30,21 @@ appId: com.totallynotwoojin.newone
     text: "What should this cover?"
     index: 1
 - inputText: ${SUBJECT}
-- hideKeyboard
+# hideKeyboard fails on iOS while a spelling callout is up (v3-07,
+# run-2026-09-06T16-16-36); tap the field's caption first, keep hideKeyboard as
+# the fallback. No drags: the sheet would close.
+- tapOn:
+    text: "What should this cover?"
+    index: 0
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: ${SHOT}-scope
