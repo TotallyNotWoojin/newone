@@ -549,12 +549,14 @@ export default function SettingsScreen() {
             icon="text-outline"
             label={t('settings.translatedOnly')}
             onValueChange={(value) => setLocalPreference('translatedOnly', value)}
+            testID="setting-translated-only"
             value={localPreferences.translatedOnly}
           />
           <SwitchRow
             icon="return-down-back-outline"
             label={t('settings.enterSends')}
             onValueChange={(value) => setLocalPreference('enterSends', value)}
+            testID="setting-enter-sends"
             value={localPreferences.enterSends}
           />
         </Group>
@@ -566,6 +568,7 @@ export default function SettingsScreen() {
               icon="notifications-outline"
               label={t('settings.allowNotifications')}
               onValueChange={(value) => void toggleNotifications(value)}
+              testID="setting-allow-notifications"
               value={notificationsOn}
             />
           ) : null}
@@ -1009,6 +1012,7 @@ function SwitchRow({
   value,
   onValueChange,
   disabled = false,
+  testID,
 }: {
   icon: IconName;
   label: string;
@@ -1016,6 +1020,7 @@ function SwitchRow({
   value: boolean;
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
+  testID?: string;
 }) {
   return (
     <Row
@@ -1025,6 +1030,7 @@ function SwitchRow({
       right={(
         <Switch
           accessibilityLabel={label}
+          testID={testID}
           accessibilityState={{ disabled }}
           disabled={disabled}
           onValueChange={onValueChange}

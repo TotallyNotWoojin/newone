@@ -643,6 +643,7 @@ export default function SignInScreen() {
                 onChangeText={setDestination}
                 onFocus={() => setDestinationFocused(true)}
                 onSubmitEditing={passwordMode ? undefined : sendLink}
+                clearButtonMode="while-editing"
                 testID="sign-in-destination"
                 placeholder={
                   destinationType === 'email'
