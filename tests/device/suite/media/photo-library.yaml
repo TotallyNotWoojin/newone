@@ -38,6 +38,37 @@ appId: com.totallynotwoojin.newone
     text: "Photo, .*"
     index: 1
     optional: true
+# A missed tap closes the picker without choosing anything, and the sheet then
+# shows a disabled Send that is still "visible": two taps on it proved nothing
+# and the step failed four rows later (chat media-01, run-2026-09-06T20-23-19).
+# Staging is proven by the image-detail control, which only exists once a photo
+# is attached; reopen the picker and try the other tile once if it is missing.
+- extendedWaitUntil:
+    visible: ".*(Image detail|Original detail).*"
+    timeout: 20000
+    optional: true
+- runFlow:
+    when:
+      notVisible: ".*(Image detail|Original detail).*"
+    commands:
+      - tapOn:
+          text: "Photo library"
+          optional: true
+      - extendedWaitUntil:
+          visible: ".*(Photos|Recents|Albums|Photo, ).*"
+          timeout: 20000
+          optional: true
+      - tapOn:
+          text: "Photo, .*"
+          index: 2
+          optional: true
+      - takeScreenshot: ${SHOT}-picker-retry
+- extendedWaitUntil:
+    visible: ".*(Image detail|Original detail).*"
+    timeout: 20000
+- assertVisible:
+    id: "attachment-send"
+    enabled: true
 - extendedWaitUntil:
     visible: "(Send securely|Send)"
     timeout: 30000
