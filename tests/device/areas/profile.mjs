@@ -12,8 +12,8 @@ export async function run(ctx) {
     return;
   }
   await ctx.step({
-    id: 'profile-01-set-photo', title: 'Settings → Choose photo → library photo becomes the profile picture', device: dev, flow: 'sessions/profile-photo.yaml',
-    expected: 'Profile card shows the picture; "Remove photo" appears; server profiles.avatar_path set and the upload row active', screen: 'settings',
+    id: 'profile-01-set-photo', title: 'Settings → Edit profile → Choose photo → library photo becomes the profile picture', device: dev, flow: 'sessions/profile-photo.yaml',
+    expected: '"Remove photo" appears in the Edit profile sheet (the picture replaced the initials); server profiles.avatar_path set and the upload row active', screen: 'settings → Edit profile sheet',
     serverTruth: async () => {
       const w = await server.waitFor(() => server.profileAvatar(A.userId), (r) => Boolean(r?.avatar_path) && r?.upload_status === 'active', { timeoutMs: 60_000 });
       return { ok: w.ok, detail: w.row };
@@ -25,8 +25,8 @@ export async function run(ctx) {
     expected: 'Chats screen; avatar image visible in the header rail on wide layouts', screen: 'chats', optional: true,
   });
   await ctx.step({
-    id: 'profile-03-remove-photo', title: 'Remove photo clears the picture', device: dev, flow: 'sessions/remove-photo.yaml',
-    expected: 'Initials again; server profiles.avatar_path null', screen: 'settings',
+    id: 'profile-03-remove-photo', title: 'Remove photo (Edit profile sheet) clears the picture', device: dev, flow: 'sessions/remove-photo.yaml',
+    expected: 'Initials again; server profiles.avatar_path null', screen: 'settings → Edit profile sheet',
     serverTruth: async () => {
       const w = await server.waitFor(() => server.profileAvatar(A.userId), (r) => r?.avatar_path === null, { timeoutMs: 30_000 });
       return { ok: w.ok, detail: w.row };

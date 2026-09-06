@@ -1,7 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# From anywhere: open Settings and remove the profile photo. (The first run
-# started on Chats after the previous step closed Settings, run-15-28-42.)
+# From anywhere: open Settings → Edit profile and remove the profile photo.
+# (The first run started on Chats after the previous step closed Settings,
+# run-15-28-42.)
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -10,13 +11,16 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Remove photo"
-    direction: DOWN
+- tapOn: "Edit profile"
+- extendedWaitUntil:
+    visible: "Remove photo"
     timeout: 30000
 - tapOn: "Remove photo"
 - extendedWaitUntil:
     notVisible: "Remove photo"
     timeout: 30000
 - takeScreenshot: ${SHOT}-photo-removed
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000

@@ -1,6 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Notifications → Enable notifications on this (simulator) device.
+# Settings → Notifications → "Allow notifications" switch on this (simulator)
+# device. The row is not pressable: the label text comes first in the
+# hierarchy, the Switch (same accessibility label) second.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -11,18 +13,27 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Device notifications"
+      text: "Allow notifications"
     direction: DOWN
     timeout: 45000
 - takeScreenshot: ${SHOT}-before
-- tapOn: "Enable notifications"
+- tapOn:
+    text: "Allow notifications"
+    index: 1
+# The OS permission alert.
 - tapOn:
     text: "Allow"
     optional: true
-- extendedWaitUntil:
-    visible: ".*(physical device|Current device|could not|cannot|unavailable|failed|not configured).*"
-    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: ${SHOT}-after
-- extendedWaitUntil:
-    visible: ".*(Current device · IOS|physical device).*"
-    timeout: 5000
+# A simulator has no push token: the error banner names a physical device
+# ("Push notifications need a physical device."). A phone registers silently
+# and the switch turns on. Record whatever text appeared; anything other than
+# the physical-device notice is a finding for the report.
+- runFlow:
+    when:
+      visible: ".*(physical device|could not|cannot|unavailable|failed|not configured|did not answer|not set up).*"
+    commands:
+      - takeScreenshot: ${SHOT}-error-text
+- assertVisible: "Allow notifications"

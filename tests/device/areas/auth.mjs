@@ -73,22 +73,22 @@ export async function run(ctx) {
   await ctx.step({
     id: 'profile-01-edit-profile', title: 'Edit display name + status message', device,
     flow: 'profile/edit-profile.yaml', env: { DISPLAY_NAME: newName, STATUS: status },
-    expected: 'Save succeeds; new name visible; server profile row updated', screen: 'settings / Edit profile',
+    expected: 'Save closes the "Edit profile" sheet; reopening it shows the new name and status; server profile row updated', screen: 'settings / Edit profile sheet',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.profileByUsername(username), (row) => row?.display_name === newName && row?.status_message === status, { timeoutMs: 20_000 });
       return { ok: wait.ok, detail: wait.row };
     },
   });
   await ctx.step({
-    id: 'profile-02-language-es', title: 'Display language → Español changes visible UI text', device,
-    flow: 'profile/language-to-es.yaml', expected: 'Settings chrome ("Cerrar configuración", "Idioma de la interfaz") and tabs ("Ajustes", "Personas") render in Spanish', screen: 'settings',
+    id: 'profile-02-language-es', title: 'Language → Español changes visible UI text', device,
+    flow: 'profile/language-to-es.yaml', expected: 'Settings chrome ("Cerrar configuración", "Idioma" row) and tabs ("Ajustes", "Personas") render in Spanish', screen: 'settings',
     serverTruth: async () => { const row = await server.profileByUsername(username); return { ok: true, detail: `server preferred_language stays ${row?.preferred_language} (display language is a device setting)` }; },
   });
-  await ctx.step({ id: 'profile-03-language-en', title: 'Display language → English restores English UI', device, flow: 'profile/language-to-en.yaml', expected: 'Settings and tabs render in English again', screen: 'settings' });
+  await ctx.step({ id: 'profile-03-language-en', title: 'Language → English restores English UI', device, flow: 'profile/language-to-en.yaml', expected: 'Settings and tabs render in English again', screen: 'settings' });
   await ctx.step({
-    id: 'profile-04-enable-notifications', title: 'Enable notifications on this (simulator) device', device,
+    id: 'profile-04-enable-notifications', title: 'Allow notifications switch on this (simulator) device', device,
     flow: 'profile/enable-notifications.yaml',
-    expected: 'Either a registered "Current device · IOS" badge or the simulator-specific "physical device" message; any other error text is a finding', screen: 'settings / Notifications',
+    expected: 'The "Allow notifications" switch asks for OS permission; on a simulator the banner "Push notifications need a physical device." follows (no push token), on a phone the switch turns on; any other error text is a finding', screen: 'settings / Notifications',
     serverTruth: async () => { const rows = userId ? await server.devices(userId) : []; return { ok: true, detail: rows.length ? rows : 'no device_registrations row (expected on a simulator: no push token)' }; },
   });
   await ctx.observe(device, { id: 'profile-04b-notifications-screen', title: 'Exact notifications section text after the attempt', screen: 'settings / Notifications' });
@@ -132,7 +132,7 @@ export async function run(ctx) {
   await ctx.step({
     id: 'auth-13-delete-account', title: 'Delete account (type username, confirm) → back at sign-in', device,
     flow: 'auth/delete-account.yaml', env: { USERNAME: username },
-    expected: 'Sign-in screen returns; server: profile tombstoned (display_name "Deleted account", username released + quarantined, auth user soft-deleted)', screen: 'settings / Delete account',
+    expected: 'Sign-in screen returns; server: profile tombstoned (display_name "Deleted account", username released + quarantined, auth user soft-deleted)', screen: 'settings / Danger → Delete account',
     serverTruth: async () => {
       if (!userId) return { ok: false, detail: 'no user id resolved before deletion' };
       const wait = await server.waitFor(() => server.tombstone(userId, username), (row) => row?.auth_soft_deleted === true && row?.display_name === 'Deleted account', { timeoutMs: 30_000 });

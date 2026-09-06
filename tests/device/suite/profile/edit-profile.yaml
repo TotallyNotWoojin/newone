@@ -1,6 +1,7 @@
 appId: com.totallynotwoojin.newone
 ---
-# Settings → Edit profile: change display name and status, save.
+# Settings → profile row ("Edit profile") → sheet: change display name and
+# status, save, then reopen the sheet to read the saved values.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -9,26 +10,47 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Save profile"
-    direction: DOWN
-    timeout: 30000
+# The profile row is one accessible element labelled "Edit profile".
+- tapOn: "Edit profile"
+- extendedWaitUntil:
+    visible: "Save profile"
+    timeout: 15000
+# Each field exposes two nodes: the label text, then the input carrying the
+# same accessibility label.
 - tapOn:
     text: "Display name"
     index: 1
 - eraseText: 60
 - inputText: ${DISPLAY_NAME}
-- tapOn: "Edit profile"
-- tapOn: '.*What are you up to\?.*'
+- tapOn:
+    text: "Status message"
+    index: 1
+- eraseText: 40
 - inputText: ${STATUS}
-- tapOn: "Edit profile"
+- hideKeyboard
 - takeScreenshot: ${SHOT}-profile-filled
+- scrollUntilVisible:
+    element:
+      text: "Save profile"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Save profile"
+# The sheet closes itself on success. The settings profile row is a single
+# accessible element ("Edit profile"), so the saved values are read by
+# reopening the sheet.
 - extendedWaitUntil:
-    visible: ${DISPLAY_NAME}
+    notVisible: "Save profile"
     timeout: 20000
-- takeScreenshot: ${SHOT}-profile-saved
 - extendedWaitUntil:
     notVisible: ".*(could not|cannot|failed).*"
     timeout: 5000
+- tapOn: "Edit profile"
+- extendedWaitUntil:
+    visible: ${DISPLAY_NAME}
+    timeout: 15000
+- assertVisible: ${STATUS}
+- takeScreenshot: ${SHOT}-profile-saved
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000

@@ -10,12 +10,16 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Display language: Español"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Display language: Español"
+# "Language" is a row in the General group at the top of Settings; its picker
+# options are labelled "Language: <name>" in the CURRENT UI copy.
+- extendedWaitUntil:
+    visible: "Language"
+    timeout: 15000
+- tapOn: "Language"
+- extendedWaitUntil:
+    visible: "Language: Español"
+    timeout: 15000
+- tapOn: "Language: Español"
 - extendedWaitUntil:
     visible: "Cerrar configuración"
     timeout: 15000
@@ -35,12 +39,14 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Cerrar configuración"
     timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Idioma de la interfaz: English"
-    direction: DOWN
-    timeout: 30000
-- tapOn: "Idioma de la interfaz: English"
+- extendedWaitUntil:
+    visible: "Idioma"
+    timeout: 15000
+- tapOn: "Idioma"
+- extendedWaitUntil:
+    visible: "Idioma: English"
+    timeout: 15000
+- tapOn: "Idioma: English"
 - extendedWaitUntil:
     visible: "Close settings"
     timeout: 15000

@@ -1,8 +1,8 @@
 // SESSIONS on two devices: the same human signs in on a second phone
-// (returning sign-in with a real code), sees it under Devices and sessions
-// on the first, revokes it (the second phone must be signed out), then
-// revokes the current session. Also: Help screen and communication
-// preferences (Settings surfaces without a durable conversation effect).
+// (returning sign-in with a real code), sees it under Devices on the first,
+// signs it out there (the second phone must be signed out), then ends the
+// first device's own session. Also: Help screen and the read-receipts /
+// sound settings (Settings surfaces without a durable conversation effect).
 
 export const meta = { id: 'sessions', devices: 2, title: 'SESSIONS + SETTINGS extras' };
 
@@ -13,10 +13,10 @@ export async function run(ctx) {
   const A = await ctx.signup(dev1, { label: 'ses_a', displayName: `Sim Sessions ${tag}` });
   if (!A.signedIn) return;
 
-  await ctx.step({ id: 'sessions-00-help', title: 'Help, recovery, and safety screen opens and closes', device: dev1, flow: 'sessions/help-screen.yaml', expected: '"Help and recovery" with the account/recovery/privacy sections', screen: 'settings → help' });
+  await ctx.step({ id: 'sessions-00-help', title: 'Help screen opens and closes', device: dev1, flow: 'sessions/help-screen.yaml', expected: '"Help and recovery" with the account/recovery/privacy sections', screen: 'settings → Help' });
   await ctx.step({
-    id: 'sessions-00b-communication-preferences', title: 'Communication preferences: read receipts Nobody + hidden preview, save, restore', device: dev1, flow: 'sessions/communication-preferences.yaml',
-    expected: 'Save succeeds without error text', screen: 'settings → Communication preferences', optional: true,
+    id: 'sessions-00b-communication-preferences', title: 'Read receipts → Nobody (picker) and Sound off, then both restored', device: dev1, flow: 'sessions/communication-preferences.yaml',
+    expected: 'The picker shows Nobody selected when reopened; no error text (account settings auto-save, there is no Save button)', screen: 'settings → General / Notifications', optional: true,
   });
 
   // Second device: returning sign-in as A.
@@ -35,17 +35,21 @@ export async function run(ctx) {
   });
   if (!verify.uiOk) return;
 
-  await ctx.step({ id: 'sessions-04-list-shows-other-device', title: 'Device 1 lists the second device under Devices and sessions', device: dev1, flow: 'sessions/sessions-list.yaml', expected: 'A row with a Revoke button; not the "No other active sessions" note', screen: 'settings → Devices and sessions' });
+  await ctx.step({ id: 'sessions-04-list-shows-other-device', title: 'Device 1 lists the second device under Devices', device: dev1, flow: 'sessions/sessions-list.yaml', expected: 'A device row with a "Sign out" action; not the "No other devices" row', screen: 'settings → Devices' });
   await ctx.step({
-    id: 'sessions-05-revoke-other', title: 'Device 1 revokes the second device\'s session', device: dev1, flow: 'sessions/revoke-other.yaml',
-    expected: 'Dialog accepts a reason; list returns to "No other active sessions"; server revoked_at set for that installation', screen: 'settings → Revoke',
+    id: 'sessions-05-revoke-other', title: 'Device 1 signs out the second device\'s session', device: dev1, flow: 'sessions/revoke-other.yaml',
+    expected: '"Sign out this device?" dialog (no reason field for consumer accounts) → "Yes, sign out"; the list returns to "No other devices"; server revoked_at set for that installation', screen: 'settings → Devices → Sign out',
     serverTruth: async () => { const w = await server.waitFor(() => server.sessions(A.userId), (rows) => rows.some((r) => r.revoked_at), { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
   });
   await ctx.step({ id: 'sessions-06-other-device-signed-out', title: 'The revoked device is signed out (next action / relaunch)', device: dev2, flow: 'sessions/other-device-signed-out.yaml', expected: 'Sign-in screen on device 2', screen: 'app' });
   await ctx.observe(dev2, { id: 'sessions-06b-revoked-device-screen', title: 'Exact screen on the revoked device', screen: 'app' });
+  // "Revoke this session" is a workplace-only RowAction (settings.tsx renders it
+  // when !personalRealm && auth.sessionId); a consumer ends this device's session
+  // with "Sign out of Newone", which revokes it on the server before signing out.
+  ctx.note({ id: 'sessions-07a-revoke-this-session-control', title: '"Revoke this session" control for the current device', status: 'UNREACHABLE', observed: 'Not rendered for consumer accounts: settings.tsx shows the RowAction only when !personalRealm && auth.sessionId. The consumer path is the "Sign out of Newone" row (sessions-07).', expected: 'n/a for consumer accounts' });
   await ctx.step({
-    id: 'sessions-07-revoke-current', title: 'Revoke this session signs device 1 out', device: dev1, flow: 'sessions/revoke-current.yaml',
-    expected: 'Sign-in screen; server: all installations revoked', screen: 'settings → Devices and sessions',
+    id: 'sessions-07-revoke-current', title: 'Sign out of Newone ends device 1\'s own session (consumer path)', device: dev1, flow: 'sessions/revoke-current.yaml',
+    expected: 'Sign-in screen; server: all installations revoked (sign-out revokes this session on the server)', screen: 'settings → Sign out of Newone',
     serverTruth: async () => { const w = await server.waitFor(() => server.sessions(A.userId), (rows) => rows.length > 0 && rows.every((r) => r.revoked_at), { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
   });
   ctx.accounts = { A };

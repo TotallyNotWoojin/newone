@@ -34,4 +34,13 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 40000
+# A fresh install shows the "Turn on notifications" card at the top of the
+# chats list on the first signed-in launch. A person answers it once; "Not now"
+# records the answer so the card never returns. The card waits for the OS
+# permission read, so let the list settle before looking for it.
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "Not now"
+    optional: true
 - takeScreenshot: ${SHOT}-signed-in

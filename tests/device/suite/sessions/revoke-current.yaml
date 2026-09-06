@@ -1,5 +1,10 @@
 appId: com.totallynotwoojin.newone
 ---
+# Ending the current device's own session from Settings. Consumer accounts have
+# no "Revoke this session" control (settings.tsx renders that RowAction only
+# for workplace organizations, !personalRealm); the consumer path is
+# "Sign out of Newone", which revokes this session on the server before
+# signing out locally.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -10,20 +15,17 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Revoke this session"
+      text: "Devices"
     direction: DOWN
     timeout: 45000
-- tapOn: "Revoke this session"
-- extendedWaitUntil:
-    visible: "Revoke and sign out"
-    timeout: 15000
-- tapOn:
-    text: "Reason"
-    index: 1
-- inputText: "Done testing (suite)"
-- tapOn: "Revoke current session"
-- tapOn: "Revoke and sign out"
+- takeScreenshot: ${SHOT}-devices
+- scrollUntilVisible:
+    element:
+      text: "Sign out of Newone"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Sign out of Newone"
 - extendedWaitUntil:
     visible: "Create account"
     timeout: 40000
-- takeScreenshot: ${SHOT}-signed-out-by-revoke
+- takeScreenshot: ${SHOT}-signed-out

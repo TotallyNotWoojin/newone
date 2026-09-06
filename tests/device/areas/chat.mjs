@@ -206,15 +206,15 @@ export async function run(ctx) {
   const doc = await ctx.step({ id: 'media-05-document', title: 'A sends a document from the Files picker', device: devA, flow: 'media/choose-file.yaml', expected: 'A document is selectable and uploads clean (simulator may offer none)', screen: 'conversation → Choose file', optional: true, timeoutMs: 300_000 });
   if (!doc.uiOk) await ctx.step({ id: 'media-05b-cancel-picker', title: 'Dismiss the document picker', device: devA, flow: 'media/cancel-picker.yaml', expected: 'composer visible', screen: 'conversation' });
 
-  // Briefing / AI summary.
+  // Summary sheet (header "Summarize"; replaced the in-list briefing card).
   await openA();
   await ctx.step({
-    id: 'chat-26-briefing', title: 'Conversation briefing: request summary draft', device: devA, flow: 'chat/briefing.yaml',
-    expected: 'A draft ("Unapproved draft") appears; anything else (failure text/code) is recorded verbatim', screen: 'conversation → Conversation briefing',
+    id: 'chat-26-briefing', title: 'Summary sheet: summarize the conversation, copy the text', device: devA, flow: 'chat/briefing.yaml',
+    expected: 'The header "Summarize" button opens the "Summary" sheet; after "Summarize conversation" the prose appears, the sheet says "No new messages since the last summary.", and Copy shows "Copied"; anything else (failure text) is recorded verbatim', screen: 'conversation → Summary sheet',
     serverTruth: async () => { const rows = await server.summaries(convId); return { ok: rows.some((r) => r.status === 'ready_for_review' || r.status === 'ready' || r.primary_topic), detail: rows }; },
     timeoutMs: 400_000,
   });
-  await ctx.observe(devA, { id: 'chat-26b-briefing-final', title: 'Exact briefing state after the request', screen: 'conversation' });
+  await ctx.observe(devA, { id: 'chat-26b-briefing-final', title: 'Conversation after the Summary sheet closes', screen: 'conversation' });
 
   // Resilience: send + kill; background 60s.
   await openA();
