@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 // React Native's KeyboardAvoidingView pads by (its own bottom edge, measured
 // relative to its PARENT) minus the keyboard's top edge (measured on SCREEN).
@@ -11,6 +11,15 @@ import { KeyboardAvoidingView, Platform, StyleSheet, View, type StyleProp, type 
 //
 // This wrapper measures its own window position and feeds it back as the
 // offset, so the padding is right wherever the screen places it.
+/**
+ * Android 15 renders edge-to-edge, which defeats adjustResize: the window keeps
+ * its size and the composer ends up under the keyboard (first real Android
+ * user, Z Flip). Padding from the keyboard frame works on both platforms; where
+ * the window does resize the measured overlap is zero, so nothing is padded
+ * twice.
+ */
+export const KEYBOARD_AVOIDING_BEHAVIOR = 'padding' as const;
+
 type Props = {
   children: ReactNode;
   extraOffset?: number;
@@ -30,9 +39,10 @@ export function KeyboardAvoidingScreen({ children, extraOffset = 0, style }: Pro
   return (
     <View collapsable={false} onLayout={onLayout} ref={ref} style={style}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={KEYBOARD_AVOIDING_BEHAVIOR}
         keyboardVerticalOffset={windowTop + extraOffset}
-        style={styles.fill}>
+        style={styles.fill}
+        testID="keyboard-avoiding-screen">
         {children}
       </KeyboardAvoidingView>
     </View>
