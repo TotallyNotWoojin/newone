@@ -47,7 +47,7 @@ async function signupWithPassword(ctx, device, { label, displayName }) {
   account.code = code.code;
   const verify = await ctx.step({
     id: `setup-${label}-signup-verify`, title: `Setup: verify the code for ${displayName}, then save a password at the "Add a password" step`, device,
-    flow: 'v3/signup-verify-password.yaml', env: { CODE: code.code, PASSWORD },
+    flow: 'common/signup-verify.yaml', env: { CODE: code.code, PASSWORD },
     expected: 'Code accepted → "Add a password" → "New password" typed → "Save password" → Chats (notification card left in place); server: profile row + app_metadata.newone_password_set_at stamped',
     screen: 'sign-in (One-time code → Add a password)',
     serverTruth: async () => {
