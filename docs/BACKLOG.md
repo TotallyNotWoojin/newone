@@ -35,7 +35,7 @@ Paused until the owner says go. Items are in rough priority order.
 19. Remove the leftover workplace warning copy from consumer screens: the summary disclaimer (`chat.summaryBoundary`), "authorized …" wording in search/member-search/actions descriptions, and the sign-in security note; keep the strings only where the workplace realm still uses them.
 20. Owner (Sep 6 2026, 04:15): v3.0 ships as queued; v3.1 also takes the items missed in v3.0 — 4 (snappier animations), 5 (confirm before declining a request), 6 (Reconnecting banner overlays the list), 6b (translation-delayed state), 11 (names in summaries), 12 (live preview translation: a chat's preview line shows the original language until the next refresh when a message arrives while the list is open), 13 (server-side mute), 14 (@handles in group pickers).
 21. Enqueue a realtime invalidation when a translation job completes (private.bff_complete_translation_job_impl) so bubbles and previews update the moment the translation lands instead of at the 30 s poll; the client follow-ups from stream B become a fallback.
-22. HELD migration 20260907020000_candidate_payload_username.sql: apply only once v3.1 is the installed floor (re-timestamp past 20260907040000 first); v3.0 clients reject the extra key in the workplace group form.
+22. HELD migration (now in supabase/migrations-held/) 20260907020000_candidate_payload_username.sql: apply only once v3.1 is the installed floor (re-timestamp past 20260907040000 first); v3.0 clients reject the extra key in the workplace group form.
 
 ## v3.3: dark mode (owner decision, Sep 6 2026; moved from v3.2 on Sep 6 11:40)
 
