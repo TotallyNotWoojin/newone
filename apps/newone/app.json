@@ -33,6 +33,7 @@
       "versionCode": 1,
       "allowBackup": false,
       "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
@@ -75,7 +76,8 @@
         {
           "microphonePermission": "Newone uses the microphone only when you record a voice message or a video to share."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

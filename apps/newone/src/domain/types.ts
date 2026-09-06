@@ -268,6 +268,8 @@ export interface Attachment {
   mimeType?: string;
   byteSize?: number;
   downloadUrl?: string;
+  /** Local file shown while the upload is still running. */
+  localUri?: string;
   transfer?: {
     state: 'preparing' | 'uploading' | 'failed' | 'cancelled' | 'uploaded';
     progress: number;

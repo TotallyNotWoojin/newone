@@ -1,26 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import {
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { useI18n } from '@/i18n/provider';
 import { colors, spacing } from '@/theme/tokens';
 
+const MAX_SCALE = 5;
+const DOUBLE_TAP_SCALE = 2.5;
+const DISMISS_DISTANCE = 110;
+const DISMISS_VELOCITY = 900;
+const SNAP = { duration: 140 };
+// The safe-area hook throws outside its provider (tests, detached trees); the
+// viewer reads the context directly and simply pads nothing when it is absent.
+const NoInsetsContext = createContext<EdgeInsets | null>(null);
+
 /**
  * Full-screen viewer for an image attachment, fed by the same signed preview
  * URL the bubble already uses, so nothing is downloaded to Files just to look
- * at a photo. Pinch-to-zoom rides on the platform scroll view (iOS zooms
- * natively; Android shows the image fitted to the screen). The download
- * action stays available from the top bar.
+ * at a photo. Pinch-to-zoom and pan run on the gesture handler on both
+ * platforms (Android never zoomed on the plain scroll view), a double tap
+ * toggles zoom, a single tap toggles the bar, and a swipe down dismisses.
  */
 export function ImageViewerModal({
   visible,
@@ -39,43 +42,129 @@ export function ImageViewerModal({
   const { width, height } = useWindowDimensions();
   // A modal window gets no safe-area view insets of its own; the root
   // provider's insets keep the bar below the status bar, where taps arrive.
-  const insets = useSafeAreaInsets();
+  const insets = useContext(SafeAreaInsetsContext ?? NoInsetsContext);
+  const topInset = insets?.top ?? 0;
   const [chromeVisible, setChromeVisible] = useState(true);
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedX = useSharedValue(0);
+  const savedY = useSharedValue(0);
+  const dismissY = useSharedValue(0);
+
   useEffect(() => {
-    if (visible) setChromeVisible(true);
-  }, [visible]);
+    if (!visible) return;
+    setChromeVisible(true);
+    scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedX.value = 0;
+    savedY.value = 0;
+    dismissY.value = 0;
+  }, [dismissY, savedScale, savedX, savedY, scale, translateX, translateY, visible]);
+
+  const toggleChrome = () => setChromeVisible((current) => !current);
+
+  const pinch = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = Math.min(MAX_SCALE, Math.max(1, savedScale.value * event.scale));
+    })
+    .onEnd(() => {
+      if (scale.value <= 1.02) {
+        scale.value = withTiming(1, SNAP);
+        translateX.value = withTiming(0, SNAP);
+        translateY.value = withTiming(0, SNAP);
+        savedScale.value = 1;
+        savedX.value = 0;
+        savedY.value = 0;
+        return;
+      }
+      savedScale.value = scale.value;
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate((event) => {
+      if (savedScale.value > 1) {
+        translateX.value = savedX.value + event.translationX;
+        translateY.value = savedY.value + event.translationY;
+        return;
+      }
+      dismissY.value = Math.max(0, event.translationY);
+    })
+    .onEnd((event) => {
+      if (savedScale.value > 1) {
+        savedX.value = translateX.value;
+        savedY.value = translateY.value;
+        return;
+      }
+      if (dismissY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
+        dismissY.value = 0;
+        scheduleOnRN(onClose);
+        return;
+      }
+      dismissY.value = withTiming(0, SNAP);
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      const next = savedScale.value > 1 ? 1 : DOUBLE_TAP_SCALE;
+      scale.value = withTiming(next, SNAP);
+      savedScale.value = next;
+      if (next === 1) {
+        translateX.value = withTiming(0, SNAP);
+        translateY.value = withTiming(0, SNAP);
+        savedX.value = 0;
+        savedY.value = 0;
+      }
+    });
+
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      scheduleOnRN(toggleChrome);
+    });
+
+  const gesture = Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap));
+
+  const imageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value + dismissY.value },
+      { scale: scale.value },
+    ],
+  }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: Math.max(0.35, 1 - dismissY.value / 320),
+  }));
+
   if (!uri) return null;
   return (
     <Modal
       animationType="fade"
       onRequestClose={onClose}
-      presentationStyle="fullScreen"
+      presentationStyle="overFullScreen"
       statusBarTranslucent
+      transparent
       visible={visible}>
-      <View style={styles.root}>
-        <ScrollView
-          bouncesZoom
-          centerContent
-          contentContainerStyle={styles.scrollContent}
-          maximumZoomScale={5}
-          minimumZoomScale={1}
-          pinchGestureEnabled
-          showsHorizontalScrollIndicator={false}
-          showsVerticalScrollIndicator={false}>
-          <Pressable
-            accessibilityLabel={name ?? t('chat.imageViewerImage')}
-            accessibilityRole="image"
-            onPress={() => setChromeVisible((current) => !current)}>
+      <GestureHandlerRootView style={styles.root}>
+        <Animated.View pointerEvents="none" style={[styles.backdrop, backdropStyle]} />
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={[styles.stage, imageStyle]}>
             <Image
               accessibilityIgnoresInvertColors
+              accessibilityLabel={name ?? t('chat.imageViewerImage')}
+              accessibilityRole="image"
               resizeMode="contain"
               source={{ uri }}
               style={{ width, height }}
             />
-          </Pressable>
-        </ScrollView>
+          </Animated.View>
+        </GestureDetector>
         {chromeVisible ? (
-          <View pointerEvents="box-none" style={[styles.chrome, { paddingTop: insets.top }]}>
+          <View pointerEvents="box-none" style={[styles.chrome, { paddingTop: topInset }]}>
             <View style={styles.bar}>
               <Pressable
                 accessibilityLabel={t('chat.imageViewerClose')}
@@ -101,14 +190,15 @@ export function ImageViewerModal({
             </View>
           </View>
         ) : null}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
-  scrollContent: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1 },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   chrome: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
   bar: {
     flexDirection: 'row',
