@@ -288,6 +288,25 @@ describe('chats index route', () => {
 
     await view.unmount();
   });
+
+  test('renders no subtitle before the bootstrap says which realm the account is in', async () => {
+    mockWidth = 390;
+    // Before the bootstrap the provider exposes an empty organizationId while
+    // the organization name and a cached handle may already be present. The
+    // workplace line must not flash for a consumer during that window.
+    mockWorkspace = baseWorkspace({
+      status: 'loading',
+      organizationId: '',
+      currentUser: { username: 'river_runner_7' },
+    });
+    const view = await render(<ChatsScreen />);
+
+    expect(screen.queryByText(/chat\.onShift/)).toBeNull();
+    expect(screen.queryByText('Controlled Company · chat.onShift')).toBeNull();
+    expect(screen.queryByText('@river_runner_7')).toBeNull();
+
+    await view.unmount();
+  });
 });
 
 describe('focused conversation route', () => {

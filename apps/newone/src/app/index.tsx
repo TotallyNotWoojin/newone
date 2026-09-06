@@ -38,12 +38,17 @@ export default function ChatsScreen() {
   const firstOrdinaryConversationId = ordinaryConversations[0]?.id ?? '';
   const selectConversation = workspace.selectConversation;
   // Consumer accounts see their own handle (when known) instead of the
-  // workspace organization-and-shift subtitle.
+  // workspace organization-and-shift subtitle. The realm is unknown until the
+  // bootstrap fills organizationId, so nothing renders before then: a consumer
+  // must never see the workplace line flash on first launch.
+  const realmKnown = Boolean(workspace.organizationId);
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const consumerUsername = workspace.currentUser?.username?.trim() || null;
-  const headerSubtitle = personalRealm
-    ? consumerUsername ? `@${consumerUsername}` : undefined
-    : `${workspace.organizationName} · ${t('chat.onShift')}`;
+  const headerSubtitle = !realmKnown
+    ? undefined
+    : personalRealm
+      ? consumerUsername ? `@${consumerUsername}` : undefined
+      : `${workspace.organizationName} · ${t('chat.onShift')}`;
 
   useEffect(() => {
     if (!selectedConversation?.managementOnly) return;
