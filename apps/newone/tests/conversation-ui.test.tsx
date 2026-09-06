@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Keyboard } from 'react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
@@ -590,6 +591,18 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
     await fireEvent.press(screen.getByLabelText('chat.react 👍'));
     await waitFor(() => expect(mockWorkspace.toggleReaction).toHaveBeenCalledWith(message, '👍'));
+  });
+
+  test('opening the attachment sheet puts the keyboard away so its Send button is reachable', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    try {
+      await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
+      await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
+      expect(dismiss).toHaveBeenCalled();
+      expect(screen.getByLabelText('chat.photoLibrary')).toBeTruthy();
+    } finally {
+      dismiss.mockRestore();
+    }
   });
 
   test('selects a real file input and sends it through the workspace attachment boundary', async () => {

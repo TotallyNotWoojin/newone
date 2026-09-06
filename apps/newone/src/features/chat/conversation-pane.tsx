@@ -607,6 +607,9 @@ export function ConversationPane({
       onCancelReply={() => setReplyingTo(null)}
       onAddAttachment={() => {
         if (composerDisabled) return;
+        // A keyboard left up by the composer stays up under the sheet and
+        // hides its Send button, so the sheet opens with the keyboard away.
+        Keyboard.dismiss();
         workspace.clearActionError();
         setSelectedAttachment(null);
         setAttachmentCaption('');
