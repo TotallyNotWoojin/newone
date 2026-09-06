@@ -802,6 +802,10 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     participantCount: memberCount,
     // Empty until something is sent; the list renders the localized fallback.
     lastMessage: optionalString(preview.body) ?? '',
+    // The server preview layer swaps in the viewer's translation once it
+    // exists and says so; own texts never need one.
+    lastMessageSenderId: optionalString(preview.senderUserId) ?? undefined,
+    lastMessageTranslated: typeof preview.translatedTo === 'string',
     lastActivity: dateTimeLabel(preview.createdAt ?? row.updatedAt),
     unreadCount: Math.max(0, integer(row.unreadCount)),
     lastReadMessageId: optionalIdentifier(row.lastReadMessageId),
