@@ -16,5 +16,6 @@ export async function run(ctx) {
     en2: (tag) => `Second English message while translation is off ${tag}`, en2Hit: '(영어|영문)',
     ownHit: '(영어|영문)',
     mixed: (tag) => `회의는 월요일입니다 but bring the printed report please ${tag}`, mixedKey: (tag) => `printed report please ${tag}`, mixedHit: '(보고서|주세요)', mixedHitEn: 'Monday',
+    previewText: (tag) => `월요일 아침에 사무실에서 봐요 ${tag}`, previewKey: (tag) => `봐요 ${tag}`, previewHit: '(Monday|monday)',
   });
 }

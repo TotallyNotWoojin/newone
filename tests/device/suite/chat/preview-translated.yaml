@@ -1,0 +1,22 @@
+appId: com.totallynotwoojin.newone
+---
+# On the Chats list (not inside the conversation) the row for PEER shows the
+# newest message translated into this account's language: HIT is a word or
+# regex the translation must contain. The list stays open the whole time, so
+# the preview has to update live (v3.1: quick reconciles after a message event
+# until the translation lands) — the original may show first, then the
+# translation replaces it within TIMEOUT ms.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*${PEER}.*"
+    timeout: 45000
+- takeScreenshot: ${SHOT}-list
+- extendedWaitUntil:
+    visible: ".*${HIT}.*"
+    timeout: ${TIMEOUT}
+# Still on the list: no composer, the row carries the translated preview.
+- assertNotVisible: ".*Write a message….*"
+- assertVisible: ".*${PEER}.*"
+- takeScreenshot: ${SHOT}-preview-translated

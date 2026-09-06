@@ -76,6 +76,8 @@ appId: com.totallynotwoojin.newone
       text: "Add ${MEMBER1}"
     direction: DOWN
     timeout: 30000
+# v3.1 (backlog 14): the picker row shows the @handle that was searched for.
+- assertVisible: ".*@${MEMBER1_QUERY}.*"
 - tapOn: "Add ${MEMBER1}"
 - runFlow:
     when:

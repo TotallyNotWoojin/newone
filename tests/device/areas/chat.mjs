@@ -292,5 +292,13 @@ export async function run(ctx) {
       serverTruth: async () => ({ ok: true, detail: rows.map((row) => `${row.kind}:${row.kind === 'group' ? row.name : row.peer}`).join(', ') }),
     });
   }
+  // v3.1 (backlog 6): the status pill floats over the list instead of pushing it
+  // down, so a tap right after launch, while the pill may still be showing, lands
+  // on the intended row (a shifting list once hit the row below, run-2026-09-04T20-41-40).
+  await ctx.step({
+    id: 'chat-36-open-row-at-launch', title: 'Right after launch (status pill may be showing) a tap on B\'s row opens B\'s conversation, not a neighbour', device: devA,
+    flow: 'chat/open-row-at-launch.yaml', env: { PEER: B.displayName },
+    expected: 'Conversation with B open at once (header names B, composer visible); no other conversation opens', screen: 'chats → conversation',
+  });
   ctx.accounts = { A, B };
 }
