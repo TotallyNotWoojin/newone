@@ -1,0 +1,32 @@
+appId: com.totallynotwoojin.newone
+---
+# Android variant of common/returning-verify.yaml: the one-time-code field does
+# not expose its typed value as visible text on Android, so type the code, tap
+# the button, and let the Chats screen prove the sign-in.
+- assertVisible: "One-time code"
+- scrollUntilVisible:
+    element:
+      text: "000000"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "000000"
+- eraseText: 8
+- inputText: ${CODE}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Verify and sign in"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Verify and sign in"
+- waitForAnimationToEnd:
+    timeout: 4000
+- takeScreenshot: ${SHOT}-android-after-verify
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "Not now"
+    optional: true
