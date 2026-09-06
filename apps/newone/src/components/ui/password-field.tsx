@@ -52,7 +52,8 @@ export function PasswordField({
         <TextInput
           accessibilityLabel={label}
           autoCapitalize="none"
-          autoComplete={autoComplete}
+          autoComplete={autoComplete === 'new-password' ? 'off' : autoComplete}
+          importantForAutofill={autoComplete === 'new-password' ? 'no' : 'auto'}
           autoCorrect={false}
           maxLength={PASSWORD_MAX_LENGTH}
           onChangeText={onChangeText}
@@ -63,10 +64,13 @@ export function PasswordField({
           secureTextEntry={!visible}
           style={styles.input}
           testID={testID}
-          // 'newPassword' makes iOS present a blocking "Use Strong Password?"
-          // sheet the moment the field is focused, which swallowed typing for the
-          // first users; the plain type keeps AutoFill available without the sheet.
-          textContentType="password"
+          // iOS presents a blocking "Use Strong Password?" sheet the moment a
+          // field it takes for a new-password field is focused; it swallowed the
+          // typed characters for the first users. Fields that create a password
+          // opt out of AutoFill heuristics entirely (oneTimeCode is the accepted
+          // way to say "no password suggestions here"); the sign-in field keeps
+          // AutoFill so saved passwords still fill.
+          textContentType={autoComplete === 'new-password' ? 'oneTimeCode' : 'password'}
           value={value}
         />
         <Pressable
