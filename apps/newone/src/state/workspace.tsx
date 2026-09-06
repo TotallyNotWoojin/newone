@@ -3284,6 +3284,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           name: prepared.name,
           mimeType: prepared.mimeType,
           byteSize: prepared.byteSize,
+          localUri: prepared.uri,
           sizeLabel: prepared.byteSize < 1024 * 1024
             ? `${Math.ceil(prepared.byteSize / 1024)} KB`
             : `${(prepared.byteSize / (1024 * 1024)).toFixed(1)} MB`,
@@ -3808,8 +3809,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const loadAttachmentPreview = useCallback(
     async (message: Message) => {
       const attachment = message.attachment;
-      // Images get an inline preview; audio gets a playable source (voice notes).
-      const previewable = attachment?.kind === 'image' || attachment?.mimeType?.startsWith('audio/') === true;
+      // Images get an inline preview; audio and video get a playable source.
+      const previewable = attachment?.kind === 'image'
+        || attachment?.mimeType?.startsWith('audio/') === true
+        || attachment?.mimeType?.startsWith('video/') === true;
       if (!snapshot || !attachment || attachment.status !== 'clean' || !previewable) return;
       if (previewRequestsRef.current.has(attachment.id)) return;
       previewRequestsRef.current.add(attachment.id);

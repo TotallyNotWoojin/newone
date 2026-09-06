@@ -3,6 +3,9 @@ const expoPreset = require('jest-expo/jest-preset');
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
+  setupFiles: [require.resolve('react-native-gesture-handler/jestSetup')],
+  // react-native-worklets ships native-only entry points; its resolver swaps in the JS runtime for tests.
+  resolver: require.resolve('react-native-worklets/jest/resolver.js'),
   rootDir: __dirname,
   roots: ['<rootDir>'],
   testMatch: ['**/*.test.[jt]s?(x)'],

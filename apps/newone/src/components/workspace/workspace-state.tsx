@@ -157,6 +157,11 @@ export function WorkspaceStatePanel({
 
 const styles = StyleSheet.create({
   banner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',

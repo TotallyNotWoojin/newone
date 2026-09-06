@@ -77,7 +77,7 @@ export default function ChatsScreen() {
           title={t('nav.chats')}
         />
       }>
-      <WorkspaceStatusBanner />
+      {!desktop ? <WorkspaceStatusBanner /> : null}
       <NotificationPrompt />
       {workspace.status === 'loading' || workspace.status === 'error' || ordinaryConversations.length === 0 ? (
         <WorkspaceStatePanel resource="chats" />

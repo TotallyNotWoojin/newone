@@ -102,6 +102,12 @@ jest.mock('@/state/workspace', () => ({
   useWorkspace: () => mockWorkspace,
 }));
 
+const mockPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null };
+
+jest.mock('@/state/device-preferences', () => ({
+  useDevicePreferences: () => ({ preferences: mockPreferences, ready: true, setPreference: jest.fn() }),
+}));
+
 const self = {
   id: 'user-self',
   displayName: 'Jordan Lee',
@@ -484,6 +490,8 @@ function buildWorkspace() {
 
 beforeEach(() => {
   mockWorkspace = buildWorkspace();
+  mockPreferences.translatedOnly = false;
+  mockPreferences.enterSends = true;
   mockCameraPermission.mockImplementation(async () => ({ granted: true }));
   mockLibraryPermission.mockImplementation(async () => ({ granted: true }));
 });
@@ -548,10 +556,17 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     const message = translatedMessage();
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={onSend} />);
 
-    await fireEvent.press(screen.getByText('chat.showProvenance'));
+    // The bubble is just the two texts; language details sit one long-press away.
+    expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    expect(screen.queryByText(/chat\.originalUpper|chat\.machineTranslation|chat\.originalCanonical|chat\.detectedLanguage/)).toBeNull();
+    await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
     expect(screen.getByText(/chat\.machineRoute/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.hideProvenance'));
+    expect(screen.queryByText(/chat\.machineRoute/)).toBeNull();
+    expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
 
-    await fireEvent.press(screen.getByText('chat.proposeCorrection'));
+    await fireEvent.press(screen.getByLabelText('chat.proposeCorrection'));
     await fireEvent.changeText(screen.getByLabelText('chat.correctedTranslation'), 'Cierre la entrada norte a las 18:00.');
     await fireEvent.changeText(screen.getByLabelText('chat.correctionRationale'), 'Approved site terminology.');
     await fireEvent.press(screen.getByLabelText('chat.submitCorrection'));
@@ -698,34 +713,18 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     });
   });
 
-  test('requires explicit scoped-disclosure consent before reporting an incoming message', async () => {
+  test('keeps moderation-report entry points out of the message actions sheet', async () => {
     const message = incomingMessage({ attachment: undefined });
-    mockWorkspace.reportMessage = jest.fn(async () => false);
-
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
     await fireEvent(screen.getByText(message.originalText), 'longPress');
-    await fireEvent.press(screen.getByLabelText('chat.reportThreat'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reportDetails'), 'Threatening instruction in the reported message.');
-
-    const oneMessageChoices = screen.getAllByLabelText('1 message');
-    await fireEvent.press(oneMessageChoices[0]);
-    const twoMessageChoices = screen.getAllByLabelText('2 messages');
-    await fireEvent.press(twoMessageChoices[1]);
-    expect(screen.getByText('Consent is required before this report can be submitted.')).toBeTruthy();
-    await fireEvent.press(screen.getByText('I understand and consent to this limited disclosure.'));
-    await fireEvent.press(screen.getByLabelText('chat.submitReport'));
-
-    await waitFor(() => expect(mockWorkspace.reportMessage).toHaveBeenCalledWith(
-      message,
-      'threat',
-      'Threatening instruction in the reported message.',
-      {
-        consentToShare: true,
-        contextBefore: 1,
-        contextAfter: 2,
-        noticeVersion: 'moderation-report-v2',
-      },
-    ));
+    expect(screen.getByText('chat.actionsTitle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.reply')).toBeTruthy();
+    expect(screen.queryByText('chat.reportPrivately')).toBeNull();
+    expect(screen.queryByLabelText('chat.reportThreat')).toBeNull();
+    expect(screen.queryByLabelText('chat.reportDetails')).toBeNull();
+    expect(screen.queryByLabelText('chat.submitReport')).toBeNull();
+    expect(screen.queryByText('chat.actionsDescription')).toBeNull();
+    expect(mockWorkspace.reportMessage).not.toHaveBeenCalled();
   });
 
   test('reviews, corrects, schedules, and reports a versioned conversation summary', async () => {
@@ -825,12 +824,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText('Controlled reviewer note.')).toBeNull();
   });
 
-  test('exercises conversation security controls, scoped membership, reporting, and departure', async () => {
+  test('exercises conversation security controls, scoped membership, and departure', async () => {
     const managedConversation = conversation({ avatarPath: 'organization-a/conversation-main/avatar.jpg' });
     mockWorkspace.conversations[0] = managedConversation;
     mockWorkspace.updateConversation = jest.fn(async () => false);
     mockWorkspace.leaveConversation = jest.fn(async () => false);
-    mockWorkspace.reportGroup = jest.fn(async () => false);
     mockWorkspace.addConversationMember = jest.fn(async () => false);
     mockWorkspace.queryConversationMemberCandidates = jest.fn(async (
       _conversationId: string,
@@ -873,16 +871,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
     await fireEvent.press(screen.getByLabelText('group.removeAvatar'));
 
-    await fireEvent.press(screen.getByLabelText('chat.reportSpam'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reportDetails'), 'Repeated unsolicited operational messages.');
-    await fireEvent.press(screen.getByText('I understand and consent to this limited disclosure.'));
-    await fireEvent.press(screen.getByLabelText('chat.submitReport'));
-    await waitFor(() => expect(mockWorkspace.reportGroup).toHaveBeenCalledWith(
-      managedConversation,
-      'spam',
-      'Repeated unsolicited operational messages.',
-      { consentToShare: true, noticeVersion: 'moderation-report-v2' },
-    ));
+    expect(screen.queryByText('chat.reportGroup')).toBeNull();
+    expect(screen.queryByLabelText('chat.reportSpam')).toBeNull();
 
     await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Controlled Operations');
     await fireEvent.changeText(screen.getByLabelText('chat.description'), 'Scoped operations coordination.');
@@ -956,6 +946,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     });
     await render(<ConversationPane conversation={mentionConversation} messages={[]} onSend={onSend} />);
 
+    expect(screen.queryByText('Mention people')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('chat.message'), '@');
     await fireEvent.press(screen.getByText('Mention people'));
     await fireEvent.changeText(screen.getByLabelText('Search conversation members to mention'), 'Ana');
     await fireEvent.press(screen.getByText(colleague.displayName));
@@ -972,12 +964,14 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(onSend).toHaveBeenCalledWith('Please inspect the valve.', undefined, [mentionCandidate.id]);
   });
 
-  test('reviews a translation decision and files a separate quality report', async () => {
+  test('reviews a translation decision from the actions sheet and offers no translation-error report', async () => {
     const message = translatedMessage();
     mockWorkspace.reviewTranslationCorrection = jest.fn(async () => false);
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
 
-    await fireEvent.press(screen.getByText('chat.reviewCorrection'));
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+    expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.reviewCorrection'));
     await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), 'Terminology requires a documented decision.');
     await fireEvent.press(screen.getByLabelText('chat.requestChanges'));
     await fireEvent.press(screen.getByLabelText('chat.rejectCorrection'));
@@ -999,22 +993,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         'Terminology requires a documented decision.',
       );
     });
-
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-    await fireEvent.press(screen.getByText('chat.reportTranslationError'));
-    await fireEvent.press(screen.getByLabelText('quality.categoryTerminology'));
-    await fireEvent.changeText(screen.getByLabelText('quality.whatWentWrong'), 'The selected site term changes the operational meaning.');
-    await fireEvent.press(screen.getAllByRole('checkbox')[0]);
-    await fireEvent.press(screen.getByLabelText('quality.submitReport'));
-    await waitFor(() => expect(mockWorkspace.reportAiOutputError).toHaveBeenCalledWith({
-      outputKind: 'translation',
-      translationId: message.translation.id,
-      summaryId: null,
-      category: 'terminology',
-      details: 'The selected site term changes the operational meaning.',
-      highConsequence: true,
-      qualityUseConsent: false,
-    }));
+    expect(mockWorkspace.reportAiOutputError).not.toHaveBeenCalled();
   });
 
   test('requests translation only from eligible language-detection states', async () => {
@@ -1041,9 +1020,12 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       },
     });
     await render(<ConversationPane conversation={conversation()} messages={[failed, notRequested]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByText('chat.showProvenance'));
+    expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
+    await fireEvent(screen.getByText('La bomba necesita servicio.'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
     expect(screen.getByText(/failed-source-hash/)).toBeTruthy();
-    await fireEvent.press(screen.getByText('chat.retryTranslation'));
+    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
+    await fireEvent.press(screen.getByLabelText('chat.retryTranslation'));
     await fireEvent.press(screen.getByText('chat.requestTranslation'));
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledWith(failed);
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledWith(notRequested);
@@ -1087,8 +1069,9 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByLabelText('chat.attachmentProgress 0%')).toBeTruthy();
     expect(screen.getByLabelText('chat.attachmentProgress 100%')).toBeTruthy();
     await fireEvent.press(screen.getByText('chat.attachmentRetry'));
+    // Newest first: the oldest (preparing) upload is the last cancel control in the tree.
     const cancelActions = screen.getAllByText('chat.attachmentCancel');
-    await fireEvent.press(cancelActions[0]);
+    await fireEvent.press(cancelActions.at(-1)!);
     await fireEvent.press(screen.getByText('chat.attachmentFinishCleanup'));
     await fireEvent.press(screen.getByLabelText('uploaded-file.pdf, chat.fileClean'));
 
@@ -1121,7 +1104,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
   });
 
-  test('reconciles scroll position, unread placement, focused sources, and appended messages', async () => {
+  test('keeps the inverted timeline pinned to the newest message and counts arrivals while scrolled up', async () => {
     const initial = translatedMessage({
       id: 'message-initial', serverId: 'message-initial', originalText: 'Initial controlled message.',
     });
@@ -1132,23 +1115,17 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       messages={[initial]}
       onSend={noopSend}
     />);
-    const root = view.root!;
-    const scroll = root.queryAll((node) => typeof node.props.onScroll === 'function')[0];
-    await fireEvent(scroll, 'scroll', {
-      nativeEvent: {
-        contentOffset: { y: 40 },
-        contentSize: { height: 1000 },
-        layoutMeasurement: { height: 300 },
-      },
-    });
-    const layoutNodes = root.queryAll((node) => typeof node.props.onLayout === 'function');
-    for (const [index, node] of layoutNodes.entries()) {
-      // Real layout events are persistable; RN's KeyboardAvoidingView (now a
-      // descendant of the measured wrapper) calls event.persist() first.
-      await fireEvent(node, 'layout', { persist() {}, nativeEvent: { layout: { y: 120 + index * 40, height: 40 } } });
-    }
-    await fireEvent(scroll, 'contentSizeChange', 320, 1000);
+    // Opening lands on the newest message, so what is on screen is read at once.
+    await waitFor(() => expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main'));
+    expect(screen.getByText('chat.unreadMessages')).toBeTruthy();
+    const list = view.root!.queryAll((node) => node.props.inverted === true && typeof node.props.onScroll === 'function')[0];
+    expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+    mockWorkspace.markConversationRead.mockClear();
 
+    // Scrolled into history: an arrival shows the jump pill instead of moving the view.
+    await fireEvent(list, 'scroll', {
+      nativeEvent: { contentOffset: { y: 400 }, contentSize: { height: 1000 }, layoutMeasurement: { height: 300 } },
+    });
     const appended = incomingMessage({
       id: 'message-appended', serverId: 'message-appended', originalText: 'New controlled message.',
     });
@@ -1159,17 +1136,31 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       onSend={noopSend}
     />);
     await waitFor(() => expect(screen.getByText(/1 chat\.newMessages/)).toBeTruthy());
+    expect(mockWorkspace.markConversationRead).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText(/1 chat\.newMessages/));
     expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main');
+    expect(screen.queryByText(/chat\.newMessages/)).toBeNull();
 
-    await fireEvent(scroll, 'scroll', {
-      nativeEvent: {
-        contentOffset: { y: 700 },
-        contentSize: { height: 1000 },
-        layoutMeasurement: { height: 300 },
-      },
+    // Offset 0 in an inverted list is the bottom: everything on screen is read.
+    await fireEvent(list, 'scroll', {
+      nativeEvent: { contentOffset: { y: 0 }, contentSize: { height: 1000 }, layoutMeasurement: { height: 300 } },
     });
-    await fireEvent(scroll, 'contentSizeChange', 320, 1200);
+    expect(mockWorkspace.markConversationRead).toHaveBeenCalledTimes(2);
+
+    // An own send always returns to the newest message, so no pill appears.
+    await fireEvent(list, 'scroll', {
+      nativeEvent: { contentOffset: { y: 400 }, contentSize: { height: 1000 }, layoutMeasurement: { height: 300 } },
+    });
+    const ownTail = translatedMessage({
+      id: 'message-own-tail', serverId: 'message-own-tail', originalText: 'Own appended tail.',
+    });
+    await view.rerender(<ConversationPane
+      conversation={conversation({ lastReadMessageId: null })}
+      messages={[initial, appended, ownTail]}
+      onSend={noopSend}
+    />);
+    expect(screen.queryByText(/chat\.newMessages/)).toBeNull();
+    expect(screen.getByText('Own appended tail.')).toBeTruthy();
   });
 
   test('closes successful message mutations and preserves explicit cancellation behavior', async () => {
@@ -1204,17 +1195,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockWorkspace.forwardMessage).toHaveBeenCalledWith(message, 'conversation-target');
     expect(mockWorkspace.proposeAction).toHaveBeenCalledWith(message, 'Successful action', '');
     expect(mockWorkspace.hideMessageForMe).toHaveBeenCalledWith(message);
-  });
-
-  test('closes a successful consented incoming-message report', async () => {
-    const message = incomingMessage({ attachment: undefined });
-    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
-    await fireEvent(screen.getByText(message.originalText), 'longPress');
-    await fireEvent.changeText(screen.getByLabelText('chat.reportDetails'), 'Controlled privacy report.');
-    await fireEvent.press(screen.getByText('I understand and consent to this limited disclosure.'));
-    await fireEvent.press(screen.getByLabelText('chat.submitReport'));
-    await waitFor(() => expect(mockWorkspace.reportMessage).toHaveBeenCalled());
-    expect(screen.queryByText('chat.actionsTitle')).toBeNull();
   });
 
   test('renders system, receipt, detection, translation, and priority branch variants', async () => {
@@ -1321,12 +1301,22 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('chat.systemConversationCreated')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarChanged')).toBeTruthy();
     expect(screen.getByText('chat.systemAvatarRemoved')).toBeTruthy();
-    expect(screen.getByText('quality.reportSubmitted')).toBeTruthy();
-    expect(screen.getByText('chat.translationPolicyStale')).toBeTruthy();
-    expect(screen.getByText(/chat\.reviewedCorrection/)).toBeTruthy();
-    expect(screen.getByText('chat.languageDetectionFailed')).toBeTruthy();
-    expect(screen.getByText('chat.languageDetectionPending')).toBeTruthy();
-    expect(screen.getByText(/policy_blocked/)).toBeTruthy();
+    // Bubbles carry no provenance; language details sit behind "Show details" in the sheet.
+    expect(screen.queryByText('quality.reportSubmitted')).toBeNull();
+    expect(screen.queryByText(/chat\.detectedLanguage|chat\.originalUpper|chat\.translationUpper/)).toBeNull();
+    expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
+    expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
+    const details = async (text: string, expected: RegExp) => {
+      await fireEvent(screen.getByText(text), 'longPress');
+      await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
+      expect(screen.getByText(expected)).toBeTruthy();
+      await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
+    };
+    await details('Approved correction source.', /chat\.translationPolicyStale/);
+    await details('Approved correction source.', /chat\.reviewedCorrection/);
+    await details('Detection failed input.', /chat\.languageDetectionFailed/);
+    await details('Detection pending input.', /chat\.languageDetectionPending/);
+    await details('Blocked translation source.', /policy_blocked/);
   });
 
   test('renders direct and incident authorization boundaries including read-only posting', async () => {
@@ -1680,12 +1670,17 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       ]}
       onSend={noopSend}
     />);
-    expect(screen.getByLabelText('own-uploaded.jpg, chat.fileClean')).toBeTruthy();
+    // The uploaded photo is just the photo; the others show their transfer state over a placeholder.
+    expect(screen.getByLabelText('chat.imageOpen')).toBeTruthy();
+    expect(screen.queryByLabelText('own-uploaded.jpg, chat.fileClean')).toBeNull();
     expect(screen.getByText('chat.attachmentFailureBody')).toBeTruthy();
-    await fireEvent.press(screen.getByText('chat.showProvenance'));
+    expect(screen.getByText('chat.attachmentCleanupBody')).toBeTruthy();
+    expect(screen.getByLabelText('chat.attachmentProgress 35%')).toBeTruthy();
+    expect(screen.getByLabelText('1/2 chat.receiptDelivered · chat.receiptReadPrivate')).toBeTruthy();
+    await fireEvent(screen.getByText('Nullable translation provenance.'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
     expect(screen.getByText(/chat\.notAvailable \/ chat\.notAvailable/)).toBeTruthy();
     expect(screen.getByText(/chat\.humanReviewed/)).toBeTruthy();
-    expect(screen.getByLabelText('1/2 chat.receiptDelivered · chat.receiptReadPrivate')).toBeTruthy();
   });
 
   test('covers initial bottom positioning, prepend anchors, and authoritative focus loading', async () => {
@@ -1842,7 +1837,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByLabelText('chat.uploading')).toBeTruthy();
   });
 
-  test('closes successful normal conversation save, archive, group report, and departure', async () => {
+  test('closes successful normal conversation save, archive, and departure', async () => {
     const current = conversation();
     await render(<ConversationPane conversation={current} messages={[]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
@@ -1858,26 +1853,18 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(current.id, { isArchived: true }));
 
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.press(screen.getByLabelText('chat.reportPrivacy'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reportDetails'), 'Scoped group privacy report.');
-    await fireEvent.press(screen.getByText('I understand and consent to this limited disclosure.'));
-    await fireEvent.press(screen.getByLabelText('chat.submitReport'));
-    await waitFor(() => expect(mockWorkspace.reportGroup).toHaveBeenCalled());
-
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
     await fireEvent.press(screen.getAllByText(colleague.displayName).at(-1)!);
     await fireEvent.press(screen.getByText('I understand that history is preserved and my future access ends.'));
     await fireEvent.press(screen.getByLabelText('Leave group'));
     await waitFor(() => expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(current.id, colleague.id));
   });
 
-  test('covers successful and refused translation review and quality-report outcomes', async () => {
+  test('covers successful and refused translation review and correction outcomes from the sheet', async () => {
     const message = translatedMessage();
     mockWorkspace.reviewTranslationCorrection = jest.fn<(..._args: unknown[]) => Promise<boolean>>()
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true);
-    mockWorkspace.reportAiOutputError = jest.fn(async () => false);
     mockWorkspace.proposeTranslationCorrection = jest.fn(async () => false);
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
 
@@ -1886,22 +1873,23 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       ['chat.requestChanges', 'Request documented changes.'],
       ['chat.rejectCorrection', 'Reject unsafe correction.'],
     ] as const) {
-      await fireEvent.press(screen.getByText('chat.reviewCorrection'));
+      await fireEvent(screen.getByText(message.originalText), 'longPress');
+      await fireEvent.press(screen.getByLabelText('chat.reviewCorrection'));
       await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), note);
       await fireEvent.press(screen.getByLabelText(action));
+      await waitFor(() => expect(screen.queryByLabelText('chat.reviewNote')).toBeNull());
     }
-    await fireEvent.press(screen.getByText('chat.proposeCorrection'));
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.proposeCorrection'));
     await fireEvent.changeText(screen.getByLabelText('chat.correctedTranslation'), 'A distinct controlled correction.');
     await fireEvent.press(screen.getByLabelText('chat.submitCorrection'));
+    await waitFor(() => expect(mockWorkspace.proposeTranslationCorrection).toHaveBeenCalled());
+    // A refused correction keeps its form open for another attempt.
+    expect(screen.getByLabelText('chat.correctedTranslation')).toBeTruthy();
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-    await fireEvent.press(screen.getByText('chat.reportTranslationError'));
-    await fireEvent.changeText(screen.getByLabelText('quality.whatWentWrong'), 'Controlled report refusal.');
-    await fireEvent.press(screen.getByLabelText('quality.submitReport'));
 
     expect(mockWorkspace.reviewTranslationCorrection).toHaveBeenCalledTimes(3);
-    expect(mockWorkspace.proposeTranslationCorrection).toHaveBeenCalled();
-    expect(mockWorkspace.reportAiOutputError).toHaveBeenCalled();
-    expect(screen.getAllByText('chat.reportTranslationError').length).toBeGreaterThan(0);
+    expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
   });
 
   test('covers nullable summary output, absent organization, avatar refusal, and non-authorized controls', async () => {
@@ -2018,93 +2006,7 @@ function counterpart(overrides: Record<string, unknown> = {}) {
   return { ...colleague, ...overrides };
 }
 
-describe('personal realm message-request thread states', () => {
-  test('shows the incoming request banner, hides the composer, and wires accept and decline', async () => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
-      candidate,
-    ];
-    mockWorkspace.respondConnection = successfulAction();
-    await render(
-      <ConversationPane
-        conversation={directRequestConversation()}
-        messages={[]}
-        onSend={noopSend}
-        mobile
-      />,
-    );
-
-    expect(screen.getByText('chat.messageRequestIncoming')).toBeTruthy();
-    expect(screen.getByText('chat.messageRequestIncomingBody')).toBeTruthy();
-    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
-    // The composer stays hidden while the counterpart's request is pending.
-    expect(screen.queryByLabelText('chat.message')).toBeNull();
-    expect(screen.queryByLabelText('chat.send')).toBeNull();
-
-    await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
-    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(1, colleague.id, 'accepted');
-    await fireEvent.press(screen.getByRole('button', { name: 'people.decline' }));
-    expect(mockWorkspace.respondConnection).toHaveBeenNthCalledWith(2, colleague.id, 'declined');
-  });
-
-  test('shows the passive pending banner with an enabled composer for the requester on desktop', async () => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
-      candidate,
-    ];
-    const onSend = jest.fn(async () => undefined);
-    await render(
-      <ConversationPane
-        conversation={directRequestConversation()}
-        messages={[]}
-        onSend={onSend}
-      />,
-    );
-
-    expect(screen.getByText('chat.messageRequestPending')).toBeTruthy();
-    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
-    // The requester can still post; the server enforces the 3-message cap.
-    await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Second request message');
-    await fireEvent.press(screen.getByLabelText('chat.send'));
-    expect(onSend).toHaveBeenCalledWith('Second request message', undefined, []);
-  });
-
-  test.each([
-    ['mobile', true],
-    ['desktop', false],
-  ])('keeps the requester composer enabled on %s when the pair is not yet permitted and surfaces the cap error', async (_layout, mobile) => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
-      candidate,
-    ];
-    mockWorkspace.actionError = 'errors.messageRequestCap';
-    const onSend = jest.fn(async () => undefined);
-    await render(
-      <ConversationPane
-        conversation={directRequestConversation({ canPost: false })}
-        messages={[]}
-        onSend={onSend}
-        mobile={mobile}
-      />,
-    );
-
-    expect(screen.getByText('chat.messageRequestPending')).toBeTruthy();
-    // The bootstrap's can_post=false for a pending pair must never read as an
-    // admins-only group restriction, and must not lock the requester out.
-    expect(screen.queryByText('chat.adminsOnlyPosting')).toBeNull();
-    expect(screen.queryByText('chat.directPostingUnavailable')).toBeNull();
-    expect(screen.getAllByText('errors.messageRequestCap').length).toBeGreaterThan(0);
-    await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Third request message');
-    await fireEvent.press(screen.getByLabelText('chat.send'));
-    expect(onSend).toHaveBeenCalledWith('Third request message', undefined, []);
-  });
-
+describe('personal realm direct threads', () => {
   test('locks a not-permitted direct thread with direct copy while groups keep the admins-only copy', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     mockWorkspace.people = [self, counterpart({ connectionState: 'available' }), candidate];
@@ -2118,7 +2020,6 @@ describe('personal realm message-request thread states', () => {
     );
     expect(screen.getByText('chat.directPostingUnavailable')).toBeTruthy();
     expect(screen.queryByText('chat.adminsOnlyPosting')).toBeNull();
-    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
     // A locked composer offers no input at all.
     expect(screen.queryByLabelText('chat.message')).toBeNull();
     expect(screen.queryByLabelText('chat.send')).toBeNull();
@@ -2140,58 +2041,6 @@ describe('personal realm message-request thread states', () => {
     );
     expect(screen.getByText('chat.incidentReadOnly')).toBeTruthy();
     expect(screen.queryByText('chat.directPostingUnavailable')).toBeNull();
-  });
-
-  test('polls the workspace every 8 seconds while a request is pending and stops once it resolves or unmounts', async () => {
-    const setIntervalSpy = jest.spyOn(global, 'setInterval');
-    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-    const pollCalls = () => setIntervalSpy.mock.calls
-      .map((call, index) => ({ call, index }))
-      .filter(({ call }) => call[1] === 8_000);
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
-      candidate,
-    ];
-    const view = await render(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(pollCalls()).toHaveLength(1);
-    expect(mockWorkspace.refresh).not.toHaveBeenCalled();
-    const [{ call: firstPoll, index: firstIndex }] = pollCalls();
-    (firstPoll[0] as () => void)();
-    (firstPoll[0] as () => void)();
-    expect(mockWorkspace.refresh).toHaveBeenCalledTimes(2);
-
-    // Acceptance clears the poll without a restart.
-    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
-    await view.rerender(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[firstIndex]!.value);
-    expect(pollCalls()).toHaveLength(1);
-
-    // A requester's own pending thread polls too, and unmounting clears it.
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
-      candidate,
-    ];
-    await view.rerender(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(pollCalls()).toHaveLength(2);
-    const { index: secondIndex } = pollCalls()[1]!;
-    await view.unmount();
-    expect(clearIntervalSpy).toHaveBeenCalledWith(setIntervalSpy.mock.results[secondIndex]!.value);
-
-    // A settled thread never starts a poll.
-    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
-    await render(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(pollCalls()).toHaveLength(2);
   });
 
   test('consumer threads offer a request for untranslated messages and a rate-limited retry for failed rows', async () => {
@@ -2227,12 +2076,13 @@ describe('personal realm message-request thread states', () => {
     // example received while translation was off) can still be requested, and
     // a failed row offers a retry.
     expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
-    await fireEvent.press(screen.getByText('chat.retryTranslation'));
+    expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.retryTranslation'));
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledTimes(1);
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledWith(failed);
     // The tap starts a 30-second cooldown on that bubble; a second tap inside
     // it is ignored, so a retry cannot be spammed.
-    expect(screen.queryByText('chat.retryTranslation')).toBeNull();
+    expect(screen.queryByText('chat.retry')).toBeNull();
     await fireEvent.press(screen.getByText('chat.retryTranslationWait'));
     expect(mockWorkspace.requestTranslation).toHaveBeenCalledTimes(1);
 
@@ -2254,41 +2104,27 @@ describe('personal realm message-request thread states', () => {
     expect(screen.getByText('chat.retryTranslationWait')).toBeTruthy();
   });
 
-  test('keeps workspace organizations and settled personal-realm threads free of request banners', async () => {
-    mockWorkspace.people = [
-      self,
-      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
-      candidate,
-    ];
-    // A workspace org keeps ordinary composer behavior with identical people state.
-    const first = await render(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
-    expect(screen.getByLabelText('chat.message')).toBeTruthy();
-    await first.unmount();
-
-    // A personal-realm group is not a request thread.
+  test('always renders the composer for an active member, even when the counterpart is still pending', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    const second = await render(
-      <ConversationPane
-        conversation={directRequestConversation({ kind: 'group', directParticipantId: undefined })}
-        messages={[]}
-        onSend={noopSend}
-      />,
-    );
-    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
-    expect(screen.getByLabelText('chat.message')).toBeTruthy();
-    await second.unmount();
-
-    // A settled (connected) direct thread shows no banner either.
-    mockWorkspace.people = [self, counterpart({ connectionState: 'connected' }), candidate];
-    await render(
-      <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
-    );
-    expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
-    expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
-    expect(screen.getByLabelText('chat.message')).toBeTruthy();
+    for (const state of [
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'incoming' }),
+      counterpart({ connectionState: 'pending', connectionRequestDirection: 'outgoing' }),
+      counterpart({ connectionState: 'connected' }),
+    ]) {
+      mockWorkspace.people = [self, state, candidate];
+      const view = await render(
+        <ConversationPane conversation={directRequestConversation()} messages={[]} onSend={noopSend} />,
+      );
+      // No request banner, no accept/decline, no polling: the thread is an ordinary chat.
+      expect(screen.queryByText('chat.messageRequestIncoming')).toBeNull();
+      expect(screen.queryByText('chat.messageRequestPending')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'people.accept' })).toBeNull();
+      expect(screen.getByLabelText('chat.message')).toBeTruthy();
+      await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Hello there');
+      expect(screen.getByLabelText('chat.send')).toBeTruthy();
+      await view.unmount();
+    }
+    expect(mockWorkspace.refresh).not.toHaveBeenCalled();
   });
 
   test('captures camera video with defaulted naming and sends it through the secure pipeline', async () => {
@@ -2394,6 +2230,7 @@ describe('personal realm conversation copy', () => {
     expect(screen.queryByText('chat.chooseBody')).toBeNull();
     await empty.unmount();
 
+    mockWorkspace.messagePagination = {};
     const fresh = await render(
       <ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />,
     );
@@ -2556,5 +2393,137 @@ describe('personal realm group member management', () => {
     />);
     expect(screen.getByText('Unsent controlled text')).toBeTruthy();
     expect(screen.getByText('chat.failed · This request already holds its 3 messages.')).toBeTruthy();
+  });
+});
+
+describe('compact timeline, translated-only mode, and composer behaviour', () => {
+  test('shows only the translation when the device prefers it and reveals the original per message', async () => {
+    mockPreferences.translatedOnly = true;
+    const translated = translatedMessage();
+    const untranslated = incomingMessage({ attachment: undefined });
+    await render(<ConversationPane conversation={conversation()} messages={[translated, untranslated]} onSend={noopSend} />);
+    expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    expect(screen.queryByText('Lock the north gate at 18:00.')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.showOriginal'));
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.hideOriginal'));
+    expect(screen.queryByText('Lock the north gate at 18:00.')).toBeNull();
+    // Without a completed translation the original stays, with one quiet status line and no toggle.
+    expect(screen.getByText('La válvula necesita revisión.')).toBeTruthy();
+    expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
+    expect(screen.getAllByLabelText('chat.showOriginal')).toHaveLength(1);
+  });
+
+  test('shows a quiet translating line while a translation is pending', async () => {
+    const pending = incomingMessage({ attachment: undefined, translationState: 'queued', translation: undefined });
+    await render(<ConversationPane conversation={conversation()} messages={[pending]} onSend={noopSend} />);
+    expect(screen.getByText('chat.translating')).toBeTruthy();
+    expect(screen.queryByText(/chat\.translationQueued|chat\.translationProcessing/)).toBeNull();
+  });
+
+  test('sends on the return key when Enter-sends is on and inserts newlines when it is off', async () => {
+    const onSend = jest.fn(async () => undefined);
+    const view = await render(<ConversationPane conversation={conversation()} messages={[]} onSend={onSend} />);
+    const input = () => screen.getByLabelText('chat.message');
+    expect(input().props.returnKeyType).toBe('send');
+    expect(input().props.submitBehavior).toBe('submit');
+    await fireEvent.changeText(input(), 'Sent with return');
+    await fireEvent(input(), 'submitEditing');
+    expect(onSend).toHaveBeenCalledWith('Sent with return', undefined, []);
+
+    mockPreferences.enterSends = false;
+    await view.rerender(<ConversationPane conversation={conversation()} messages={[]} onSend={onSend} />);
+    expect(input().props.returnKeyType).toBe('default');
+    expect(input().props.submitBehavior).toBe('newline');
+    expect(input().props.onSubmitEditing).toBeUndefined();
+  });
+
+  test('shows a spinner, not an empty list, while the first page is still on the server', async () => {
+    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
+    expect(screen.getByLabelText('chat.loadingMessages')).toBeTruthy();
+    expect(screen.queryByText('chat.start')).toBeNull();
+    await waitFor(() => expect(mockWorkspace.loadOlderMessages).toHaveBeenCalledWith('conversation-main'));
+  });
+
+  test('renders a photo as the picture with its time on top and opens the viewer', async () => {
+    const photo = translatedMessage({
+      id: 'photo', serverId: 'photo', originalText: '', translatedText: null, translation: undefined,
+      translationState: 'not_requested', languageDetection: undefined, priority: 'normal', mentionUserIds: [],
+      edited: false, pinned: false, forwarded: false, replyTo: undefined, reactions: [], receipt: undefined,
+      deliveryState: 'delivered',
+      attachment: {
+        id: 'attachment-photo', kind: 'image', name: 'site.jpg', sizeLabel: '1.2 MB', status: 'clean',
+        mimeType: 'image/jpeg', byteSize: 1_200_000, downloadUrl: 'https://example.invalid/site.jpg',
+      },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[photo]} onSend={noopSend} />);
+    expect(screen.queryByText('site.jpg')).toBeNull();
+    expect(screen.queryByText(/1\.2 MB/)).toBeNull();
+    expect(screen.getByText('12:00')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.imageOpen'));
+    expect(screen.getByLabelText('chat.imageViewerClose')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.imageViewerDownload'));
+    expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(photo);
+    await fireEvent.press(screen.getByLabelText('chat.imageViewerClose'));
+    expect(screen.queryByLabelText('chat.imageViewerClose')).toBeNull();
+  });
+
+  test('plays a received video inline and keeps the download control', async () => {
+    const video = incomingMessage({
+      id: 'video', serverId: 'video', originalText: '',
+      attachment: {
+        id: 'attachment-video', kind: 'document', name: 'line-two.mp4', sizeLabel: '48 MB', status: 'clean',
+        mimeType: 'video/mp4', byteSize: 48 * 1024 * 1024, downloadUrl: 'https://example.invalid/signed-video',
+      },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[video]} onSend={noopSend} />);
+    expect(screen.getByTestId('expo-video-view')).toBeTruthy();
+    expect(screen.getByLabelText('chat.videoAttachment · line-two.mp4')).toBeTruthy();
+    expect(screen.queryByText('chat.translationUnavailable')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(video);
+  });
+
+  test('puts the handle, member count, and language pair on the single header line', async () => {
+    mockWorkspace.people = [self, { ...colleague, username: 'ana' }, candidate];
+    const direct = conversation({
+      kind: 'direct', directParticipantId: colleague.id, translationPair: 'EN ↔ ES', subtitle: 'member • Denver',
+    });
+    const view = await render(<ConversationPane conversation={direct} messages={[]} onSend={noopSend} />);
+    expect(screen.getByText('@ana')).toBeTruthy();
+    expect(screen.getByText('EN ↔ ES')).toBeTruthy();
+    expect(screen.queryByText('member • Denver')).toBeNull();
+    expect(screen.queryByText(/chat\.translationAvailable|chat\.originalPreserved/)).toBeNull();
+    await view.rerender(<ConversationPane conversation={conversation({ participantCount: 3 })} messages={[]} onSend={noopSend} />);
+    expect(screen.getByText('chat.memberCount')).toBeTruthy();
+  });
+
+  test('offers the @mention chip only in groups and only once the draft holds an @', async () => {
+    // Mentionable members must carry real identities (UUIDs), as in production.
+    const mentionSelf = { ...self, id: '11111111-1111-4111-8111-111111111111' };
+    const mentionColleague = { ...colleague, id: '22222222-2222-4222-8222-222222222222' };
+    const mentionCandidate = { ...candidate, id: '33333333-3333-4333-8333-333333333333' };
+    mockWorkspace.currentUser = mentionSelf;
+    mockWorkspace.people = [mentionSelf, mentionColleague, mentionCandidate];
+    const memberIds = [mentionSelf.id, mentionColleague.id, mentionCandidate.id];
+    const view = await render(<ConversationPane conversation={conversation({ memberIds })} messages={[]} onSend={noopSend} />);
+    expect(screen.queryByText('Mention people')).toBeNull();
+    expect(screen.queryByText('Up to 50 people per message')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('chat.message'), 'Ping @');
+    expect(screen.getByText('Mention people')).toBeTruthy();
+    expect(screen.queryByText('Up to 50 people per message')).toBeNull();
+    await view.rerender(<ConversationPane
+      conversation={conversation({ kind: 'direct', directParticipantId: mentionColleague.id, memberIds: memberIds.slice(0, 2) })}
+      messages={[]}
+      onSend={noopSend}
+    />);
+    expect(screen.queryByText('Mention people')).toBeNull();
+  });
+
+  test('overlays the workspace status banner inside the pane instead of reflowing the list', async () => {
+    mockWorkspace.connectivity = 'offline';
+    mockWorkspace.offlineQueueAvailable = true;
+    await render(<ConversationPane conversation={conversation()} messages={[translatedMessage()]} onSend={noopSend} />);
+    expect(screen.getByText('status.offline')).toBeTruthy();
   });
 });

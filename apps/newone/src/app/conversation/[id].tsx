@@ -3,10 +3,7 @@ import { useEffect } from 'react';
 
 import { AppScaffold } from '@/components/navigation/app-scaffold';
 import { ConversationPane } from '@/features/chat/conversation-pane';
-import {
-  WorkspaceStatePanel,
-  WorkspaceStatusBanner,
-} from '@/components/workspace/workspace-state';
+import { WorkspaceStatePanel } from '@/components/workspace/workspace-state';
 import { ScreenErrorBoundary } from '@/components/ui/error-boundary';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
@@ -25,7 +22,6 @@ export default function ConversationScreen() {
 
   return (
     <AppScaffold current="chats" hideMobileTabs>
-      <WorkspaceStatusBanner />
       {workspace.status === 'loading' || workspace.status === 'error' ? (
         <WorkspaceStatePanel resource="chats" />
       ) : (
