@@ -553,6 +553,9 @@ export interface SummaryProvenance {
   providerRoute: string | null;
 }
 
+/** The range a reader picked for a summary (v3.1). */
+export type SummaryScopeKind = 'unread' | 'today' | 'yesterday' | 'last_7_days' | 'everything';
+
 export interface ConversationSummary {
   id: string;
   conversationId: string;
@@ -570,6 +573,10 @@ export interface ConversationSummary {
   sourceLastMessageId: string;
   sourceFingerprint: string;
   outputFingerprint: string | null;
+  /** The reader's range and focus; null on versions made before ranges existed. */
+  scopeKind: SummaryScopeKind | null;
+  scopeSubject: string | null;
+  sourceMessageCount: number;
   sourceState: 'current' | 'stale';
   policyState: 'current' | 'stale' | 'not_applicable' | 'unknown';
   requestMode: 'manual' | 'automatic_message_count' | 'automatic_shift_close' | 'manual_fallback' | 'correction';

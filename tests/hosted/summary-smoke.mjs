@@ -1,8 +1,11 @@
-// Real-API proof for the conversation briefing (AI summary): two real
-// signups, a message request accepted, three real messages, then the
-// requester asks for a summary draft through the route the app uses.
-// Expected: 202, a conversation_summaries row that reaches a terminal state,
-// and the timing from request to that state.
+// Real-API proof for the conversation summary (v3.1, reader-defined scope):
+// two real signups, a message request accepted, a short thread, then the
+// requester asks for a summary of "today" about a subject through the route
+// the app uses. A second, long thread (about 20,000 characters) is summarized
+// as "everything", which the AI worker must cut into slices and merge.
+// Expected: 202s, rows that reach draft with the scope columns filled, a
+// "summary_range_empty" refusal for a range with nothing in it, provenance
+// slices > 1 for the long run, and the timing of each.
 import { randomUUID } from 'node:crypto';
 import { makeRunId } from './lib.mjs';
 import { PERSONAL_REALM_ID, fail, gatewayPost, loadAccessToken, managementSql, projectKeys, signupUser } from './smoke-lib.mjs';
@@ -22,47 +25,99 @@ const accept = await gatewayPost('newone-api', `/v2/contacts/connections/${ana.u
   body: { organizationId: PERSONAL_REALM_ID, decision: 'accepted' },
 });
 if (accept.status !== 200) fail(`accept failed (${accept.status})`, accept.payload);
-const send = async (user, n, body) => {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let sent = 0;
+const send = async (user, body) => {
+  sent += 1;
   const r = await gatewayPost('newone-api', `/v2/conversations/${conversationId}/messages`, keys, {
-    installationId: user.installationId, accessToken: user.accessToken, idempotencyKey: `sum-${runId}-m${n}`,
+    installationId: user.installationId, accessToken: user.accessToken, idempotencyKey: `sum-${runId}-m${sent}`,
     body: { organizationId: PERSONAL_REALM_ID, clientMessageId: randomUUID(), kind: 'text', body },
   });
-  if (r.status !== 201) fail(`message ${n} failed (${r.status})`, r.payload);
+  if (r.status !== 201) fail(`message ${sent} failed (${r.status})`, r.payload);
   const d = r.payload?.data ?? r.payload;
   return String(d?.messageId ?? d?.id ?? '');
 };
-const ids = [
-  await send(eli, 1, 'Monday morning works. The paper arrives Friday so we can start at 8.'),
-  await send(ana, 2, 'Great. Please bring the two proof copies and the invoice for the client.'),
-  await send(eli, 3, 'Will do. I will also ask the courier to pick up at noon.'),
-];
+await send(eli, 'Monday morning works. The paper arrives Friday so we can start at 8.');
+await send(ana, 'Great. Please bring the two proof copies and the invoice for the client.');
+await send(eli, 'Will do. I will also ask the courier to pick up at noon.');
 const rows = async (query) => { const r = await managementSql(accessToken, query); return Array.isArray(r) ? r : r?.result ?? []; };
-const sourceMessageIds = ids.map((id) => Number(id));
-const requestedAt = Date.now();
-const summary = await gatewayPost('newone-api', `/v2/conversations/${conversationId}/summaries`, keys, {
-  installationId: ana.installationId, accessToken: ana.accessToken, idempotencyKey: `sum-${runId}-s1`,
-  body: { organizationId: PERSONAL_REALM_ID, sourceMessageIds, languageCode: 'en' },
-});
-console.log('summary request →', summary.status, JSON.stringify(summary.payload?.data ?? summary.payload).slice(0, 300));
-if (summary.status !== 202) fail(`summary request was not accepted (${summary.status})`, summary.payload);
-const summariesOf = () => rows(`select id, status, request_mode, failure_code, primary_topic, left(summary_body, 240) as summary_body, created_at, updated_at
+const utcOffsetMinutes = -new Date().getTimezoneOffset();
+const requestSummary = async (label, range, expectedStatus = 202) => {
+  const response = await gatewayPost('newone-api', `/v2/conversations/${conversationId}/summaries`, keys, {
+    installationId: ana.installationId, accessToken: ana.accessToken, idempotencyKey: `sum-${runId}-${label}`,
+    body: { organizationId: PERSONAL_REALM_ID, languageCode: 'en', range: { utcOffsetMinutes, ...range } },
+  });
+  console.log(`summary request (${label}) →`, response.status, JSON.stringify(response.payload?.data ?? response.payload).slice(0, 300));
+  if (response.status !== expectedStatus) fail(`summary request ${label} returned ${response.status}, expected ${expectedStatus}`, response.payload);
+  return response.payload?.data ?? response.payload;
+};
+const summariesOf = () => rows(`select id, status, request_mode, failure_code, scope_kind, scope_subject,
+    cardinality(source_message_ids) as source_count, processor_provenance->>'slices' as slices,
+    primary_topic, left(summary_body, 240) as summary_body, decisions, action_items, created_at, updated_at
   from public.conversation_summaries where conversation_id = '${conversationId}' order by created_at desc`);
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-let final = null;
-for (let i = 0; i < 60; i += 1) {
-  await sleep(2000);
-  const list = await summariesOf();
-  const row = list[0];
-  if (row && !['queued', 'pending', 'generating', 'processing', 'requested'].includes(String(row.status))) { final = row; break; }
+const waitForTerminal = async (summaryId, requestedAt) => {
+  let final = null;
+  for (let i = 0; i < 90; i += 1) {
+    await sleep(2000);
+    const row = (await summariesOf()).find((entry) => entry.id === summaryId);
+    if (row && !['queued', 'pending', 'generating', 'processing', 'requested'].includes(String(row.status))) { final = row; break; }
+  }
+  const seconds = Math.round((Date.now() - requestedAt) / 1000);
+  console.log(`after ${seconds}s:`, JSON.stringify(final, null, 1));
+  if (!final) fail(`summary ${summaryId} did not reach a terminal state within 180s`, await summariesOf());
+  if (final.status !== 'draft' && final.status !== 'approved') {
+    fail(`summary ended in ${final.status} (${final.failure_code ?? 'no failure code'})`, final);
+  }
+  const text = `${final.primary_topic ?? ''} ${final.summary_body ?? ''}`;
+  if (/\bs[0-9]{4}\b/.test(text) || /participant [0-9]/i.test(text)) fail('summary text carries source ids or participant labels', final);
+  return { final, seconds };
+};
+
+// 1. Today, about a subject: the four text messages so far.
+const shortRequestedAt = Date.now();
+const short = await requestSummary('today', { kind: 'today', subject: 'the print run' });
+if (short.scopeKind !== 'today' || short.scopeSubject !== 'the print run' || short.sourceMessageCount !== 4) {
+  fail('summary receipt did not echo the reader\'s scope', short);
 }
-const seconds = Math.round((Date.now() - requestedAt) / 1000);
-const list = await summariesOf();
-console.log(`after ${seconds}s:`, JSON.stringify(list, null, 1));
+const shortResult = await waitForTerminal(short.summaryId, shortRequestedAt);
+if (shortResult.final.scope_kind !== 'today' || shortResult.final.scope_subject !== 'the print run' || Number(shortResult.final.source_count) !== 4) {
+  fail('summary row did not keep the reader\'s scope', shortResult.final);
+}
+console.log(`PASS (today · about the print run): ${shortResult.final.status} in ≤${shortResult.seconds}s — topic: ${shortResult.final.primary_topic ?? '(none)'}`);
+
+// 2. A range with nothing in it is refused by name, never queued.
+const empty = await gatewayPost('newone-api', `/v2/conversations/${conversationId}/summaries`, keys, {
+  installationId: ana.installationId, accessToken: ana.accessToken, idempotencyKey: `sum-${runId}-yesterday`,
+  body: { organizationId: PERSONAL_REALM_ID, languageCode: 'en', range: { kind: 'yesterday', utcOffsetMinutes } },
+});
+console.log('summary request (yesterday) →', empty.status, JSON.stringify(empty.payload).slice(0, 200));
+if (empty.status !== 422 || !JSON.stringify(empty.payload).includes('summary_range_empty')) {
+  fail('an empty range should answer 422 summary_range_empty', empty.payload);
+}
+
+// 3. A long thread (12 messages of ~1,700 characters ≈ 20,400 characters,
+//    over the 18,000-character slice limit) summarized as "everything".
+const topics = ['the paper stock', 'the courier pickup', 'the proof copies', 'the invoice', 'the press schedule', 'the client meeting'];
+const longBody = (index) => {
+  const topic = topics[index % topics.length];
+  const sentences = [];
+  for (let n = 1; sentences.join(' ').length < 1650; n += 1) {
+    sentences.push(`Update ${index + 1}.${n} on ${topic}: we agreed to keep the plan as discussed and to confirm the details with the team before Monday.`);
+  }
+  return sentences.join(' ');
+};
+for (let index = 0; index < 12; index += 1) {
+  await send(index % 2 === 0 ? eli : ana, longBody(index));
+  await sleep(150);
+}
+const longRequestedAt = Date.now();
+const long = await requestSummary('everything', { kind: 'everything', subject: null });
+if (long.scopeKind !== 'everything' || long.sourceMessageCount !== 16) fail('long-range receipt did not cover every text message', long);
+const longResult = await waitForTerminal(long.summaryId, longRequestedAt);
+if (Number(longResult.final.slices) < 2 || Number(longResult.final.source_count) !== 16) {
+  fail('the long range should have been summarized in slices', longResult.final);
+}
 const jobs = await rows(`select id, topic, status, attempts, last_error_code, created_at, completed_at from private.outbox_jobs
-  where topic = 'summary' and organization_id = '${PERSONAL_REALM_ID}' and created_at > now() - interval '10 minutes' order by id desc limit 3`);
+  where topic = 'summary' and organization_id = '${PERSONAL_REALM_ID}' and created_at > now() - interval '15 minutes' order by id desc limit 5`);
 console.log('summary jobs:', JSON.stringify(jobs));
-if (!final) fail('summary did not reach a terminal state within 120s', list);
-if (final.status !== 'draft' && final.status !== 'completed' && final.status !== 'unapproved') {
-  fail(`summary ended in ${final.status} (${final.failure_code ?? 'no failure code'})`, final);
-}
-console.log(`PASS: summary ${final.status} in ≤${seconds}s — topic: ${final.primary_topic ?? '(none)'}`);
+console.log(`PASS (everything, ${longResult.final.slices} slices, ${longResult.final.source_count} messages): ${longResult.final.status} in ≤${longResult.seconds}s — topic: ${longResult.final.primary_topic ?? '(none)'}`);

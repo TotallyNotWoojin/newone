@@ -1039,7 +1039,7 @@ function strictSummaryTextArray(value: unknown, label: string, maximum = 50) {
     .filter((item) => item.text.length > 0);
 }
 
-function strictSummarySourceIds(value: unknown, label: string, maximum = 500) {
+function strictSummarySourceIds(value: unknown, label: string, maximum = 2000) {
   if (!Array.isArray(value) || value.length < 1 || value.length > maximum) {
     throw new RepositoryError(`The service returned invalid ${label}.`, 'invalid_response', true);
   }
@@ -1076,6 +1076,8 @@ function parseSummaryAction(
     sourceMessageIds: evidence.sourceMessageIds,
   };
 }
+
+const SUMMARY_SCOPE_KIND_VALUES = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'];
 
 function summaryFromDto(row: JsonRecord): ConversationSummary {
   const rawStatus = String(row.status);
@@ -1165,6 +1167,14 @@ function summaryFromDto(row: JsonRecord): ConversationSummary {
   if (versionNumber < 1) {
     throw new RepositoryError('The service returned an invalid summary version.', 'invalid_response', true);
   }
+  const scopeKind = row.scopeKind == null ? null : String(row.scopeKind);
+  if (scopeKind !== null && !SUMMARY_SCOPE_KIND_VALUES.includes(scopeKind)) {
+    throw new RepositoryError('The service returned an invalid summary scope.', 'invalid_response', true);
+  }
+  const sourceMessageCount = row.sourceMessageCount == null ? sourceMessageIds.length : Number(row.sourceMessageCount);
+  if (!Number.isSafeInteger(sourceMessageCount) || sourceMessageCount < 1) {
+    throw new RepositoryError('The service returned an invalid summary message count.', 'invalid_response', true);
+  }
   return {
     id: requiredString(row.summaryId, 'summary'),
     conversationId: requiredString(row.conversationId, 'summary conversation'),
@@ -1182,6 +1192,9 @@ function summaryFromDto(row: JsonRecord): ConversationSummary {
     sourceLastMessageId,
     sourceFingerprint,
     outputFingerprint,
+    scopeKind: scopeKind as ConversationSummary['scopeKind'],
+    scopeSubject: nullableText(row.scopeSubject, 'summary subject'),
+    sourceMessageCount,
     sourceState: sourceState as ConversationSummary['sourceState'],
     policyState: policyState as ConversationSummary['policyState'],
     requestMode: requestMode as ConversationSummary['requestMode'],

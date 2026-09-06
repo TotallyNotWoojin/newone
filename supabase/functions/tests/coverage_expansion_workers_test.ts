@@ -807,7 +807,10 @@ Deno.test('summary persistence rejects unbound and oversized evidence payloads',
   await assertRejects(
     () =>
       summaryPersistence(
-        summaryResult({ sourceMap: { s0001: '3', huge: 'x'.repeat(17_000) } }),
+        summaryResult({
+          sourceMap: { s0001: '3', huge: 'x'.repeat(17_000) },
+          keyTopics: [{ text: 'Line status', sourceRefs: ['huge'] }],
+        }),
         summarySource,
       ),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',

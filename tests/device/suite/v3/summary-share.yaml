@@ -1,11 +1,14 @@
 appId: com.totallynotwoojin.newone
 ---
 # Header "Summarize" → the "Summary" sheet. Nothing has been summarized yet, so
-# the sheet must offer "Summarize conversation" and say "Nothing summarized
-# yet." (not "No new messages…"). After the request "Generating" gives way to
-# the prose and Copy/Share become enabled; Copy confirms with "Copied". The
-# prose must carry no source-id citations ("s1234"-style tokens belong to the
-# workplace product, never to a consumer summary).
+# the sheet says "Nothing summarized yet." and shows the range chips (Today …
+# Everything) with the "What should this cover?" field. The reader picks
+# "Everything", types ${SUBJECT}, and taps "Summarize conversation". After the
+# request "Generating" gives way to the prose under a scope line such as
+# "Everything · 6 messages · about the plan", and Copy/Share become enabled;
+# Copy confirms with "Copied". The prose must carry no source-id citations
+# ("s1234"-style tokens belong to the workplace product, never to a consumer
+# summary).
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
@@ -17,11 +20,23 @@ appId: com.totallynotwoojin.newone
     visible: "Summarize conversation"
     timeout: 15000
 - assertVisible: "Nothing summarized yet."
+- assertVisible: "Today"
+- assertVisible: "Everything"
 - assertNotVisible: "No new messages since the last summary."
 - takeScreenshot: ${SHOT}-sheet
+- tapOn: "Everything"
+# The label and the field share the accessibility label; index 1 is the field.
+- tapOn:
+    text: "What should this cover?"
+    index: 1
+- inputText: ${SUBJECT}
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${SHOT}-scope
 - tapOn: "Summarize conversation"
 - extendedWaitUntil:
-    visible: ".*(Generating|No new messages since the last summary|Summary unavailable|Source changed).*"
+    visible: ".*(Generating|Too long|No messages in this range|Could not summarize|Source changed).*"
     timeout: 30000
 - takeScreenshot: ${SHOT}-requested
 - extendedWaitUntil:
@@ -29,8 +44,12 @@ appId: com.totallynotwoojin.newone
     timeout: 180000
 - takeScreenshot: ${SHOT}-ready
 - assertNotVisible: "Summary unavailable"
+- assertNotVisible: "Too long — pick a shorter range."
+- assertNotVisible: "Could not summarize right now. Try again."
 - assertNotVisible: "Source changed"
-# Ready: the prose is on screen and both actions are enabled.
+# Ready: the scope line names the range, the count, and the subject; the prose
+# is on screen and both actions are enabled.
+- assertVisible: ".*Everything · [0-9]+ messages · about ${SUBJECT}.*"
 - assertVisible:
     text: "Copy"
     enabled: true
@@ -38,6 +57,7 @@ appId: com.totallynotwoojin.newone
     text: "Share"
     enabled: true
 - assertNotVisible: ".*s[0-9]{4}.*"
+- assertNotVisible: ".*participant [0-9].*"
 - tapOn: "Copy"
 - extendedWaitUntil:
     visible: "Copied"

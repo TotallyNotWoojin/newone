@@ -202,18 +202,21 @@ export async function run(ctx) {
   });
   await ctx.step({ id: 'v3-06-image-viewer', title: 'Tap the photo ("Open image full screen"): the viewer opens ("Close image") and closes', device: devA, flow: 'media/open-image-viewer.yaml', expected: '"Close image" visible, then the composer again', screen: 'conversation → viewer', timeoutMs: 240_000 });
 
-  // 7. Summary sheet: summarize, copy, and make sure no source ids leak.
+  // 7. Summary sheet (v3.1): pick a range and a subject, summarize, copy, and
+  //    make sure no source ids or participant labels leak.
   await openA();
   await ctx.step({
-    id: 'v3-07-summary-copy', title: 'Header "Summarize" → "Summary" sheet → "Summarize conversation" → prose → Copy → "Copied"; no "s1234"-style source ids', device: devA,
-    flow: 'v3/summary-share.yaml',
-    expected: 'Sheet first says "Nothing summarized yet." and offers "Summarize conversation"; after the request the prose appears with Copy and Share enabled; Copy shows "Copied"; no text matching s[0-9]{4}; server conversation_summaries row ready without such tokens', screen: 'conversation → Summary sheet',
+    id: 'v3-07-summary-copy', title: 'Header "Summarize" → "Summary" sheet → range "Everything" + subject → "Summarize conversation" → prose + scope line → Copy → "Copied"; no "s1234"-style source ids', device: devA,
+    flow: 'v3/summary-share.yaml', env: { SUBJECT: 'the plan' },
+    expected: 'Sheet first says "Nothing summarized yet." with the range chips (Today … Everything) and the "What should this cover?" field; after the request the prose appears under "Everything · N messages · about the plan" with Copy and Share enabled; Copy shows "Copied"; no text matching s[0-9]{4}; server conversation_summaries row draft with scope_kind everything and scope_subject "the plan", without such tokens', screen: 'conversation → Summary sheet',
     serverTruth: async () => {
-      const rows = await server.sql(`select id, status, request_mode, failure_code, primary_topic, summary_body, created_at
+      const rows = await server.sql(`select id, status, request_mode, failure_code, primary_topic, summary_body, scope_kind, scope_subject,
+          cardinality(source_message_ids) as source_count, processor_provenance->>'slices' as slices, created_at
         from public.conversation_summaries where conversation_id = ${server.lit(convId)} order by created_at desc`);
-      const ready = rows.find((row) => ['ready_for_review', 'approved', 'corrected', 'ready'].includes(row.status) || row.primary_topic);
-      const leaked = ready ? /s[0-9]{4}/.test(`${ready.primary_topic ?? ''} ${ready.summary_body ?? ''}`) : false;
-      return { ok: Boolean(ready) && !leaked, detail: { rows: rows.length, status: ready?.status ?? rows[0]?.status ?? 'none', failure_code: rows[0]?.failure_code ?? null, topic: ready?.primary_topic ?? null, leakedSourceIds: leaked, body: (ready?.summary_body ?? '').slice(0, 200) } };
+      const ready = rows.find((row) => ['draft', 'approved'].includes(row.status) || row.primary_topic);
+      const leaked = ready ? /\bs[0-9]{4}\b|participant [0-9]/i.test(`${ready.primary_topic ?? ''} ${ready.summary_body ?? ''}`) : false;
+      const scoped = ready?.scope_kind === 'everything' && ready?.scope_subject === 'the plan';
+      return { ok: Boolean(ready) && !leaked && scoped, detail: { rows: rows.length, status: ready?.status ?? rows[0]?.status ?? 'none', failure_code: rows[0]?.failure_code ?? null, topic: ready?.primary_topic ?? null, scope_kind: ready?.scope_kind ?? null, scope_subject: ready?.scope_subject ?? null, source_count: ready?.source_count ?? null, slices: ready?.slices ?? null, leaked, body: (ready?.summary_body ?? '').slice(0, 200) } };
     },
     timeoutMs: 400_000,
   });

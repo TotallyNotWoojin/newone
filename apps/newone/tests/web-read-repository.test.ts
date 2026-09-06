@@ -405,6 +405,9 @@ function bootstrapPayload() {
       sourceLastMessageId: '102',
       sourceFingerprint: 'c'.repeat(64),
       outputFingerprint: 'd'.repeat(64),
+      scopeKind: 'last_7_days',
+      scopeSubject: 'the trip',
+      sourceMessageCount: 143,
       sourceState: 'current',
       policyState: 'current',
       requestMode: 'manual',
@@ -885,6 +888,9 @@ describe('authoritative web read repository', () => {
       primaryTopic: 'Gate safety',
       summary: 'Secure the gate and inspect the valve.',
       ambiguities: [{ text: 'Valve number', sourceMessageIds: [] }],
+      scopeKind: 'last_7_days',
+      scopeSubject: 'the trip',
+      sourceMessageCount: 143,
     });
     // Older rows carry evidence suffixes in their text; none of it reaches a screen.
     expect(workspace.summaries[0].keyTopics.map((item) => item.text)).toEqual(['Gate', 'Valve']);
@@ -1001,6 +1007,8 @@ describe('authoritative web read repository', () => {
       },
       (payload) => { payload.summaries[0].decisions[0].sourceMessageIds = ['unauthorized']; },
       (payload) => { payload.summaries[0].status = 'unknown'; },
+      (payload) => { payload.summaries[0].scopeKind = 'someday'; },
+      (payload) => { payload.summaries[0].sourceMessageCount = 0; },
       (payload) => { payload.summaries[0].sourceFirstMessageId = '999'; },
       (payload) => { payload.summaries[0].requestMode = 'unknown'; },
       (payload) => { payload.summaries[0].processorType = 'unknown'; },

@@ -20,6 +20,7 @@ import {
   loadOpenRouterEnvironment,
   type OpenRouterEnvironment,
   OpenRouterLanguageProcessor,
+  SUMMARY_MAX_MESSAGES,
   type SummaryResult,
   type SummarySource,
 } from '../_shared/openrouter.ts';
@@ -64,6 +65,9 @@ export interface SummarySourceResolution extends PolicyResolution {
   sourceFingerprint: string;
   language: string;
   sources: SummarySource[];
+  /** The reader's range (unread, today, ...) and focus line, when the row carries them. */
+  scopeKind?: string | null;
+  subject?: string | null;
 }
 
 type Resolution<T> = { authorized: false } | { authorized: true; source: T };
@@ -262,6 +266,47 @@ function parseTranslationResolution(
   };
 }
 
+// A display name's first word, kept to letters, marks, digits, apostrophes,
+// dots and hyphens (at most 40 characters); null when nothing usable is left.
+function firstName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const first = value.normalize('NFC').trim().split(/\s+/)[0] ?? '';
+  const name = first.replace(/[^\p{L}\p{M}\p{N}'’.-]/gu, '').slice(0, 40);
+  return /^\p{L}/u.test(name) ? name : null;
+}
+
+/**
+ * Speaker labels for everyone but the requester: first names (backlog 11),
+ * the full display name when two people share a first name, and
+ * "participant N" when a sender has no usable name. User ids never leave.
+ */
+export function speakerLabels(messages: unknown[], requesterId: string): Map<string, string> {
+  const labels = new Map<string, string>();
+  const used = new Set<string>();
+  let unnamed = 0;
+  for (const entry of messages) {
+    const message = asObject(entry);
+    const senderId = typeof message.sender_user_id === 'string'
+      ? message.sender_user_id.toLowerCase()
+      : null;
+    if (!senderId || senderId === requesterId || labels.has(senderId)) continue;
+    const candidates = [firstName(message.sender_display_name)];
+    if (typeof message.sender_display_name === 'string') {
+      const full = message.sender_display_name.normalize('NFC').trim()
+        .replace(/[^\p{L}\p{M}\p{N}'’.\- ]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (/^\p{L}/u.test(full)) candidates.push(full);
+    }
+    let label = candidates.find((candidate) => candidate && !used.has(candidate.toLowerCase())) ?? null;
+    if (!label) {
+      unnamed += 1;
+      label = `participant ${unnamed}`;
+    }
+    used.add(label.toLowerCase());
+    labels.set(senderId, label);
+  }
+  return labels;
+}
+
 export function parseSummaryResolution(
   value: unknown,
   job: AiJob,
@@ -273,16 +318,21 @@ export function parseSummaryResolution(
   uuid(row.summary_id);
   uuid(row.conversation_id);
   const requesterId = uuid(row.requested_by_user_id);
-  if (!Array.isArray(row.messages) || row.messages.length < 1 || row.messages.length > 200) {
+  if (!Array.isArray(row.messages) || row.messages.length < 1) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
+  }
+  // Over the cap the reader is told to pick a shorter range (terminal).
+  if (row.messages.length > SUMMARY_MAX_MESSAGES) {
+    throw new ApiError(422, 'ai_output_needs_review', 'summary_range_too_long');
   }
   // Attachment and system messages have no body; they are part of the source
   // fingerprint but carry nothing to summarize, so they are left out of the
   // prompt (defect M, Sep 4 2026: a thread with a photo and a voice note made
   // the whole summary fail with bad_request and stay "processing").
-  // Speaker labels give the model enough context for coherent prose ("you
-  // asked…, they replied…") without sending names or user ids.
-  const speakers = new Map<string, string>();
+  // Speaker labels give the model enough context for coherent prose: "you"
+  // for the reader and first names for everyone else, so a recap can say
+  // "Diego agreed" (backlog 11). User ids never leave.
+  const speakers = speakerLabels(row.messages, requesterId);
   const sources = row.messages.flatMap((entry) => {
     const message = asObject(entry);
     const messageId = positiveBigint(message.message_id);
@@ -290,12 +340,7 @@ export function parseSummaryResolution(
     const senderId = typeof message.sender_user_id === 'string'
       ? message.sender_user_id.toLowerCase()
       : null;
-    let speaker: string | undefined;
-    if (senderId === requesterId) speaker = 'you';
-    else if (senderId) {
-      speaker = speakers.get(senderId) ?? `participant ${speakers.size + 1}`;
-      speakers.set(senderId, speaker);
-    }
+    const speaker = senderId === requesterId ? 'you' : senderId ? speakers.get(senderId) : undefined;
     return [{
       messageId,
       body: normalizedString(message.body, { min: 1, max: 20_000, trim: false }) as string,
@@ -313,6 +358,12 @@ export function parseSummaryResolution(
       sourceFingerprint: sha256(row.source_fingerprint),
       language: language(row.language_code),
       sources,
+      scopeKind: row.scope_kind === null || row.scope_kind === undefined
+        ? null
+        : normalizedString(row.scope_kind, { min: 1, max: 32 }) as string,
+      subject: row.scope_subject === null || row.scope_subject === undefined
+        ? null
+        : normalizedString(row.scope_subject, { min: 1, max: 200 }) as string,
     },
   };
 }
@@ -362,6 +413,16 @@ function jsonBytes(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
+// Only the references the lists cite are kept: a 2,000-message range's full
+// map would not fit the provenance column.
+function citedSourceMap(result: SummaryResult): Record<string, string> {
+  const cited = new Set<string>();
+  for (const list of [result.keyTopics, result.decisions, result.actionItems, result.ambiguities]) {
+    for (const entry of list) for (const ref of entry.sourceRefs) cited.add(ref);
+  }
+  return Object.fromEntries(Object.entries(result.sourceMap).filter(([ref]) => cited.has(ref)));
+}
+
 export function summaryPersistence(result: SummaryResult, source: SummarySourceResolution) {
   // Key topics and ambiguities are stored as the clean text people read; their
   // citations live in provenance.evidence (resolved through provenance.sourceMap)
@@ -400,9 +461,10 @@ export function summaryPersistence(result: SummaryResult, source: SummarySourceR
     generationId: result.generationId,
     promptTokens: result.promptTokens,
     completionTokens: result.completionTokens,
-    sourceMap: result.sourceMap,
+    sourceMap: citedSourceMap(result),
     evidence,
     evidenceEncoding: 'provenance-evidence-v2',
+    slices: result.sliceCount ?? 1,
     humanReviewRequired: true,
   };
   if (jsonBytes(provenance) > 16_384) throw new ApiError(422, 'ai_output_needs_review', 'summary_provenance_too_large');
@@ -642,6 +704,7 @@ async function processJob(
       sourceFingerprint: resolution.source.sourceFingerprint,
       language: resolution.source.language,
       correlationId,
+      subject: resolution.source.subject ?? null,
       // Consumer chats keep faithful times/units in the summary text.
       introducedTokenPolicy: job.organizationId === PERSONAL_REALM_ORGANIZATION_ID ? 'allow' : 'reject',
     });
@@ -653,7 +716,13 @@ async function processJob(
       // A summary can be failed without a source hash (the fail RPC keys on
       // the job); detection and translation need the hash to name the source.
       if (terminal(safe, job.attempts) && (sourceHash || job.topic === 'summary')) {
-        await dependencies.terminalFailure(workerId, job, sourceHash, safe.code.slice(0, 120));
+        // A summary keeps the worker's own rule label when it names the
+        // reader's remedy (summary_range_too_long, provider_refused), so the
+        // sheet can tell "pick a shorter range" from an outage.
+        const code = job.topic === 'summary' && /^(summary_[a-z0-9_]+|provider_refused)$/.test(safe.message)
+          ? safe.message
+          : safe.code;
+        await dependencies.terminalFailure(workerId, job, sourceHash, code.slice(0, 120));
       } else {
         // Keep the worker's own rule label (never provider or message text) next
         // to the code so operators can see which policy check tripped.

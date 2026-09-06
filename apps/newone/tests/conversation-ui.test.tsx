@@ -803,7 +803,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', ['message-translated']);
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'unread', subject: '' });
     await missing.unmount();
 
     mockWorkspace = buildWorkspace();
@@ -1564,11 +1564,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('Cancelled inspection')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.startAction'));
     await fireEvent.press(screen.getByLabelText('chat.cancelAction'));
-    // The reader's own corrected version marks where "new messages" start.
-    await fireEvent.press(screen.getByLabelText('chat.summarizeNew'));
+    // Every request names the reader's range; an earlier version never narrows it.
+    await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
     expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-confirmed', 'in_progress');
     expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-progress', 'cancelled');
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', ['message-translated']);
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'unread', subject: '' });
   });
 
   test('supports rejecting reviews, closing summary dialogs, and shift-close schedules', async () => {

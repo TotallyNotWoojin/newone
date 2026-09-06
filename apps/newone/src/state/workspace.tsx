@@ -207,7 +207,7 @@ interface WorkspaceState {
   ) => Promise<boolean>;
   requestConversationSummary: (
     conversationId: string,
-    sourceMessageIds: string[],
+    range: { kind: SummaryScopeKind; subject?: string | null },
   ) => Promise<boolean>;
   correctConversationSummary: (
     summary: ConversationSummary,
@@ -576,6 +576,9 @@ function messageFromCommand(
     ...(command.payload.replyPreview ? { replyTo: command.payload.replyPreview } : {}),
   };
 }
+
+type SummaryScopeKind = NonNullable<ConversationSummary['scopeKind']>;
+const SUMMARY_SCOPE_KINDS: readonly SummaryScopeKind[] = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'];
 
 function mergeMessages(current: Message[], incoming: Message[]) {
   return mergeTimelineMessages(current, incoming) as Message[];
@@ -2002,24 +2005,27 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const requestConversationSummary = useCallback(async (
     conversationId: string,
-    sourceMessageIds: string[],
+    range: { kind: SummaryScopeKind; subject?: string | null },
   ) => {
     const current = snapshotRef.current;
-    const available = new Set(
-      current?.messages[conversationId]?.flatMap((message) => message.serverId ? [message.serverId] : []) ?? [],
-    );
-    if (
-      !current
-      || sourceMessageIds.length < 1
-      || sourceMessageIds.length > 500
-      || new Set(sourceMessageIds).size !== sourceMessageIds.length
-      || sourceMessageIds.some((messageId) => !available.has(messageId))
-    ) return false;
+    const subject = (range.subject ?? '').replace(/\s+/g, ' ').trim();
+    if (!current || !SUMMARY_SCOPE_KINDS.includes(range.kind) || subject.length > 200) return false;
+    // "Unread" starts at the first message the pane showed as unread: the
+    // chat was marked read the moment it opened, so the server needs the hint.
+    const dividerId = unreadDividerIds[conversationId] ?? null;
+    const divider = dividerId
+      ? current.messages[conversationId]?.find((message) => message.id === dividerId)
+      : undefined;
     const result = await executeImmediate(`summary-request:${conversationId}`, () =>
       repositories.commands.requestConversationSummary({
         organizationId: current.organizationId,
         conversationId,
-        sourceMessageIds,
+        range: {
+          kind: range.kind,
+          subject: subject || null,
+          fromMessageId: range.kind === 'unread' ? divider?.serverId ?? null : null,
+          utcOffsetMinutes: -new Date().getTimezoneOffset(),
+        },
         languageCode: current.messageDisplayLanguage,
         idempotencyKey: createClientId(),
       })
@@ -2027,7 +2033,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     if (!result) return false;
     await refresh();
     return true;
-  }, [executeImmediate, refresh, repositories.commands]);
+  }, [executeImmediate, refresh, repositories.commands, unreadDividerIds]);
 
   const correctConversationSummary = useCallback(async (
     summary: ConversationSummary,

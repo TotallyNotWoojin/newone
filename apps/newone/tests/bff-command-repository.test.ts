@@ -2367,8 +2367,18 @@ describe('BFF command transport security and parsing', () => {
       deduplicated: false,
     } }));
     await expect(repo.requestConversationSummary({
-      ...base, conversationId, sourceMessageIds: ['201'], languageCode: 'en',
+      ...base,
+      conversationId,
+      range: { kind: 'last_7_days', subject: 'the trip', fromMessageId: null, utcOffsetMinutes: 540 },
+      languageCode: 'en',
     })).resolves.toMatchObject({ summaryId, status: 'queued', deduplicated: false });
+    // The reader's range travels as one object; message ids are the server's to pick.
+    const summaryRequest = JSON.parse(String((mockFetch.mock.calls.at(-1)?.[1] as { body?: string } | undefined)?.body ?? '{}'));
+    expect(summaryRequest).toEqual({
+      organizationId,
+      languageCode: 'en',
+      range: { kind: 'last_7_days', subject: 'the trip', fromMessageId: null, utcOffsetMinutes: 540 },
+    });
 
     mockFetch.mockImplementationOnce(async () => response({ data: {
       summaryId,
@@ -2432,7 +2442,10 @@ describe('BFF command transport security and parsing', () => {
         ...base, correctionId: 'correction-a', decision: 'approved', note: 'Verified',
       })],
       ['requestConversationSummary', () => repo.requestConversationSummary({
-        ...base, conversationId, sourceMessageIds: ['101'], languageCode: 'en',
+        ...base,
+        conversationId,
+        range: { kind: 'unread', subject: null, fromMessageId: '101', utcOffsetMinutes: 0 },
+        languageCode: 'en',
       })],
       ['createManualSummary', () => repo.createManualSummary({
         ...base,

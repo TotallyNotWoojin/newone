@@ -12,6 +12,8 @@ export type ErrorCode =
   | 'not_found'
   | 'conflict'
   | 'summary_no_text_sources'
+  | 'summary_range_empty'
+  | 'summary_range_too_long'
   | 'idempotency_conflict'
   | 'signup_expired'
   | 'invalid_username'
@@ -47,6 +49,8 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   not_found: 'The requested resource was not found.',
   conflict: 'The request conflicts with the current state.',
   summary_no_text_sources: 'The selected messages have no text to summarize.',
+  summary_range_empty: 'There are no messages in that range.',
+  summary_range_too_long: 'That range holds too many messages to summarize. Pick a shorter one.',
   idempotency_conflict: 'The idempotency key was already used for another request.',
   signup_expired: 'The signup verification window expired. Restart signup.',
   invalid_username: 'The username format is not allowed.',
@@ -107,11 +111,19 @@ export function fromDatabaseError(error: unknown): ApiError {
     case '23514':
       return new ApiError(400, 'bad_request');
     case '42501':
-      // The database names one permission case the client has copy for: a
-      // pending message request that already holds its three messages.
-      return value.message === 'message_request_cap'
-        ? new ApiError(403, 'message_request_cap')
-        : new ApiError(403, 'forbidden');
+      // The database names the permission cases the client has copy for: a
+      // pending message request that already holds its three messages, and a
+      // summary range that is empty or too long to summarize.
+      switch (value.message) {
+        case 'message_request_cap':
+          return new ApiError(403, 'message_request_cap');
+        case 'summary_range_empty':
+          return new ApiError(422, 'summary_range_empty');
+        case 'summary_range_too_long':
+          return new ApiError(422, 'summary_range_too_long');
+        default:
+          return new ApiError(403, 'forbidden');
+      }
     case 'P0001':
       return new ApiError(429, 'rate_limited', undefined, 60);
     case 'PGRST116':

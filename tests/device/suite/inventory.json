@@ -1313,18 +1313,18 @@
           "kind": "button",
           "gating": "none (header IconButton; the same button also sits inside the Conversation settings sheet)",
           "consumerIosReachable": true,
-          "note": "Opens the Summary sheet (ActionModal titled 'Summary', chat.summarySheetTitle; description = scope line 'Since {time} · {count} messages'). Replaced the in-list 'Conversation briefing' card.",
+          "note": "Opens the Summary sheet (ActionModal titled 'Summary', chat.summarySheetTitle; description = scope line 'Last 7 days · 143 messages · about the trip'). Replaced the in-list 'Conversation briefing' card.",
           "sourceLine": 988
         },
         {
           "id": "pane.summary-request",
-          "label": "Summarize conversation / Summarize new messages",
+          "label": "Summarize conversation",
           "catalogKey": "chat.summarizeAll",
           "kind": "button",
-          "gating": "Summary sheet; label is chat.summarizeNew once the requester has a covering summary; disabled while queued/generating or when no loaded message is newer than the last summary",
+          "gating": "Summary sheet, under the range chips (Unread · Today · Yesterday · Last 7 days · Everything) and the 'What should this cover?' field; disabled while queued/generating. Every request is independent: nothing is excluded because an earlier summary covered it",
           "consumerIosReachable": true,
-          "note": "workspace.requestConversationSummary(conversationId, newSourceIds); 'No new messages since the last summary.' (chat.summaryNoNewMessages) once everything is covered; 'Nothing summarized yet.' (chat.summaryEmpty) before the first summary; 'Generating' while it runs",
-          "sourceLine": 191,
+          "note": "workspace.requestConversationSummary(conversationId, { kind, subject }); the server picks the messages for the range (bff_request_conversation_summary_scope). 'Nothing summarized yet.' (chat.summaryEmpty) before the first summary; 'Generating' while it runs; 'Too long — pick a shorter range.' (chat.summaryTooLong) when the range was refused or too long; prose, then Decisions and To-do lists when non-empty",
+          "sourceLine": 244,
           "sourceFile": "apps/newone/src/features/chat/summary-sheet.tsx"
         },
         {
@@ -5730,7 +5730,7 @@
       "en": "Request summary draft",
       "usedIn": [],
       "consumerIosReachable": false,
-      "gating": "removed with the briefing card; see chat.summarizeAll / chat.summarizeNew"
+      "gating": "removed with the briefing card; see chat.summarizeAll"
     },
     {
       "key": "chat.createManualHandoff",
@@ -5775,25 +5775,89 @@
         "summary-sheet.tsx:191"
       ],
       "consumerIosReachable": true,
-      "gating": "Summary sheet, no covering summary yet"
+      "gating": "Summary sheet, under the range chips; disabled while queued/generating"
     },
     {
-      "key": "chat.summarizeNew",
-      "en": "Summarize new messages",
+      "key": "chat.summaryRangeUnread",
+      "en": "Unread",
       "usedIn": [
-        "summary-sheet.tsx:191"
+        "summary-sheet.tsx"
       ],
       "consumerIosReachable": true,
-      "gating": "Summary sheet once the requester has a covering summary"
+      "gating": "Summary sheet range chip; shown and preselected only when the chat had unread messages when it was opened"
     },
     {
-      "key": "chat.summaryNoNewMessages",
-      "en": "No new messages since the last summary.",
+      "key": "chat.summaryRangeToday",
+      "en": "Today",
       "usedIn": [
-        "summary-sheet.tsx:213"
+        "summary-sheet.tsx"
       ],
       "consumerIosReachable": true,
-      "gating": "Summary sheet when every loaded message is covered and nothing is generating"
+      "gating": "Summary sheet range chip (preselected without unread messages)"
+    },
+    {
+      "key": "chat.summaryRangeYesterday",
+      "en": "Yesterday",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet range chip"
+    },
+    {
+      "key": "chat.summaryRangeWeek",
+      "en": "Last 7 days",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet range chip"
+    },
+    {
+      "key": "chat.summaryRangeEverything",
+      "en": "Everything",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet range chip"
+    },
+    {
+      "key": "chat.summarySubject",
+      "en": "What should this cover?",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet, single-line field under the range chips (placeholder chat.summarySubjectPlaceholder 'Optional')"
+    },
+    {
+      "key": "chat.summaryScopeLine",
+      "en": "{range} · {count} messages",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet description once a version exists (chat.summaryScopeLineOne for one message; chat.summaryScopeAbout 'about {subject}' appended when a subject was given); also the metadata line of the copied/shared text"
+    },
+    {
+      "key": "chat.summaryDecisions",
+      "en": "Decisions",
+      "usedIn": [
+        "summary-sheet.tsx"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet under the prose when the version has decisions (chat.summaryTodo 'To-do' likewise for action items); both lists are in the exported text"
+    },
+    {
+      "key": "chat.summaryTooLong",
+      "en": "Too long — pick a shorter range.",
+      "usedIn": [
+        "summary-sheet.tsx",
+        "i18n/errors.ts"
+      ],
+      "consumerIosReachable": true,
+      "gating": "Summary sheet: the request was refused for a range over 2,000 messages (summary_range_too_long), or the failed version carries summary_range_too_long / provider_refused / ai_output_needs_review; chat.summaryRangeEmpty 'No messages in this range.' for an empty range; chat.summaryRetry for any other failure"
     },
     {
       "key": "chat.summaryEmpty",
