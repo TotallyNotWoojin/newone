@@ -7,7 +7,7 @@ import {
   loadClientEnvironment,
 } from '../_shared/clients.ts';
 import { hmacSha256Hex, randomBase64Url, safeEqual } from '../_shared/crypto.ts';
-import { ApiError, asApiError, fromDatabaseError } from '../_shared/errors.ts';
+import { ApiError, asApiError, fromDatabaseError, DEFAULT_MESSAGES } from '../_shared/errors.ts';
 import {
   accessCredential,
   buildRequestMeta,
@@ -3120,6 +3120,12 @@ export function createAuthHandler(
           cause: error instanceof ApiError
             ? undefined
             : String(error instanceof Error ? error.message : error).slice(0, 300),
+          // A refusal we raised ourselves carries its own words when they say
+          // more than the generic code (a database state, a named field); they
+          // are our strings, never request content.
+          detail: error instanceof ApiError && error.message !== DEFAULT_MESSAGES[safe.code]
+            ? error.message.slice(0, 200)
+            : undefined,
         }));
       }
       return errorResponse(meta, error);
