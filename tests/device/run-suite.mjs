@@ -37,6 +37,9 @@ const RUN_ID = option('run', `run-${new Date().toISOString().replace(/[:.]/g, '-
 // devices it needs. Order matters: independent areas share a wave.
 const WAVES = [
   ['auth', 'people'],
+  // v3 consumer features (two devices) run before profile, which grants the
+  // notification permission the v3 first-launch card depends on.
+  ['v3'],
   ['chat', 'negative'],
   ['groups'],
   ['translation', 'sessions'],

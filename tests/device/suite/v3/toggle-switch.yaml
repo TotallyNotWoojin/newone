@@ -1,0 +1,31 @@
+appId: com.totallynotwoojin.newone
+---
+# Flip one Settings switch named LABEL ("Show only translations", "Enter key
+# sends", "Allow notifications") and come back to Chats. A switch row is a
+# non-accessible container, so the label appears twice in the hierarchy: the
+# caption text first, then the Switch carrying the same accessibility name.
+# launchApp relaunches into Chats, so this works from inside a conversation too.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "${LABEL}"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: ${SHOT}-before
+- tapOn:
+    text: "${LABEL}"
+    index: 1
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-after
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000

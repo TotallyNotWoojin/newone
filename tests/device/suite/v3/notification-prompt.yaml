@@ -1,0 +1,21 @@
+appId: com.totallynotwoojin.newone
+---
+# First signed-in launch after signup: the "Turn on notifications" card sits at
+# the top of the Chats list with "Turn on" and "Not now". "Not now" records
+# the answer; the card leaves at once (and never returns, v3-01c).
+# No launchApp here on purpose: this is the very launch that followed signup.
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Turn on notifications"
+    timeout: 20000
+- assertVisible: "Turn on"
+- assertVisible: "Not now"
+- takeScreenshot: ${SHOT}-card
+- tapOn: "Not now"
+- extendedWaitUntil:
+    notVisible: "Turn on notifications"
+    timeout: 10000
+- assertNotVisible: "Not now"
+- takeScreenshot: ${SHOT}-dismissed
