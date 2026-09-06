@@ -470,3 +470,155 @@ Deno.test('a summary that cannot run is failed terminally without a source hash'
   assertEquals(terminal, [{ topic: 'summary', sourceHash: null, code: 'summary_no_text_sources' }]);
   assertEquals(retried, 0);
 });
+
+// v3.1: first names reach the prose, the reader's scope reaches the model,
+// and a range that is too long (or refused) fails with the reader's remedy
+// as the stored code.
+Deno.test('summary resolution labels senders by first name, keeps namesakes apart, and passes the scope', () => {
+  const job = { id: '3', organizationId, topic: 'summary' as const, payload: {}, attempts: 1 };
+  const provider = openRouterEnvironment.policy.providerTag;
+  const requester = '33333333-3333-4333-8333-333333333333';
+  const resolved = parseSummaryResolution({
+    authorized: true,
+    provider_egress_allowed: true,
+    organization_id: organizationId,
+    processor_id: provider,
+    route_policy: 'approved_zero_retention',
+    provider_route_policy: 'zero_retention_only',
+    ai_policy_version: 2,
+    summary_id: '11111111-1111-4111-8111-111111111111',
+    conversation_id: '22222222-2222-4222-8222-222222222222',
+    requested_by_user_id: requester,
+    source_fingerprint: 'c'.repeat(64),
+    language_code: 'en',
+    scope_kind: 'last_7_days',
+    scope_subject: 'the trip',
+    messages: [
+      { message_id: '3', body: 'Monday?', sender_user_id: requester, sender_display_name: 'Jordan Lee' },
+      { message_id: '4', body: 'Works.', sender_user_id: '44444444-4444-4444-8444-444444444444', sender_display_name: 'Diego Ruiz' },
+      { message_id: '5', body: 'Same.', sender_user_id: '55555555-5555-4555-8555-555555555555', sender_display_name: 'Ana Torres' },
+      { message_id: '6', body: 'Me too.', sender_user_id: '66666666-6666-4666-8666-666666666666', sender_display_name: 'Ana Kim' },
+      { message_id: '7', body: '좋아요', sender_user_id: '77777777-7777-4777-8777-777777777777', sender_display_name: '이지수' },
+      { message_id: '8', body: 'Sure.', sender_user_id: '88888888-8888-4888-8888-888888888888', sender_display_name: '!!!' },
+      { message_id: '9', body: 'Great.', sender_user_id: '44444444-4444-4444-8444-444444444444', sender_display_name: 'Diego Ruiz' },
+      { message_id: '10', body: 'Ok', sender_user_id: '99999999-9999-4999-8999-999999999999' },
+    ],
+  }, job, provider);
+  assert(resolved.authorized);
+  if (!resolved.authorized) return;
+  assertEquals(resolved.source.scopeKind, 'last_7_days');
+  assertEquals(resolved.source.subject, 'the trip');
+  assertEquals(resolved.source.sources.map((source) => source.speaker), [
+    'you', 'Diego', 'Ana', 'Ana Kim', '이지수', 'participant 1', 'Diego', 'participant 2',
+  ]);
+  // No names, no scope: the older resolver shape still works.
+  const legacy = parseSummaryResolution({
+    authorized: true,
+    provider_egress_allowed: true,
+    organization_id: organizationId,
+    processor_id: provider,
+    route_policy: 'approved_zero_retention',
+    provider_route_policy: 'zero_retention_only',
+    ai_policy_version: 2,
+    summary_id: '11111111-1111-4111-8111-111111111111',
+    conversation_id: '22222222-2222-4222-8222-222222222222',
+    requested_by_user_id: requester,
+    source_fingerprint: 'c'.repeat(64),
+    language_code: 'en',
+    messages: [{ message_id: '3', body: 'Hi', sender_user_id: '44444444-4444-4444-8444-444444444444' }],
+  }, job, provider);
+  assert(legacy.authorized);
+  if (!legacy.authorized) return;
+  assertEquals(legacy.source.scopeKind, null);
+  assertEquals(legacy.source.subject, null);
+  assertEquals(legacy.source.sources[0]?.speaker, 'participant 1');
+  // Over the cap: terminal, with the reader's remedy as the reason.
+  let reason = '';
+  try {
+    parseSummaryResolution({
+      authorized: true,
+      provider_egress_allowed: true,
+      organization_id: organizationId,
+      processor_id: provider,
+      route_policy: 'approved_zero_retention',
+      provider_route_policy: 'zero_retention_only',
+      ai_policy_version: 2,
+      summary_id: '11111111-1111-4111-8111-111111111111',
+      conversation_id: '22222222-2222-4222-8222-222222222222',
+      requested_by_user_id: requester,
+      source_fingerprint: 'c'.repeat(64),
+      language_code: 'en',
+      messages: Array.from({ length: 2001 }, (_, index) => ({ message_id: String(index + 1), body: 'Hi' })),
+    }, job, provider);
+  } catch (error) {
+    reason = error instanceof ApiError ? `${error.status}:${error.code}:${error.message}` : 'other';
+  }
+  assertEquals(reason, '422:ai_output_needs_review:summary_range_too_long');
+});
+
+Deno.test('the subject reaches the processor and a too-long or refused summary stores the remedy as its code', async () => {
+  const subjects: Array<string | null | undefined> = [];
+  const terminal: string[] = [];
+  const run = async (failure: ApiError | null) => {
+    const handler = createAiWorkerHandler(() =>
+      dependencies({
+        claim: onceClaim(['summary']),
+        resolveSummary: async () => ({
+          authorized: true,
+          source: {
+            sources: [{ messageId: '3', body: 'Keep the line stopped.', speaker: 'Diego' }],
+            sourceFingerprint: 'c'.repeat(64),
+            language: 'en',
+            aiPolicyVersion: 2,
+            processorId: openRouterEnvironment.policy.providerTag,
+            scopeKind: 'today',
+            subject: 'the trip',
+          },
+        }),
+        processorFactory: () =>
+          fakeProcessor({
+            summarize: async (request) => {
+              subjects.push(request.subject);
+              if (failure) throw failure;
+              return summaryResult;
+            },
+          }),
+        terminalFailure: async (_workerId, _job, _sourceHash, code) => {
+          terminal.push(code);
+        },
+      })
+    );
+    return (await (await handler(request())).json()) as Record<string, number>;
+  };
+  assertEquals((await run(null)).completed, 1);
+  assertEquals(subjects, ['the trip']);
+  await run(new ApiError(422, 'ai_output_needs_review', 'summary_range_too_long'));
+  await run(new ApiError(422, 'ai_output_needs_review', 'provider_refused'));
+  await run(new ApiError(422, 'ai_output_needs_review'));
+  await run(new ApiError(422, 'ai_output_needs_review', 'summary_prose_empty'));
+  assertEquals(terminal, [
+    'summary_range_too_long',
+    'provider_refused',
+    'ai_output_needs_review',
+    'summary_prose_empty',
+  ]);
+});
+
+Deno.test('summary persistence records the slice count and keeps only the cited source references', () => {
+  const source: SummarySourceResolution = {
+    sources: [{ messageId: '3', body: 'Keep the line stopped.' }],
+    sourceFingerprint: 'c'.repeat(64),
+    language: 'en',
+    aiPolicyVersion: 2,
+    processorId: openRouterEnvironment.policy.providerTag,
+  };
+  const wide: SummaryResult = {
+    ...summaryResult,
+    sourceMap: Object.fromEntries(Array.from({ length: 2000 }, (_, index) => [`s${String(index + 1).padStart(4, '0')}`, String(index + 3)])),
+    sliceCount: 14,
+  };
+  const persisted = summaryPersistence(wide, source);
+  assertEquals(persisted.provenance.slices, 14);
+  assertEquals(persisted.provenance.sourceMap, { s0001: '3' });
+  assertEquals(summaryPersistence(summaryResult, source).provenance.slices, 1);
+});

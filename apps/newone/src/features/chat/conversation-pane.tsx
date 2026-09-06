@@ -741,7 +741,6 @@ export function ConversationPane({
       <SummarySheet
         key={`${conversation.id}:${showSummary ? 'open' : 'closed'}`}
         conversation={conversation}
-        messages={messages}
         onClose={() => setShowSummary(false)}
         onReportError={(summaryId) => {
           // One system modal at a time: the sheet yields to the report form.

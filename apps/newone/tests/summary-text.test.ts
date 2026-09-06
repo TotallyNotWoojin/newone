@@ -1,18 +1,16 @@
 import { describe, expect, test } from '@jest/globals';
 
 import {
-  coveringSummary,
-  formatSummaryScope,
+  SUMMARY_SCOPE_KINDS,
   latestSummary,
-  newSummarySourceIds,
-  relativeTimeLabel,
   stripSummarySourceTokens,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
-  summaryScope,
+  summaryScopeLine,
+  summaryTodoText,
 } from '@/data/summary-text';
-import type { ConversationSummary, Message } from '@/domain/types';
+import type { ConversationSummary } from '@/domain/types';
 
 function summary(overrides: Partial<ConversationSummary> = {}): ConversationSummary {
   return {
@@ -22,7 +20,7 @@ function summary(overrides: Partial<ConversationSummary> = {}): ConversationSumm
     language: 'en',
     status: 'ready_for_review',
     primaryTopic: 'Weekend plans',
-    summary: 'You asked about Saturday. They said yes.',
+    summary: 'You asked about Saturday. Ana said yes.',
     keyTopics: [],
     decisions: [],
     actionItems: [],
@@ -32,6 +30,9 @@ function summary(overrides: Partial<ConversationSummary> = {}): ConversationSumm
     sourceLastMessageId: '103',
     sourceFingerprint: 'a'.repeat(64),
     outputFingerprint: 'b'.repeat(64),
+    scopeKind: 'last_7_days',
+    scopeSubject: 'the trip',
+    sourceMessageCount: 143,
     sourceState: 'current',
     policyState: 'current',
     requestMode: 'manual',
@@ -51,25 +52,14 @@ function summary(overrides: Partial<ConversationSummary> = {}): ConversationSumm
   };
 }
 
-function message(serverId: string, createdAt?: string): Message {
-  return {
-    id: `local-${serverId}`,
-    serverId,
-    conversationId: 'conversation-a',
-    senderId: 'user-other',
-    senderName: 'Ana',
-    senderInitials: 'A',
-    senderColor: '#000',
-    originalText: `Message ${serverId}`,
-    sourceLanguage: 'en',
-    translationState: 'not_requested',
-    createdAt,
-    sentAt: '10:00',
-    isOwn: false,
-    deliveryState: 'delivered',
-    priority: 'normal',
-  } as Message;
-}
+const copy = {
+  ranges: {
+    unread: 'Unread', today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', everything: 'Everything',
+  },
+  lineTemplate: '{range} · {count} messages',
+  lineOneTemplate: '{range} · 1 message',
+  aboutTemplate: 'about {subject}',
+};
 
 describe('summary text never shows machinery', () => {
   test('strips legacy source-reference suffixes, groups, and bare codes while keeping content', () => {
@@ -81,16 +71,31 @@ describe('summary text never shows machinery', () => {
     expect(stripSummarySourceTokens('First line s0001.\n\n\n\nSecond [sources: s0002] line.')).toBe('First line.\n\nSecond line.');
   });
 
-  test('export text carries the title, one metadata line, and clean prose', () => {
+  test('export text carries the title, one metadata line, clean prose, and the lists when they have entries', () => {
     const text = summaryExportText({
       title: 'Weekend plans (s0001)',
-      body: 'You asked about Saturday [sources:s0001]. They said yes.',
+      body: 'You asked about Saturday [sources:s0001]. Ana said yes.',
       conversationTitle: 'Ana Torres',
-      scope: 'Since yesterday 14:03 · 3 messages',
+      scope: 'Last 7 days · 143 messages · about the trip',
+      decisions: ['Meet at noon (s0002)', ''],
+      todos: ['Book the cabin · Ana', 's0003'],
+      headings: { decisions: 'Decisions', todo: 'To-do' },
     });
-    expect(text).toBe('Weekend plans\nAna Torres · Since yesterday 14:03 · 3 messages\n\nYou asked about Saturday. They said yes.\n');
+    expect(text).toBe(
+      'Weekend plans\nAna Torres · Last 7 days · 143 messages · about the trip\n\nYou asked about Saturday. Ana said yes.\n'
+      + '\nDecisions\n• Meet at noon\n\nTo-do\n• Book the cabin · Ana\n',
+    );
     expect(summaryExportText({ title: 'T', body: 'B', conversationTitle: 'C', scope: null })).toBe('T\nC\n\nB\n');
+    expect(summaryExportText({
+      title: 'T', body: 'B', conversationTitle: 'C', scope: null, decisions: [], todos: ['s0001'], headings: { decisions: 'D', todo: 'X' },
+    })).toBe('T\nC\n\nB\n');
     expect(text).not.toMatch(/\bs0\d{3}\b/);
+  });
+
+  test('to-do lines join the title, owner, and due date and drop empty parts', () => {
+    expect(summaryTodoText({ title: 'Book the cabin', owner: 'Ana', dueAt: 'Friday', sourceMessageIds: [] })).toBe('Book the cabin · Ana · Friday');
+    expect(summaryTodoText({ title: ' Book (s0001) ', owner: null, dueAt: '  ', sourceMessageIds: [] })).toBe('Book');
+    expect(summaryTodoText({ title: '', sourceMessageIds: [] })).toBe('');
   });
 
   test('file names are safe and dated', () => {
@@ -101,65 +106,33 @@ describe('summary text never shows machinery', () => {
   });
 });
 
-describe('summary scope and "since last time"', () => {
-  test('picks the newest version and only counts readable ones as ready', () => {
+describe('summary versions and the reader-defined scope', () => {
+  test('picks the newest version, the reader\'s own when they have one, and only counts readable ones as ready', () => {
     const summaries = [
       summary({ id: 'v1', versionNumber: 1 }),
       summary({ id: 'v3', versionNumber: 3, status: 'failed', summary: '', primaryTopic: '', outputFingerprint: null, failureCode: 'x' }),
       summary({ id: 'v2', versionNumber: 2 }),
+      summary({ id: 'theirs', versionNumber: 4, requestedByUserId: 'user-other' }),
       summary({ id: 'other', conversationId: 'conversation-b', versionNumber: 9 }),
     ];
-    expect(latestSummary(summaries, 'conversation-a')?.id).toBe('v3');
-    expect(summaryIsReady(latestSummary(summaries, 'conversation-a'))).toBe(false);
+    expect(latestSummary(summaries, 'conversation-a')?.id).toBe('theirs');
+    expect(latestSummary(summaries, 'conversation-a', 'user-self')?.id).toBe('v3');
+    expect(latestSummary(summaries, 'conversation-a', 'user-nobody')?.id).toBe('theirs');
+    expect(latestSummary(summaries, 'conversation-c', 'user-self')).toBeUndefined();
+    expect(summaryIsReady(latestSummary(summaries, 'conversation-a', 'user-self'))).toBe(false);
     expect(summaryIsReady(summaries[0])).toBe(true);
     expect(summaryIsReady(undefined)).toBe(false);
   });
 
-  test('the boundary is the requester\'s newest covering summary; failed and superseded versions do not count', () => {
-    const summaries = [
-      summary({ id: 'mine-1', versionNumber: 1, sourceLastMessageId: '103' }),
-      summary({ id: 'theirs', versionNumber: 2, requestedByUserId: 'user-other', sourceLastMessageId: '110' }),
-      summary({ id: 'mine-failed', versionNumber: 3, status: 'failed', sourceLastMessageId: '111' }),
-      summary({ id: 'mine-superseded', versionNumber: 4, status: 'superseded', sourceLastMessageId: '112' }),
-      summary({ id: 'mine-generating', versionNumber: 5, status: 'generating', sourceLastMessageId: '105' }),
-    ];
-    expect(coveringSummary(summaries, 'conversation-a', 'user-self')?.id).toBe('mine-generating');
-    expect(coveringSummary(summaries.slice(0, 4), 'conversation-a', 'user-self')?.id).toBe('mine-1');
-    expect(coveringSummary(summaries, 'conversation-a', null)).toBeUndefined();
-    expect(coveringSummary(summaries, 'conversation-b', 'user-self')).toBeUndefined();
-  });
-
-  test('new source ids start after the boundary, by position or by id, and cap at the request limit', () => {
-    const messages = [message('101'), { ...message('x'), serverId: undefined } as Message, message('102'), message('103'), message('104'), message('105')];
-    expect(newSummarySourceIds(messages, undefined)).toEqual(['101', '102', '103', '104', '105']);
-    expect(newSummarySourceIds(messages, summary({ sourceLastMessageId: '103' }))).toEqual(['104', '105']);
-    expect(newSummarySourceIds(messages, summary({ sourceLastMessageId: '105' }))).toEqual([]);
-    // The boundary message is no longer loaded: numeric ids still order the scope.
-    expect(newSummarySourceIds(messages, summary({ sourceLastMessageId: '102' }).sourceLastMessageId === '102'
-      ? summary({ sourceLastMessageId: '1025' }) : undefined)).toEqual([]);
-    expect(newSummarySourceIds(messages, summary({ sourceLastMessageId: '100' }))).toEqual(['101', '102', '103', '104', '105']);
-    // Non-numeric ids that are not loaded fall back to the whole loaded history.
-    expect(newSummarySourceIds(messages, summary({ sourceLastMessageId: 'message-old' }))).toEqual(['101', '102', '103', '104', '105']);
-    expect(newSummarySourceIds(messages, undefined, 2)).toEqual(['104', '105']);
-  });
-
-  test('scope uses the first covered message time when loaded and formats one metadata line', () => {
-    const now = new Date(2026, 8, 5, 12, 0);
-    const yesterday = new Date(2026, 8, 4, 14, 3).toISOString();
-    const messages = [message('101', yesterday), message('102'), message('103')];
-    const copy = {
-      locale: 'en',
-      sinceTemplate: 'Since {time} · {count} messages',
-      countTemplate: '{count} messages',
-      today: 'today',
-      yesterday: 'yesterday',
-    };
-    expect(summaryScope(summary(), messages)).toEqual({ since: yesterday, count: 3 });
-    expect(formatSummaryScope(summaryScope(summary(), messages), copy, now)).toBe('Since yesterday 2:03 PM · 3 messages');
-    expect(formatSummaryScope(summaryScope(summary(), []), copy, now)).toBe('3 messages');
-    expect(summaryScope(summary(), [message('101', 'not a date')]).since).toBeNull();
-    expect(relativeTimeLabel(new Date(2026, 8, 5, 9, 12).toISOString(), copy, now)).toBe('today 9:12 AM');
-    expect(relativeTimeLabel(new Date(2026, 8, 1, 9, 12).toISOString(), copy, now)).toBe('Sep 1, 9:12 AM');
-    expect(relativeTimeLabel(new Date(2026, 8, 4, 14, 3).toISOString(), { ...copy, locale: 'ko', yesterday: '어제' }, now)).toBe('어제 오후 2:03');
+  test('the scope line names the range, the count, and the subject; older versions carry only the count', () => {
+    expect(summaryScopeLine(summary(), copy)).toBe('Last 7 days · 143 messages · about the trip');
+    expect(summaryScopeLine(summary({ scopeKind: 'unread', scopeSubject: null, sourceMessageCount: 1 }), copy)).toBe('Unread · 1 message');
+    expect(summaryScopeLine(summary({ scopeKind: 'today', scopeSubject: '  ', sourceMessageCount: 12 }), copy)).toBe('Today · 12 messages');
+    expect(summaryScopeLine(summary({ scopeKind: null, scopeSubject: null, sourceMessageCount: 3 }), copy)).toBe('3 messages');
+    expect(summaryScopeLine(summary({ scopeKind: null, scopeSubject: 'lunch', sourceMessageCount: 1 }), copy)).toBe('1 message · about lunch');
+    expect(summaryScopeLine(summary({ scopeKind: 'everything', scopeSubject: null, sourceMessageCount: 2 }), {
+      ...copy, lineTemplate: '{range} · 메시지 {count}개',
+    })).toBe('Everything · 메시지 2개');
+    expect(SUMMARY_SCOPE_KINDS).toEqual(['unread', 'today', 'yesterday', 'last_7_days', 'everything']);
   });
 });

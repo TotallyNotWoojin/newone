@@ -137,15 +137,29 @@ export interface MessageReceiptResult {
   readAt: string | null;
 }
 
+/** The range the reader picked; the server resolves it to messages. */
+export interface SummaryRangeInput {
+  kind: NonNullable<ConversationSummary['scopeKind']>;
+  subject: string | null;
+  /** Server id of the first message the reader saw as unread (range 'unread'). */
+  fromMessageId: string | null;
+  utcOffsetMinutes: number;
+}
+
 export interface RequestSummaryInput {
+  organizationId: string;
+  conversationId: string;
+  range: SummaryRangeInput;
+  languageCode: LanguageCode;
+  idempotencyKey: string;
+}
+
+export interface ManualSummaryInput {
   organizationId: string;
   conversationId: string;
   sourceMessageIds: string[];
   languageCode: LanguageCode;
   idempotencyKey: string;
-}
-
-export interface ManualSummaryInput extends RequestSummaryInput {
   primaryTopic: string;
   summary: string;
   keyTopics: string[];

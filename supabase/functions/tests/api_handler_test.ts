@@ -267,6 +267,16 @@ Deno.test('translation retry, correction, and summary commands map only to autho
       source_fingerprint: 'a'.repeat(64),
       deduplicated: false,
     },
+    bff_request_conversation_summary_scope: {
+      summary_id: summaryId,
+      version_number: 2,
+      status: 'queued',
+      source_fingerprint: 'a'.repeat(64),
+      source_message_count: 143,
+      scope_kind: 'last_7_days',
+      scope_subject: 'the trip',
+      deduplicated: false,
+    },
     bff_create_manual_summary: {
       summary_id: summaryId,
       version_number: 2,
@@ -326,6 +336,17 @@ Deno.test('translation retry, correction, and summary commands map only to autho
       rpc: 'bff_request_conversation_summary',
     },
     {
+      // v3.1: the reader names a range and a subject; the server picks the messages.
+      method: 'POST',
+      path: `/v2/conversations/${conversationId}/summaries`,
+      body: {
+        organizationId,
+        languageCode: 'en',
+        range: { kind: 'last_7_days', subject: '  the trip ', fromMessageId: null, utcOffsetMinutes: 540 },
+      },
+      rpc: 'bff_request_conversation_summary_scope',
+    },
+    {
       method: 'POST',
       path: `/v2/conversations/${conversationId}/summaries/manual`,
       body: {
@@ -370,17 +391,33 @@ Deno.test('translation retry, correction, and summary commands map only to autho
   }
   assertEquals(calls.map((call) => call.name), cases.map((item) => item.rpc));
   assertEquals(results[0]?.body, { translationId: '501', status: 'queued', retried: true });
-  assertEquals(calls[4]?.args.p_decisions, [{
+  assertEquals(calls[4]?.args.p_scope_kind, 'last_7_days');
+  assertEquals(calls[4]?.args.p_scope_subject, 'the trip');
+  assertEquals(calls[4]?.args.p_from_message_id, null);
+  assertEquals(calls[4]?.args.p_utc_offset_minutes, 540);
+  assertEquals(calls[4]?.args.p_language_code, 'en');
+  assertEquals('p_source_message_ids' in (calls[4]?.args ?? {}), false);
+  assertEquals(results[4]?.body, {
+    summaryId,
+    versionNumber: 2,
+    status: 'queued',
+    sourceFingerprint: 'a'.repeat(64),
+    sourceMessageCount: 143,
+    scopeKind: 'last_7_days',
+    scopeSubject: 'the trip',
+    deduplicated: false,
+  });
+  assertEquals(calls[5]?.args.p_decisions, [{
     text: 'Detener la línea',
     source_message_ids: ['101'],
   }]);
-  assertEquals(calls[4]?.args.p_action_items, [{
+  assertEquals(calls[5]?.args.p_action_items, [{
     text: 'Inspeccionar',
     source_message_ids: ['102'],
     owner: null,
     due: null,
   }]);
-  assertEquals(calls[6]?.args.p_message_count_threshold, 50);
+  assertEquals(calls[7]?.args.p_message_count_threshold, 50);
   for (const call of calls) {
     assertEquals(call.args.p_actor_user_id, actor.user.id);
     assertEquals(call.args.p_session_id, actor.claims.sessionId);
@@ -412,6 +449,38 @@ Deno.test('summary and translation routes reject client policy expansion and uns
       languageCode: 'es',
     })
   );
+  // A range request names one of the five ranges, never message ids as well,
+  // with a subject of at most 200 characters and a plausible UTC offset.
+  for (
+    const range of [
+      { kind: 'someday' },
+      { kind: 'today', subject: 'x'.repeat(201) },
+      { kind: 'today', utcOffsetMinutes: 901 },
+      { kind: 'unread', fromMessageId: 'abc' },
+      { kind: 'today', extra: true },
+    ]
+  ) {
+    await assertRejects(() => parseCommand(requestRoute, { organizationId, languageCode: 'es', range }));
+  }
+  await assertRejects(() =>
+    parseCommand(requestRoute, {
+      organizationId,
+      languageCode: 'es',
+      sourceMessageIds: ['101'],
+      range: { kind: 'today' },
+    })
+  );
+  const unread = parseCommand(requestRoute, {
+    organizationId,
+    languageCode: 'es',
+    range: { kind: 'unread', fromMessageId: '9007199254740993', subject: null },
+  });
+  assertEquals(unread.values.range, {
+    kind: 'unread',
+    subject: null,
+    fromMessageId: '9007199254740993',
+    utcOffsetMinutes: 0,
+  });
   await assertRejects(() =>
     parseCommand(manualRoute, {
       organizationId,

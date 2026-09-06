@@ -2065,8 +2065,13 @@ export class BffCommandRepository implements CommandRepository {
         organizationId: input.organizationId,
         idempotencyKey: input.idempotencyKey,
         body: {
-          sourceMessageIds: input.sourceMessageIds,
           languageCode: input.languageCode,
+          range: {
+            kind: input.range.kind,
+            subject: input.range.subject,
+            fromMessageId: input.range.fromMessageId,
+            utcOffsetMinutes: input.range.utcOffsetMinutes,
+          },
         },
       },
     );

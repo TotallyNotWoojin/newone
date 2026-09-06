@@ -4,6 +4,9 @@ import { DISABLED_OPENROUTER_PLUGINS } from '../_shared/openrouter-control-plane
 import {
   cleanSummaryText,
   type FetchLike,
+  groupSummaryParts,
+  sliceSummarySources,
+  summarySubject,
   OpenRouterLanguageProcessor,
   parseOpenRouterPolicy,
 } from '../_shared/openrouter.ts';
@@ -759,4 +762,179 @@ Deno.test('cleanSummaryText removes only minted references and tidies the senten
   assertEquals(cleanSummaryText('Kept [sources: s0009] because it is not ours.', allowed), 'Kept [sources: s0009] because it is not ours.');
   assertEquals(cleanSummaryText('  # Title  \n\n\n\n* one\n- two  ', allowed), 'Title\n\n• one\n• two');
   assertEquals(cleanSummaryText('출처 확인【s0001】 완료, , 끝.', allowed), '출처 확인 완료, 끝.');
+});
+
+// v3.1: long ranges are summarized in slices and merged; the reader's subject
+// is an instruction in every call; names reach the prose; a refusal and a
+// range over the cap are terminal.
+function summaryCompletion(content: Record<string, unknown>, id = 'gen-summary'): Response {
+  return new Response(
+    JSON.stringify({
+      id,
+      model: policyValue.model,
+      choices: [{ message: { content: JSON.stringify(content) } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5 },
+      openrouter_metadata: routerMetadata(),
+    }),
+    { status: 200 },
+  );
+}
+
+Deno.test('a long range is summarized in slices, merged once, and the subject and names reach every call', async () => {
+  const calls: Array<{ system: string; user: string }> = [];
+  const processor = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async (_input, init) => {
+    const sent = JSON.parse(String(init?.body));
+    const messages = sent.messages as Array<Record<string, string>>;
+    const system = String(messages[0]?.content ?? '');
+    const user = String(messages[1]?.content ?? '');
+    calls.push({ system, user });
+    if (user.includes('<parts-json>')) {
+      // The merge input carries the slices' restored values, protected again.
+      const placeholders = user.match(/__NEWONE_PROTECTED_[0-9]{4}__/g) ?? [];
+      return summaryCompletion({
+        primaryTopic: 'Trip plan',
+        summary: `Ana proposed the trip at ${placeholders[0] ?? 'noon'}. You agreed.`,
+        keyTopics: [{ text: 'Trip', sourceRefs: ['s0001', 's0151'] }],
+        decisions: [{ text: 'Go on Friday', sourceRefs: ['s0320'] }],
+        actionItems: [{ text: 'Book the cabin', sourceRefs: ['s0002'], owner: 'Ana', due: null }],
+        ambiguities: [],
+      }, 'gen-merge');
+    }
+    const rows = JSON.parse(user.slice(user.indexOf('<sources-json>') + 14, user.indexOf('</sources-json>'))) as Array<{ sourceRef: string }>;
+    const part = Number(user.match(/^Part: ([0-9]+) of/m)?.[1] ?? 0);
+    // The time in the first slice's sources arrives protected; the recap
+    // copies its placeholder, so "14:30" is a source value, never invented.
+    const placeholders = user.match(/__NEWONE_PROTECTED_[0-9]{4}__/g) ?? [];
+    return summaryCompletion({
+      primaryTopic: `Part ${part}`,
+      summary: part === 1 ? `Ana suggested meeting at ${placeholders[0]}.` : `Part ${part} recap.`,
+      keyTopics: [{ text: `Topic ${part}`, sourceRefs: [rows[0]!.sourceRef] }],
+      decisions: [],
+      actionItems: [],
+      ambiguities: [],
+    }, `gen-part-${part}`);
+  });
+  const sources = Array.from({ length: 320 }, (_, index) => ({
+    messageId: String(1000 + index),
+    body: index === 0
+      ? 'Ana here: meeting at 14:30?'
+      : index % 2 === 0
+      ? `Message ${index} from Ana.`
+      : `Reply ${index}.`,
+    speaker: index % 2 === 0 ? 'Ana' : 'you',
+  }));
+  const result = await processor.summarize({
+    sources,
+    sourceFingerprint: 'f'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000010',
+    subject: ' the "trip" ',
+  });
+  assertEquals(result.sliceCount, 3);
+  assertEquals(calls.length, 4);
+  assertEquals(result.summary, 'Ana proposed the trip at 14:30. You agreed.');
+  assertEquals(result.primaryTopic, 'Trip plan');
+  assertEquals(result.decisions, [{ text: 'Go on Friday', sourceRefs: ['s0320'] }]);
+  assertEquals(result.actionItems[0]?.owner, 'Ana');
+  assertEquals(Object.keys(result.sourceMap).length, 320);
+  assertEquals(result.sourceMap.s0320, '1319');
+  assertEquals(result.generationId, 'gen-merge');
+  assertEquals(result.promptTokens, 40);
+  assertEquals(result.completionTokens, 20);
+  // Slices carry consecutive runs of at most 150 sources, numbered globally.
+  assert(calls[0]!.user.includes('"sourceRef":"s0001"') && !calls[0]!.user.includes('"sourceRef":"s0151"'));
+  assert(calls[1]!.user.includes('"sourceRef":"s0151"') && calls[1]!.user.includes('"sourceRef":"s0300"'));
+  assert(calls[2]!.user.includes('"sourceRef":"s0301"') && calls[2]!.user.includes('"sourceRef":"s0320"'));
+  assert(calls[0]!.system.includes('part 1 of 3'));
+  assert(calls[3]!.system.includes('combine partial recaps'));
+  assert(calls[3]!.user.includes('<parts-json>') && calls[3]!.user.includes('__NEWONE_PROTECTED_'));
+  assert(!calls[3]!.user.includes('14:30'));
+  for (const call of calls) {
+    // The subject is the reader's instruction, quoted plainly and never as chat text.
+    assert(call.system.includes('The reader asked what this recap should cover: "the \'trip\'"'));
+    assert(call.system.includes('comes from the reader, not from the messages'));
+    assert(call.system.includes('first names'));
+    assert(call.system.includes('untrusted data'));
+  }
+  assert(calls[0]!.user.includes('"speaker":"Ana"'));
+});
+
+Deno.test('slices cut on message count or characters and merge batches stay bounded', () => {
+  const rows = (lengths: number[]) => lengths.map((length, index) => ({ index, length }));
+  assertEquals(
+    sliceSummarySources(rows([8000, 8000, 8000]), 150, 18_000).map((slice) => slice.map((row) => row.index)),
+    [[0, 1], [2]],
+  );
+  assertEquals(
+    sliceSummarySources(rows([19_000, 10]), 150, 18_000).map((slice) => slice.length),
+    [1, 1],
+  );
+  assertEquals(
+    sliceSummarySources(rows(Array(301).fill(10)), 150, 18_000).map((slice) => slice.length),
+    [150, 150, 1],
+  );
+  assertEquals(sliceSummarySources([], 150, 18_000), []);
+  const parts = Array.from({ length: 14 }, (_, index) => ({ part: index, summary: 'x'.repeat(100) }));
+  assertEquals(groupSummaryParts(parts, 8, 40_000).map((group) => group.length), [8, 6]);
+  assertEquals(groupSummaryParts(parts, 8, 300).map((group) => group.length), Array(7).fill(2));
+});
+
+Deno.test('a refusal is terminal, a range over the cap never reaches the provider, and names are validated', async () => {
+  let called = 0;
+  const refusing = new OpenRouterLanguageProcessor({
+    apiKey: 'test-openrouter-key-that-is-long-enough',
+    dataClassification: 'synthetic',
+    policy: parseOpenRouterPolicy(JSON.stringify(policyValue)),
+  }, async () => {
+    called += 1;
+    return new Response(
+      JSON.stringify({
+        id: 'gen-refusal',
+        model: policyValue.model,
+        choices: [{ finish_reason: 'content_filter', message: { content: null, refusal: 'I cannot help with that.' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 0 },
+        openrouter_metadata: routerMetadata(),
+      }),
+      { status: 200 },
+    );
+  });
+  const base = {
+    sourceFingerprint: 'e'.repeat(64),
+    language: 'en',
+    correlationId: '00000000-0000-4000-8000-000000000011',
+  };
+  await assertRejects(
+    () => refusing.summarize({ ...base, sources: [{ messageId: '21', body: 'Hi.', speaker: '이지수' }] }),
+    (error) => error instanceof ApiError && error.status === 422 && error.code === 'ai_output_needs_review' && error.message === 'provider_refused',
+  );
+  assertEquals(called, 1);
+  await assertRejects(
+    () =>
+      refusing.summarize({
+        ...base,
+        sources: Array.from({ length: 2001 }, (_, index) => ({ messageId: String(index + 1), body: 'Hi.' })),
+      }),
+    (error) => error instanceof ApiError && error.status === 422 && error.message === 'summary_range_too_long',
+  );
+  assertEquals(called, 1);
+  for (const speaker of ['María-José', "O'Neil", 'Kyle LEE', 'participant 12']) {
+    await assertRejects(
+      () => refusing.summarize({ ...base, sources: [{ messageId: '21', body: 'Hi.', speaker }] }),
+      (error) => error instanceof ApiError && error.message === 'provider_refused',
+    );
+  }
+  for (const speaker of ['Ana!', '1st', '', 'x'.repeat(41)]) {
+    await assertRejects(
+      () => refusing.summarize({ ...base, sources: [{ messageId: '21', body: 'Hi.', speaker }] }),
+      (error) => error instanceof ApiError && error.status === 400,
+    );
+  }
+  assertEquals(summarySubject('  the  "trip"\n\n now  '), "the 'trip' now");
+  assertEquals(summarySubject('   '), null);
+  assertEquals(summarySubject(undefined), null);
+  assertEquals(summarySubject('x'.repeat(250))?.length, 200);
 });

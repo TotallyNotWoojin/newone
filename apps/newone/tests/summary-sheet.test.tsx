@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform, Share } from 'react-native';
 
-import type { ConversationSummary, Message } from '@/domain/types';
+import type { ConversationSummary } from '@/domain/types';
 import { SummarySheet } from '@/features/chat/summary-sheet';
 import { shareSummary as shareSummaryWeb } from '@/features/chat/summary-export.web';
 
@@ -51,28 +51,9 @@ function conversation(overrides: Record<string, unknown> = {}) {
     avatarColor: '#123456',
     kind: 'direct',
     canManage: true,
+    unreadCount: 0,
     ...overrides,
   } as any;
-}
-
-function message(serverId: string, createdAt?: string): Message {
-  return {
-    id: `local-${serverId}`,
-    serverId,
-    conversationId: 'conversation-a',
-    senderId: other.id,
-    senderName: other.displayName,
-    senderInitials: 'AT',
-    senderColor: '#654321',
-    originalText: `Message ${serverId}`,
-    sourceLanguage: 'en',
-    translationState: 'not_requested',
-    createdAt,
-    sentAt: '10:00',
-    isOwn: false,
-    deliveryState: 'delivered',
-    priority: 'normal',
-  } as Message;
 }
 
 function summary(overrides: Partial<ConversationSummary> = {}): ConversationSummary {
@@ -83,16 +64,19 @@ function summary(overrides: Partial<ConversationSummary> = {}): ConversationSumm
     language: 'en',
     status: 'ready_for_review',
     primaryTopic: 'Weekend plans',
-    summary: 'You asked whether Saturday works. They said yes and suggested meeting at noon.',
+    summary: 'You asked whether Saturday works. Ana said yes and suggested meeting at noon.',
     keyTopics: [{ text: 'Saturday', sourceMessageIds: ['101'] }],
-    decisions: [],
-    actionItems: [],
+    decisions: [{ text: 'Meet at noon', sourceMessageIds: ['102'] }],
+    actionItems: [{ title: 'Book the cabin', owner: 'Ana', dueAt: null, sourceMessageIds: ['103'] }],
     ambiguities: [],
     sourceMessageIds: ['101', '102', '103'],
     sourceFirstMessageId: '101',
     sourceLastMessageId: '103',
     sourceFingerprint: 'a'.repeat(64),
     outputFingerprint: 'b'.repeat(64),
+    scopeKind: 'last_7_days',
+    scopeSubject: 'the trip',
+    sourceMessageCount: 143,
     sourceState: 'current',
     policyState: 'current',
     requestMode: 'manual',
@@ -124,6 +108,7 @@ function buildWorkspace(organizationId = PERSONAL_REALM) {
     actions: [],
     aiOutputErrorReports: [],
     people: [self, other],
+    unreadDividerIds: {},
     hasCapability: jest.fn(() => true),
     clearActionError: jest.fn(),
     requestConversationSummary: successfulAction(),
@@ -135,16 +120,12 @@ function buildWorkspace(organizationId = PERSONAL_REALM) {
   };
 }
 
-const loadedMessages = [
-  message('101', '2026-09-04T09:00:00.000Z'),
-  message('102', '2026-09-04T09:05:00.000Z'),
-  message('103', '2026-09-04T09:06:00.000Z'),
-  message('104', '2026-09-04T11:00:00.000Z'),
-  message('105', '2026-09-04T11:30:00.000Z'),
-];
-
 function disabledState(element: { props: { accessibilityState?: { disabled?: boolean } } } | undefined) {
   return element?.props.accessibilityState?.disabled === true;
+}
+
+function selectedState(element: { props: { accessibilityState?: { selected?: boolean } } } | undefined) {
+  return element?.props.accessibilityState?.selected === true;
 }
 
 async function open(props: Record<string, unknown> = {}) {
@@ -153,7 +134,6 @@ async function open(props: Record<string, unknown> = {}) {
   const view = await render(
     <SummarySheet
       conversation={conversation()}
-      messages={loadedMessages}
       onClose={onClose}
       onReportError={onReportError}
       visible
@@ -169,62 +149,98 @@ beforeEach(() => {
 });
 
 describe('summary sheet for consumers', () => {
-  test('shows the latest recap as plain prose with one scope line and no workplace controls', async () => {
+  test('shows the latest recap as prose, then decisions and to-dos, with one scope line and no workplace controls', async () => {
     await open();
     expect(screen.getByText('chat.summarySheetTitle')).toBeTruthy();
-    expect(screen.getByText('chat.summaryScope')).toBeTruthy();
+    expect(screen.getByText('chat.summaryScopeLine · chat.summaryScopeAbout')).toBeTruthy();
     expect(screen.getByText('Weekend plans')).toBeTruthy();
     expect(screen.getByText(/You asked whether Saturday works/)).toBeTruthy();
+    expect(screen.getByText('chat.summaryDecisions')).toBeTruthy();
+    expect(screen.getByText('• Meet at noon')).toBeTruthy();
+    expect(screen.getByText('chat.summaryTodo')).toBeTruthy();
+    expect(screen.getByText('• Book the cabin · Ana')).toBeTruthy();
     expect(screen.queryByText('chat.summaryReadyReview')).toBeNull();
     expect(screen.queryByLabelText('chat.correctSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.summarySchedule')).toBeNull();
     expect(screen.queryByLabelText('chat.reportSummaryError')).toBeNull();
     expect(screen.queryByText('Saturday')).toBeNull();
+    expect(screen.queryByText(/\bs0\d{3}\b/)).toBeNull();
   });
 
-  test('summarizes only the messages that arrived since the reader\'s last recap', async () => {
+  test('keeps the lists out when a recap has none', async () => {
+    mockWorkspace.summaries = [summary({ decisions: [], actionItems: [] })];
     await open();
-    await fireEvent.press(screen.getByLabelText('chat.summarizeNew'));
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', ['104', '105']);
+    expect(screen.queryByText('chat.summaryDecisions')).toBeNull();
+    expect(screen.queryByText('chat.summaryTodo')).toBeNull();
   });
 
-  test('summarizes the whole loaded history when nothing was summarized before, and disables copy and share', async () => {
-    mockWorkspace.summaries = [];
+  test('offers Today by default without unread messages; the reader picks a range and says what it should cover', async () => {
     await open();
-    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
-    expect(screen.queryByText('chat.summaryScope')).toBeNull();
-    expect(disabledState(screen.getByLabelText('chat.copy'))).toBe(true);
-    expect(disabledState(screen.getByLabelText('chat.summaryShare'))).toBe(true);
+    expect(screen.queryByLabelText('chat.summaryRangeUnread')).toBeNull();
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeToday'))).toBe(true);
+    expect(screen.getByLabelText('chat.summaryRangeYesterday')).toBeTruthy();
+    expect(screen.getByLabelText('chat.summaryRangeEverything')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.summaryRangeWeek'));
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeWeek'))).toBe(true);
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeToday'))).toBe(false);
+    await fireEvent.changeText(screen.getByLabelText('chat.summarySubject'), 'the trip');
     await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', ['101', '102', '103', '104', '105']);
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', { kind: 'last_7_days', subject: 'the trip' });
   });
 
-  test('shows a loading state while a recap is generating and says when there is nothing new', async () => {
+  test('starts from Unread when the chat had unread messages, and an earlier recap never narrows a request', async () => {
+    mockWorkspace.unreadDividerIds = { 'conversation-a': 'local-104' };
+    // The newest version already covers every loaded message: still summarizable.
+    mockWorkspace.summaries = [summary({ sourceLastMessageId: '105', sourceMessageIds: ['101', '102', '103', '104', '105'] })];
+    const withDivider = await open();
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeUnread'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
+    expect(screen.queryByText(/chat\.summaryNoNewMessages|chat\.summarizeNew/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', { kind: 'unread', subject: '' });
+    await withDivider.view.unmount();
+
+    mockWorkspace = buildWorkspace();
+    await open({ conversation: conversation({ unreadCount: 3 }) });
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeUnread'))).toBe(true);
+  });
+
+  test('shows a loading state while a recap is generating and disables copy and share without one', async () => {
     mockWorkspace.summaries = [summary({ status: 'generating', summary: '', primaryTopic: '', outputFingerprint: null })];
     const generating = await open();
     expect(screen.getByText('chat.summaryGenerating')).toBeTruthy();
-    expect(disabledState(screen.getByLabelText('chat.summarizeNew'))).toBe(true);
-    expect(screen.queryByText('chat.summaryNoNewMessages')).toBeNull();
+    expect(screen.getByText('chat.summaryScopeLine · chat.summaryScopeAbout')).toBeTruthy();
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.copy'))).toBe(true);
     await generating.view.unmount();
 
     mockWorkspace = buildWorkspace();
-    mockWorkspace.summaries = [summary({ sourceLastMessageId: '105' })];
-    await open();
-    expect(screen.getByText('chat.summaryNoNewMessages')).toBeTruthy();
-    expect(disabledState(screen.getByLabelText('chat.summarizeNew'))).toBe(true);
+    mockWorkspace.summaries = [];
+    const empty = await open();
+    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
+    expect(screen.queryByText(/chat\.summaryScopeLine/)).toBeNull();
+    expect(disabledState(screen.getByLabelText('chat.copy'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.summaryShare'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
+    await empty.view.unmount();
 
+    mockWorkspace = buildWorkspace();
     mockWorkspace.actionBusy = 'summary-request:conversation-a';
-    await open({ messages: loadedMessages });
-    expect(disabledState(screen.getAllByLabelText('chat.summarizeNew').at(-1))).toBe(true);
+    await open();
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(true);
   });
 
-  test('copies the recap as clean text', async () => {
+  test('copies the recap as clean text with its scope line and lists', async () => {
     await open();
     await fireEvent.press(screen.getByLabelText('chat.copy'));
     await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledTimes(1));
     const copied = mockClipboardWrite.mock.calls[0]?.[0] ?? '';
-    expect(copied.startsWith('Weekend plans\nAna Torres · chat.summaryScope\n\nYou asked whether Saturday works.')).toBe(true);
+    expect(copied.startsWith(
+      'Weekend plans\nAna Torres · chat.summaryScopeLine · chat.summaryScopeAbout\n\nYou asked whether Saturday works.',
+    )).toBe(true);
+    expect(copied).toContain('\nchat.summaryDecisions\n• Meet at noon\n');
+    expect(copied).toContain('\nchat.summaryTodo\n• Book the cabin · Ana\n');
     expect(copied).not.toMatch(/\bs0\d{3}\b|\[sources/);
     expect(screen.getByText('chat.summaryCopied')).toBeTruthy();
   });
@@ -241,6 +257,7 @@ describe('summary sheet for consumers', () => {
     expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockFileCreate).toHaveBeenCalledTimes(1);
     expect(mockFileWrite.mock.calls[0]?.[0]).toContain('You asked whether Saturday works.');
+    expect(mockFileWrite.mock.calls[0]?.[0]).toContain('• Book the cabin · Ana');
     expect(share).toHaveBeenCalledWith(
       { url: `file:///cache/${fileName}`, title: 'Weekend plans' },
       { subject: 'Weekend plans' },
@@ -268,16 +285,37 @@ describe('summary sheet for consumers', () => {
     share.mockRestore();
   });
 
-  test('tells the reader when the last recap failed, without workplace detail', async () => {
-    mockWorkspace.summaries = [summary({
-      status: 'failed', summary: '', primaryTopic: '', outputFingerprint: null, failureCode: 'provider_unavailable',
-    })];
+  test('says to pick a shorter range when a recap was too long or refused, and to try again otherwise', async () => {
+    const failed = (failureCode: string) => summary({
+      status: 'failed', summary: '', primaryTopic: '', outputFingerprint: null, failureCode,
+    });
+    for (const code of ['summary_range_too_long', 'provider_refused', 'ai_output_needs_review']) {
+      mockWorkspace = buildWorkspace();
+      mockWorkspace.summaries = [failed(code)];
+      const view = await open();
+      expect(screen.getByText('chat.summaryTooLong')).toBeTruthy();
+      expect(screen.queryByText('chat.summaryFailed')).toBeNull();
+      expect(screen.queryByText(new RegExp(code))).toBeNull();
+      expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
+      expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
+      await view.view.unmount();
+    }
+    mockWorkspace = buildWorkspace();
+    mockWorkspace.summaries = [failed('provider_unavailable')];
     await open();
-    expect(screen.getByText('chat.summaryFailed')).toBeTruthy();
+    expect(screen.getByText('chat.summaryRetry')).toBeTruthy();
+    expect(screen.queryByText('chat.summaryFailed')).toBeNull();
     expect(screen.queryByText(/provider_unavailable/)).toBeNull();
-    expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
-    // The failed version never covered anything, so the next request is a full one.
-    expect(screen.getByLabelText('chat.summarizeAll')).toBeTruthy();
+  });
+
+  test('shows the reader their own latest recap rather than someone else\'s newer one', async () => {
+    mockWorkspace.summaries = [
+      summary({ id: 'theirs', versionNumber: 5, requestedByUserId: other.id, primaryTopic: 'Their recap' }),
+      summary(),
+    ];
+    await open();
+    expect(screen.getByText('Weekend plans')).toBeTruthy();
+    expect(screen.queryByText('Their recap')).toBeNull();
   });
 });
 
@@ -332,6 +370,7 @@ describe('summary sheet for workplace organizations', () => {
       status: 'failed', summary: '', primaryTopic: '', outputFingerprint: null, failureCode: 'provider_unavailable',
     })];
     const failed = await open();
+    expect(screen.getByText('chat.summaryFailed')).toBeTruthy();
     expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
     expect(mockPush).toHaveBeenCalledWith('/handoffs');

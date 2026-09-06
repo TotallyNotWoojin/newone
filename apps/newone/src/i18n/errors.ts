@@ -21,6 +21,8 @@ export function errorMessageKey(error: unknown): MessageKey {
     return 'errors.notificationDenied';
   }
   if (code === 'push_token_unavailable') return 'errors.pushTokenUnavailable';
+  if (code === 'summary_range_too_long') return 'chat.summaryTooLong';
+  if (code === 'summary_range_empty') return 'chat.summaryRangeEmpty';
   if (
     code === 'network_unavailable'
     || code.includes('unreachable')

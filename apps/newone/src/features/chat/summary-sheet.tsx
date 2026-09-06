@@ -7,69 +7,93 @@ import { ActionError, ActionModal, FormField } from '@/components/ui/action-moda
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import {
-  coveringSummary,
-  formatSummaryScope,
+  SUMMARY_SCOPE_KINDS,
   latestSummary,
-  newSummarySourceIds,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
-  summaryScope,
+  summaryScopeLine,
+  summaryTodoText,
 } from '@/data/summary-text';
-import type { Conversation, Message, OperationalAction } from '@/domain/types';
+import type { Conversation, OperationalAction, SummaryScopeKind } from '@/domain/types';
 // Metro selects the platform adapter (file + share sheet natively, Web Share or clipboard on web).
 // eslint-disable-next-line import/no-unresolved
 import { shareSummary } from '@/features/chat/summary-export';
+import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { colors, radii, spacing } from '@/theme/tokens';
 
+const RANGE_KEYS: Record<SummaryScopeKind, MessageKey> = {
+  unread: 'chat.summaryRangeUnread',
+  today: 'chat.summaryRangeToday',
+  yesterday: 'chat.summaryRangeYesterday',
+  last_7_days: 'chat.summaryRangeWeek',
+  everything: 'chat.summaryRangeEverything',
+};
+
+// A range the server refused or the model could not handle is a "pick a
+// shorter range" case; anything else was the service, so "try again".
+const SHORTER_RANGE_FAILURE = /too_long|refused|needs_review/;
+
 /**
  * The conversation summary, reachable from the header anywhere in the thread:
- * the latest recap as plain prose, one line saying what it covers, a button
- * that summarizes only what arrived since the reader's last recap, and copy
- * and share actions. Workplace organizations additionally keep their review,
+ * the reader picks a range (Unread, Today, Yesterday, Last 7 days, Everything)
+ * and can say what the recap should cover; the latest recap shows as plain
+ * prose with its decisions and to-dos, one scope line, and copy and share
+ * actions. Workplace organizations additionally keep their review,
  * correction, schedule, and operational-action controls here.
  */
 export function SummarySheet({
   conversation,
-  messages,
   visible,
   onClose,
   onReportError,
 }: {
   conversation: Conversation;
-  messages: Message[];
   visible: boolean;
   onClose: () => void;
   onReportError?: (summaryId: string) => void;
 }) {
   const workspace = useWorkspace();
   const router = useRouter();
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const consumer = isPersonalRealm(workspace.organizationId);
   const currentUserId = workspace.currentUser?.id ?? null;
-  const summary = latestSummary(workspace.summaries, conversation.id);
+  const summary = latestSummary(workspace.summaries, conversation.id, consumer ? currentUserId : null);
   const readySummary = summaryIsReady(summary) ? summary : null;
-  const boundary = coveringSummary(workspace.summaries, conversation.id, currentUserId);
-  const newSourceIds = newSummarySourceIds(messages, boundary);
+  // The pane marks the chat read as it opens; the unread divider it keeps is
+  // what "Unread" means here.
+  const hasUnread = Boolean(workspace.unreadDividerIds?.[conversation.id]) || conversation.unreadCount > 0;
+  const ranges = hasUnread ? SUMMARY_SCOPE_KINDS : SUMMARY_SCOPE_KINDS.filter((kind) => kind !== 'unread');
+  const [range, setRange] = useState<SummaryScopeKind>(hasUnread ? 'unread' : 'today');
+  const [subject, setSubject] = useState('');
   const requesting = workspace.actionBusy === `summary-request:${conversation.id}`;
   const generating = summary?.status === 'queued' || summary?.status === 'generating';
-  const scope = summary
-    ? formatSummaryScope(summaryScope(summary, messages), {
-      locale,
-      sinceTemplate: t('chat.summaryScope'),
-      countTemplate: t('chat.summaryScopeCount'),
-      today: t('chat.summaryScopeToday'),
-      yesterday: t('chat.summaryScopeYesterday'),
-    })
-    : null;
+  const scopeCopy = {
+    ranges: {
+      unread: t('chat.summaryRangeUnread'),
+      today: t('chat.summaryRangeToday'),
+      yesterday: t('chat.summaryRangeYesterday'),
+      last_7_days: t('chat.summaryRangeWeek'),
+      everything: t('chat.summaryRangeEverything'),
+    },
+    lineTemplate: t('chat.summaryScopeLine'),
+    lineOneTemplate: t('chat.summaryScopeLineOne'),
+    aboutTemplate: t('chat.summaryScopeAbout'),
+  };
+  const scope = summary ? summaryScopeLine(summary, scopeCopy) : null;
+  const decisions = readySummary ? readySummary.decisions.map((item) => item.text.trim()).filter(Boolean) : [];
+  const todos = readySummary ? readySummary.actionItems.map(summaryTodoText).filter(Boolean) : [];
   const exportText = readySummary
     ? summaryExportText({
       title: readySummary.primaryTopic,
       body: readySummary.summary,
       conversationTitle: conversation.title,
       scope,
+      decisions,
+      todos,
+      headings: { decisions: t('chat.summaryDecisions'), todo: t('chat.summaryTodo') },
     })
     : '';
   // The pane remounts the sheet on every open (see its `key`), so notices and
@@ -104,6 +128,11 @@ export function SummarySheet({
     failed: t('chat.summaryFailed'),
     superseded: t('chat.summarySuperseded'),
   })[summary.status] : null;
+  const failureCopy = summary && summary.status === 'failed' && consumer
+    ? SHORTER_RANGE_FAILURE.test((summary.failureCode ?? '').toLowerCase())
+      ? t('chat.summaryTooLong')
+      : t('chat.summaryRetry')
+    : statusLabel;
   const actionStatus = (status: OperationalAction['status']) => ({
     proposed: t('chat.actionProposed'),
     confirmed: t('chat.actionConfirmed'),
@@ -135,7 +164,6 @@ export function SummarySheet({
     }
   };
 
-  const canSummarize = !generating && newSourceIds.length > 0;
   return (
     <ActionModal
       description={scope ?? undefined}
@@ -159,6 +187,22 @@ export function SummarySheet({
           ) : null}
           <Text style={styles.topic}>{readySummary.primaryTopic}</Text>
           <Text selectable style={styles.prose}>{readySummary.summary}</Text>
+          {decisions.length ? (
+            <View style={styles.list}>
+              <Text style={styles.listTitle}>{t('chat.summaryDecisions')}</Text>
+              {decisions.map((text, index) => (
+                <Text key={`decision-${index}`} selectable style={styles.listItem}>• {text}</Text>
+              ))}
+            </View>
+          ) : null}
+          {todos.length ? (
+            <View style={styles.list}>
+              <Text style={styles.listTitle}>{t('chat.summaryTodo')}</Text>
+              {todos.map((text, index) => (
+                <Text key={`todo-${index}`} selectable style={styles.listItem}>• {text}</Text>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : generating ? (
         <View accessibilityLiveRegion="polite" style={styles.stateRow}>
@@ -167,7 +211,7 @@ export function SummarySheet({
         </View>
       ) : summary && (summary.status === 'failed' || summary.status === 'superseded') ? (
         <View accessibilityLiveRegion="polite" style={styles.state}>
-          <Text style={styles.stateText}>{statusLabel}</Text>
+          <Text style={styles.stateText}>{failureCopy}</Text>
           {!consumer && summary.failureCode ? (
             <Text selectable style={styles.meta}>{t('chat.failureCode')} · {summary.failureCode}</Text>
           ) : null}
@@ -184,13 +228,29 @@ export function SummarySheet({
         <Text style={styles.empty}>{t('chat.summaryEmpty')}</Text>
       )}
 
+      <View style={styles.ranges}>
+        {ranges.map((kind) => (
+          <Chip
+            key={kind}
+            label={t(RANGE_KEYS[kind])}
+            onPress={() => setRange(kind)}
+            selected={range === kind}
+          />
+        ))}
+      </View>
+      <FormField
+        label={t('chat.summarySubject')}
+        onChangeText={setSubject}
+        placeholder={t('chat.summarySubjectPlaceholder')}
+        value={subject}
+      />
       <View style={styles.actions}>
         <PrimaryButton
-          disabled={!canSummarize}
+          disabled={generating}
           icon="sparkles-outline"
-          label={boundary ? t('chat.summarizeNew') : t('chat.summarizeAll')}
+          label={t('chat.summarizeAll')}
           loading={requesting}
-          onPress={() => void workspace.requestConversationSummary(conversation.id, newSourceIds)}
+          onPress={() => void workspace.requestConversationSummary(conversation.id, { kind: range, subject })}
           tone="dark"
         />
         <PrimaryButton
@@ -209,9 +269,6 @@ export function SummarySheet({
           tone="light"
         />
       </View>
-      {boundary && !generating && newSourceIds.length === 0 ? (
-        <Text style={styles.hint}>{t('chat.summaryNoNewMessages')}</Text>
-      ) : null}
       {notice ? (
         <Text accessibilityLiveRegion="polite" style={styles.hint}>
           {notice === 'copied' ? t('chat.summaryCopied') : t('chat.summaryShareFailed')}
@@ -428,11 +485,15 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   topic: { color: colors.ink, fontSize: 14, fontWeight: '800', lineHeight: 20 },
   prose: { color: colors.ink, fontSize: 13, lineHeight: 20 },
+  list: { gap: 2, paddingTop: spacing.xs },
+  listTitle: { color: colors.inkMuted, fontSize: 11, fontWeight: '800', lineHeight: 16 },
+  listItem: { color: colors.ink, fontSize: 13, lineHeight: 20 },
   stateRow: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   state: { gap: spacing.xs },
   stateText: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
   meta: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15 },
   empty: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
+  ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingTop: spacing.xs },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   hint: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },
   label: { color: colors.plum, fontSize: 9, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },

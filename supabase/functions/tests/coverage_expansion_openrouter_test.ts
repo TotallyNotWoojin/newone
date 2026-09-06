@@ -400,7 +400,6 @@ Deno.test('OpenRouter summary validates source bounds and evidence provenance', 
       { language: '*' },
       { sourceFingerprint: 'x' },
       { sources: [] },
-      { sources: Array(201).fill({ messageId: '1', body: 'text' }) },
       { sources: [{ messageId: '0', body: 'text' }] },
       { sources: [{ messageId: '1', body: 'text' }, { messageId: '1', body: 'text' }] },
       { sources: [{ messageId: '1', body: '' }] },
@@ -413,6 +412,16 @@ Deno.test('OpenRouter summary validates source bounds and evidence provenance', 
       }).summarize({ ...base, ...override })
     );
   }
+
+  // Over the cap is the reader's problem to fix (a shorter range), so it is
+  // terminal rather than a bad request that would be retried elsewhere.
+  await assertRejects(
+    () =>
+      processor(async () => {
+        throw new Error('provider must not be called');
+      }).summarize({ ...base, sources: Array(2001).fill({ messageId: '1', body: 'text' }) }),
+    (error) => error instanceof ApiError && error.status === 422 && error.message === 'summary_range_too_long',
+  );
 
   const validOutput = {
     primaryTopic: 'Coverage topic',

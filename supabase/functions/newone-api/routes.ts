@@ -1095,6 +1095,9 @@ function announcementAudienceSpec(value: unknown): JsonObject {
   };
 }
 
+// The ranges a reader can pick for a summary; the server resolves them.
+const SUMMARY_RANGE_KINDS = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'] as const;
+
 function messageIdArray(value: unknown, maximum = 500): string[] {
   if (!Array.isArray(value) || value.length > maximum) {
     throw new ApiError(400, 'bad_request');
@@ -2316,16 +2319,38 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       };
     }
     case 'summary.request': {
-      onlyKeys(body, ['organizationId', 'sourceMessageIds', 'languageCode']);
+      onlyKeys(body, ['organizationId', 'sourceMessageIds', 'languageCode', 'range']);
+      const conversationId = pathUuid(route, 'conversationId');
+      const languageCode = language(body.languageCode);
+      // v3.1 clients name a range the server resolves; older clients still
+      // send the message ids they had loaded.
+      if (body.range !== undefined) {
+        if (body.sourceMessageIds !== undefined) throw new ApiError(400, 'bad_request');
+        const range = asObject(body.range);
+        onlyKeys(range, ['kind', 'subject', 'fromMessageId', 'utcOffsetMinutes']);
+        return {
+          organizationId: organization(body),
+          values: {
+            conversationId,
+            languageCode,
+            range: {
+              kind: oneOf(range.kind, SUMMARY_RANGE_KINDS),
+              subject: optionalString(range, 'subject', { max: 200, nullable: true }) ?? null,
+              fromMessageId: range.fromMessageId === undefined || range.fromMessageId === null
+                ? null
+                : messageId(range.fromMessageId),
+              utcOffsetMinutes: range.utcOffsetMinutes === undefined
+                ? 0
+                : integer(range.utcOffsetMinutes, -900, 900),
+            },
+          },
+        };
+      }
       const sourceMessageIds = messageIdArray(body.sourceMessageIds);
       if (!sourceMessageIds.length) throw new ApiError(400, 'bad_request');
       return {
         organizationId: organization(body),
-        values: {
-          conversationId: pathUuid(route, 'conversationId'),
-          sourceMessageIds,
-          languageCode: language(body.languageCode),
-        },
+        values: { conversationId, sourceMessageIds, languageCode },
       };
     }
     case 'summary.manual.create': {
@@ -5890,7 +5915,8 @@ export async function executeCommand(
           },
         ),
       };
-    case 'summary.request':
+    case 'summary.request': {
+      const range = values.range === undefined ? null : asObject(values.range);
       return {
         status: 202,
         body: await businessRpc(
@@ -5898,14 +5924,24 @@ export async function executeCommand(
           org,
           idempotencyKey,
           requestDigest,
-          'bff_request_conversation_summary',
-          {
-            p_conversation_id: values.conversationId,
-            p_source_message_ids: values.sourceMessageIds,
-            p_language_code: values.languageCode,
-          },
+          range ? 'bff_request_conversation_summary_scope' : 'bff_request_conversation_summary',
+          range
+            ? {
+              p_conversation_id: values.conversationId,
+              p_scope_kind: range.kind,
+              p_scope_subject: range.subject,
+              p_from_message_id: range.fromMessageId,
+              p_utc_offset_minutes: range.utcOffsetMinutes,
+              p_language_code: values.languageCode,
+            }
+            : {
+              p_conversation_id: values.conversationId,
+              p_source_message_ids: values.sourceMessageIds,
+              p_language_code: values.languageCode,
+            },
         ),
       };
+    }
     case 'summary.manual.create':
       return {
         status: 201,

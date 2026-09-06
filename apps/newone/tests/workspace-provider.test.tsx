@@ -313,6 +313,9 @@ function controlledSummary(): ConversationSummary {
     sourceLastMessageId: sourceMessageId,
     sourceFingerprint: 'summary-source-fingerprint',
     outputFingerprint: 'summary-output-fingerprint',
+    scopeKind: 'today',
+    scopeSubject: null,
+    sourceMessageCount: 1,
     sourceState: 'current',
     policyState: 'current',
     requestMode: 'manual',
@@ -1122,7 +1125,7 @@ describe('authoritative workspace provider', () => {
       results.push(await currentWorkspace().requestTranslation(message));
       results.push(await currentWorkspace().proposeTranslationCorrection(message, 'Corrected text'));
       results.push(await currentWorkspace().reviewTranslationCorrection(message, 'rejected'));
-      results.push(await currentWorkspace().requestConversationSummary(conversation.id, [message.serverId as string]));
+      results.push(await currentWorkspace().requestConversationSummary(conversation.id, { kind: 'today', subject: ' the trip ' }));
       results.push(await currentWorkspace().correctConversationSummary(summary, 'Topic', 'Summary'));
       results.push(await currentWorkspace().reviewConversationSummary(summary.id, 'reject'));
       results.push(await currentWorkspace().reportAiOutputError({
@@ -2169,7 +2172,7 @@ describe('authoritative workspace provider', () => {
       ));
       results.push(await currentWorkspace().requestConversationSummary(
         'conversation-a',
-        [message.serverId as string],
+        { kind: 'everything' },
       ));
       results.push(await currentWorkspace().correctConversationSummary(
         summary,
@@ -3452,7 +3455,7 @@ describe('authoritative workspace provider', () => {
       failures.push(await currentWorkspace().reviewTranslationCorrection(incoming, 'rejected'));
       failures.push(await currentWorkspace().requestConversationSummary(
         'conversation-a',
-        [incoming.serverId as string],
+        { kind: 'today' },
       ));
       failures.push(await currentWorkspace().correctConversationSummary(summary, 'Topic', 'Summary'));
       failures.push(await currentWorkspace().reviewConversationSummary(summary.id, 'reject'));
