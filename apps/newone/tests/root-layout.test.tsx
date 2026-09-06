@@ -156,11 +156,11 @@ beforeEach(() => {
 });
 
 describe('root application boundary', () => {
-  test('shows the securing state while authentication is loading', async () => {
+  test('shows the loading state while authentication is loading', async () => {
     mockAuth = { authenticated: false, loading: true };
     const view = await render(<RootLayout />);
 
-    expect(screen.getByText('Securing your workspace…')).toBeTruthy();
+    expect(screen.getByText('Loading…')).toBeTruthy();
     expect(screen.queryByTestId('controlled-stack')).toBeNull();
     expect(mockRouter.replace).not.toHaveBeenCalled();
     expect(AppState.addEventListener).not.toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe('root application boundary', () => {
   test('redirects unauthenticated private routes but leaves help and sign-in public', async () => {
     const privateView = await render(<RootLayout />);
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in'));
-    expect(screen.getByText('Redirecting securely…')).toBeTruthy();
+    expect(screen.getByText('One moment…')).toBeTruthy();
     await privateView.unmount();
 
     mockRouter.replace.mockClear();
@@ -195,7 +195,7 @@ describe('root application boundary', () => {
     const view = await render(<RootLayout />);
 
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
-    expect(screen.getByText('Redirecting securely…')).toBeTruthy();
+    expect(screen.getByText('One moment…')).toBeTruthy();
     expect(mockWorkspaceProviderRenders).toBe(0);
 
     await view.unmount();

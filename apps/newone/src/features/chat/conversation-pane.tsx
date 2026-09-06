@@ -282,7 +282,7 @@ export function ConversationPane({
     return (
       <View style={styles.emptyPane}>
         <EmptyState
-          body={t('status.loading')}
+          body={t('status.oneMoment')}
           icon="hourglass-outline"
           title={t('status.loading')}
         />
