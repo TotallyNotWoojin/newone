@@ -151,7 +151,7 @@ function parseConversationMemberCandidatePage(value: unknown, requestedLimit: nu
     const userId = row.userId;
     const displayName = row.displayName;
     if (
-      !hasOnlyKeys(row, ['userId', 'displayName', 'avatarPath', 'roleLabel', 'membershipType']) ||
+      !hasOnlyKeys(row, ['userId', 'displayName', 'avatarPath', 'roleLabel', 'membershipType', 'username']) ||
       !UUID_PATTERN.test(String(userId)) ||
       typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 160 ||
       displayName.trim() !== displayName || displayName.normalize('NFC') !== displayName ||
