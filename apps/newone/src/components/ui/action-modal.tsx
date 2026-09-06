@@ -72,6 +72,7 @@ export function FormField({
   value,
   onChangeText,
   placeholder,
+  testID,
   multiline = false,
   keyboardType,
 }: {
@@ -79,6 +80,8 @@ export function FormField({
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
+  /** Stable identifier for UI drivers. */
+  testID?: string;
   multiline?: boolean;
   keyboardType?: 'default' | 'email-address' | 'number-pad';
 }) {
@@ -91,6 +94,7 @@ export function FormField({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        testID={testID}
         placeholderTextColor={colors.inkSubtle}
         style={[styles.input, multiline && styles.multiline]}
         value={value}
