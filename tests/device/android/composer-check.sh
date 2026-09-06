@@ -16,7 +16,7 @@ export NEWONE_DEVICE_MINT_CODES=1
 "$ADB" -s $DEV shell monkey -p com.totallynotwoojin.newone -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
 sleep 15
 run() { maestro --device $DEV test "$@" 2>&1 | grep -E "COMPLETED|FAILED|Error|✅|❌" | tail -3; }
-run -e EMAIL="$EMAIL" tests/device/suite/common/returning-request.yaml
+run -e EMAIL="$EMAIL" tests/device/android/returning-request.yaml
 CODE=$(node --input-type=module -e "import { mintCode } from './tests/device/lib/mailbox.mjs'; console.log((await mintCode('$EMAIL')).code)")
 run -e EMAIL="$EMAIL" -e CODE="$CODE" -e SHOT="$OUT/shot" tests/device/android/returning-verify.yaml
 # Dismiss the first-launch notification card if it shows, then open the thread.
