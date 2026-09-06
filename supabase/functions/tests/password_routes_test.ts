@@ -364,8 +364,8 @@ Deno.test('native bearer password set inspects the live session and updates exac
         calls.push({ step: 'inspect', accessToken });
         return activeSession();
       },
-      setPassword: async (userId, password) => {
-        calls.push({ step: 'set', userId, password });
+      setPassword: async (accessToken, userId, password) => {
+        calls.push({ step: 'set', accessToken, userId, password });
       },
     })
   );
@@ -376,7 +376,8 @@ Deno.test('native bearer password set inspects the live session and updates exac
   assertEquals(await response.json(), { passwordSet: true });
   assertEquals(calls, [
     { step: 'inspect', accessToken: session.accessToken },
-    { step: 'set', userId: session.userId, password: 'brand new password' },
+    // The write goes through the member's own token so their session survives.
+    { step: 'set', accessToken: session.accessToken, userId: session.userId, password: 'brand new password' },
   ]);
   assertEquals(response.headers.getSetCookie().length, 0);
 });

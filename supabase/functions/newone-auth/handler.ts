@@ -280,7 +280,7 @@ export interface AuthDependencies {
    * secure_password_change re-authentication gate that would otherwise block
    * members whose (intentionally long-lived) session is older than a day.
    */
-  setPassword(userId: string, password: string): Promise<void>;
+  setPassword(accessToken: string, userId: string, password: string): Promise<void>;
   redeemInvite(
     accessToken: string,
     expectedUserId: string,
@@ -805,23 +805,43 @@ export function defaultAuthDependencies(): AuthDependencies {
       ) throw new ApiError(401, 'unauthorized');
       return parsed;
     },
-    async setPassword(userId, password) {
+    async setPassword(accessToken, userId, password) {
+      // The admin password update logs the member out of every session,
+      // including the one that just asked for the password: a returning
+      // member who saved one after a code sign-in landed back on the sign-in
+      // screen. GoTrue's user-scoped update keeps the caller's own session and
+      // signs out only the others, so the write goes through the member's
+      // token. The stamp is a separate admin write, which revokes nothing.
+      const response = await fetch(`${clientEnvironment.url}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          apikey: clientEnvironment.publishableKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({}))) as {
+          error_code?: unknown;
+          code?: unknown;
+        };
+        const code = typeof detail.error_code === 'string' ? detail.error_code : detail.code;
+        if (code !== 'same_password') {
+          if (code === 'weak_password' || response.status === 422) {
+            throw new ApiError(400, 'weak_password');
+          }
+          if (response.status === 401) throw new ApiError(401, 'unauthorized');
+          throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+        }
+      }
       const { data, error } = await createAdminClient(clientEnvironment).auth.admin.updateUserById(
         userId,
-        {
-          password,
-          // updateUserById merges app_metadata keys, so newone_signup_state
-          // and any other stamps survive this write.
-          app_metadata: { newone_password_set_at: new Date().toISOString() },
-        },
+        // updateUserById merges app_metadata keys, so newone_signup_state
+        // and any other stamps survive this write.
+        { app_metadata: { newone_password_set_at: new Date().toISOString() } },
       );
-      if (error) {
-        if (error.code === 'weak_password' || error.status === 422) {
-          throw new ApiError(400, 'weak_password');
-        }
-        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-      }
-      if (!data.user) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+      if (error || !data.user) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
     },
     async redeemInvite(accessToken, expectedUserId, inviteToken, employeeCode) {
       const result = asObject(
@@ -2522,7 +2542,7 @@ export function createAuthHandler(
         verifyCsrf(request, config, credential.viaCookie);
         const active = await dependencies.inspect(credential.token);
         if (active.memberships.length === 0) throw new ApiError(401, 'unauthorized');
-        await dependencies.setPassword(active.userId, password);
+        await dependencies.setPassword(credential.token, active.userId, password);
         return jsonResponse(meta, 200, { passwordSet: true });
       }
 
