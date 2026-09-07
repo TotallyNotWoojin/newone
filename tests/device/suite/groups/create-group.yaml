@@ -1,7 +1,13 @@
 appId: com.totallynotwoojin.newone
 ---
 # Chats → Start a conversation → name → find the MEMBER(s) through the picker's
-# people search → Create. Anyone can be added (Sep 2026 social stream): the
+# people search → Create.
+#
+# v3.3 (backlog 36): a group needs three people -- the creator and two others --
+# so every caller must pass HAS_MEMBER2: 'true' with a second member. A
+# two-person attempt is refused by the service with 400 and the Create button
+# stays disabled. The name field is now labelled "Group name (optional)", which
+# is why the taps below match "Group name.*". Anyone can be added (Sep 2026 social stream): the
 # picker lists the people this account already knows and finds everyone else
 # by name or @username, so MEMBERn_QUERY is what gets typed (the @username)
 # and "Add MEMBERn" is the row that must appear.
