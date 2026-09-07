@@ -23,9 +23,13 @@
 --
 -- Steady state after this and the two sibling migrations: ~22,300 rows a day
 -- (the outbox drops from 17,226 runs to 1,440 and maintenance to 0), so about
--- 67,000 succeeded rows and ~210 failed ones -- roughly 87 MB, against 237 MB
+-- 67,000 succeeded rows and ~210 failed ones -- roughly 87 MB, against 238 MB
 -- today and unbounded growth. Strictly more failure history than a 7-day
 -- window, at 43% of its size.
+--
+-- Counted against the live table on Sep 7 2026, the one-off below keeps 9,922
+-- of 192,696 rows: 238 MB becomes about 12 MB, so roughly 226 MB comes back and
+-- the database should fall from 294 MB to somewhere near 70 MB.
 --
 -- This is operational telemetry, not application data. Nothing in the client,
 -- the Edge Functions, the tests or the scripts reads it.

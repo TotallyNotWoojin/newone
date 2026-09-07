@@ -5,9 +5,10 @@
 -- bff_promote_due_announcements, bff_process_announcement_obligations and
 -- bff_process_overdue_handoffs -- and they act only on announcements and shift
 -- handoffs. Live on Sep 7 2026: announcements, announcement_versions,
--- shift_handoffs and handoff_versions all have n_tup_ins = 0 over the whole
--- life of the database, and the two processing RPCs have 3,109 calls each in
--- pg_stat_statements. Real work, on nothing.
+-- announcement_recipients, shift_handoffs, handoff_versions and
+-- handoff_acknowledgements all have n_tup_ins = 0 over the whole life of the
+-- database, and all three RPCs have 3,573 calls each in pg_stat_statements.
+-- Real work, on nothing.
 --
 -- Cost removed: 1,440 Edge invocations a day (43,200 a month), 4,320 RPC round
 -- trips a day, and 1,440 rows a day into cron.job_run_details.
