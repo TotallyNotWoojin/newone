@@ -283,6 +283,8 @@ function translatedMessage(overrides: Record<string, unknown> = {}) {
       method: 'server-detector',
       detectedAt: '2026-08-04T18:00:00.000Z',
     },
+    // Just sent, so editing and unsending are still inside their window.
+    createdAt: new Date().toISOString(),
     sentAt: '12:00',
     dayLabel: 'Today',
     isOwn: true,
@@ -2365,6 +2367,37 @@ describe('personal realm message actions', () => {
     expect(screen.queryByText('chat.forwardTo')).toBeNull();
     await fireEvent.press(screen.getByLabelText('chat.forward'));
     expect(screen.getByText('chat.forwardTo')).toBeTruthy();
+  });
+
+  test('drops Edit and Delete from the sheet once the fifteen minutes are up', async () => {
+    const fresh = translatedMessage();
+    const freshView = await render(
+      <ConversationPane conversation={conversation()} messages={[fresh]} onSend={noopSend} />,
+    );
+    await fireEvent(screen.getByText(fresh.originalText), 'longPress');
+    expect(screen.getByLabelText('chat.editMessage')).toBeTruthy();
+    expect(screen.getByLabelText('chat.saveEdit')).toBeTruthy();
+    expect(screen.getByLabelText('chat.deleteEveryone')).toBeTruthy();
+    await freshView.unmount();
+
+    mockWorkspace = buildWorkspace();
+    const old = translatedMessage({
+      id: 'message-old',
+      serverId: 'message-old',
+      originalText: 'Sent a long time ago.',
+      createdAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[old]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(old.originalText), 'longPress');
+
+    expect(screen.queryByLabelText('chat.editMessage')).toBeNull();
+    expect(screen.queryByLabelText('chat.saveEdit')).toBeNull();
+    expect(screen.queryByLabelText('chat.deleteEveryone')).toBeNull();
+    // Everything that does not change the message is still there.
+    expect(screen.getByLabelText('chat.reply')).toBeTruthy();
+    expect(screen.getByLabelText('chat.copy')).toBeTruthy();
+    expect(screen.getByLabelText('chat.forward')).toBeTruthy();
+    expect(screen.getByTestId('reaction-row')).toBeTruthy();
   });
 
   test('keeps the translation review items for workspace organizations', async () => {

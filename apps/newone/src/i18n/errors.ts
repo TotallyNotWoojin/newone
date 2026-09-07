@@ -21,6 +21,8 @@ export function errorMessageKey(error: unknown): MessageKey {
     return 'errors.notificationDenied';
   }
   if (code === 'push_token_unavailable') return 'errors.pushTokenUnavailable';
+  if (code === 'message_edit_window_closed') return 'chat.editWindowClosed';
+  if (code === 'message_unsend_window_closed') return 'chat.unsendWindowClosed';
   if (code === 'summary_range_too_long') return 'chat.summaryTooLong';
   if (code === 'summary_range_empty') return 'chat.summaryRangeEmpty';
   if (

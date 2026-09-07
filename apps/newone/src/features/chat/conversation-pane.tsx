@@ -47,6 +47,7 @@ import {
 } from '@/features/chat/mention-controls.mjs';
 import { shouldSendOnEnter } from '@/features/chat/composer-keys';
 import { mentionCopy } from '@/features/chat/mention-copy';
+import { messageEditWindowOpen } from '@/features/chat/message-edit-window';
 import {
   attachmentReady,
   ImageAttachment,
@@ -2147,7 +2148,7 @@ function MessageActionsModal({
         </View>
       ) : null}
       {message && detailsOpen ? <TranslationDetails message={message} /> : null}
-      {message?.isOwn && message.serverId && !message.deleted ? (
+      {message && messageEditWindowOpen(message) ? (
         <View style={styles.modalSection}>
           <FormField label={t('chat.editMessage')} multiline onChangeText={onChangeEditDraft} value={editDraft} />
           <PrimaryButton
