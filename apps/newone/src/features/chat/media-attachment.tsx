@@ -9,7 +9,8 @@ import { mediaFrame } from '@/features/chat/timeline-layout';
 import { VideoAttachment } from '@/features/chat/video-attachment';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const VIDEO_RATIO = 16 / 9;
 
@@ -63,6 +64,8 @@ export function ImageAttachment({
   onDownload: () => void;
   footer?: ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const attachment = message.attachment;
   const { uri, ready } = useAttachmentSource(message);
@@ -141,6 +144,8 @@ export function VideoMessageAttachment({
   maxWidth: number;
   onDownload: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const attachment = message.attachment;
@@ -182,6 +187,7 @@ export function ProgressRing({
   size?: number;
   thickness?: number;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const clamped = Math.max(0, Math.min(1, progress));
   const percent = Math.round(clamped * 100);
   const angle = clamped * 360;
@@ -223,6 +229,8 @@ export function ProgressRing({
 
 /** Retry / cancel controls for an upload that is running, failed, or awaiting cleanup. */
 export function TransferControls({ message, tone }: { message: Message; tone: 'light' | 'default' }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const transfer = message.attachment?.transfer;
@@ -289,7 +297,7 @@ export function TransferControls({ message, tone }: { message: Message; tone: 'l
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   frame: { borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(16,46,39,0.08)' },
   fill: { width: '100%', height: '100%' },
   center: { alignItems: 'center', justifyContent: 'center' },

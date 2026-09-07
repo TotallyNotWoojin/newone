@@ -24,7 +24,8 @@ import type { Person } from '@/domain/types';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 type GroupKind = 'group' | 'team' | 'shift' | 'incident';
@@ -85,6 +86,8 @@ export function groupNameFromPeople(names: string[], fallback: string): string {
 }
 
 export default function NewGroupScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const workspace = useWorkspace();
@@ -760,7 +763,7 @@ export default function NewGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   header: {
     minHeight: 76,

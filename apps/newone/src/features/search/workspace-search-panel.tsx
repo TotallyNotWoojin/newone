@@ -36,7 +36,8 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 const allTypes: SearchResultType[] = [
@@ -65,6 +66,8 @@ export function WorkspaceSearchPanel({
   initialQuery?: string;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -677,6 +680,8 @@ function PersonResultRow({
   result: UserSearchResult;
   onMessage: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const avatarUrl = useProfileAvatar(result.userId);
   const name = result.displayName ?? result.username;
@@ -692,7 +697,7 @@ function PersonResultRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   keyboard: { flex: 1 },
   panel: { flex: 1, backgroundColor: colors.canvas },
   panelHeader: {

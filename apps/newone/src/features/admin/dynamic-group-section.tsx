@@ -15,11 +15,13 @@ import type { OrganizationUnitOption } from '@/data/repositories/contracts';
 import { dynamicGroupCopy } from '@/features/admin/dynamic-group-copy';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const membershipRoleOrder: DynamicGroupMembershipRole[] = ['owner', 'admin', 'manager', 'member'];
 
 export function DynamicGroupSection({ privilegedReady }: { privilegedReady: boolean }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { locale } = useI18n();
   const copy = dynamicGroupCopy(locale);
@@ -557,6 +559,7 @@ export function DynamicGroupSection({ privilegedReady }: { privilegedReady: bool
 }
 
 function Count({ label, value }: { label: string; value: number }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.count}>
       <Text style={styles.countValue}>{value}</Text>
@@ -576,6 +579,7 @@ function SampleList({
   label: string;
   personLabel: (id: string) => string;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.sampleBlock}>
       <Text style={styles.label}>{label} · {copy.sample}</Text>
@@ -586,7 +590,7 @@ function SampleList({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     backgroundColor: colors.paper,
     borderColor: colors.line,

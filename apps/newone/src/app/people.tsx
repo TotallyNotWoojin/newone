@@ -35,7 +35,8 @@ import type { UserSearchResult } from '@/data/repositories/contracts';
 import type { Person } from '@/domain/types';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import {
   moderationCopy,
@@ -53,6 +54,8 @@ function displayInitials(displayName: string) {
 }
 
 export default function PeopleScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -593,6 +596,7 @@ function PersonRow({
   onAdd?: () => void;
   requested?: boolean;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
   return (
@@ -647,6 +651,8 @@ function PersonCard({
   onRemove: () => void;
   desktop: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
   const connected = person.connectionState === 'connected';
@@ -724,7 +730,7 @@ function PersonCard({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   keyboard: {
     flex: 1,
   },

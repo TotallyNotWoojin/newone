@@ -81,7 +81,8 @@ import { GroupMembersSection } from '@/features/chat/group-members-section';
 import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const rowKey = (row: TimelineRow) => row.key;
 
@@ -100,6 +101,8 @@ export function ConversationPane({
   mobile?: boolean;
   focusMessageId?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList<TimelineRow>>(null);
   const router = useRouter();
@@ -937,6 +940,8 @@ function ConversationHeader({
   mobile: boolean;
   typingLabel?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   // One meta line: the @handle for a direct chat, the member count for a
@@ -1005,6 +1010,8 @@ function ConversationHeader({
 }
 
 function SystemEventRow({ message }: { message: Message }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const event = message.systemEvent;
@@ -1079,6 +1086,8 @@ const MessageBubble = memo(function MessageBubble({
   onJumpToQuoted: (messageId: string) => void;
   onDownload: (message: Message) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { locale, t } = useI18n();
   const { width: windowWidth } = useWindowDimensions();
@@ -1418,6 +1427,7 @@ const MessageBubble = memo(function MessageBubble({
 
 /** Language and translation provenance, reachable from the actions sheet. */
 function TranslationDetails({ message }: { message: Message }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const conversation = workspace.conversations.find((item) => item.id === message.conversationId);
@@ -1499,6 +1509,7 @@ function TranslationDetails({ message }: { message: Message }) {
 }
 
 function TranslationCorrectionModal({ message, onClose }: { message: Message; onClose: () => void }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [correctionText, setCorrectionText] = useState(message.translatedText ?? '');
@@ -1526,6 +1537,7 @@ function TranslationCorrectionModal({ message, onClose }: { message: Message; on
 }
 
 function TranslationReviewModal({ message, onClose }: { message: Message; onClose: () => void }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [reviewNote, setReviewNote] = useState('');
@@ -1579,6 +1591,8 @@ function AiOutputErrorReportModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const categories: AiOutputErrorCategory[] = outputKind === 'translation'
@@ -1680,6 +1694,8 @@ function formatPlaybackTime(seconds: number) {
 }
 
 function AudioAttachmentBubble({ message }: { message: Message }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const attachment = message.attachment;
@@ -1728,6 +1744,8 @@ function AudioAttachmentBubble({ message }: { message: Message }) {
 
 /** Compact one-line card for files that are not shown inline: icon, name, size, download. */
 function AttachmentCard({ message, onDownload }: { message: Message; onDownload: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const attachment = message.attachment;
@@ -1872,6 +1890,8 @@ function Composer({
   replyingTo: Message | null;
   onCancelReply: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const bottomInset = useComposerBottomInset(mobile);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -2035,6 +2055,8 @@ function MentionSelector({
   onChange: (value: string[]) => void;
   onChangeOpen: (value: boolean) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale } = useI18n();
   const copy = mentionCopy(locale);
   const [query, setQuery] = useState('');
@@ -2191,6 +2213,7 @@ function MessageActionsModal({
   onProposeCorrection?: () => void;
   onReviewCorrection?: () => void;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   // Action items, translation provenance, corrections and their review are
@@ -2399,6 +2422,8 @@ function ConversationControlsModal({
   ) => Promise<boolean>;
   onCloseIncident: (reason: string) => Promise<void>;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const workspace = useWorkspace();
   // Workplace-only notes and discovery controls stay out of the personal realm.
@@ -3059,6 +3084,8 @@ function AttachmentPickerModal({
   imageMode: 'optimized' | 'original';
   onChangeImageMode: (value: 'optimized' | 'original') => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   return (
@@ -3116,7 +3143,7 @@ function AttachmentPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   systemEventRow: {
     flexDirection: 'row',
     alignItems: 'center',

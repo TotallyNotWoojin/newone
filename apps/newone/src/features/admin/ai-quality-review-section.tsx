@@ -7,7 +7,8 @@ import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import type { AiOutputErrorReport } from '@/domain/types';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export function AiQualityReviewSection({
   privilegedReady,
@@ -16,6 +17,8 @@ export function AiQualityReviewSection({
   privilegedReady: boolean;
   onVerifyNow: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const loadAiOutputReviewQueue = workspace.loadAiOutputReviewQueue;
@@ -252,7 +255,7 @@ export function AiQualityReviewSection({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: { gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, backgroundColor: colors.paper },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   icon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.plumSoft },

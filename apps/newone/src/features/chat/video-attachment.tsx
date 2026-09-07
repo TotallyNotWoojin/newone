@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { colors } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * Inline video attachment: the first frame is the poster and the platform
@@ -24,6 +24,8 @@ export function VideoAttachment({
   downloadLabel?: string;
   onDownload?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const player = useVideoPlayer(uri, (instance) => {
     instance.loop = false;
   });
@@ -52,7 +54,7 @@ export function VideoAttachment({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   frame: { borderRadius: 14, overflow: 'hidden', backgroundColor: '#000' },
   video: { flex: 1 },
   download: {

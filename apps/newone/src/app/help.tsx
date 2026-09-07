@@ -6,9 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { publicRuntimeConfig } from '@/config/runtime';
 import { useI18n } from '@/i18n/provider';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export default function HelpScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { t } = useI18n();
   const support = publicRuntimeConfig.supportContact;
@@ -71,7 +74,7 @@ export default function HelpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   header: {
     minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: spacing.md,

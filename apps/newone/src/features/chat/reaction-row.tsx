@@ -3,7 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { quickReactionEmojis, normalizeReactionEmoji } from '@/features/chat/message-reactions';
 import { useI18n } from '@/i18n/provider';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * The six reactions in one compact row, plus a "+" for anything else.
@@ -21,6 +22,8 @@ export function ReactionRow({
   onReact: (emoji: string) => void;
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -104,7 +107,7 @@ export function ReactionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   row: { marginTop: 2 },
   rowContent: { alignItems: 'center', gap: spacing.xs, paddingRight: spacing.sm },
   emojiButton: {

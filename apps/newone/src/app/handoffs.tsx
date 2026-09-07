@@ -25,11 +25,14 @@ import type { ShiftHandoff } from '@/domain/types';
 import { handoffCorrectionCopy } from '@/features/handoffs/handoff-correction-copy';
 import { handoffAcknowledgementCopy } from '@/features/handoffs/handoff-acknowledgement-copy';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 function HandoffsWorkplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -506,6 +509,8 @@ function HandoffCard({
   onCorrect: () => void;
   onOpenSource: (messageId: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const copy = handoffCorrectionCopy(locale);
   const status = {
@@ -648,7 +653,7 @@ function HandoffCard({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,

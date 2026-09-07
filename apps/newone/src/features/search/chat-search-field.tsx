@@ -3,7 +3,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import type { SearchChip, SearchSuggestion } from '@/features/search/chat-search';
 import { useI18n } from '@/i18n/provider';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * One field for the whole of Chats. Finished names sit in it as chips, the
@@ -32,6 +33,8 @@ export function ChatSearchField({
   loading?: boolean;
   trailing?: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   // The visible text is only the unfinished tail; the finished parts are chips.
   const draft = value.includes(',') ? value.slice(value.lastIndexOf(',') + 1).trimStart() : value;
@@ -137,7 +140,7 @@ export function ChatSearchField({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   wrap: { gap: spacing.xs },
   field: {
     minHeight: 42,

@@ -23,7 +23,8 @@ import {
   type SearchPersonRef,
   type SearchSuggestion,
 } from '@/features/search/chat-search';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
@@ -160,6 +161,8 @@ export function ConversationList({
   /** Chats the reader put back to unread by hand. */
   markedUnreadIds?: readonly string[];
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const listRef = useRef<ScrollView>(null);
   const [scrolledAway, setScrolledAway] = useState(false);
   const [openRowId, setOpenRowId] = useState<string | null>(null);
@@ -377,6 +380,8 @@ function ConversationRow({
   onAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
   onToggleActions?: (open: boolean) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const directAvatarUrl = useProfileAvatar(conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null);
   const { t } = useI18n();
   const workspace = useWorkspace();
@@ -523,7 +528,7 @@ function ConversationRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   rowShell: {
     position: 'relative',
   },

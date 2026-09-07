@@ -20,7 +20,8 @@ import { Chip, PrimaryButton } from '@/components/ui/primitives';
 import { CaptchaChallenge } from '@/components/security/captcha-challenge';
 import { publicRuntimeConfig } from '@/config/runtime';
 import { isWebAuthBlocked } from '@/lib/supabase';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useAuth } from '@/state/auth';
 import { useI18n } from '@/i18n/provider';
 import { errorMessageKey } from '@/i18n/errors';
@@ -89,6 +90,8 @@ type AccessMode = 'signup' | 'returning' | 'enrollment';
 type AuthStep = 'identity' | 'password' | 'verify' | 'new-password';
 
 export default function SignInScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const auth = useAuth();
   const { locale, setLocale, t } = useI18n();
@@ -822,6 +825,8 @@ export default function SignInScreen() {
 }
 
 function TrustItem({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.trustItem}>
       <View style={styles.trustIcon}>
@@ -832,7 +837,7 @@ function TrustItem({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text:
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.forest,

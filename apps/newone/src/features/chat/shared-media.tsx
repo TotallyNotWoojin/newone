@@ -8,7 +8,8 @@ import { ImageViewerModal } from '@/features/chat/image-viewer';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /** A thumbnail is only worth drawing for something the viewer can show. */
 export function isThumbnail(item: SharedMediaItem): boolean {
@@ -52,6 +53,8 @@ export function mediaKindKey(kind: SharedMediaItem['kind']): MessageKey {
 }
 
 function Thumbnail({ item, onPress }: { item: SharedMediaItem; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   return (
     <Pressable
@@ -76,6 +79,8 @@ function Thumbnail({ item, onPress }: { item: SharedMediaItem; onPress: () => vo
 }
 
 function FileRow({ item }: { item: SharedMediaItem }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const icon = item.kind === 'voice'
     ? 'mic-outline'
@@ -113,6 +118,8 @@ export function SharedMediaModal({
   conversationId: string;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const loadSharedMedia = workspace.loadSharedMedia;
@@ -202,7 +209,7 @@ export function SharedMediaModal({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   sections: { gap: spacing.xs },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   tile: {

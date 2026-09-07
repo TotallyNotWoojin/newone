@@ -6,7 +6,8 @@ import { EmptyState, PrimaryButton } from '@/components/ui/primitives';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing } from '@/theme/tokens';
+import { radii, shadow, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /** A degraded realtime connection self-heals in the background (resubscribe
  * with backoff); only surface the disruptive-looking indicator once the
@@ -29,6 +30,8 @@ function useDegradedRealtimeIndicator(realtimeState: string): boolean {
 }
 
 export function WorkspaceStatusBanner() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const degradedIndicatorVisible = useDegradedRealtimeIndicator(workspace.realtimeState);
@@ -90,6 +93,8 @@ export function WorkspaceStatePanel({
 }: {
   resource: 'chats' | 'people' | 'updates' | 'handoffs';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   // Consumer accounts never see workplace directory wording in empty states.
@@ -160,7 +165,7 @@ export function WorkspaceStatePanel({
   return null;
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   bannerLayer: {
     position: 'absolute',
     top: spacing.xs,

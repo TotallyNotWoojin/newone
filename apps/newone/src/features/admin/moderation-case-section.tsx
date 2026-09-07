@@ -22,7 +22,8 @@ import { moderationCopy } from '@/features/admin/moderation-copy';
 import { useI18n } from '@/i18n/provider';
 import { createClientId } from '@/lib/client-id';
 import { getRealtimeClient } from '@/lib/supabase';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 interface Props {
@@ -76,6 +77,8 @@ export function ModerationCaseSection({
   organizationId,
   people,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale } = useI18n();
   const copy = moderationCopy(locale);
   const { width } = useHydrationSafeWindowDimensions();
@@ -623,7 +626,7 @@ export function ModerationCaseSection({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: { width: '100%', marginTop: spacing.xl },
   headingRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.md },
   headingCopy: { flex: 1, minWidth: 260 },

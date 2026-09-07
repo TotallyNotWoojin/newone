@@ -41,7 +41,8 @@ import { outboxCopy } from '@/features/settings/outbox-copy';
 import { useAuth } from '@/state/auth';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 interface MfaFactor {
   id: string;
@@ -63,6 +64,8 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export default function SettingsScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const workspace = useWorkspace();
   // Consumer accounts have no authenticator, recovery-case, or shift tooling;
@@ -946,6 +949,7 @@ export default function SettingsScreen() {
 
 /** A titled card of rows separated by hairlines, like a messenger's settings list. */
 function Group({ title, children }: { title?: string; children: ReactNode }) {
+  const styles = useThemedStyles(buildStyles);
   const rows = Children.toArray(children).filter(Boolean);
   return (
     <View style={styles.group}>
@@ -983,6 +987,8 @@ function Row({
   muted?: boolean;
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const content = (
     <>
       <Ionicons
@@ -1037,6 +1043,7 @@ function SwitchRow({
   disabled?: boolean;
   testID?: string;
 }) {
+  const { colors } = useTheme();
   return (
     <Row
       hint={hint}
@@ -1073,6 +1080,8 @@ function RowAction({
   tone?: 'accent' | 'danger';
   loading?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <Pressable
       accessibilityLabel={label}
@@ -1102,6 +1111,8 @@ function OptionList<T extends string | null>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.options}>
       {options.map(([value, label]) => (
@@ -1120,7 +1131,7 @@ function OptionList<T extends string | null>({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   loadingScreen: { flex: 1 },
   errorBanner: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },

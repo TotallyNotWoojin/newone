@@ -22,7 +22,8 @@ import { shareSummary } from '@/features/chat/summary-export';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const RANGE_KEYS: Record<SummaryScopeKind, MessageKey> = {
   unread: 'chat.summaryRangeUnread',
@@ -55,6 +56,8 @@ export function SummarySheet({
   onClose: () => void;
   onReportError?: (summaryId: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const router = useRouter();
   const { t } = useI18n();
@@ -480,7 +483,7 @@ export function SummarySheet({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   summary: { gap: spacing.xs },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   topic: { color: colors.ink, fontSize: 14, fontWeight: '800', lineHeight: 20 },

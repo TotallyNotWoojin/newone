@@ -33,7 +33,8 @@ import { WorkspaceSearchPanel } from '@/features/search/workspace-search-panel';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import type { Conversation } from '@/domain/types';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing } from '@/theme/tokens';
+import { radii, shadow, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
@@ -46,6 +47,7 @@ import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-win
 const markedUnread = new Set<string>();
 
 export default function ChatsScreen() {
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -315,6 +317,8 @@ function NewMenuRow({
   label: string;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <Pressable
       accessibilityLabel={label}
@@ -330,7 +334,7 @@ function NewMenuRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   newMenuRow: {
     minHeight: 52,
     flexDirection: 'row',

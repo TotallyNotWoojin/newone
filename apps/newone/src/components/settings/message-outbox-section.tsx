@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import type { VisibleMessageOutboxItem } from '@/data/persistence/types';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export interface MessageOutboxCopy {
   title: string;
@@ -59,6 +60,8 @@ export function MessageOutboxSection({
   onClearError,
   degradedReason = null,
 }: MessageOutboxSectionProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const [editing, setEditing] = useState<VisibleMessageOutboxItem | null>(null);
   const [editBody, setEditBody] = useState('');
   const [cancelling, setCancelling] = useState<VisibleMessageOutboxItem | null>(null);
@@ -227,7 +230,7 @@ export function MessageOutboxSection({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     overflow: 'hidden',
     borderRadius: radii.lg,

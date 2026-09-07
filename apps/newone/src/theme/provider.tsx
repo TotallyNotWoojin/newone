@@ -20,6 +20,7 @@ import { useDevicePreferences } from '@/state/device-preferences';
 
 export { THEME_PREFERENCES, isThemePreference, resolveColorScheme } from '@/theme/scheme';
 export type { ThemePreference } from '@/theme/scheme';
+export type { ColorScheme, ThemeColors } from '@/theme/palette';
 
 export interface ThemeValue {
   /** What is actually being drawn right now. */

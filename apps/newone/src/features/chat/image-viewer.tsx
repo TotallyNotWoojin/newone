@@ -16,7 +16,8 @@ import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-c
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useI18n } from '@/i18n/provider';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const MAX_SCALE = 5;
 const DOUBLE_TAP_SCALE = 2.5;
@@ -55,6 +56,8 @@ export function ImageViewerModal({
   onNext?: () => void;
   onPrevious?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const { width, height } = useWindowDimensions();
   // A modal window gets no safe-area view insets of its own; the root
@@ -258,7 +261,7 @@ export function ImageViewerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1 },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000' },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },

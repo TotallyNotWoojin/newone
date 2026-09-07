@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 /** A sheet settles in one quick beat; closing is immediate. The system
@@ -35,6 +36,8 @@ export function ActionModal({
   description?: string;
   onClose: () => void;
 }>) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -115,6 +118,8 @@ export function FormField({
   multiline?: boolean;
   keyboardType?: 'default' | 'email-address' | 'number-pad';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -134,6 +139,8 @@ export function FormField({
 }
 
 export function ActionError({ message }: { message?: string | null }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   if (!message) return null;
   return (
     <View accessibilityLiveRegion="assertive" style={styles.error}>
@@ -143,7 +150,7 @@ export function ActionError({ message }: { message?: string | null }) {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   dim: {
     position: 'absolute',
     top: 0,

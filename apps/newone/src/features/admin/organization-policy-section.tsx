@@ -6,9 +6,11 @@ import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import type { OrganizationPolicy } from '@/data/repositories/organization-policy-dto.mjs';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export function OrganizationPolicySection({ privilegedReady }: { privilegedReady: boolean }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const policy = workspace.organizationPolicy;
@@ -29,6 +31,7 @@ function OrganizationPolicyEditor({
   policy: OrganizationPolicy;
   privilegedReady: boolean;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [messageRetentionDays, setMessageRetentionDays] = useState(String(policy.messageRetentionDays));
@@ -225,6 +228,7 @@ function PolicySwitch({
   value: boolean;
   onValueChange: (value: boolean) => void;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.switchRow}>
       <View style={styles.switchCopy}>
@@ -236,7 +240,7 @@ function PolicySwitch({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     backgroundColor: colors.paper,
     borderColor: colors.line,

@@ -20,7 +20,8 @@ import type {
 import { auditCopy } from '@/features/admin/audit-copy';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 type RangeChoice = 'day' | 'week' | 'month';
 type QueryWithoutOrganization = Omit<AuditQueryInput, 'organizationId'>;
@@ -49,6 +50,8 @@ function compactDigest(value: string) {
 }
 
 export function AuditAccessSection({ privilegedReady, onVerifyNow }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { locale } = useI18n();
   const copy = auditCopy(locale);
@@ -401,7 +404,7 @@ export function AuditAccessSection({ privilegedReady, onVerifyNow }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: { gap: spacing.md },
   headingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
   headingIcon: {

@@ -38,7 +38,8 @@ import { createClientId } from '@/lib/client-id';
 import { getSupabaseClient } from '@/lib/supabase';
 import { useAuth } from '@/state/auth';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 type UpdatePriority = 'normal' | 'important' | 'emergency';
@@ -72,6 +73,8 @@ function toggledValue<Value extends string>(values: Value[], value: Value) {
 }
 
 function UpdatesWorkplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -1277,6 +1280,8 @@ function SummaryCard({
   value: string;
   tone: 'danger' | 'success' | 'neutral';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const palette = {
     danger: { background: colors.redSoft, foreground: colors.red },
     success: { background: colors.mintSoft, foreground: colors.mintDark },
@@ -1306,6 +1311,8 @@ function UpdateCard({
   onOpen: () => void;
   desktop: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const copy = updateCopy(locale);
   const critical = update.severity === 'critical';
@@ -1424,6 +1431,8 @@ function PublisherControlCenter({
   onRefresh: () => void;
   updates: ManagedUpdate[];
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.publisherSection}>
       <View style={styles.publisherHeader}>
@@ -1613,6 +1622,7 @@ function PublisherMetric({
   tone?: 'neutral' | 'danger' | 'warning';
   value: number;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={[
       styles.publisherMetric,
@@ -1632,6 +1642,7 @@ function NonResponderRow({
   copy: ReturnType<typeof updateCopy>;
   person: UpdateNonAcknowledger;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const reachabilityLabel = {
     delivered: copy.deliveredReachability,
     pending: copy.pendingReachability,
@@ -1672,7 +1683,7 @@ function NonResponderRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,

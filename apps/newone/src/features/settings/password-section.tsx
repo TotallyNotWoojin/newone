@@ -8,7 +8,8 @@ import { PrimaryButton } from '@/components/ui/primitives';
 import { errorMessageKey } from '@/i18n/errors';
 import { useI18n } from '@/i18n/provider';
 import { useAuth } from '@/state/auth';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * One settings row, styled like the list rows around it: set a password when
@@ -16,6 +17,8 @@ import { colors, radii, spacing } from '@/theme/tokens';
  * there is no "forgot" path here.
  */
 export function PasswordSection() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const auth = useAuth();
   const { t } = useI18n();
   const [visible, setVisible] = useState(false);
@@ -97,7 +100,7 @@ export function PasswordSection() {
 }
 
 // Mirrors the settings screen's group/row metrics so this reads as one list.
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   group: { marginTop: spacing.md },
   card: {
     marginHorizontal: spacing.sm,

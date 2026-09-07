@@ -21,7 +21,8 @@ import { AuthProvider, useAuth } from '@/state/auth';
 import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 import { I18nProvider } from '@/i18n/provider';
 import { DevicePreferencesProvider } from '@/state/device-preferences';
-import { colors, spacing, type } from '@/theme/tokens';
+import { spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 // Metro selects the native notification bridge or the web no-op.
 // eslint-disable-next-line import/no-unresolved
 import { useNotificationNavigation } from '@/device/notification-navigation';
@@ -31,6 +32,7 @@ import { consumeWebDeepLink } from '@/lib/web-deep-link';
 installCrashGuard();
 
 export default function RootLayout() {
+  const styles = useThemedStyles(buildStyles);
   const [privacyShielded, setPrivacyShielded] = useState(
     Platform.OS !== 'web' && AppState.currentState !== 'active',
   );
@@ -168,6 +170,8 @@ function NotificationAwareWorkspace({ children }: PropsWithChildren) {
 }
 
 function AuthLoadingScreen({ label }: { label: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.loadingScreen}>
       <View style={styles.loadingMark}>
@@ -179,7 +183,7 @@ function AuthLoadingScreen({ label }: { label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   privacyShield: {
     position: 'absolute',
     inset: 0,
