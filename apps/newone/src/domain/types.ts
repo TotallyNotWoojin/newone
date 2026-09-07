@@ -313,6 +313,8 @@ export interface Message {
     messageId: string;
   };
   replyTo?: {
+    /** The message being answered, so tapping the quote can go to it. */
+    messageId?: string;
     senderName: string;
     preview: string;
   };

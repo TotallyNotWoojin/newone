@@ -1795,6 +1795,68 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
   });
 
+  test('tapping a reply quote goes to the message it answers', async () => {
+    const scrollToIndex = jest
+      .spyOn(FlatList.prototype, 'scrollToIndex')
+      .mockImplementation(() => undefined);
+    const quoted = incomingMessage({
+      id: 'quoted-source', serverId: 'quoted-source', originalText: 'Please confirm the gate.',
+      attachment: undefined,
+    });
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: {
+        messageId: 'quoted-source',
+        senderName: colleague.displayName,
+        preview: 'Please confirm the gate.',
+      },
+    });
+    await render(
+      <ConversationPane conversation={conversation()} messages={[quoted, answer]} onSend={noopSend} />,
+    );
+
+    const quote = screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`);
+    expect(quote.props.accessibilityHint).toBe('chat.goToQuoted');
+    await fireEvent.press(quote);
+
+    // The message is already in memory, so nothing older has to be fetched.
+    expect(mockWorkspace.ensureMessageLoaded).not.toHaveBeenCalled();
+    await waitFor(() => expect(scrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({ animated: true, viewPosition: 0.5 }),
+    ));
+  });
+
+  test('a quote whose message has scrolled out of memory asks for the older page', async () => {
+    mockWorkspace.ensureMessageLoaded = jest.fn(async () => true);
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: {
+        messageId: 'far-older-message',
+        senderName: colleague.displayName,
+        preview: 'Please confirm the gate.',
+      },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[answer]} onSend={noopSend} />);
+
+    await fireEvent.press(screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`));
+    await waitFor(() => expect(mockWorkspace.ensureMessageLoaded).toHaveBeenCalledWith(
+      'conversation-main', 'far-older-message',
+    ));
+  });
+
+  test('a quote from before reply ids were stored is not a control', async () => {
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: { senderName: colleague.displayName, preview: 'Please confirm the gate.' },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[answer]} onSend={noopSend} />);
+
+    const quote = screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`);
+    expect(quote.props.accessibilityHint).toBeUndefined();
+    await fireEvent.press(quote);
+    expect(mockWorkspace.ensureMessageLoaded).not.toHaveBeenCalled();
+  });
+
   test('fails closed for queued, deleted, attachment, and translation-disabled message actions', async () => {
     const queued = translatedMessage({
       id: 'queued-client-message', serverId: undefined, clientMessageId: 'queued-client-message',

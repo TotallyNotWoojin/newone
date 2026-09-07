@@ -256,7 +256,7 @@ export interface SendMessageInput {
   kind?: 'text' | 'attachment';
   languageCode: string;
   replyToMessageId?: string;
-  replyPreview?: { senderName: string; preview: string };
+  replyPreview?: { messageId?: string; senderName: string; preview: string };
   mentionUserIds?: string[];
   idempotencyKey: string;
 }

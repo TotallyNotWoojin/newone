@@ -121,6 +121,8 @@ export function ConversationPane({
   const [attachmentCaption, setAttachmentCaption] = useState('');
   const [attachmentImageMode, setAttachmentImageMode] = useState<'optimized' | 'original'>('optimized');
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The timeline is an inverted list: offset 0 is the newest message, so the
   // thread opens at the bottom and stays there with no scroll-to-end logic.
   const nearBottomRef = useRef(true);
@@ -301,12 +303,36 @@ export function ConversationPane({
     setSelectedMessage(null);
     setReplyingTo(message);
   }, []);
+  // Tapping a quote goes to the message it quotes, loading older pages if that
+  // message has scrolled out of what is in memory, and marks it for a moment so
+  // the eye can find it.
+  // Read through a ref: scrolling depends on the rows in memory, and the row
+  // renderer below must keep its identity across every arrival.
+  const scrollToSourceRef = useRef(scrollToSourceMessage);
+  useEffect(() => {
+    scrollToSourceRef.current = scrollToSourceMessage;
+  }, [scrollToSourceMessage]);
+  useEffect(() => () => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+  }, []);
+  const jumpToQuoted = useCallback((messageId: string) => {
+    setSelectedMessage(null);
+    void scrollToSourceRef.current(messageId).then((found) => {
+      if (!found) return;
+      setHighlightedMessageId(messageId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setHighlightedMessageId(null), 1600);
+    });
+  }, []);
   const translatedOnly = preferences.translatedOnly;
   const unreadDividerLabel = t('chat.unreadMessages');
   const renderRow = useCallback(({ item }: { item: TimelineRow }) => {
     const { message } = item;
     return (
-      <View style={(message.serverId ?? message.id) === focusMessageId ? styles.searchTarget : undefined}>
+      <View style={(message.serverId ?? message.id) === focusMessageId
+        || (message.serverId ?? message.id) === highlightedMessageId
+        ? styles.searchTarget
+        : undefined}>
         {item.showUnreadDivider ? (
           <View style={styles.unreadDivider}>
             <View style={styles.unreadDividerLine} />
@@ -325,6 +351,7 @@ export function ConversationPane({
           <MessageBubble
             message={message}
             onDownload={downloadMessageAttachment}
+            onJumpToQuoted={jumpToQuoted}
             onOpenActions={openActions}
             onReply={replyToMessage}
             showSender={item.showSender}
@@ -336,6 +363,8 @@ export function ConversationPane({
   }, [
     downloadMessageAttachment,
     focusMessageId,
+    highlightedMessageId,
+    jumpToQuoted,
     openActions,
     replyToMessage,
     translatedOnly,
@@ -1000,6 +1029,7 @@ const MessageBubble = memo(function MessageBubble({
   translatedOnly,
   onOpenActions,
   onReply,
+  onJumpToQuoted,
   onDownload,
 }: {
   message: Message;
@@ -1007,6 +1037,7 @@ const MessageBubble = memo(function MessageBubble({
   translatedOnly: boolean;
   onOpenActions: (message: Message) => void;
   onReply: (message: Message) => void;
+  onJumpToQuoted: (messageId: string) => void;
   onDownload: (message: Message) => void;
 }) {
   const workspace = useWorkspace();
@@ -1239,10 +1270,18 @@ const MessageBubble = memo(function MessageBubble({
           ) : null}
 
           {message.replyTo ? (
-            <View style={styles.reply}>
+            <Pressable
+              accessibilityHint={message.replyTo.messageId ? t('chat.goToQuoted') : undefined}
+              accessibilityLabel={`${message.replyTo.senderName}: ${message.replyTo.preview}`}
+              accessibilityRole={message.replyTo.messageId ? 'button' : undefined}
+              disabled={!message.replyTo.messageId}
+              onPress={() => {
+                if (message.replyTo?.messageId) onJumpToQuoted(message.replyTo.messageId);
+              }}
+              style={({ pressed }) => [styles.reply, pressed && styles.pressed]}>
               <Text style={styles.replySender}>{message.replyTo.senderName}</Text>
               <Text numberOfLines={1} style={styles.replyPreview}>{message.replyTo.preview}</Text>
-            </View>
+            </Pressable>
           ) : null}
 
           {mentionedNames.length ? (

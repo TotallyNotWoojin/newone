@@ -2873,7 +2873,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         ...(selectedMentionUserIds.length ? { mentionUserIds: selectedMentionUserIds } : {}),
         ...(replyTo?.serverId ? {
           replyToMessageId: replyTo.serverId,
-          replyPreview: { senderName: replyTo.senderName, preview: replyTo.originalText.slice(0, 180) },
+          replyPreview: {
+            messageId: replyTo.serverId,
+            senderName: replyTo.senderName,
+            preview: replyTo.originalText.slice(0, 180),
+          },
         } : {}),
       };
       const command: OutboxCommand<SendMessageInput> = {
