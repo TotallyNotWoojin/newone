@@ -63,6 +63,12 @@ Timing (owner, Sep 6 2026 12:05): the wipe runs RIGHT BEFORE the v3.2 release (s
 32. **A plus button on Chats, not a compose sheet** (owner, Sep 6 2026 16:10; the compose-field idea was rejected as too complicated). A "+" on the Chats header opens a short, plainly labelled menu: "Add a friend" (search by name or @handle, send a request) and "New group". Group creation itself becomes more visible and simpler: the entry is named, not an icon to decode, and the form is one screen (name, then pick people, then create). Show the owner a mockup of the menu and the group screen before building.
 33. **Setting: see what your own messages become.** A toggle beside the existing chat settings that shows your own sent bubbles the way recipients read them: your original plus its translation, in the same slim two-line form used for incoming messages. Per-device preference like the others.
 
+35. **Group creation, rebuilt** (owner, Sep 6 2026 16:20). Order on one screen: group name, a small description box, a group photo control that does not dominate the screen, then the people. Name, description and photo are all marked optional. Everything else (who can post, whether new members see earlier messages) moves into an "Advanced options" section, collapsed by default.
+36. **A group needs at least three people in total** (the creator plus two). Say so plainly on the form, and enforce it on the server.
+37. **No duplicate groups.** If a group with exactly the same members already exists, whatever it is called, say so and offer a small "Open it" button instead of creating another. Needs a members-set signature on the server (order-independent), checked at creation.
+38. **Search finds groups too**, by group name or by the people in them ("mom dad" finds the group with both). Think of the phone's own search: one box, mixed results, grouped by kind.
+39. **Adding people who are not friends**: keep it possible in the group picker, but separate the two intents visibly — "your contacts" first, then "search everyone" underneath — so adding a friend and finding a stranger never feel like the same action.
+
 ## Dropped
 
 34. ~~Bridging WhatsApp / iMessage / SMS into Newone~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).
