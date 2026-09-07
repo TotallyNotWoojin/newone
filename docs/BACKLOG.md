@@ -83,6 +83,11 @@ Ship together. The database is wiped right before release, as it was for v3.2.
 56. **Link preview thumbnails are fetched but not drawn** (stream I, Sep 6 2026). Title and site name ship; the image is parsed and stored but never rendered, because drawing it would make the phone fetch a third-party URL. Finish it with either a gateway image proxy or a copy into the attachments bucket at unfurl time.
 57. **Branch coverage is below its gate** (88.91% against 91%), and was already failing at 89.00% before v3.3. Most of the gap is in Pressable style callbacks the test renderer cannot exercise. Either test them properly or move the gate to a number that means something.
 
+58. **The unread-count badge is white on mint, 2.2:1** (stream K, Sep 7 2026). Pre-existing in the light palette and unchanged by dark mode, but it is the only text/background pairing in the app that fails WCAG AA, and it is recorded as an explicit exemption in `src/theme/contrast.ts` so the contrast test does not lie about it. Two one-line fixes exist — draw the count in `onAccent` (6.5:1) or fill the badge with `accentStrong` and keep it white (5.5:1) — but either visibly changes the light app, so it needs the owner's eye rather than a quiet edit.
+
+59. **The dark splash needs a native rebuild** (stream K, Sep 7 2026). `app.json` now carries `expo-splash-screen`'s `dark` variant and a root `backgroundColor`; both are baked into the native project, so they only appear after the next simulator/EAS build, not over the JavaScript bundle.
+
+
 40. **Testing:** unit tests for the theme, the search chips and the duplicate rule; Deno and hosted smokes for the members signature and the group minimum; device flows for the "+" menu, group creation, chip search, the own-translation toggle, the pinned views and (if built) the media grid; then a full device pass. The chat area's long-standing "pinned view unreachable" note becomes a real step. Dark mode's look is reviewed by the owner, not asserted.
 
 ## Dropped
