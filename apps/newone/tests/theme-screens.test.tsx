@@ -22,7 +22,7 @@ jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
 
 jest.mock('@/state/device-preferences', () => ({
   useDevicePreferences: () => ({
-    preferences: { translatedOnly: false, enterSends: true, notificationsPromptedAt: null, theme: 'system' },
+    preferences: { translatedOnly: false, showOwnTranslations: false, enterSends: true, notificationsPromptedAt: null, theme: 'system' },
     ready: true,
     setPreference: () => undefined,
   }),

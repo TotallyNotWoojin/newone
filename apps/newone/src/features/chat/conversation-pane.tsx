@@ -336,6 +336,7 @@ export function ConversationPane({
     });
   }, []);
   const translatedOnly = preferences.translatedOnly;
+  const showOwnTranslations = preferences.showOwnTranslations;
   const unreadDividerLabel = t('chat.unreadMessages');
   const renderRow = useCallback(({ item }: { item: TimelineRow }) => {
     const { message } = item;
@@ -365,6 +366,7 @@ export function ConversationPane({
             onJumpToQuoted={jumpToQuoted}
             onOpenActions={openActions}
             onReply={replyToMessage}
+            showOwnTranslations={showOwnTranslations}
             showSender={item.showSender}
             translatedOnly={translatedOnly}
           />
@@ -378,6 +380,7 @@ export function ConversationPane({
     jumpToQuoted,
     openActions,
     replyToMessage,
+    showOwnTranslations,
     // The sheet is a new object when the palette changes, so the rows repaint.
     styles,
     translatedOnly,
@@ -1075,6 +1078,7 @@ const MessageBubble = memo(function MessageBubble({
   message,
   showSender,
   translatedOnly,
+  showOwnTranslations,
   onOpenActions,
   onReply,
   onJumpToQuoted,
@@ -1083,6 +1087,7 @@ const MessageBubble = memo(function MessageBubble({
   message: Message;
   showSender: boolean;
   translatedOnly: boolean;
+  showOwnTranslations: boolean;
   onOpenActions: (message: Message) => void;
   onReply: (message: Message) => void;
   onJumpToQuoted: (messageId: string) => void;
@@ -1198,7 +1203,22 @@ const MessageBubble = memo(function MessageBubble({
   // A photo without a caption is just the photo; its time rides on the image.
   const mediaOnly = imageAttachment && !caption;
   const maxMedia = mediaMaxWidth(windowWidth, !message.isOwn);
-  const showTranslationOnly = translatedOnly && hasTranslation;
+  // Your own message, shown the way the other side reads it. Only a finished
+  // translation appears: a queued one would shove a line into a bubble you
+  // are still looking at, and there is nothing to say about one that never
+  // existed because you both read the same language.
+  const ownTranslation = showOwnTranslations && message.isOwn && translationEnabled && !message.deleted
+    ? message.outgoingTranslation
+    : undefined;
+  const ownTranslatedText = ownTranslation?.status === 'completed'
+    ? (ownTranslation.correction?.status === 'approved'
+      ? ownTranslation.correction.correctedText
+      : ownTranslation.translatedText) ?? undefined
+    : undefined;
+  // Both lines are already on screen for your own message, so the collapsed
+  // form and its "Show original" tap would only contradict the setting.
+  const showTranslationOnly = translatedOnly && hasTranslation
+    && !(showOwnTranslations && message.isOwn);
   const tickName = message.deliveryState === 'pending'
     ? 'time-outline'
     : message.deliveryState === 'failed'
@@ -1390,6 +1410,10 @@ const MessageBubble = memo(function MessageBubble({
               {hasTranslation ? (
                 <View style={styles.translationBlock}>
                   <Text style={styles.messageText}>{message.translatedText}</Text>
+                </View>
+              ) : ownTranslatedText ? (
+                <View style={styles.translationBlock}>
+                  <Text style={styles.messageText}>{ownTranslatedText}</Text>
                 </View>
               ) : caption ? translationLine : null}
             </>

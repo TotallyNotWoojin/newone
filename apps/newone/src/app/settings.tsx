@@ -583,6 +583,14 @@ export default function SettingsScreen() {
             value={localPreferences.translatedOnly}
           />
           <SwitchRow
+            hint={t('settings.ownTranslationsHint')}
+            icon="repeat-outline"
+            label={t('settings.ownTranslations')}
+            onValueChange={(value) => setLocalPreference('showOwnTranslations', value)}
+            testID="setting-own-translations"
+            value={localPreferences.showOwnTranslations}
+          />
+          <SwitchRow
             icon="return-down-back-outline"
             label={t('settings.enterSends')}
             onValueChange={(value) => setLocalPreference('enterSends', value)}
