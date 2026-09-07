@@ -142,6 +142,8 @@ export type RouteKind =
   | 'saved_contact.remove'
   | 'member.block'
   | 'member.unblock'
+  | 'person.mute'
+  | 'person.unmute'
   | 'update.publish'
   | 'update.preview'
   | 'update.manage.list'
@@ -660,6 +662,18 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     method: 'DELETE',
     kind: 'member.unblock',
     template: '/v2/people/:membershipId/block',
+    status: 200,
+  },
+  {
+    method: 'PUT',
+    kind: 'person.mute',
+    template: '/v2/people/:membershipId/mute',
+    status: 200,
+  },
+  {
+    method: 'DELETE',
+    kind: 'person.unmute',
+    template: '/v2/people/:membershipId/mute',
     status: 200,
   },
   {
@@ -2633,7 +2647,9 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
     }
     case 'saved_contact.remove':
     case 'member.block':
-    case 'member.unblock': {
+    case 'member.unblock':
+    case 'person.mute':
+    case 'person.unmute': {
       onlyKeys(body, ['organizationId']);
       return {
         organizationId: organization(body),
@@ -4235,6 +4251,21 @@ function publicConversationMemberCandidates(value: unknown, requestedLimit: numb
   }
 }
 
+/**
+ * The service found a group with exactly this member set instead of creating
+ * another one. Its id is the whole answer; the app offers to open it.
+ */
+function publicGroupAlreadyExists(value: unknown): JsonObject | null {
+  try {
+    const row = asObject(value);
+    if (row.alreadyExists !== true) return null;
+    onlyKeys(row, ['alreadyExists', 'conversationId']);
+    return { alreadyExists: true, conversationId: uuid(row.conversationId) };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
 function publicGroupCreationReceipt(value: unknown): JsonObject {
   try {
     const row = asObject(value);
@@ -4988,6 +5019,10 @@ export async function executeCommand(
           p_incident_classification: values.incidentClassification,
         },
       );
+      const existing = publicGroupAlreadyExists(result);
+      // Nothing was created, so this is not a 201: the app is being sent to
+      // the group it already has.
+      if (existing) return { status: 200, body: existing };
       return {
         status: 201,
         body: publicGroupCreationReceipt(result),
@@ -6267,6 +6302,24 @@ export async function executeCommand(
           {
             p_target_user_id: values.targetUserId,
             p_blocked: route.kind === 'member.block',
+          },
+        ),
+      };
+    // Muting a person is a personal notification preference: nothing is
+    // hidden, so it is its own command rather than a flavour of blocking.
+    case 'person.mute':
+    case 'person.unmute':
+      return {
+        status: 200,
+        body: await businessRpc(
+          actor,
+          org,
+          idempotencyKey,
+          requestDigest,
+          'bff_set_person_mute',
+          {
+            p_target_user_id: values.targetUserId,
+            p_muted: route.kind === 'person.mute',
           },
         ),
       };

@@ -12,9 +12,11 @@ const api = (actor, method, path, label, body) => gatewayRequest('newone-api', m
 function expectStatus(r, status, label) { if (r.status !== status) fail(`${label} returned ${r.status} (expected ${status})`, r.payload); return data(r); }
 const ana = await signupUser(keys, { runId, label: 'ana', language: 'en' });
 const ben = await signupUser(keys, { runId, label: 'ben', language: 'en' });
+// A group is three people or more (backlog 36).
+const cara = await signupUser(keys, { runId, label: 'cara', language: 'en' });
 expectStatus(await api(ana, 'POST', '/v2/contacts/message-requests', 'req', { targetUserId: ben.userId, body: 'Hi Ben, photo time.' }), 201, 'request');
 expectStatus(await api(ben, 'POST', `/v2/contacts/connections/${ana.userId}/respond`, 'acc', { decision: 'accepted' }), 200, 'accept');
-const group = expectStatus(await api(ana, 'POST', '/v2/conversations/group', 'grp', { name: `Photo smoke ${runId}`, kind: 'group', memberAssignments: [{ membershipId: ben.userId, role: 'member' }] }), 201, 'group');
+const group = expectStatus(await api(ana, 'POST', '/v2/conversations/group', 'grp', { name: `Photo smoke ${runId}`, kind: 'group', memberAssignments: [{ membershipId: ben.userId, role: 'member' }, { membershipId: cara.userId, role: 'member' }] }), 201, 'group');
 const conversationId = group.conversationId; console.log('ok  group', conversationId);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const sha256Hex = createHash('sha256').update(png).digest('hex');

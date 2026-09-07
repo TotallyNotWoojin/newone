@@ -1499,7 +1499,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
     await fireEvent.press(screen.getByLabelText('chat.removeFavorite'));
     await fireEvent.press(screen.getByLabelText('Remove timed mute'));
-    expect(screen.getByText(/You cannot leave this company-managed audience yourself/)).toBeTruthy();
+    // v3.3: the shared line every chat can see says nothing about a company;
+    // the workplace reason for this particular group still does.
+    expect(screen.getByText(/Leaving isn’t available here/)).toBeTruthy();
+    expect(screen.getByText(/A dynamic company policy manages this group/)).toBeTruthy();
     expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(muted.id, {
       notificationLevel: 'mentions', mutedUntil: null,
     });

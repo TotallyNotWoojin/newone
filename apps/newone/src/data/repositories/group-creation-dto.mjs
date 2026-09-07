@@ -115,6 +115,25 @@ export function parseGroupCreationCandidates(value) {
   return { candidates, limit: root.limit };
 }
 
+/**
+ * The service answered "you already have this group" instead of creating one.
+ * Recognised by shape so the caller can tell the two outcomes apart.
+ */
+export function groupAlreadyExists(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+    && value.alreadyExists === true;
+}
+
+export function parseGroupAlreadyExistsReceipt(value) {
+  const row = object(value, 'existing group receipt');
+  exactKeys(row, ['alreadyExists', 'conversationId'], 'existing group receipt');
+  if (row.alreadyExists !== true) throw new TypeError('Invalid existing group receipt.');
+  return {
+    alreadyExists: true,
+    conversationId: identifier(row.conversationId, 'existing group identity'),
+  };
+}
+
 export function parseGroupCreationReceipt(value) {
   const row = object(value, 'group creation receipt');
   exactKeys(row, [

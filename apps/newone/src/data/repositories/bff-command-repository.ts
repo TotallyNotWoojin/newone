@@ -33,7 +33,9 @@ import {
   parseDeviceNotificationPreferences,
 } from '@/data/repositories/device-notification-preferences-dto.mjs';
 import {
+  groupAlreadyExists,
   parseConversationMemberRoleReceipt,
+  parseGroupAlreadyExistsReceipt,
   parseGroupCreationCandidates,
   parseGroupCreationReceipt,
 } from '@/data/repositories/group-creation-dto.mjs';
@@ -1154,7 +1156,12 @@ export class BffCommandRepository implements CommandRepository {
       },
     });
     try {
-      return parseGroupCreationReceipt(dataValue(payload));
+      const data = dataValue(payload);
+      // Two outcomes: a group was created, or one with exactly these people
+      // already exists and its id comes back instead.
+      return groupAlreadyExists(data)
+        ? parseGroupAlreadyExistsReceipt(data)
+        : parseGroupCreationReceipt(data);
     } catch {
       throw new RepositoryError(
         'The service returned an invalid group creation receipt.',
@@ -3124,6 +3131,14 @@ export class BffCommandRepository implements CommandRepository {
       organizationId: input.organizationId,
       idempotencyKey: input.idempotencyKey,
       method: input.blocked ? 'PUT' : 'DELETE',
+    });
+  }
+
+  async setPersonMuted(input: Parameters<CommandRepository['setPersonMuted']>[0]) {
+    await this.request(`/v2/people/${encodeURIComponent(input.membershipId)}/mute`, {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      method: input.muted ? 'PUT' : 'DELETE',
     });
   }
 

@@ -35,6 +35,12 @@ export interface GroupCreationReceipt {
   isReadOnly: false;
 }
 
+/** No group was created: this one already holds exactly those people. */
+export interface GroupAlreadyExistsReceipt {
+  alreadyExists: true;
+  conversationId: string;
+}
+
 export interface ConversationMemberRoleReceipt {
   conversationId: string;
   userId: string;
@@ -44,4 +50,6 @@ export interface ConversationMemberRoleReceipt {
 
 export function parseGroupCreationCandidates(value: unknown): GroupCreationCandidatesReceipt;
 export function parseGroupCreationReceipt(value: unknown): GroupCreationReceipt;
+export function groupAlreadyExists(value: unknown): boolean;
+export function parseGroupAlreadyExistsReceipt(value: unknown): GroupAlreadyExistsReceipt;
 export function parseConversationMemberRoleReceipt(value: unknown): ConversationMemberRoleReceipt;

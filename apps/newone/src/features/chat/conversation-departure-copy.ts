@@ -11,7 +11,7 @@ const COPY = {
     replacement: 'New owner',
     confirmation: 'I understand',
     confirm: 'Leave group',
-    unavailable: 'You cannot leave this company-managed audience yourself.',
+    unavailable: 'Leaving isn’t available here.',
     noReplacement: 'Add someone else to the group before leaving.',
     restrictions: {
       direct_mandatory: 'You can’t leave a one-to-one chat.',
@@ -31,7 +31,7 @@ const COPY = {
     replacement: '새 소유자',
     confirmation: '이해했습니다',
     confirm: '그룹 나가기',
-    unavailable: '회사에서 관리하는 이 대상에서는 직접 나갈 수 없습니다.',
+    unavailable: '여기서는 나갈 수 없습니다.',
     noReplacement: '나가기 전에 다른 사람을 그룹에 추가하세요.',
     restrictions: {
       direct_mandatory: '1:1 채팅에서는 나갈 수 없습니다.',
@@ -51,7 +51,7 @@ const COPY = {
     replacement: 'Nuevo propietario',
     confirmation: 'Entendido',
     confirm: 'Salir del grupo',
-    unavailable: 'No puedes salir por tu cuenta de esta audiencia administrada por la empresa.',
+    unavailable: 'Aquí no puedes salir.',
     noReplacement: 'Añade a alguien más al grupo antes de salir.',
     restrictions: {
       direct_mandatory: 'No puedes salir de un chat individual.',
@@ -73,4 +73,17 @@ export function conversationDepartureCopy(locale: Locale) {
 export function conversationDepartureRestrictionCopy(locale: Locale, restriction: Restriction) {
   const copy = conversationDepartureCopy(locale);
   return restriction ? copy.restrictions[restriction] : copy.unavailable;
+}
+
+/**
+ * A one-to-one chat has nothing to leave, so it shows no departure section at
+ * all — not even the line explaining why. Groups keep the section whenever the
+ * service sent departure options for them.
+ */
+export function conversationDepartureSectionVisible(
+  conversation: Pick<Conversation, 'kind' | 'managementOnly' | 'departure'>,
+): boolean {
+  if (conversation.kind === 'direct') return false;
+  if (conversation.managementOnly) return false;
+  return Boolean(conversation.departure);
 }

@@ -51,6 +51,7 @@ import type {
 } from '@/data/repositories/device-notification-preferences-dto.mjs';
 import type {
   ConversationMemberRoleReceipt,
+  GroupAlreadyExistsReceipt,
   GroupCreationCandidatesReceipt,
   GroupCreationReceipt,
   InitialConversationRole,
@@ -507,7 +508,9 @@ export interface CommandRepository {
     cursor?: string | null;
     limit?: number;
   }): Promise<ConversationMemberCandidatePage>;
-  createGroupConversation(input: CreateGroupInput): Promise<GroupCreationReceipt>;
+  createGroupConversation(
+    input: CreateGroupInput,
+  ): Promise<GroupCreationReceipt | GroupAlreadyExistsReceipt>;
   updateConversation(input: {
     organizationId: string;
     conversationId: string;
@@ -1100,6 +1103,13 @@ export interface CommandRepository {
     organizationId: string;
     membershipId: string;
     blocked: boolean;
+    idempotencyKey: string;
+  }): Promise<void>;
+  /** Personal notification silence for one person; nothing is hidden. */
+  setPersonMuted(input: {
+    organizationId: string;
+    membershipId: string;
+    muted: boolean;
     idempotencyKey: string;
   }): Promise<void>;
   queryRoleAssignments(input: {
