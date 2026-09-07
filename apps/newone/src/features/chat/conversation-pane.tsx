@@ -55,6 +55,7 @@ import {
   VideoMessageAttachment,
 } from '@/features/chat/media-attachment';
 import { notificationCopy } from '@/features/chat/notification-copy';
+import { ReactionRow } from '@/features/chat/reaction-row';
 import { SummarySheet } from '@/features/chat/summary-sheet';
 import {
   appendedMessageCount,
@@ -2137,18 +2138,7 @@ function MessageActionsModal({
       {message?.serverId && !message.deleted ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.react')}</Text>
-          <View style={styles.modalRow}>
-            {['👍', '❤️', '✅', '👀'].map((emoji) => (
-              <Pressable
-                accessibilityLabel={`${t('chat.react')} ${emoji}`}
-                accessibilityRole="button"
-                key={emoji}
-                onPress={() => onReact(emoji)}
-                style={({ pressed }) => [styles.emojiButton, pressed && styles.pressed]}>
-                <Text style={styles.emojiText}>{emoji}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <ReactionRow onReact={onReact} />
         </View>
       ) : null}
       {message?.isOwn && message.serverId && !message.deleted ? (

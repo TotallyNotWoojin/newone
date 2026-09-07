@@ -5,6 +5,7 @@ import {
   signConversationMemberCandidateCursor,
   verifyConversationMemberCandidateCursor,
 } from '../_shared/cursors.ts';
+import { isSingleEmoji } from '../_shared/emoji.ts';
 import { ApiError } from '../_shared/errors.ts';
 import { expoPushToken } from '../_shared/expo-push.ts';
 import { asRpcClient, invokeRpc } from '../_shared/rpc.ts';
@@ -2039,12 +2040,16 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
     }
     case 'message.react': {
       onlyKeys(body, ['organizationId', 'conversationId', 'emoji', 'active']);
+      // The "+" in the app hands over the phone's emoji keyboard, so anything
+      // can arrive here. Store any emoji; store nothing else.
+      const emoji = requiredString(body, 'emoji', { min: 1, max: 32, trim: false });
+      if (!isSingleEmoji(emoji)) throw new ApiError(400, 'bad_request');
       return {
         organizationId: organization(body),
         values: {
           conversationId: requiredUuid(body, 'conversationId'),
           messageId: pathMessageId(route),
-          emoji: requiredString(body, 'emoji', { min: 1, max: 32, trim: false }),
+          emoji,
           active: 'active' in body ? bool(body.active) : true,
         },
       };
