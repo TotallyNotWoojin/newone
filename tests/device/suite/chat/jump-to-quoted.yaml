@@ -1,9 +1,14 @@
 appId: com.totallynotwoojin.newone
 ---
 # v3.3 (backlog 47d): the quote on a reply is a way back. Tapping it scrolls to
-# the message the reply answers and centres it. The quote reads
-# "<sender>: <preview of the original>", and QUOTED is a word from that
-# original; ORIGINAL is text only the original bubble carries.
+# the message the reply answers and centres it (scrollToIndex, viewPosition 0.5).
+# The quote reads "<sender>: <preview of the original>" — the preview is the
+# first 240 characters of the body, so a short message is quoted whole. QUOTED
+# is a distinctive part of the original; ORIGINAL is the original's own text.
+#
+# Callers should point this at a message far above the reply: with the original
+# already on screen, the tap proves the quote is actionable but not that the
+# list moved. The before/after screenshots show whether it did.
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"

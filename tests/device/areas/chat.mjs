@@ -160,22 +160,25 @@ export async function run(ctx) {
 
   // v3.3 (backlog 46): the reply gesture.
   const swipeReply = `Swiped reply ${tag}`;
+  // The target is the oldest message in the thread, so the reply's quote is a
+  // real jump rather than a tap on something already on screen.
   await ctx.step({
-    id: 'chat-13b-swipe-reply', title: 'A swipes right on B\'s reply to answer it', device: devA,
-    flow: 'chat/swipe-reply.yaml', env: { TARGET: r1, REPLY: swipeReply },
-    expected: 'The drag opens "Replying to …" without the actions sheet; the sent bubble quotes B; server reply_to_message_id points at B\'s reply',
+    id: 'chat-13b-swipe-reply', title: 'A swipes right on the first message of the thread to answer it', device: devA,
+    flow: 'chat/swipe-reply.yaml', env: { TARGET: intro, REPLY: swipeReply },
+    expected: 'The drag opens "Replying to …" without the actions sheet; the sent bubble quotes the first message; server reply_to_message_id points at it',
     screen: 'conversation',
     serverTruth: async () => {
-      const original = await server.messageByBody(convId, r1);
+      const original = await server.messageByBody(convId, intro);
       const w = await server.waitFor(() => server.messageByBody(convId, swipeReply), (r) => Boolean(r), { timeoutMs: 20_000 });
       return { ok: w.ok && w.row?.reply_to === original?.id, detail: { reply: w.row?.id, reply_to: w.row?.reply_to, original: original?.id } };
     },
   });
-  // v3.3 (backlog 47d): tapping the quote goes to the message it answers.
+  // v3.3 (backlog 47d): tapping the quote goes to the message it answers — here
+  // the top of the thread, a screenful or more above the reply.
   await ctx.step({
-    id: 'chat-13c-jump-to-quoted', title: 'Tapping the quote on A\'s swiped reply jumps to B\'s original', device: devA,
-    flow: 'chat/jump-to-quoted.yaml', env: { REPLY: swipeReply, SENDER: B.displayName, QUOTED: `Reply from Ben ${tag}`, ORIGINAL: r1 },
-    expected: 'The quote reads "<B>: <the original>"; tapping it centres the original in the thread',
+    id: 'chat-13c-jump-to-quoted', title: 'Tapping the quote on A\'s swiped reply jumps back to the first message', device: devA,
+    flow: 'chat/jump-to-quoted.yaml', env: { REPLY: swipeReply, SENDER: A.displayName, QUOTED: `Ana here ${tag}`, ORIGINAL: intro },
+    expected: 'The quote reads "<A>: <the first message>"; tapping it scrolls the thread to that message and centres it (the before/after screenshots are the evidence that the list moved)',
     screen: 'conversation',
   });
   // v3.3 (backlog 47g): a link grows a card saying what the page calls itself.

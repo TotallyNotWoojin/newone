@@ -2,6 +2,9 @@ appId: com.totallynotwoojin.newone
 ---
 # A plain member opens the controls: no role chips for anyone (including
 # self), no Remove buttons, no "Add people" section ("Add to group" button).
+# v3.3 (backlog 50): the member's own "People in this group" section still
+# offers Message / Add as friend / Mute / Block, but never "Remove from group"
+# — that is for owners and admins.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -17,6 +20,20 @@ appId: com.totallynotwoojin.newone
 - assertNotVisible: "Member · ${SELF}"
 - assertNotVisible: "Remove ${OTHER}"
 - assertNotVisible: "Add to group"
+- scrollUntilVisible:
+    element:
+      text: "People in this group"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Options for ${OTHER}"
+- extendedWaitUntil:
+    visible: "Add as friend"
+    timeout: 15000
+- assertVisible: "Mute"
+- assertVisible: "Block"
+- assertNotVisible: "Remove from group"
+- takeScreenshot: ${SHOT}-member-actions-as-member
+- tapOn: "Options for ${OTHER}"
 # "Report this group privately" was removed with the Sep 2026 chat stream; the
 # sheet ends with Leave this group (members) or Archive conversation (managers).
 - scrollUntilVisible:

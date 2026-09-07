@@ -124,7 +124,7 @@ export async function run(ctx) {
   });
   await ctx.step({
     id: 'groups-14-member-self-role', title: 'Member (B) cannot change roles: no role chips/remove/add controls', device: devB, flow: 'groups/member-self-role-check.yaml', env: { SELF: B.displayName, OTHER: C.displayName },
-    expected: 'Controls sheet for a member shows the People list without role chips, Remove buttons or the Add people section', screen: 'group → Conversation controls',
+    expected: 'Controls sheet for a member shows the People list without role chips, Remove buttons or the Add people section; the member\'s own "People in this group" row offers Message / Add as friend / Mute / Block but never "Remove from group"', screen: 'group → Conversation controls',
     serverTruth: async () => { const rows = await server.members(gid); return { ok: rows.find((r) => r.user_id === B.userId)?.role === 'member', detail: rows }; },
   });
 
