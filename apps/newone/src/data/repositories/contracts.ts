@@ -491,6 +491,14 @@ export interface ConversationMemberCandidatePage {
   nextCursor: string | null;
 }
 
+export interface LinkPreviewMetadata {
+  url: string;
+  title: string | null;
+  siteName: string | null;
+  imageUrl: string | null;
+  status: 'ready' | 'unavailable';
+}
+
 export interface CommandRepository {
   createDirectConversation(input: CreateDirectInput): Promise<{ conversationId: string }>;
   exportAudit(input: Omit<AuditQueryInput, 'cursor' | 'limit'> & {
@@ -875,6 +883,14 @@ export interface CommandRepository {
     active: boolean;
     idempotencyKey: string;
   }): Promise<void>;
+  /**
+   * What a shared page calls itself. The gateway fetches it; the phone never
+   * touches a third-party address of its own accord.
+   */
+  loadLinkPreview(input: {
+    organizationId: string;
+    url: string;
+  }): Promise<LinkPreviewMetadata>;
   setMessagePin(input: {
     organizationId: string;
     conversationId: string;

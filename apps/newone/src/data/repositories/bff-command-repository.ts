@@ -2442,6 +2442,23 @@ export class BffCommandRepository implements CommandRepository {
     });
   }
 
+  async loadLinkPreview(input: Parameters<CommandRepository['loadLinkPreview']>[0]) {
+    const payload = await this.request('/v2/link-previews/query', {
+      organizationId: input.organizationId,
+      body: { url: input.url },
+      maxResponseBytes: 8192,
+    });
+    const data = objectValue(payload);
+    const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
+    return {
+      url: text(data.url) ?? input.url,
+      title: text(data.title),
+      siteName: text(data.siteName),
+      imageUrl: text(data.imageUrl),
+      status: data.status === 'ready' ? 'ready' as const : 'unavailable' as const,
+    };
+  }
+
   async setMessagePin(input: Parameters<CommandRepository['setMessagePin']>[0]) {
     await this.request(`/v2/messages/${encodeURIComponent(input.messageId)}/pin`, {
       organizationId: input.organizationId,

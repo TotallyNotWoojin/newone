@@ -46,6 +46,8 @@ import {
   mentionablePeople,
 } from '@/features/chat/mention-controls.mjs';
 import { shouldSendOnEnter } from '@/features/chat/composer-keys';
+import { firstPreviewUrl } from '@/features/chat/link-preview';
+import { LinkPreviewCard } from '@/features/chat/link-preview-card';
 import { mentionCopy } from '@/features/chat/mention-copy';
 import { messageEditWindowOpen } from '@/features/chat/message-edit-window';
 import {
@@ -1048,6 +1050,12 @@ const MessageBubble = memo(function MessageBubble({
     (conversation) => conversation.id === message.conversationId,
   );
   const group = translationConversation?.kind !== 'direct';
+  // One card per message, under the text, for the first address in it. A
+  // deleted message keeps nothing, and a system line is never a person's words.
+  const previewUrl = useMemo(
+    () => (message.deleted || message.systemEvent ? null : firstPreviewUrl(message.originalText)),
+    [message.deleted, message.originalText, message.systemEvent],
+  );
   const translationEnabled = translationConversation?.translationMode !== 'off';
   const translation = translationEnabled ? message.translation : undefined;
   const visibleTranslationState = translationEnabled ? message.translationState : 'not_requested';
@@ -1337,6 +1345,8 @@ const MessageBubble = memo(function MessageBubble({
               ) : caption ? translationLine : null}
             </>
           )}
+
+          {previewUrl ? <LinkPreviewCard url={previewUrl} /> : null}
 
           {message.deliveryState === 'failed' ? (
             <View style={[styles.quietRow, mediaOnly && styles.mediaTrailer]}>

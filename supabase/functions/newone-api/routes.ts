@@ -6,6 +6,7 @@ import {
   verifyConversationMemberCandidateCursor,
 } from '../_shared/cursors.ts';
 import { isSingleEmoji } from '../_shared/emoji.ts';
+import { fetchLinkPreview, normalizePreviewUrl } from '../_shared/link-preview.ts';
 import { ApiError } from '../_shared/errors.ts';
 import { expoPushToken } from '../_shared/expo-push.ts';
 import { asRpcClient, invokeRpc } from '../_shared/rpc.ts';
@@ -118,6 +119,7 @@ export type RouteKind =
   | 'message.pin'
   | 'message.receipt'
   | 'message.hide_for_me'
+  | 'message.link_preview'
   | 'message.forward'
   | 'message.preservation.place'
   | 'message.preservation.release'
@@ -490,6 +492,13 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     kind: 'message.hide_for_me',
     template: '/v2/messages/:messageId/hide',
     status: 200,
+  },
+  {
+    method: 'POST',
+    kind: 'message.link_preview',
+    template: '/v2/link-previews/query',
+    status: 200,
+    idempotencyRequired: false,
   },
   {
     method: 'POST',
@@ -2253,6 +2262,15 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           messageId: pathMessageId(route),
           state: oneOf(body.state, ['delivered', 'read'] as const),
         },
+      };
+    }
+    case 'message.link_preview': {
+      onlyKeys(body, ['organizationId', 'url']);
+      return {
+        organizationId: organization(body),
+        // Only https, only a public host, no credentials, no fragment: the
+        // address came from a member and is treated accordingly.
+        values: { url: normalizePreviewUrl(body.url) },
       };
     }
     case 'message.hide_for_me': {
@@ -5892,6 +5910,40 @@ export async function executeCommand(
           },
         ),
       };
+    case 'message.link_preview': {
+      const url = values.url as string;
+      const digest = await sha256Hex(url);
+      const client = asRpcClient(actor.adminClient);
+      const args = {
+        p_actor_user_id: actor.user.id,
+        p_organization_id: org,
+        p_session_id: actor.claims.sessionId,
+        p_url_sha256: digest,
+      };
+      const cached = await invokeRpc<Record<string, unknown>>(
+        client,
+        'bff_link_preview_lookup',
+        args,
+      );
+      if (cached.cached === true) return { status: 200, body: toPublicJson(cached) };
+      // A miss: fetch the page once, on this side, and keep what it said. A
+      // page that is slow, gone or not a page at all is simply unavailable —
+      // one bad link in a chat must never fail the reader's request.
+      const preview = await fetchLinkPreview(url);
+      return {
+        status: 200,
+        body: toPublicJson(
+          await invokeRpc(client, 'bff_link_preview_record', {
+            ...args,
+            p_url: preview.url,
+            p_title: preview.title,
+            p_site_name: preview.siteName,
+            p_image_url: preview.imageUrl,
+            p_status: preview.status,
+          }),
+        ),
+      };
+    }
     case 'message.hide_for_me':
       return {
         status: 200,
