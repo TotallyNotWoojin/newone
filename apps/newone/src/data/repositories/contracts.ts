@@ -256,7 +256,7 @@ export interface SendMessageInput {
   kind?: 'text' | 'attachment';
   languageCode: string;
   replyToMessageId?: string;
-  replyPreview?: { senderName: string; preview: string };
+  replyPreview?: { messageId?: string; senderName: string; preview: string };
   mentionUserIds?: string[];
   idempotencyKey: string;
 }
@@ -489,6 +489,14 @@ export interface ConversationMemberCandidate {
 export interface ConversationMemberCandidatePage {
   candidates: ConversationMemberCandidate[];
   nextCursor: string | null;
+}
+
+export interface LinkPreviewMetadata {
+  url: string;
+  title: string | null;
+  siteName: string | null;
+  imageUrl: string | null;
+  status: 'ready' | 'unavailable';
 }
 
 export interface CommandRepository {
@@ -875,6 +883,14 @@ export interface CommandRepository {
     active: boolean;
     idempotencyKey: string;
   }): Promise<void>;
+  /**
+   * What a shared page calls itself. The gateway fetches it; the phone never
+   * touches a third-party address of its own accord.
+   */
+  loadLinkPreview(input: {
+    organizationId: string;
+    url: string;
+  }): Promise<LinkPreviewMetadata>;
   setMessagePin(input: {
     organizationId: string;
     conversationId: string;

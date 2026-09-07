@@ -283,6 +283,8 @@ function translatedMessage(overrides: Record<string, unknown> = {}) {
       method: 'server-detector',
       detectedAt: '2026-08-04T18:00:00.000Z',
     },
+    // Just sent, so editing and unsending are still inside their window.
+    createdAt: new Date().toISOString(),
     sentAt: '12:00',
     dayLabel: 'Today',
     isOwn: true,
@@ -719,7 +721,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     mockWorkspace.deleteMessage = jest.fn(async () => false);
     mockWorkspace.forwardMessage = jest.fn(async () => false);
     mockWorkspace.proposeAction = jest.fn(async () => false);
-    mockWorkspace.hideMessageForMe = jest.fn(async () => false);
 
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
     await fireEvent(screen.getByText(message.originalText), 'longPress');
@@ -729,12 +730,12 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.changeText(screen.getByLabelText('chat.editMessage'), 'Updated canonical message');
     await fireEvent.press(screen.getByLabelText('chat.saveEdit'));
     await fireEvent.press(screen.getByLabelText('chat.deleteEveryone'));
+    await fireEvent.press(screen.getByLabelText('chat.forward'));
     await fireEvent.press(screen.getByLabelText('Maintenance'));
     await fireEvent.press(screen.getByLabelText('chat.forwardConfirm'));
     await fireEvent.changeText(screen.getByLabelText('chat.actionTitle'), 'Verify gate lock');
     await fireEvent.changeText(screen.getByLabelText('chat.actionDetails'), 'Inspect the north gate at shift close.');
     await fireEvent.press(screen.getByLabelText('chat.actionCreate'));
-    await fireEvent.press(screen.getByLabelText('chat.deleteMe'));
 
     await waitFor(() => {
       expect(mockWorkspace.setMessagePinned).toHaveBeenCalledWith(message, false);
@@ -747,7 +748,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         'Verify gate lock',
         'Inspect the north gate at shift close.',
       );
-      expect(mockWorkspace.hideMessageForMe).toHaveBeenCalledWith(message);
+      // "Delete for me" is gone from the sheet: a message you can see is a
+      // message everyone in the chat can see.
+      expect(screen.queryByLabelText('chat.deleteMe')).toBeNull();
+      expect(mockWorkspace.hideMessageForMe).not.toHaveBeenCalled();
     });
   });
 
@@ -1223,13 +1227,12 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await openActions();
     await fireEvent.press(screen.getByLabelText('chat.deleteEveryone'));
     await openActions();
+    await fireEvent.press(screen.getByLabelText('chat.forward'));
     await fireEvent.press(screen.getByLabelText('Maintenance'));
     await fireEvent.press(screen.getByLabelText('chat.forwardConfirm'));
     await openActions();
     await fireEvent.changeText(screen.getByLabelText('chat.actionTitle'), 'Successful action');
     await fireEvent.press(screen.getByLabelText('chat.actionCreate'));
-    await openActions();
-    await fireEvent.press(screen.getByLabelText('chat.deleteMe'));
     await openActions();
     await fireEvent.press(screen.getByLabelText('chat.reply'));
     await fireEvent.press(screen.getByLabelText('chat.cancelReply'));
@@ -1241,7 +1244,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockWorkspace.deleteMessage).toHaveBeenCalledWith(message);
     expect(mockWorkspace.forwardMessage).toHaveBeenCalledWith(message, 'conversation-target');
     expect(mockWorkspace.proposeAction).toHaveBeenCalledWith(message, 'Successful action', '');
-    expect(mockWorkspace.hideMessageForMe).toHaveBeenCalledWith(message);
+    expect(mockWorkspace.hideMessageForMe).not.toHaveBeenCalled();
   });
 
   test('renders system, receipt, detection, translation, and priority branch variants', async () => {
@@ -1792,6 +1795,68 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
   });
 
+  test('tapping a reply quote goes to the message it answers', async () => {
+    const scrollToIndex = jest
+      .spyOn(FlatList.prototype, 'scrollToIndex')
+      .mockImplementation(() => undefined);
+    const quoted = incomingMessage({
+      id: 'quoted-source', serverId: 'quoted-source', originalText: 'Please confirm the gate.',
+      attachment: undefined,
+    });
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: {
+        messageId: 'quoted-source',
+        senderName: colleague.displayName,
+        preview: 'Please confirm the gate.',
+      },
+    });
+    await render(
+      <ConversationPane conversation={conversation()} messages={[quoted, answer]} onSend={noopSend} />,
+    );
+
+    const quote = screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`);
+    expect(quote.props.accessibilityHint).toBe('chat.goToQuoted');
+    await fireEvent.press(quote);
+
+    // The message is already in memory, so nothing older has to be fetched.
+    expect(mockWorkspace.ensureMessageLoaded).not.toHaveBeenCalled();
+    await waitFor(() => expect(scrollToIndex).toHaveBeenCalledWith(
+      expect.objectContaining({ animated: true, viewPosition: 0.5 }),
+    ));
+  });
+
+  test('a quote whose message has scrolled out of memory asks for the older page', async () => {
+    mockWorkspace.ensureMessageLoaded = jest.fn(async () => true);
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: {
+        messageId: 'far-older-message',
+        senderName: colleague.displayName,
+        preview: 'Please confirm the gate.',
+      },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[answer]} onSend={noopSend} />);
+
+    await fireEvent.press(screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`));
+    await waitFor(() => expect(mockWorkspace.ensureMessageLoaded).toHaveBeenCalledWith(
+      'conversation-main', 'far-older-message',
+    ));
+  });
+
+  test('a quote from before reply ids were stored is not a control', async () => {
+    const answer = translatedMessage({
+      id: 'the-answer', serverId: 'the-answer', originalText: 'Confirmed, closing now.',
+      replyTo: { senderName: colleague.displayName, preview: 'Please confirm the gate.' },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[answer]} onSend={noopSend} />);
+
+    const quote = screen.getByLabelText(`${colleague.displayName}: Please confirm the gate.`);
+    expect(quote.props.accessibilityHint).toBeUndefined();
+    await fireEvent.press(quote);
+    expect(mockWorkspace.ensureMessageLoaded).not.toHaveBeenCalled();
+  });
+
   test('fails closed for queued, deleted, attachment, and translation-disabled message actions', async () => {
     const queued = translatedMessage({
       id: 'queued-client-message', serverId: undefined, clientMessageId: 'queued-client-message',
@@ -1820,6 +1885,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     const withAttachment = incomingMessage();
     const attachmentView = await render(<ConversationPane conversation={conversation()} messages={[withAttachment]} onSend={noopSend} />);
     await fireEvent(screen.getByText(withAttachment.originalText), 'longPress');
+    expect(screen.queryByText('chat.attachmentForwardUnavailable')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.forward'));
     expect(screen.getByText('chat.attachmentForwardUnavailable')).toBeTruthy();
     await attachmentView.unmount();
 
@@ -2327,7 +2394,82 @@ describe('personal realm message actions', () => {
     expect(screen.queryByLabelText('chat.actionCreate')).toBeNull();
     // Every consumer-relevant action stays available.
     expect(screen.getByLabelText('chat.reply')).toBeTruthy();
-    expect(screen.getByLabelText('chat.deleteMe')).toBeTruthy();
+    expect(screen.queryByLabelText('chat.deleteMe')).toBeNull();
+  });
+
+  test('gives the personal realm exactly the consumer sheet and nothing from the review desk', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const message = translatedMessage();
+    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+
+    // The reaction row comes first, then the actions, then your own message's.
+    expect(screen.getByTestId('reaction-row')).toBeTruthy();
+    for (const emoji of ['👍', '❤️', '😂', '😮', '😢', '🙏']) {
+      expect(screen.getByLabelText(`chat.react ${emoji}`)).toBeTruthy();
+    }
+    expect(screen.getByLabelText('chat.reactMore')).toBeTruthy();
+    for (const label of ['chat.reply', 'chat.copy', 'chat.unpin', 'chat.forward']) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    expect(screen.getByLabelText('chat.editMessage')).toBeTruthy();
+    expect(screen.getByLabelText('chat.saveEdit')).toBeTruthy();
+    expect(screen.getByLabelText('chat.deleteEveryone')).toBeTruthy();
+
+    // The review desk stays at work.
+    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
+    expect(screen.queryByLabelText('chat.hideProvenance')).toBeNull();
+    expect(screen.queryByLabelText('chat.proposeCorrection')).toBeNull();
+    expect(screen.queryByLabelText('chat.reviewCorrection')).toBeNull();
+    expect(screen.queryByText('chat.sourceFingerprint')).toBeNull();
+    expect(screen.queryByLabelText('chat.deleteMe')).toBeNull();
+    expect(screen.queryByText('chat.deleteMeHint')).toBeNull();
+
+    // Forward opens its picker only when it is asked for.
+    expect(screen.queryByText('chat.forwardTo')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.forward'));
+    expect(screen.getByText('chat.forwardTo')).toBeTruthy();
+  });
+
+  test('drops Edit and Delete from the sheet once the fifteen minutes are up', async () => {
+    const fresh = translatedMessage();
+    const freshView = await render(
+      <ConversationPane conversation={conversation()} messages={[fresh]} onSend={noopSend} />,
+    );
+    await fireEvent(screen.getByText(fresh.originalText), 'longPress');
+    expect(screen.getByLabelText('chat.editMessage')).toBeTruthy();
+    expect(screen.getByLabelText('chat.saveEdit')).toBeTruthy();
+    expect(screen.getByLabelText('chat.deleteEveryone')).toBeTruthy();
+    await freshView.unmount();
+
+    mockWorkspace = buildWorkspace();
+    const old = translatedMessage({
+      id: 'message-old',
+      serverId: 'message-old',
+      originalText: 'Sent a long time ago.',
+      createdAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[old]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(old.originalText), 'longPress');
+
+    expect(screen.queryByLabelText('chat.editMessage')).toBeNull();
+    expect(screen.queryByLabelText('chat.saveEdit')).toBeNull();
+    expect(screen.queryByLabelText('chat.deleteEveryone')).toBeNull();
+    // Everything that does not change the message is still there.
+    expect(screen.getByLabelText('chat.reply')).toBeTruthy();
+    expect(screen.getByLabelText('chat.copy')).toBeTruthy();
+    expect(screen.getByLabelText('chat.forward')).toBeTruthy();
+    expect(screen.getByTestId('reaction-row')).toBeTruthy();
+  });
+
+  test('keeps the translation review items for workspace organizations', async () => {
+    const message = translatedMessage();
+    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    await fireEvent(screen.getByText(message.originalText), 'longPress');
+
+    expect(screen.getByLabelText('chat.showProvenance')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
+    expect(screen.getByLabelText('chat.hideProvenance')).toBeTruthy();
   });
 
   test('keeps the create-action-item affordance for workspace organizations', async () => {

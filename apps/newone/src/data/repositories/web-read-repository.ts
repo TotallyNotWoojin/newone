@@ -708,6 +708,7 @@ function messageFromDto(
     edited: Boolean(row.editedAt),
     pinned: row.pinned === true,
     replyTo: Object.keys(reply).length ? {
+      messageId: optionalString(reply.messageId) ?? undefined,
       senderName: peopleById.get(String(reply.senderUserId))?.displayName ?? unknownPersonLabel(current),
       preview: optionalString(reply.body) ?? '',
     } : undefined,

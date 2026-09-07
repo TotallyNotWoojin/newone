@@ -47,6 +47,7 @@ import type {
   AuditQueryInput,
   ConversationMemberCandidatePage,
   IssuedInvitation,
+  LinkPreviewMetadata,
   MessageReceiptInput,
   OrganizationUnitOption,
   ReadRepository,
@@ -335,6 +336,7 @@ interface WorkspaceState {
     releaseReasonCode: string,
   ) => Promise<boolean>;
   toggleReaction: (message: Message, emoji: string) => Promise<boolean>;
+  loadLinkPreview: (url: string) => Promise<LinkPreviewMetadata | null>;
   setMessagePinned: (message: Message, pinned: boolean) => Promise<boolean>;
   reportMessage: (
     message: Message,
@@ -2873,7 +2875,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         ...(selectedMentionUserIds.length ? { mentionUserIds: selectedMentionUserIds } : {}),
         ...(replyTo?.serverId ? {
           replyToMessageId: replyTo.serverId,
-          replyPreview: { senderName: replyTo.senderName, preview: replyTo.originalText.slice(0, 180) },
+          replyPreview: {
+            messageId: replyTo.serverId,
+            senderName: replyTo.senderName,
+            preview: replyTo.originalText.slice(0, 180),
+          },
         } : {}),
       };
       const command: OutboxCommand<SendMessageInput> = {
@@ -3687,6 +3693,25 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return true;
     },
     [executeImmediate, patchServerMessage, repositories.commands, snapshot],
+  );
+
+  // One request per address per session: a link shared into a busy chat is
+  // asked about once, not once per bubble that scrolls past.
+  const linkPreviewCache = useRef(new Map<string, Promise<LinkPreviewMetadata | null>>());
+  const loadLinkPreview = useCallback(
+    async (url: string) => {
+      if (!snapshot) return null;
+      const cached = linkPreviewCache.current.get(url);
+      if (cached) return cached;
+      const pending = repositories.commands
+        .loadLinkPreview({ organizationId: snapshot.organizationId, url })
+        // A link that cannot be read is not an error anyone needs to see; the
+        // bubble simply shows its text and nothing else.
+        .catch(() => null);
+      linkPreviewCache.current.set(url, pending);
+      return pending;
+    },
+    [repositories.commands, snapshot],
   );
 
   const setMessagePinned = useCallback(
@@ -5922,6 +5947,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       placeMessagePreservationHold,
       releaseMessagePreservationHold,
       toggleReaction,
+      loadLinkPreview,
       setMessagePinned,
       reportMessage,
       reportGroup,
@@ -6118,6 +6144,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       status,
       suspendMember,
       toggleReaction,
+      loadLinkPreview,
       setMessagePinned,
       setConversationSummaryPolicy,
       updateConversation,

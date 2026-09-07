@@ -46,7 +46,10 @@ import {
   mentionablePeople,
 } from '@/features/chat/mention-controls.mjs';
 import { shouldSendOnEnter } from '@/features/chat/composer-keys';
+import { firstPreviewUrl } from '@/features/chat/link-preview';
+import { LinkPreviewCard } from '@/features/chat/link-preview-card';
 import { mentionCopy } from '@/features/chat/mention-copy';
+import { messageEditWindowOpen } from '@/features/chat/message-edit-window';
 import {
   attachmentReady,
   ImageAttachment,
@@ -55,7 +58,10 @@ import {
   VideoMessageAttachment,
 } from '@/features/chat/media-attachment';
 import { notificationCopy } from '@/features/chat/notification-copy';
+import { ReactionRow } from '@/features/chat/reaction-row';
 import { SummarySheet } from '@/features/chat/summary-sheet';
+import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
+import { swipeReplyAvailable } from '@/features/chat/swipe-to-reply';
 import {
   appendedMessageCount,
   buildTimelineRows,
@@ -119,6 +125,8 @@ export function ConversationPane({
   const [attachmentCaption, setAttachmentCaption] = useState('');
   const [attachmentImageMode, setAttachmentImageMode] = useState<'optimized' | 'original'>('optimized');
   const [newMessageCount, setNewMessageCount] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The timeline is an inverted list: offset 0 is the newest message, so the
   // thread opens at the bottom and stays there with no scroll-to-end logic.
   const nearBottomRef = useRef(true);
@@ -294,12 +302,41 @@ export function ConversationPane({
   const downloadMessageAttachment = useCallback((message: Message) => {
     void downloadAttachment(message);
   }, [downloadAttachment]);
+  // The swipe and the sheet's Reply land in the same place.
+  const replyToMessage = useCallback((message: Message) => {
+    setSelectedMessage(null);
+    setReplyingTo(message);
+  }, []);
+  // Tapping a quote goes to the message it quotes, loading older pages if that
+  // message has scrolled out of what is in memory, and marks it for a moment so
+  // the eye can find it.
+  // Read through a ref: scrolling depends on the rows in memory, and the row
+  // renderer below must keep its identity across every arrival.
+  const scrollToSourceRef = useRef(scrollToSourceMessage);
+  useEffect(() => {
+    scrollToSourceRef.current = scrollToSourceMessage;
+  }, [scrollToSourceMessage]);
+  useEffect(() => () => {
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+  }, []);
+  const jumpToQuoted = useCallback((messageId: string) => {
+    setSelectedMessage(null);
+    void scrollToSourceRef.current(messageId).then((found) => {
+      if (!found) return;
+      setHighlightedMessageId(messageId);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = setTimeout(() => setHighlightedMessageId(null), 1600);
+    });
+  }, []);
   const translatedOnly = preferences.translatedOnly;
   const unreadDividerLabel = t('chat.unreadMessages');
   const renderRow = useCallback(({ item }: { item: TimelineRow }) => {
     const { message } = item;
     return (
-      <View style={(message.serverId ?? message.id) === focusMessageId ? styles.searchTarget : undefined}>
+      <View style={(message.serverId ?? message.id) === focusMessageId
+        || (message.serverId ?? message.id) === highlightedMessageId
+        ? styles.searchTarget
+        : undefined}>
         {item.showUnreadDivider ? (
           <View style={styles.unreadDivider}>
             <View style={styles.unreadDividerLine} />
@@ -318,14 +355,25 @@ export function ConversationPane({
           <MessageBubble
             message={message}
             onDownload={downloadMessageAttachment}
+            onJumpToQuoted={jumpToQuoted}
             onOpenActions={openActions}
+            onReply={replyToMessage}
             showSender={item.showSender}
             translatedOnly={translatedOnly}
           />
         )}
       </View>
     );
-  }, [downloadMessageAttachment, focusMessageId, openActions, translatedOnly, unreadDividerLabel]);
+  }, [
+    downloadMessageAttachment,
+    focusMessageId,
+    highlightedMessageId,
+    jumpToQuoted,
+    openActions,
+    replyToMessage,
+    translatedOnly,
+    unreadDividerLabel,
+  ]);
 
   if (!currentUserId) {
     return (
@@ -645,9 +693,6 @@ export function ConversationPane({
         onClose={() => setSelectedMessage(null)}
         onDelete={async () => {
           if (selectedMessage && await workspace.deleteMessage(selectedMessage)) setSelectedMessage(null);
-        }}
-        onHide={async () => {
-          if (selectedMessage && await workspace.hideMessageForMe(selectedMessage)) setSelectedMessage(null);
         }}
         onForward={async (targetConversationId) => {
           if (selectedMessage && await workspace.forwardMessage(selectedMessage, targetConversationId)) {
@@ -987,12 +1032,16 @@ const MessageBubble = memo(function MessageBubble({
   showSender,
   translatedOnly,
   onOpenActions,
+  onReply,
+  onJumpToQuoted,
   onDownload,
 }: {
   message: Message;
   showSender: boolean;
   translatedOnly: boolean;
   onOpenActions: (message: Message) => void;
+  onReply: (message: Message) => void;
+  onJumpToQuoted: (messageId: string) => void;
   onDownload: (message: Message) => void;
 }) {
   const workspace = useWorkspace();
@@ -1003,6 +1052,12 @@ const MessageBubble = memo(function MessageBubble({
     (conversation) => conversation.id === message.conversationId,
   );
   const group = translationConversation?.kind !== 'direct';
+  // One card per message, under the text, for the first address in it. A
+  // deleted message keeps nothing, and a system line is never a person's words.
+  const previewUrl = useMemo(
+    () => (message.deleted || message.systemEvent ? null : firstPreviewUrl(message.originalText)),
+    [message.deleted, message.originalText, message.systemEvent],
+  );
   const translationEnabled = translationConversation?.translationMode !== 'off';
   const translation = translationEnabled ? message.translation : undefined;
   const visibleTranslationState = translationEnabled ? message.translationState : 'not_requested';
@@ -1188,6 +1243,11 @@ const MessageBubble = memo(function MessageBubble({
       ) : null}
       <View style={[styles.messageStack, message.isOwn && styles.messageStackOwn]}>
         {showSender ? <Text style={styles.senderName}>{message.senderName}</Text> : null}
+        <SwipeToReply
+          enabled={swipeReplyAvailable(message)}
+          onOpenActions={() => onOpenActions(message)}
+          onReply={() => onReply(message)}
+          own={message.isOwn}>
         <Pressable
           // Not an accessibility element itself: iOS would otherwise flatten the whole
           // bubble into one node and hide the controls inside it from VoiceOver.
@@ -1221,10 +1281,18 @@ const MessageBubble = memo(function MessageBubble({
           ) : null}
 
           {message.replyTo ? (
-            <View style={styles.reply}>
+            <Pressable
+              accessibilityHint={message.replyTo.messageId ? t('chat.goToQuoted') : undefined}
+              accessibilityLabel={`${message.replyTo.senderName}: ${message.replyTo.preview}`}
+              accessibilityRole={message.replyTo.messageId ? 'button' : undefined}
+              disabled={!message.replyTo.messageId}
+              onPress={() => {
+                if (message.replyTo?.messageId) onJumpToQuoted(message.replyTo.messageId);
+              }}
+              style={({ pressed }) => [styles.reply, pressed && styles.pressed]}>
               <Text style={styles.replySender}>{message.replyTo.senderName}</Text>
               <Text numberOfLines={1} style={styles.replyPreview}>{message.replyTo.preview}</Text>
-            </View>
+            </Pressable>
           ) : null}
 
           {mentionedNames.length ? (
@@ -1281,6 +1349,8 @@ const MessageBubble = memo(function MessageBubble({
             </>
           )}
 
+          {previewUrl ? <LinkPreviewCard url={previewUrl} /> : null}
+
           {message.deliveryState === 'failed' ? (
             <View style={[styles.quietRow, mediaOnly && styles.mediaTrailer]}>
               <Ionicons name="alert-circle-outline" size={12} color={colors.red} />
@@ -1292,6 +1362,7 @@ const MessageBubble = memo(function MessageBubble({
 
           {mediaOnly ? null : meta(false)}
         </Pressable>
+        </SwipeToReply>
 
         {message.reactions?.length ? (
           <View style={[styles.reactions, message.isOwn && styles.reactionsOwn]}>
@@ -2056,7 +2127,6 @@ function MessageActionsModal({
   onChangeEditDraft,
   onEdit,
   onDelete,
-  onHide,
   onForward,
   onProposeAction,
   onReact,
@@ -2076,7 +2146,6 @@ function MessageActionsModal({
   onChangeEditDraft: (value: string) => void;
   onEdit: () => void;
   onDelete: () => void;
-  onHide: () => void;
   onForward: (targetConversationId: string) => Promise<void>;
   onProposeAction: (title: string, details: string) => Promise<void>;
   onReact: (emoji: string) => void;
@@ -2089,10 +2158,13 @@ function MessageActionsModal({
 }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
-  // Action items are a workplace concept; the personal realm never surfaces
-  // the affordance to propose one from a message.
+  // Action items, translation provenance, corrections and their review are
+  // workplace concepts. In the personal realm the sheet is exactly: the
+  // reaction row, Reply, Copy, Pin, Forward, Translate for me, and — on your
+  // own messages — Edit and Delete.
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [forwardTargetId, setForwardTargetId] = useState('');
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [actionTitle, setActionTitle] = useState('');
   const [actionDetails, setActionDetails] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -2103,19 +2175,33 @@ function MessageActionsModal({
     : undefined;
   const translationEnabled = conversation?.translationMode !== 'off';
   const translation = message && translationEnabled ? message.translation : undefined;
-  const hasDetails = Boolean(message && translationEnabled && (translation || message.languageDetection));
-  const canCorrect = Boolean(message?.translatedText && translation?.status === 'completed');
-  const canReview = translation?.correction?.status === 'pending' && workspace.hasCapability('language.review');
+  const hasDetails = Boolean(
+    !personalRealm && message && translationEnabled && (translation || message.languageDetection),
+  );
+  const canCorrect = Boolean(!personalRealm && message?.translatedText && translation?.status === 'completed');
+  const canReview = !personalRealm
+    && translation?.correction?.status === 'pending'
+    && workspace.hasCapability('language.review');
+  const live = Boolean(message?.serverId && !message.deleted);
   return (
     <ActionModal
       onClose={onClose}
       title={t('chat.actionsTitle')}
       visible={Boolean(message)}>
+      {live ? <ReactionRow disabled={busy === 'message-reaction'} onReact={onReact} /> : null}
       {message ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon="arrow-undo-outline" label={t('chat.reply')} onPress={onReply} tone="light" />
           <PrimaryButton icon="copy-outline" label={t('chat.copy')} onPress={onCopy} tone="light" />
           <PrimaryButton icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? t('chat.unpin') : t('chat.pin')} loading={busy === 'message-pin'} onPress={onPin} tone="light" />
+          {live ? (
+            <PrimaryButton
+              icon="arrow-redo-outline"
+              label={t('chat.forward')}
+              onPress={() => setForwardOpen((open) => !open)}
+              tone="light"
+            />
+          ) : null}
           {onTranslate ? (
             <PrimaryButton icon="language-outline" label={t('chat.translateForMe')} onPress={onTranslate} tone="light" />
           ) : null}
@@ -2136,24 +2222,7 @@ function MessageActionsModal({
         </View>
       ) : null}
       {message && detailsOpen ? <TranslationDetails message={message} /> : null}
-      {message?.serverId && !message.deleted ? (
-        <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('chat.react')}</Text>
-          <View style={styles.modalRow}>
-            {['👍', '❤️', '✅', '👀'].map((emoji) => (
-              <Pressable
-                accessibilityLabel={`${t('chat.react')} ${emoji}`}
-                accessibilityRole="button"
-                key={emoji}
-                onPress={() => onReact(emoji)}
-                style={({ pressed }) => [styles.emojiButton, pressed && styles.pressed]}>
-                <Text style={styles.emojiText}>{emoji}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
-      {message?.isOwn && message.serverId && !message.deleted ? (
+      {message && messageEditWindowOpen(message) ? (
         <View style={styles.modalSection}>
           <FormField label={t('chat.editMessage')} multiline onChangeText={onChangeEditDraft} value={editDraft} />
           <PrimaryButton
@@ -2177,7 +2246,7 @@ function MessageActionsModal({
       ) : null}
       {message?.serverId && !message.deleted ? (
         <>
-          {message.attachment ? (
+          {!forwardOpen ? null : message.attachment ? (
             <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>{t('chat.forwardUnavailable')}</Text>
               <Text style={styles.modalNote}>{t('chat.attachmentForwardUnavailable')}</Text>
@@ -2227,16 +2296,6 @@ function MessageActionsModal({
               />
             </View>
           ) : null}
-          <View style={styles.modalSection}>
-            <Text style={styles.modalNote}>{t('chat.deleteMeHint')}</Text>
-            <PrimaryButton
-              icon="eye-off-outline"
-              label={t('chat.deleteMe')}
-              loading={busy === 'message-hide'}
-              onPress={onHide}
-              tone="danger"
-            />
-          </View>
         </>
       ) : null}
       <ActionError message={error} />
