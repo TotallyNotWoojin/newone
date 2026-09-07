@@ -4,6 +4,7 @@
 // performed for real on one device and observed on the other, with the
 // database row consulted after each durable effect.
 import { openUrl, backgroundApp, launchApp } from '../lib/devices.mjs';
+import { setupThirdPerson } from '../lib/accounts.mjs';
 
 export const meta = { id: 'chat', devices: 2, title: 'CHAT + MEDIA (A/B)' };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,13 +22,18 @@ export async function run(ctx) {
     return;
   }
 
+  // v3.3 (backlog 36): a group needs three people, and this area has two
+  // devices, so the third is an account nobody holds — created through the same
+  // public signup route and found by the picker like anyone else.
+  const C = await setupThirdPerson(ctx, { label: 'chat_c', displayName: `Sim Cass ${tag}` });
+
   // Relationship: A messages B directly from the People search (the message
   // request / accept path is gone; the step ids keep their history).
   const intro = `Hey Ben, Ana here ${tag}`;
   await ctx.step({ id: 'chat-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'people' });
   const request = await ctx.step({
     id: 'chat-00b-message-request', title: 'A taps Message and sends the first text (the chat opens directly, no request)', device: devA,
-    flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'Conversation opens at once; first text renders as sent; server: direct conversation row', screen: 'people → conversation',
+    flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'Conversation opens at once; first text renders as sent; server: direct conversation row', screen: 'people → conversation',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       return { ok: wait.ok, detail: wait.row };
@@ -110,18 +116,85 @@ export async function run(ctx) {
     flow: 'chat/see-text.yaml', env: { TEXT: r1, TIMEOUT: '20000' },
     expected: 'The reply is on screen again', screen: 'conversation',
   });
+  // v3.3 (backlog 41): a pin can also be taken back from the list it lives in.
+  await ctx.step({
+    id: 'chat-10e-unpin-from-list', title: 'A unpins from the chat\'s Pinned list ("Unpin: <sender>")', device: devA,
+    flow: 'chat/unpin-from-list.yaml', env: { TARGET: r1, SENDER: B.displayName },
+    expected: 'The row goes and the list says "Nothing pinned yet"; server message_pins row removed',
+    screen: 'conversation → Conversation controls → Pinned',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => r?.pinned === false, { timeoutMs: 20_000 }); return { ok: w.ok, detail: `pinned=${w.row?.pinned}` }; },
+  });
+  await ctx.step({
+    id: 'chat-10f-repin', title: 'A pins the reply again (so the sheet\'s own Unpin still has something to undo)', device: devA, flow: 'chat/pin.yaml', env: { TARGET: r1 },
+    expected: 'Pinned again; server message_pins row', screen: 'conversation → Message actions',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => r?.pinned === true, { timeoutMs: 20_000 }); return { ok: w.ok, detail: `pinned=${w.row?.pinned}` }; },
+  });
   await ctx.step({
     id: 'chat-11-unpin', title: 'A unpins the reply', device: devA, flow: 'chat/unpin.yaml', env: { TARGET: r1 },
     expected: 'Pin offered again; server row removed', screen: 'conversation → Message actions',
     serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => r?.pinned === false, { timeoutMs: 20_000 }); return { ok: w.ok, detail: `pinned=${w.row?.pinned}` }; },
   });
 
+  // v3.3 (backlog 44/45): the consumer sheet is the reaction row, Reply, Copy,
+  // Pin, Forward, Translate for me, and — inside fifteen minutes — Edit and
+  // Delete for everyone. "Delete for me" was removed from the app entirely
+  // (the old chat-12/chat-13 pair exercised it), and the workplace review
+  // items are hidden, so the sheet's contents are what is checked here.
+  const fresh = `Fresh own text ${tag}`;
+  await ctx.step({ id: 'chat-11b-send-fresh', title: 'A sends a text to long-press while it is still inside the fifteen-minute window', device: devA, flow: 'chat/send-text.yaml', env: { TEXT: fresh }, expected: 'bubble', screen: 'conversation',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, fresh), (r) => Boolean(r), { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.id ?? 'no row' }; } });
   await ctx.step({
-    id: 'chat-12-delete-for-me', title: 'A deletes the reply for me', device: devA, flow: 'chat/delete-for-me.yaml', env: { TARGET: r1 },
-    expected: 'Reply disappears on A only; server message_user_visibility row for A', screen: 'conversation → Message actions',
-    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => (r?.hidden_for ?? '').includes(A.userId), { timeoutMs: 20_000 }); return { ok: w.ok && !w.row?.deleted_at, detail: { hidden_for: w.row?.hidden_for, deleted_at: w.row?.deleted_at } }; },
+    id: 'chat-12-actions-sheet-contents', title: 'The long-press sheet for a consumer: reactions, Reply, Copy, Pin, Forward, Edit and Delete for everyone — no corrections, no provenance, no "Delete for me"', device: devA,
+    flow: 'chat/actions-sheet-contents.yaml', env: { TARGET: fresh },
+    expected: 'Reply, Copy, Pin and Forward present; Edit message + Save edit + "Delete for everyone" on an own message minutes old; none of "Propose correction", "Review correction", "Show details", "Hide details", "Create action item", "Delete for me"',
+    screen: 'conversation → Message actions',
   });
-  await ctx.step({ id: 'chat-13-b-still-sees', title: 'B still sees the reply after A\'s delete-for-me', device: devB, flow: 'chat/expect-still-visible.yaml', env: { TEXT: r1 }, expected: 'Reply still visible on B', screen: 'conversation' });
+  // v3.3 (backlog 43): six reactions in one row, and a "+" that takes any emoji.
+  await ctx.step({
+    id: 'chat-13-reactions', title: 'The six reactions (👍 ❤️ 😂 😮 😢 🙏) and the "+" emoji route; anything that is not one emoji is refused', device: devA,
+    flow: 'chat/reactions.yaml', env: { TARGET: r1, CUSTOM: '🎉' },
+    expected: 'All six offered plus "More emoji"; the old ✅ and 👀 gone; "+" opens an "Any emoji" field that answers "Pick one emoji." to words and stores 🎉; server message_reactions row carries 🎉',
+    screen: 'conversation → Message actions',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => (r?.reaction_detail ?? '').includes('🎉'), { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row?.reaction_detail ?? 'no 🎉 reaction' }; },
+  });
+
+  // v3.3 (backlog 46): the reply gesture.
+  const swipeReply = `Swiped reply ${tag}`;
+  await ctx.step({
+    id: 'chat-13b-swipe-reply', title: 'A swipes right on B\'s reply to answer it', device: devA,
+    flow: 'chat/swipe-reply.yaml', env: { TARGET: r1, REPLY: swipeReply },
+    expected: 'The drag opens "Replying to …" without the actions sheet; the sent bubble quotes B; server reply_to_message_id points at B\'s reply',
+    screen: 'conversation',
+    serverTruth: async () => {
+      const original = await server.messageByBody(convId, r1);
+      const w = await server.waitFor(() => server.messageByBody(convId, swipeReply), (r) => Boolean(r), { timeoutMs: 20_000 });
+      return { ok: w.ok && w.row?.reply_to === original?.id, detail: { reply: w.row?.id, reply_to: w.row?.reply_to, original: original?.id } };
+    },
+  });
+  // v3.3 (backlog 47d): tapping the quote goes to the message it answers.
+  await ctx.step({
+    id: 'chat-13c-jump-to-quoted', title: 'Tapping the quote on A\'s swiped reply jumps to B\'s original', device: devA,
+    flow: 'chat/jump-to-quoted.yaml', env: { REPLY: swipeReply, SENDER: B.displayName, QUOTED: `Reply from Ben ${tag}`, ORIGINAL: r1 },
+    expected: 'The quote reads "<B>: <the original>"; tapping it centres the original in the thread',
+    screen: 'conversation',
+  });
+  // v3.3 (backlog 47g): a link grows a card saying what the page calls itself.
+  const linkText = `Look at this ${tag} https://example.com/`;
+  await ctx.step({
+    id: 'chat-13d-link-preview', title: 'A sends a link; the bubble grows a preview card with the page title', device: devA,
+    flow: 'chat/link-preview.yaml', env: { TEXT: linkText, TITLE: 'Example Domain', TIMEOUT: '60000' },
+    expected: 'A card under the bubble reading "Example Domain"; server: private.link_previews holds https://example.com/ with status ready (the gateway fetched it, not the phone)',
+    screen: 'conversation',
+    serverTruth: async () => {
+      const w = await server.waitFor(
+        () => server.one(`select url, title, site_name, status from private.link_previews where url = 'https://example.com/'`),
+        (row) => row?.status === 'ready' && Boolean(row?.title),
+        { timeoutMs: 60_000 },
+      );
+      return { ok: w.ok, detail: w.row ?? 'no cached preview' };
+    },
+    timeoutMs: 240_000,
+  });
 
   const t2 = `Delete me everywhere ${tag}`;
   await ctx.step({ id: 'chat-14a-send-t2', title: 'A sends a second text', device: devA, flow: 'chat/send-text.yaml', env: { TEXT: t2 }, expected: 'bubble', screen: 'conversation' });
@@ -154,11 +227,13 @@ export async function run(ctx) {
 
   // Forward: A needs a second conversation → a small group with B.
   const groupName = `Fwd ${tag}`;
-  const group = await ctx.step({
-    id: 'chat-17a-create-group', title: 'A creates a group with B (forward target)', device: devA, flow: 'groups/create-group.yaml', env: { NAME: groupName, MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'false', MEMBER2: '', MEMBER2_QUERY: '' },
-    expected: 'Group opens; server conversations row + 2 members', screen: 'new-group',
-    serverTruth: async () => { const w = await server.waitFor(() => server.groupByName(groupName), (r) => Boolean(r), { timeoutMs: 20_000 }); const m = w.row ? await server.members(w.row.id) : []; return { ok: w.ok && m.length === 2, detail: { group: w.row?.id, members: m } }; },
-  });
+  const group = C.userId
+    ? await ctx.step({
+      id: 'chat-17a-create-group', title: 'A creates a group with B and the third account (forward target; v3.3 needs three people)', device: devA, flow: 'groups/create-group.yaml', env: { NAME: groupName, MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'true', MEMBER2: C.displayName, MEMBER2_QUERY: C.username },
+      expected: 'Group opens; server conversations row + 3 members', screen: 'new-group',
+      serverTruth: async () => { const w = await server.waitFor(() => server.groupByName(groupName), (r) => Boolean(r), { timeoutMs: 20_000 }); const m = w.row ? await server.members(w.row.id) : []; return { ok: w.ok && m.filter((r) => r.status === 'active').length === 3, detail: { group: w.row?.id, members: m } }; },
+    })
+    : (ctx.note({ id: 'chat-17a-create-group', title: 'A creates a group (forward target)', status: 'FAIL', expected: 'a three-person group to forward into', observed: `the third account could not be created: ${C.error}` }), { uiOk: false });
   const groupRow = await server.groupByName(groupName);
   if (group.uiOk) {
     await openA();
@@ -170,13 +245,23 @@ export async function run(ctx) {
       serverTruth: async () => { const w = groupRow ? await server.waitFor(() => server.messageByBody(groupRow.id, `edited ${tag}`), (r) => r?.forwarded === true && r?.language_detection_state === 'completed', { timeoutMs: 90_000 }) : { ok: false }; return { ok: w.ok, detail: w.row ? { id: w.row.id, forwarded: w.row.forwarded, detection: w.row.language_detection_state } : 'no forwarded row' }; },
     });
     await ctx.step({ id: 'chat-18-see-forwarded', title: 'Forwarded copy shows the FORWARDED label in the group', device: devA, flow: 'chat/see-forwarded.yaml', env: { DEST: groupName, TEXT: t1e }, expected: 'FORWARDED label + text', screen: 'group conversation' });
+    // v3.3 (backlog 47b): the chat-row gesture on a group is named for what it
+    // does. B leaves from the row; nothing later needs B in this group.
+    await ctx.step({
+      id: 'chat-18b-row-leave-group', title: 'B leaves the group from its row: the row says Leave, never Delete, and the confirmation names the group', device: devB,
+      flow: 'chat/row-leave-group.yaml', env: { NAME: groupName },
+      expected: '"Leave" with no "Delete"; "Leave <group>?" carrying "The group carries on without you." and a "Keep it" alongside; after Leave the row goes and the server has B no longer active',
+      screen: 'chats',
+      serverTruth: async () => { const w = await server.waitFor(() => server.members(groupRow.id), (rows) => { const b = rows.find((r) => r.user_id === B.userId); return !b || b.status !== 'active'; }, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === B.userId) ?? 'row gone' }; },
+    });
+    await openB();
   }
 
   const query = `zebra${tag}`;
-  await ctx.step({ id: 'chat-19-search', title: 'Message search finds the text (results as you type; no Search button or filter chips for consumers)', device: devA, flow: 'chat/search-messages.yaml', env: { QUERY: query }, expected: 'A Messages result ("Open …") containing the token', screen: 'search' });
+  await ctx.step({ id: 'chat-19-search', title: 'The Chats field finds the message (v3.3: the Search tab is gone; results arrive as you type)', device: devA, flow: 'chat/search-messages.yaml', env: { QUERY: query }, expected: 'A "Messages" section under the field with a row carrying the token; no "Search people and messages" screen anywhere', screen: 'chats (search field)' });
   // The Messages filter chip is workplace-only; the step id keeps its history
   // and now proves the result opens the conversation.
-  await ctx.step({ id: 'chat-20-search-filter', title: 'Open the Messages result from Search', device: devA, flow: 'chat/search-filter-messages.yaml', env: { QUERY: query }, expected: 'Tapping "Open …" opens the conversation with the text', screen: 'search' });
+  await ctx.step({ id: 'chat-20-search-filter', title: 'Open the message suggestion from the Chats field', device: devA, flow: 'chat/search-filter-messages.yaml', env: { QUERY: query }, expected: 'Tapping the "<chat> · <matched words>" row opens that conversation at the text', screen: 'chats (search field)' });
 
   // Unread badge: A on the Chats list, B sends.
   await ctx.step({ id: 'chat-21a-a-back', title: 'A returns to the Chats list', device: devA, flow: 'chat/back-to-chats.yaml', expected: 'Chats', screen: 'chats' });
@@ -230,7 +315,7 @@ export async function run(ctx) {
   await openA();
   await ctx.step({
     id: 'media-06-shared-media', title: 'A opens Photos and files for the chat', device: devA, flow: 'chat/shared-media.yaml',
-    expected: 'The grid lists the photo as a thumbnail and the voice note and document as rows, newest first; tapping the photo opens the full-screen viewer',
+    expected: 'The grid lists the photo as a thumbnail and the voice note and document as rows, newest first; tapping the photo opens the full-screen viewer, and "Next photo"/"Previous photo" step along the grid when it holds more than one',
     screen: 'conversation → Conversation controls → Photos and files',
     serverTruth: async () => { const rows = await server.attachments(convId); return { ok: rows.length > 0, detail: rows.map((r) => ({ mime: r.mime_type, scan: r.scan_status })) }; },
     timeoutMs: 300_000,
@@ -271,6 +356,23 @@ export async function run(ctx) {
       serverTruth: async () => { const row = await server.messageByBody(convId, t5); return { ok: Boolean(row), detail: row ? `server row ${row.id}` : 'no server row' }; } });
   }
 
+  // v3.3 (backlog 47c): scrolled back through a thread, an arriving message
+  // shows a pill rather than yanking the list; tapping it returns to the newest.
+  await openA();
+  const jumpText = `Arrived while scrolled back ${tag}`;
+  await Promise.all([
+    ctx.step({
+      id: 'chat-29c-new-messages-jump', title: 'A is scrolled back when B sends: a "N new messages" pill appears and returns A to the newest', device: devA,
+      flow: 'chat/new-messages-jump.yaml', env: { TEXT: jumpText, TIMEOUT: '60000' },
+      expected: 'After two drags back through the history the pill appears within 60s of B\'s send; tapping it lands on the new message. A thread shorter than a screenful never leaves the bottom, so the pill never appears and the step records that instead of failing.',
+      screen: 'conversation', optional: true,
+    }),
+    (async () => {
+      await sleep(12_000);
+      return ctx.step({ id: 'chat-29d-b-sends-for-jump', title: 'B sends while A is scrolled back', device: devB, flow: 'chat/send-text.yaml', env: { TEXT: jumpText }, expected: 'bubble', screen: 'conversation' });
+    })(),
+  ]);
+
   await ctx.step({ id: 'chat-30-language-mid-session', title: 'Switch display language mid-session; originals unchanged', device: devA, flow: 'chat/language-mid-session.yaml', env: { PEER: B.displayName, TEXT: t5 }, expected: 'Spanish chrome in the conversation ("Escribe un mensaje…", "Volver a chats"), message text unchanged, English restored', screen: 'settings / conversation' });
 
   // Deep link.
@@ -281,6 +383,12 @@ export async function run(ctx) {
   } catch (error) {
     ctx.note({ id: 'chat-31-deep-link', title: 'Deep link', status: 'FAIL', observed: String(error.message) });
   }
+  ctx.note({
+    id: 'chat-32b-no-banner-for-open-chat', title: 'No notification banner for the chat that is already open', status: 'INFO',
+    expected: 'A message arriving in the conversation on screen shows no banner; it simply appears in the thread',
+    observed: 'Not provable on a simulator: iOS simulators receive no APNs/Expo push at all (Device.isDevice is false, so no push token is ever issued), which is also why chat-32 is unreachable. The suppression is on the phone, in the notification handler: setVisibleConversation records the conversation on screen and announcesVisibleConversation makes handleNotification return shouldShowBanner/shouldShowList false for a push naming it (apps/newone/src/device/push-registration.native.ts, visible-conversation.ts), which Jest covers in apps/newone/tests/visible-conversation.test.ts. On a physical device this is the step to watch; chat-02 already proves the message itself lands in the open thread.',
+    screen: 'conversation',
+  });
   ctx.note({ id: 'chat-32-push-tap', title: 'Notification tap routing', status: 'UNREACHABLE', observed: 'iOS simulators cannot receive APNs/Expo push; injecting a synthetic simctl payload would be a mock, so this is not exercised. Push registration itself is covered by profile-04.', expected: 'Tapping a real push opens the conversation' });
 
   // Group housekeeping: rename + archive the forward-target group.
@@ -326,5 +434,63 @@ export async function run(ctx) {
     flow: 'chat/open-row-at-launch.yaml', env: { PEER: B.displayName },
     expected: 'Conversation with B open at once (header names B, composer visible); no other conversation opens', screen: 'chats → conversation',
   });
-  ctx.accounts = { A, B };
+
+  // ---- v3.3: what the Chats list itself now does ----
+  // The one search field: chips for people, and two chips meaning "the chats
+  // holding both". A's list has the direct chat with B and the group with B
+  // and the third account, so chipping both leaves only the group.
+  if (groupRow && C.userId) {
+    await ctx.step({
+      id: 'chat-37-search-chips', title: 'Chats search: a person suggestion becomes a chip (with the comma written), a second chip narrows to the chat holding both, one tap clears a chip', device: devA,
+      flow: 'chat/search-chips.yaml', env: { PERSON1: B.displayName, PERSON2: C.displayName, BOTH: groupName, ABSENT: t5 },
+      expected: 'Typing B suggests B under "People"; tapping it leaves a "Remove <B>" chip; adding the third account leaves both chips and only the group listed; tapping a chip clears just that one',
+      screen: 'chats (search field)',
+    });
+  }
+  // The "+" menu: two rows, one to the stranger search and one to creation.
+  await ctx.step({
+    id: 'chat-38-new-menu', title: 'The "+" on the Chats header: "Add a friend" reaches the stranger search, "New group" reaches creation', device: devA,
+    flow: 'chat/new-menu.yaml',
+    expected: 'The "New" sheet holds exactly "Add a friend" and "New group"; the first opens Contacts with the "Search by name or @username" sheet, the second opens "Create a group"; the old "Start a conversation" entry is gone',
+    screen: 'chats → New',
+  });
+  // Chat-row actions: mark unread, mute, and the two confirmations.
+  await ctx.step({
+    id: 'chat-39-row-mark-unread', title: 'A puts B\'s chat back to unread from the row, then reads it again', device: devA,
+    flow: 'chat/row-mark-unread.yaml', env: { PEER: B.displayName },
+    expected: 'A long press opens Mark unread / Mute / Archive / Delete; after Mark unread the Unread filter lists the chat and the row offers Mark read',
+    screen: 'chats',
+  });
+  await ctx.step({
+    id: 'chat-40-row-mute', title: 'A mutes B\'s chat from the row and unmutes it again', device: devA,
+    flow: 'chat/row-mute.yaml', env: { PEER: B.displayName },
+    expected: 'Mute becomes Unmute; server conversation_preferences.notification_level none while muted and all afterwards',
+    screen: 'chats',
+    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.notification_level === 'all', { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
+  });
+  await ctx.step({
+    id: 'chat-41-row-delete-confirmation', title: 'Deleting a one-to-one chat asks first and names the other person; "Keep it" leaves it alone', device: devA,
+    flow: 'chat/row-delete-confirm.yaml', env: { PEER: B.displayName },
+    expected: '"Delete this chat?" with "It disappears from your list. <B> keeps theirs." and Keep it; the row is a one-to-one so it says Delete, never Leave; after Keep it the chat is still listed',
+    screen: 'chats',
+    serverTruth: async () => { const row = await server.preferences(convId, A.userId); return { ok: row?.is_archived !== true, detail: row ?? 'no preference row (not archived)' }; },
+  });
+  // Archiving from the row takes the chat off the list at once. Last, because
+  // it removes B's chat from A's list.
+  await ctx.step({
+    id: 'chat-43-row-archive', title: 'A archives B\'s chat from the row: it leaves the list', device: devA,
+    flow: 'chat/row-archive.yaml', env: { PEER: B.displayName },
+    expected: 'The row disappears; server conversation_preferences.is_archived true for A',
+    screen: 'chats',
+    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_archived === true, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
+  });
+  // Back to the newest: the control only exists once the list is a screenful
+  // deep, which a test account with a few chats never is.
+  await ctx.step({
+    id: 'chat-44-jump-to-latest', title: 'Scrolled down the Chats list, "Back to the newest" returns to the top', device: devA,
+    flow: 'chat/jump-to-latest.yaml',
+    expected: 'After two upward drags the control appears and returns the list to the top; a list shorter than a screenful never scrolls, and that is recorded rather than forced',
+    screen: 'chats', optional: true,
+  });
+  ctx.accounts = { A, B, C };
 }

@@ -5,9 +5,11 @@ appId: com.totallynotwoojin.newone
 # second chip means "the conversations holding both", which is how a group is
 # found without its name; one tap clears a chip.
 #
-# PERSON1 / PERSON2 are display names, BOTH is the conversation that holds both
-# of them, ONLY1 a conversation that holds PERSON1 but not PERSON2 and must
-# therefore disappear once the second chip is added.
+# PERSON1 / PERSON2 are display names and BOTH is the conversation that holds
+# both of them. ABSENT is text that only the one-to-one chat with PERSON1
+# carries (its newest message, shown as that row's preview): with two chips
+# that row is filtered out, so the text goes with it. A display name would not
+# do as the negative — it is also the chip's own label.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
@@ -51,7 +53,7 @@ appId: com.totallynotwoojin.newone
 - takeScreenshot: ${SHOT}-two-chips
 # Two people chipped: only what holds both survives.
 - assertVisible: ".*${BOTH}.*"
-- assertNotVisible: ".*${ONLY1}.*"
+- assertNotVisible: ".*${ABSENT}.*"
 - tapOn: "Remove ${PERSON1}"
 - extendedWaitUntil:
     notVisible: "Remove ${PERSON1}"
