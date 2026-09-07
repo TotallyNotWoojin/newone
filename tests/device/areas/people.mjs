@@ -38,7 +38,7 @@ export async function run(ctx) {
   const firstMessage = await ctx.step({
     id: 'people-04-message-request', title: 'Message opens a chat with the stranger at once; A sends the first text', device: devA,
     flow: 'people/message-from-result.yaml', env: { NAME: C.displayName, TEXT: firstText },
-    expected: 'Conversation opens directly (no pending banner, no approval); the first message renders as sent; server: direct conversation + message row', screen: 'people → conversation',
+    expected: 'Conversation opens directly (no pending banner, no approval); the first message renders as sent; server: direct conversation + message row', screen: 'contacts → conversation',
     serverTruth: async () => {
       const conversation = await server.waitFor(() => server.directConversation(A.userId, C.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       const message = conversation.row ? await server.waitFor(() => server.messageByBody(conversation.row.id, firstText), (row) => Boolean(row), { timeoutMs: 20_000 }) : { ok: false };
@@ -99,7 +99,7 @@ export async function run(ctx) {
   await ctx.step({
     id: 'people-11-message-friend', title: 'A taps Message on B\'s row and sends a text', device: devA,
     flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: hello },
-    expected: 'Direct conversation opens; message renders as sent; server message row', screen: 'people → conversation',
+    expected: 'Direct conversation opens; message renders as sent; server message row', screen: 'contacts → conversation',
     serverTruth: async () => {
       const conversation = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       const message = conversation.row ? await server.waitFor(() => server.messageByBody(conversation.row.id, hello), (row) => Boolean(row), { timeoutMs: 20_000 }) : { ok: false };
@@ -115,7 +115,7 @@ export async function run(ctx) {
     await ctx.step({
       id: 'people-10b-a-sees-friend-relaunch', title: 'A sees B under "Your people" after a relaunch (fallback check)', device: devA,
       flow: 'people/friends-shows-after-relaunch.yaml', env: { NAME: B.displayName },
-      expected: 'After force-quit + relaunch, B is listed under "Your people"', screen: 'people',
+      expected: 'After force-quit + relaunch, B is listed under "Your people"', screen: 'contacts',
     });
   }
   await ctx.step({

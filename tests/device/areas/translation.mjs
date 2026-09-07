@@ -35,9 +35,9 @@ export async function runPair(ctx, cfg) {
     return;
   }
   // Consumers message anyone directly: no request to send or accept.
-  await ctx.step({ id: 'setup-tr-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with Message', screen: 'people' });
+  await ctx.step({ id: 'setup-tr-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with Message', screen: 'contacts → Add a friend' });
   const intro = cfg.intro(tag);
-  await ctx.step({ id: 'setup-tr-request', title: 'Setup: A taps Message and sends the first text (chat opens directly)', device: devA, flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'conversation open, first text sent', screen: 'people → conversation' });
+  await ctx.step({ id: 'setup-tr-request', title: 'Setup: A taps Message and sends the first text (chat opens directly)', device: devA, flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'conversation open, first text sent', screen: 'contacts → conversation' });
   const accept = await ctx.step({ id: 'setup-tr-accept', title: 'Setup: B opens the chat from Chats (nothing to accept)', device: devB, flow: 'people/receive-text.yaml', env: { PEER: A.displayName, TEXT: intro }, expected: 'composer', screen: 'conversation' });
   if (!accept.uiOk) return;
   const conversation = await server.directConversation(A.userId, B.userId);

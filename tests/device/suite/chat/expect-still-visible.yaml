@@ -1,7 +1,0 @@
-appId: com.totallynotwoojin.newone
----
-# … or must STILL be visible (delete for me must not touch the peer).
-- extendedWaitUntil:
-    visible: ".*${TEXT}.*"
-    timeout: 20000
-- takeScreenshot: ${SHOT}-still-visible

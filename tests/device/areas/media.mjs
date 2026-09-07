@@ -17,10 +17,10 @@ export async function run(ctx) {
     return;
   }
   const intro = `Hey Max, Mia here ${tag}`;
-  await ctx.step({ id: 'media-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'people' });
+  await ctx.step({ id: 'media-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'contacts → Add a friend' });
   const request = await ctx.step({
     id: 'media-00b-message-request', title: 'A taps Message and sends the first text (chat opens directly, no request)', device: devA,
-    flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'Conversation opens at once; first text sent', screen: 'people → conversation',
+    flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'Conversation opens at once; first text sent', screen: 'contacts → conversation',
     serverTruth: async () => { const w = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
   if (!request.uiOk) return;

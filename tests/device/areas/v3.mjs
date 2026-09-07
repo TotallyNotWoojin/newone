@@ -132,7 +132,7 @@ export async function run(ctx) {
   const opened = await ctx.step({
     id: 'v3-03-message-anyone', title: 'A taps Message with no prior connection: the chat opens; A sends "hola desde A"', device: devA,
     flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: hola },
-    expected: 'Conversation opens at once; the text renders as sent; server: public.conversations direct row between A and B, no accepted contact_connections row', screen: 'people → conversation',
+    expected: 'Conversation opens at once; the text renders as sent; server: public.conversations direct row between A and B, no accepted contact_connections row', screen: 'contacts → conversation',
     serverTruth: async () => {
       const conversation = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       const message = conversation.row ? await server.waitFor(() => server.messageByBody(conversation.row.id, hola), (row) => Boolean(row), { timeoutMs: 20_000 }) : { ok: false };

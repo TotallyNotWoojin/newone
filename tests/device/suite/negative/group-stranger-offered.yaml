@@ -1,6 +1,6 @@
 appId: com.totallynotwoojin.newone
 ---
-# New group → search the picker for a stranger (STRANGER_QUERY is their
+# Chats → "+" → New group → search the picker for a stranger (STRANGER_QUERY is their
 # @username). Consumers can add anyone (Sep 2026 social stream), so the
 # stranger must be offered as "Add STRANGER"; the old "No authorized
 # candidates match this search." refusal no longer exists. Nothing is created:
@@ -11,15 +11,19 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - runFlow:
     when:
-      notVisible: "Start a conversation"
+      notVisible: "New"
     commands:
       - tapOn: "Chats"
-- tapOn: "Start a conversation"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
 - extendedWaitUntil:
     visible: "Create a group"
     timeout: 20000
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
@@ -30,7 +34,7 @@ appId: com.totallynotwoojin.newone
 # pass); the "Group name" caption tap puts the keyboard away, hideKeyboard is
 # only the fallback. No drags: this form is a sheet and a drag closes it.
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 0
     optional: true
 - waitForAnimationToEnd:
@@ -60,7 +64,7 @@ appId: com.totallynotwoojin.newone
 # pass); the "Group name" caption tap puts the keyboard away, hideKeyboard is
 # only the fallback. No drags: this form is a sheet and a drag closes it.
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 0
     optional: true
 - waitForAnimationToEnd:

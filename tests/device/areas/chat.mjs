@@ -30,10 +30,10 @@ export async function run(ctx) {
   // Relationship: A messages B directly from the People search (the message
   // request / accept path is gone; the step ids keep their history).
   const intro = `Hey Ben, Ana here ${tag}`;
-  await ctx.step({ id: 'chat-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'people' });
+  await ctx.step({ id: 'chat-00a-search', title: 'Setup: A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a Message button', screen: 'contacts → Add a friend' });
   const request = await ctx.step({
     id: 'chat-00b-message-request', title: 'A taps Message and sends the first text (the chat opens directly, no request)', device: devA,
-    flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'Conversation opens at once; first text renders as sent; server: direct conversation row', screen: 'people → conversation',
+    flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'Conversation opens at once; first text renders as sent; server: direct conversation row', screen: 'contacts → conversation',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       return { ok: wait.ok, detail: wait.row };
