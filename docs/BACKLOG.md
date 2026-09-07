@@ -91,6 +91,8 @@ Ship together. The database is wiped right before release, as it was for v3.2.
 
 61. **Reporting: only a person can be reported** (recorded Sep 7 2026). The owner asked on Sep 5 to drop the report feature; the message and group sheets went, the person report stayed. The server routes, repository methods, workspace actions and the admin console are all still wired, and the catalog still carries `chat.reportGroup`, so a sheet can come back without rebuilding the pipe. Worth a deliberate decision before App Review: an app carrying other people's content needs a way to report content and block people, which blocking plus the person report satisfies, but message-level reporting is what reviewers most often look for.
 
+62. **accessibilityState never reaches the browser** (found by the browser suite, Sep 7 2026). This React Native Web build reads `aria-expanded` / `aria-checked`, not `accessibilityState`, so the Advanced-options disclosure (new-group.tsx), the reaction row, two conversation-pane controls and the Settings switch rows emit no state to a screen reader on the web. Native is unaffected. Fix at the call sites by passing the aria props on web, and add an axe assertion that would have caught it.
+
 40. **Testing:** unit tests for the theme, the search chips and the duplicate rule; Deno and hosted smokes for the members signature and the group minimum; device flows for the "+" menu, group creation, chip search, the own-translation toggle, the pinned views and (if built) the media grid; then a full device pass. The chat area's long-standing "pinned view unreachable" note becomes a real step. Dark mode's look is reviewed by the owner, not asserted.
 
 ## Dropped
