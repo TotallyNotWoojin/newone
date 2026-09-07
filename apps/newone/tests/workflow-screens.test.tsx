@@ -362,8 +362,9 @@ describe('group creation workflow screen', () => {
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Guest Candidate' }));
     expect(screen.getByText('group.guestDisclosure')).toBeTruthy();
 
-    await fireEvent.changeText(screen.getByLabelText('group.name'), 'Incident Alpha');
-    await fireEvent.changeText(screen.getByLabelText('group.description'), 'Live production incident coordination.');
+    await fireEvent.changeText(screen.getByLabelText('group.nameOptional'), 'Incident Alpha');
+    await fireEvent.changeText(screen.getByLabelText('group.descriptionOptional'), 'Live production incident coordination.');
+    await fireEvent.press(screen.getByRole('button', { name: 'group.advancedOptions' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.incident' }));
     expect(screen.getByText('group.joinLockedDisclosure')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'group.incidentSeverityCritical' }));
@@ -372,7 +373,7 @@ describe('group creation workflow screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'group.postingAdminsOnly' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.historyAll' }));
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.chooseAvatar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.photoOptional' }));
     expect(screen.getByLabelText('group.avatarSelected')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(createGroupConversation).toHaveBeenCalledWith({
@@ -413,12 +414,12 @@ describe('group creation workflow screen', () => {
     await waitFor(() => expect(screen.getByText('One Candidate')).toBeTruthy());
 
     mockRequestMediaPermission.mockResolvedValueOnce({ granted: false });
-    await fireEvent.press(screen.getByRole('button', { name: 'group.chooseAvatar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.photoOptional' }));
     expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
     mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: true, assets: [] });
-    await fireEvent.press(screen.getByRole('button', { name: 'group.chooseAvatar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.photoOptional' }));
     expect(screen.queryByLabelText('group.avatarSelected')).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'group.chooseAvatar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.photoOptional' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.changeAvatar' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.removeAvatar' }));
     expect(screen.queryByLabelText('group.avatarSelected')).toBeNull();
@@ -430,13 +431,14 @@ describe('group creation workflow screen', () => {
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson One Candidate' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.member' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.owner' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.advancedOptions' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.organizationWide' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.postingAllMembers' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.joinInviteOnly' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.joinApproval' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.joinInherit' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.historySinceJoin' }));
-    await fireEvent.changeText(screen.getByLabelText('group.name'), 'Mobile Group');
+    await fireEvent.changeText(screen.getByLabelText('group.nameOptional'), 'Mobile Group');
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith({
       pathname: '/conversation/[id]',
@@ -489,6 +491,7 @@ describe('group creation workflow screen', () => {
     await waitFor(() => expect(screen.getByText('group.noCandidates')).toBeTruthy());
     await fireEvent.changeText(screen.getByLabelText('group.search'), 'retry');
     await waitFor(() => expect(screen.getByText('Retry Candidate')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'group.advancedOptions' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.team' }));
     const candidateToggle = () => screen.getByRole('checkbox', {
       name: /Retry Candidate/,
@@ -496,8 +499,8 @@ describe('group creation workflow screen', () => {
     await fireEvent.press(candidateToggle());
     await fireEvent.press(candidateToggle());
     await fireEvent.press(candidateToggle());
-    await fireEvent.changeText(screen.getByLabelText('group.name'), 'Retry Team');
-    await fireEvent.press(screen.getByRole('button', { name: 'group.chooseAvatar' }));
+    await fireEvent.changeText(screen.getByLabelText('group.nameOptional'), 'Retry Team');
+    await fireEvent.press(screen.getByRole('button', { name: 'group.photoOptional' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(createGroupConversation).toHaveBeenCalledTimes(1));
     expect(mockRouter.replace).not.toHaveBeenCalledWith('/');
@@ -551,7 +554,9 @@ describe('group creation workflow screen', () => {
     expect(queryGroupCreationCandidates).not.toHaveBeenCalled();
 
     // Consumer-only controls: no workplace kinds, scope, or join policy, and
-    // none of the explanatory boxes.
+    // none of the explanatory boxes. The advanced disclosure is opened first so
+    // the absent controls are absent even where they would live.
+    await fireEvent.press(screen.getByRole('button', { name: 'group.advancedOptions' }));
     for (const gone of [
       'group.private', 'group.organizationWide', 'group.joinInherit', 'group.joinApproval',
       'group.team', 'group.shift', 'group.incident',
@@ -596,7 +601,7 @@ describe('group creation workflow screen', () => {
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
     expect(screen.getByText('2 group.selectedSuffix')).toBeTruthy();
 
-    await fireEvent.changeText(screen.getByLabelText('group.name'), 'Weekend Trip');
+    await fireEvent.changeText(screen.getByLabelText('group.nameOptional'), 'Weekend Trip');
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(createGroupConversation).toHaveBeenCalledWith({
       name: 'Weekend Trip',
@@ -624,7 +629,7 @@ describe('group creation workflow screen', () => {
       createGroupConversation: successfulAction(null),
     });
     await render(<NewGroupScreen />);
-    await waitFor(() => expect(screen.getByText('group.pickerHint')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('group.pickerHint').length).toBeGreaterThan(0));
     expect(screen.queryByText('group.noCandidates')).toBeNull();
     expect(screen.queryByText('group.loadingCandidates')).toBeNull();
   });

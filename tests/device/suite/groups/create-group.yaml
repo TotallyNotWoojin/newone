@@ -19,7 +19,7 @@ appId: com.totallynotwoojin.newone
     visible: "Create a group"
     timeout: 20000
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 1
 - inputText: ${NAME}
 - tapOn: "Create a group"
@@ -28,7 +28,7 @@ appId: com.totallynotwoojin.newone
 # so the keyboard goes away with a tap on the "Group name" caption, and
 # hideKeyboard is the fallback.
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 0
 - waitForAnimationToEnd:
     timeout: 1500
@@ -58,7 +58,7 @@ appId: com.totallynotwoojin.newone
 # No drags on this sheet (they pull it closed): a caption tap puts the
 # keyboard away, hideKeyboard is the fallback.
 - tapOn:
-    text: "Group name"
+    text: "Group name.*"
     index: 0
     optional: true
 - waitForAnimationToEnd:
@@ -92,7 +92,7 @@ appId: com.totallynotwoojin.newone
       - inputText: ${MEMBER2_QUERY}
       # No drags on this sheet (they pull it closed): caption tap, then hideKeyboard.
       - tapOn:
-          text: "Group name"
+          text: "Group name.*"
           index: 0
           optional: true
       - waitForAnimationToEnd:
