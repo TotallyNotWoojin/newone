@@ -1,5 +1,5 @@
+import * as Haptics from 'expo-haptics';
 import { describe, expect, jest, test } from '@jest/globals';
-import { Vibration } from 'react-native';
 
 import { replyHapticTick } from '@/features/chat/reply-haptics';
 import {
@@ -104,16 +104,20 @@ describe('which messages can be swiped', () => {
 });
 
 describe('the tick when the swipe passes its threshold', () => {
-  test('taps the vibrator briefly on Android', () => {
-    const vibrate = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
+  test('plays the light impact on both phones', () => {
+    const impact = jest.spyOn(Haptics, 'impactAsync').mockResolvedValue(undefined);
+    replyHapticTick('ios');
     replyHapticTick('android');
-    expect(vibrate).toHaveBeenCalledWith(10);
+    expect(impact).toHaveBeenCalledTimes(2);
+    expect(impact).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+    impact.mockRestore();
   });
 
-  test('stays silent where the only vibration would be a long buzz', () => {
-    const vibrate = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
-    replyHapticTick('ios');
+  test('does nothing on the web, and a phone with haptics off is not an error', () => {
+    const impact = jest.spyOn(Haptics, 'impactAsync').mockRejectedValue(new Error('unavailable'));
     replyHapticTick('web');
-    expect(vibrate).not.toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
+    expect(() => replyHapticTick('ios')).not.toThrow();
+    impact.mockRestore();
   });
 });
