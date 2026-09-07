@@ -2,7 +2,14 @@ appId: com.totallynotwoojin.newone
 ---
 # v3.3 (backlog 46): a short drag right on a bubble starts a reply to it — the
 # iMessage gesture with the quoted reply the app already renders. The gesture
-# triggers past 56 points, so a full-width drag from the bubble is well past it.
+# triggers past 56 points.
+#
+# A directional swipe starts at the middle of the matched element and ends at
+# 90% of the screen width, so the runway is only as long as whatever is left of
+# the screen. Point TARGET at a bubble from the other person: those sit on the
+# left and leave two hundred points to travel. A short own bubble hugs the right
+# edge and leaves about sixty, which is inside the threshold's own rounding —
+# run-2026-09-07T17-53-35 swiped one and no "Replying to" ever appeared.
 - runFlow:
     when:
       visible: "(.*(Typing Predictions|Dictate).*|space)"

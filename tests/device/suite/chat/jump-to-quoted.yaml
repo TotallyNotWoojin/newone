@@ -28,7 +28,9 @@ appId: com.totallynotwoojin.newone
 - tapOn: "${SENDER}: .*${QUOTED}.*"
 - waitForAnimationToEnd:
     timeout: 3000
+# Matched whole, not as a fragment: the quote itself reads "<sender>: <original>"
+# and would satisfy a ".*<original>.*" without the list having moved at all.
 - extendedWaitUntil:
-    visible: ".*${ORIGINAL}.*"
+    visible: "${ORIGINAL}"
     timeout: 20000
 - takeScreenshot: ${SHOT}-jumped-to-original

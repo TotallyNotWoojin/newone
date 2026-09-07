@@ -98,12 +98,17 @@ export function filterConversations(
   search: string,
   people: readonly SearchPersonRef[] = [],
   messageConversationIds?: ReadonlySet<string>,
+  // A chat put back to unread from its row carries no server-side unread
+  // count, so the Unread filter has to be told about it or the chat the row
+  // just marked would not be there when the filter is opened.
+  markedUnreadIds: readonly string[] = [],
 ) {
   const parsed = parseSearch(search, people);
+  const markedUnread = new Set(markedUnreadIds);
   return conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
     if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) return false;
-    if (filter === 'unread') return conversation.unreadCount > 0;
+    if (filter === 'unread') return conversation.unreadCount > 0 || markedUnread.has(conversation.id);
     if (filter === 'direct') return conversation.kind === 'direct';
     if (filter === 'groups') {
       return ['group', 'team', 'shift'].includes(conversation.kind);
@@ -174,8 +179,8 @@ export function ConversationList({
     [suggestions],
   );
   const visible = useMemo(
-    () => filterConversations(conversations, filter, search, people, messageConversationIds),
-    [conversations, filter, messageConversationIds, people, search],
+    () => filterConversations(conversations, filter, search, people, messageConversationIds, markedUnreadIds),
+    [conversations, filter, markedUnreadIds, messageConversationIds, people, search],
   );
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
@@ -392,6 +397,11 @@ function ConversationRow({
   const actionable = Boolean(onAction);
   const showActions = actionable && (actionsOpen || hovered);
   const unreadCount = markedUnread && !conversation.unreadCount ? 1 : conversation.unreadCount;
+  // The row is one element to VoiceOver, so its label has to carry the preview
+  // line as well as the name — otherwise the newest message, which is the whole
+  // point of the row, is read out by nobody and seen by no test driver.
+  const previewLine = conversation.lastMessage
+    || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet');
   const actions = useMemo(
     () => conversationRowActions({ ...conversation, unreadCount }),
     [conversation, unreadCount],
@@ -418,7 +428,7 @@ function ConversationRow({
   const row = (
     <View accessible={false} ref={rowRef} style={styles.rowShell}>
       <Pressable
-        accessibilityLabel={conversation.title}
+        accessibilityLabel={`${conversation.title}: ${previewLine}`}
         accessibilityRole="button"
         accessibilityState={{ selected }}
         onHoverIn={actionable ? () => setHovered(true) : undefined}
@@ -469,7 +479,7 @@ function ConversationRow({
                   styles.rowPreview,
                   unreadCount > 0 && styles.rowPreviewUnread,
                 ]}>
-                {conversation.lastMessage || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet')}
+                {previewLine}
               </Text>
             </View>
             {unreadCount ? (
