@@ -4831,15 +4831,6 @@
       "gating": "authStep === 'verify' || authStep === 'password'"
     },
     {
-      "key": "auth.differentEmail",
-      "en": "Use a different email",
-      "usedIn": [
-        "app/sign-in.tsx:816"
-      ],
-      "consumerIosReachable": false,
-      "gating": "not referenced by any screen (legacy key)"
-    },
-    {
       "key": "auth.displayNameLabel",
       "en": "Display name",
       "usedIn": [
