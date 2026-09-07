@@ -76,6 +76,16 @@ describe('every text pairing the app draws', () => {
     expect(failures[0].minimum).toBe(AA_NORMAL);
   });
 
+  test('an exemption has to say why, and there is only the one', () => {
+    const exempt = TEXT_PAIRS.filter((pair) => pair.minimum === 0);
+    expect(exempt.map((pair) => `${pair.text} on ${pair.on}`)).toEqual(['white on mint']);
+    for (const pair of exempt) expect((pair.note ?? '').length).toBeGreaterThan(40);
+    // Recorded, not forgotten: this is what it actually measures today.
+    for (const scheme of schemes) {
+      expect(contrastRatio(palettes[scheme].white, palettes[scheme].mint)).toBeLessThan(AA_NORMAL);
+    }
+  });
+
   test('every pair names real tokens and no pair is listed twice', () => {
     const seen = new Set<string>();
     for (const pair of TEXT_PAIRS) {

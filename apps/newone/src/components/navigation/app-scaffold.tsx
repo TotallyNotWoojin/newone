@@ -263,7 +263,7 @@ function MobileTabs({ current }: { current: NavigationKey }) {
               <Ionicons
                 name={selected ? item.iconActive : item.icon}
                 size={20}
-                color={selected ? colors.onAccent : colors.inkSubtle}
+                color={selected ? colors.accentInk : colors.inkSubtle}
               />
               {badge > 0 ? <View style={styles.mobileBadge} /> : null}
             </View>

@@ -50,6 +50,11 @@ export interface TextPair {
   where: string;
   /** Only for text the app draws large; defaults to AA_NORMAL. */
   minimum?: number;
+  /**
+   * Set with `minimum: 0` to record a pairing the app draws that the palettes
+   * cannot meet, and say why. Nothing else may skip the check.
+   */
+  note?: string;
 }
 
 /**
@@ -97,6 +102,17 @@ export const TEXT_PAIRS: TextPair[] = [
   { text: 'white', on: 'forestRaised', where: 'raised brand surface text' },
   { text: 'white', on: 'redStrong', where: 'unread badge and acknowledge button' },
   { text: 'white', on: 'inkStrong', where: 'discovery pill' },
+  { text: 'white', on: 'accentStrong', where: 'jump-to-latest pill' },
+  {
+    text: 'white',
+    on: 'mint',
+    where: "a chat row's unread count",
+    minimum: 0,
+    note: 'Pre-existing in the light palette (2.2:1) and unchanged by dark mode. '
+      + 'The count is a shape more than a word, and darkening the badge or moving '
+      + 'its text to onAccent is a visible change to the light app that the owner '
+      + 'has not asked for. Raise it with the owner rather than quietly editing it.',
+  },
 ];
 
 export interface ContrastFailure {
@@ -111,6 +127,7 @@ export function findContrastFailures(colors: ThemeColors, pairs: TextPair[] = TE
   const failures: ContrastFailure[] = [];
   for (const pair of pairs) {
     const minimum = pair.minimum ?? AA_NORMAL;
+    // A zero minimum is a recorded exemption; `note` says why.
     if (minimum <= 0) continue;
     const ratio = contrastRatio(colors[pair.text], colors[pair.on]);
     if (ratio + 1e-9 < minimum) {

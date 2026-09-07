@@ -3345,7 +3345,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.sm,
-    backgroundColor: colors.red,
+    backgroundColor: colors.redStrong,
   },
   acknowledgeText: {
     color: colors.white,
@@ -3812,7 +3812,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 6,
     paddingHorizontal: spacing.sm,
     borderRadius: radii.pill,
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.accentStrong,
   },
   composerWrap: {
     paddingHorizontal: spacing.sm,

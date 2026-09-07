@@ -267,7 +267,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.mintSoft,
   },
   emptyCopy: { flex: 1, minWidth: 0 },
-  emptyTitle: { color: colors.forest, fontSize: 12, fontWeight: '900' },
+  emptyTitle: { color: colors.accentInk, fontSize: 12, fontWeight: '900' },
   emptyBody: { color: colors.inkMuted, fontSize: 10, lineHeight: 15, marginTop: 2 },
   item: {
     gap: spacing.xs,

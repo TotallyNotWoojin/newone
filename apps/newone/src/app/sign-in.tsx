@@ -837,7 +837,7 @@ function TrustItem({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text:
   return (
     <View style={styles.trustItem}>
       <View style={styles.trustIcon}>
-        <Ionicons name={icon} size={18} color={colors.forest} />
+        <Ionicons name={icon} size={18} color={colors.onAccent} />
       </View>
       <Text style={styles.trustText}>{text}</Text>
     </View>

@@ -19,9 +19,10 @@
  * - `mint` stays a bright accent in both, so anything drawn on it (`onAccent`)
  *   stays dark in both. `accentInk` is the heading colour on `mintSoft`, which
  *   does flip.
- * - `redStrong` / `inkStrong` are solid fills that always carry `white` text
- *   (unread badges, the destructive button). They stay dark in both palettes;
- *   `red` and `ink` are foregrounds and flip.
+ * - `redStrong` / `inkStrong` / `accentStrong` are solid fills that always
+ *   carry `white` text (unread badges, the destructive button, the
+ *   jump-to-latest pill). They stay dark in both palettes; `red`, `ink` and
+ *   `mintDark` are foregrounds and flip.
  * - `tint*` are the translucent washes drawn *inside* a bubble, so they darken
  *   on light and lighten on dark.
  */
@@ -43,6 +44,8 @@ export const lightColors = {
   forestRaised: '#173D34',
   mint: '#35C48D',
   mintDark: '#167854',
+  /** Solid accent fill that carries `white` text (the jump-to-latest pill). */
+  accentStrong: '#167854',
   mintSoft: '#DDF7EC',
   mintBorder: '#BCE8D7',
   /** Text and icons drawn on `mint`; dark in both palettes. */
@@ -93,6 +96,7 @@ export const darkColors: ThemeColors = {
   forestRaised: '#1A4038',
   mint: '#3ED79B',
   mintDark: '#6FE0B4',
+  accentStrong: '#1E7458',
   mintSoft: '#12362B',
   mintBorder: '#1F5C48',
   onAccent: '#062018',
