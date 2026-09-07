@@ -26,8 +26,9 @@ appId: com.totallynotwoojin.newone
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: ${SHOT}-reaction-row
-# All six fit one row on a phone-sized screen (7 x 44pt buttons); if a narrower
-# device ever hides one, this is where it shows.
+# All six are drawn at once; the row scrolls sideways because seven 44pt buttons
+# are wider than the sheet (328pt of row against 368pt of buttons on a 402pt
+# phone), so this is the first thing to look at if one ever goes missing.
 - assertVisible: "React 👍"
 - assertVisible: "React ❤️"
 - assertVisible: "React 😂"
@@ -38,6 +39,18 @@ appId: com.totallynotwoojin.newone
 # The old four are gone: ✅ and 👀 were replaced.
 - assertNotVisible: "React ✅"
 - assertNotVisible: "React 👀"
+# The "+" sits past the right edge of the row's viewport, so its middle — the
+# point a driver taps — is outside the scroll view and the tap lands on the
+# sheet behind it (run-2026-09-07T17-53-35: the sheet stayed put and no field
+# appeared). Drag the row to its end first; a finger reaches it the same way.
+- swipe:
+    from:
+      id: "reaction-row"
+    direction: LEFT
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-reaction-row-end
 # The "+" route: a field that takes one emoji and refuses anything else.
 - tapOn: "More emoji"
 - extendedWaitUntil:

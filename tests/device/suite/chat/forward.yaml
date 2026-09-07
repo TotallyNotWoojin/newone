@@ -1,6 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# Long-press TARGET → "Forward to a chat" → pick DEST chip → Forward message.
+# Long-press TARGET → "Forward" → "Forward to a chat" → pick DEST chip →
+# Forward message. The destination list is folded away behind the sheet's
+# Forward button (v3.3), so it has to be opened before there is anything to
+# scroll to (run-2026-09-07T17-53-35: the sheet was open, the chips were not).
 # The composer keeps the keyboard up after a send; a long-press on a bubble that
 # sits behind the keyboard lands on the keys instead. Drag the list to dismiss it
 # (keyboardDismissMode="interactive") before touching the message.
@@ -24,6 +27,7 @@ appId: com.totallynotwoojin.newone
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 2000
+- tapOn: "Forward"
 - scrollUntilVisible:
     element:
       text: "Forward to a chat"

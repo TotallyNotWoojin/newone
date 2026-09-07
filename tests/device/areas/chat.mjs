@@ -160,25 +160,28 @@ export async function run(ctx) {
 
   // v3.3 (backlog 46): the reply gesture.
   const swipeReply = `Swiped reply ${tag}`;
-  // The target is the oldest message in the thread, so the reply's quote is a
-  // real jump rather than a tap on something already on screen.
+  // The target is B's reply, high up the thread and drawn on the left: a
+  // directional swipe starts at the middle of the bubble and stops at 90% of the
+  // screen, so a left-hand bubble gives the gesture room to pass its 56pt
+  // threshold, where a short own bubble on the right leaves barely sixty points
+  // (run-2026-09-07T17-53-35: no "Replying to" ever appeared).
   await ctx.step({
-    id: 'chat-13b-swipe-reply', title: 'A swipes right on the first message of the thread to answer it', device: devA,
-    flow: 'chat/swipe-reply.yaml', env: { TARGET: intro, REPLY: swipeReply },
-    expected: 'The drag opens "Replying to …" without the actions sheet; the sent bubble quotes the first message; server reply_to_message_id points at it',
+    id: 'chat-13b-swipe-reply', title: 'A swipes right on B\'s message to answer it', device: devA,
+    flow: 'chat/swipe-reply.yaml', env: { TARGET: r1, REPLY: swipeReply },
+    expected: 'The drag opens "Replying to …" without the actions sheet; the sent bubble quotes B\'s message; server reply_to_message_id points at it',
     screen: 'conversation',
     serverTruth: async () => {
-      const original = await server.messageByBody(convId, intro);
+      const original = await server.messageByBody(convId, r1);
       const w = await server.waitFor(() => server.messageByBody(convId, swipeReply), (r) => Boolean(r), { timeoutMs: 20_000 });
       return { ok: w.ok && w.row?.reply_to === original?.id, detail: { reply: w.row?.id, reply_to: w.row?.reply_to, original: original?.id } };
     },
   });
-  // v3.3 (backlog 47d): tapping the quote goes to the message it answers — here
-  // the top of the thread, a screenful or more above the reply.
+  // v3.3 (backlog 47d): tapping the quote goes to the message it answers, up the
+  // thread from the reply.
   await ctx.step({
-    id: 'chat-13c-jump-to-quoted', title: 'Tapping the quote on A\'s swiped reply jumps back to the first message', device: devA,
-    flow: 'chat/jump-to-quoted.yaml', env: { REPLY: swipeReply, SENDER: A.displayName, QUOTED: `Ana here ${tag}`, ORIGINAL: intro },
-    expected: 'The quote reads "<A>: <the first message>"; tapping it scrolls the thread to that message and centres it (the before/after screenshots are the evidence that the list moved)',
+    id: 'chat-13c-jump-to-quoted', title: 'Tapping the quote on A\'s swiped reply jumps back to the message it answers', device: devA,
+    flow: 'chat/jump-to-quoted.yaml', env: { REPLY: swipeReply, SENDER: B.displayName, QUOTED: `Reply from Ben ${tag}`, ORIGINAL: r1 },
+    expected: 'The quote reads "<B>: <B\'s message>"; tapping it scrolls the thread to that message and centres it — the wait afterwards names the bubble whole, so the quote itself cannot stand in for it (the before/after screenshots show the list moved)',
     screen: 'conversation',
   });
   // v3.3 (backlog 47g): a link grows a card saying what the page calls itself.
@@ -248,8 +251,15 @@ export async function run(ctx) {
       serverTruth: async () => { const w = groupRow ? await server.waitFor(() => server.messageByBody(groupRow.id, `edited ${tag}`), (r) => r?.forwarded === true && r?.language_detection_state === 'completed', { timeoutMs: 90_000 }) : { ok: false }; return { ok: w.ok, detail: w.row ? { id: w.row.id, forwarded: w.row.forwarded, detection: w.row.language_detection_state } : 'no forwarded row' }; },
     });
     await ctx.step({ id: 'chat-18-see-forwarded', title: 'Forwarded copy shows the FORWARDED label in the group', device: devA, flow: 'chat/see-forwarded.yaml', env: { DEST: groupName, TEXT: t1e }, expected: 'FORWARDED label + text', screen: 'group conversation' });
-    // v3.3 (backlog 47b): the chat-row gesture on a group is named for what it
-    // does. B leaves from the row; nothing later needs B in this group.
+    await openB();
+  }
+  // v3.3 (backlog 47b): the chat-row gesture on a group is named for what it
+  // does. B leaves from the row — but not yet: the group is the only chat that
+  // holds both B and the third account, which is exactly what chat-37 chips two
+  // names to find, so this runs after it (run-2026-09-07T17-53-35: B had already
+  // gone and the two chips correctly matched nothing).
+  const leaveGroupFromRow = async () => {
+    if (!group.uiOk || !groupRow) return;
     await ctx.step({
       id: 'chat-18b-row-leave-group', title: 'B leaves the group from its row: the row says Leave, never Delete, and the confirmation names the group', device: devB,
       flow: 'chat/row-leave-group.yaml', env: { NAME: groupName },
@@ -257,8 +267,7 @@ export async function run(ctx) {
       screen: 'chats',
       serverTruth: async () => { const w = await server.waitFor(() => server.members(groupRow.id), (rows) => { const b = rows.find((r) => r.user_id === B.userId); return !b || b.status !== 'active'; }, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === B.userId) ?? 'row gone' }; },
     });
-    await openB();
-  }
+  };
 
   const query = `zebra${tag}`;
   await ctx.step({ id: 'chat-19-search', title: 'The Chats field finds the message (v3.3: the Search tab is gone; results arrive as you type)', device: devA, flow: 'chat/search-messages.yaml', env: { QUERY: query }, expected: 'A "Messages" section under the field with a row carrying the token; no "Search people and messages" screen anywhere', screen: 'chats (search field)' });
@@ -445,11 +454,16 @@ export async function run(ctx) {
   if (groupRow && C.userId) {
     await ctx.step({
       id: 'chat-37-search-chips', title: 'Chats search: a person suggestion becomes a chip (with the comma written), a second chip narrows to the chat holding both, one tap clears a chip', device: devA,
-      flow: 'chat/search-chips.yaml', env: { PERSON1: B.displayName, PERSON2: C.displayName, BOTH: groupName, ABSENT: t5 },
+      // ABSENT has to be the newest text of the one-to-one chat, because that
+      // is what its row's preview line reads: with both chips the row is gone
+      // and its preview goes with it.
+      flow: 'chat/search-chips.yaml', env: { PERSON1: B.displayName, PERSON2: C.displayName, BOTH: groupName, ABSENT: jumpText },
       expected: 'Typing B suggests B under "People"; tapping it leaves a "Remove <B>" chip; adding the third account leaves both chips and only the group listed; tapping a chip clears just that one',
       screen: 'chats (search field)',
     });
   }
+  // Now B can go: nothing after this needs a chat holding both B and C.
+  await leaveGroupFromRow();
   // The "+" menu: two rows, one to the stranger search and one to creation.
   await ctx.step({
     id: 'chat-38-new-menu', title: 'The "+" on the Chats header: "Add a friend" reaches the stranger search, "New group" reaches creation', device: devA,
@@ -476,16 +490,22 @@ export async function run(ctx) {
     flow: 'chat/row-delete-confirm.yaml', env: { PEER: B.displayName },
     expected: '"Delete this chat?" with "It disappears from your list. <B> keeps theirs." and Keep it; the row is a one-to-one so it says Delete, never Leave; after Keep it the chat is still listed',
     screen: 'chats',
-    serverTruth: async () => { const row = await server.preferences(convId, A.userId); return { ok: row?.is_archived !== true, detail: row ?? 'no preference row (not archived)' }; },
+    // Archiving one person's copy of a chat is a per-user flag, and the column
+    // that carries it is conversation_preferences.is_hidden — the table has no
+    // is_archived at all, so asking for one answers undefined whatever the app
+    // did (run-2026-09-07T17-53-35 read is_hidden true and still called it a
+    // mismatch). conversations.is_archived is the other thing: the whole
+    // conversation, archived for everyone, which chat-34 checks.
+    serverTruth: async () => { const row = await server.preferences(convId, A.userId); return { ok: row?.is_hidden !== true, detail: row ?? 'no preference row (not archived)' }; },
   });
   // Archiving from the row takes the chat off the list at once. Last, because
   // it removes B's chat from A's list.
   await ctx.step({
     id: 'chat-43-row-archive', title: 'A archives B\'s chat from the row: it leaves the list', device: devA,
     flow: 'chat/row-archive.yaml', env: { PEER: B.displayName },
-    expected: 'The row disappears; server conversation_preferences.is_archived true for A',
+    expected: 'The row disappears; server conversation_preferences.is_hidden true for A',
     screen: 'chats',
-    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_archived === true, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
+    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_hidden === true, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
   });
   // Back to the newest: the control only exists once the list is a screenful
   // deep, which a test account with a few chats never is.
