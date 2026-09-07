@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { clientStore } from '@/data/persistence/client-store';
+import { isThemePreference, type ThemePreference } from '@/theme/scheme';
 
 /**
  * Per-device reading and typing preferences. These are deliberately local
@@ -13,17 +14,21 @@ import { clientStore } from '@/data/persistence/client-store';
  *   inserting a newline (default on; a Settings toggle turns it off).
  * - notificationsPromptedAt: when the app first asked for notification
  *   permission, so the ask happens once at first launch, not on every start.
+ * - theme: light or dark, or "system" to follow the phone's appearance
+ *   setting (the default).
  */
 export interface DevicePreferences {
   translatedOnly: boolean;
   enterSends: boolean;
   notificationsPromptedAt: string | null;
+  theme: ThemePreference;
 }
 
 export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   translatedOnly: false,
   enterSends: true,
   notificationsPromptedAt: null,
+  theme: 'system',
 };
 
 const STORAGE_KEY = 'preferences.device.v1';
@@ -48,6 +53,7 @@ export function parseDevicePreferences(raw: string | null | undefined): DevicePr
       translatedOnly: typeof parsed.translatedOnly === 'boolean' ? parsed.translatedOnly : DEFAULT_DEVICE_PREFERENCES.translatedOnly,
       enterSends: typeof parsed.enterSends === 'boolean' ? parsed.enterSends : DEFAULT_DEVICE_PREFERENCES.enterSends,
       notificationsPromptedAt: typeof parsed.notificationsPromptedAt === 'string' ? parsed.notificationsPromptedAt : null,
+      theme: isThemePreference(parsed.theme) ? parsed.theme : DEFAULT_DEVICE_PREFERENCES.theme,
     };
   } catch {
     return DEFAULT_DEVICE_PREFERENCES;

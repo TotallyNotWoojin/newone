@@ -1,33 +1,19 @@
 import { Platform } from 'react-native';
 
-export const colors = {
-  ink: '#13211D',
-  inkMuted: '#53635D',
-  inkSubtle: '#5F6F69',
-  canvas: '#F3F5F1',
-  paper: '#FFFFFF',
-  paperMuted: '#F7F8F5',
-  line: '#E2E7E2',
-  lineStrong: '#D4DCD5',
-  forest: '#102E27',
-  forestRaised: '#173D34',
-  mint: '#35C48D',
-  mintDark: '#167854',
-  mintSoft: '#DDF7EC',
-  /** Off-state switch track: visible against the card, still clearly "off". */
-  switchOff: '#A7B4AE',
-  blue: '#2A61C9',
-  blueSoft: '#EAF1FF',
-  amber: '#874A08',
-  amberSoft: '#FFF0D8',
-  red: '#A6382F',
-  redSoft: '#FDEAE7',
-  plum: '#68439A',
-  plumSoft: '#F0E9FA',
-  white: '#FFFFFF',
-  black: '#08110E',
-  overlay: 'rgba(10, 27, 22, 0.46)',
-} as const;
+import { lightColors, type ThemeColors } from '@/theme/palette';
+
+export type { ColorScheme, ThemeColors } from '@/theme/palette';
+
+/**
+ * The light palette, frozen at import.
+ *
+ * Anything that responds to the theme must read colours at render time through
+ * `useTheme()` / `useThemedStyles()` (src/theme/provider.tsx) instead. This
+ * export stays for the places that legitimately do not change: glyphs drawn on
+ * a fixed-colour surface, the sign-in screen's own dark treatment, and the
+ * default value of the theme context.
+ */
+export const colors: ThemeColors = lightColors;
 
 export const spacing = {
   xxs: 4,
@@ -60,7 +46,7 @@ export const shadow = Platform.select({
     boxShadow: '0 12px 36px rgba(25, 52, 43, 0.08)',
   },
   default: {
-    shadowColor: colors.black,
+    shadowColor: lightColors.black,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
