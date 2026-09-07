@@ -8,7 +8,11 @@ test('shared web and native composer honors effective server posting access', as
   const pane = await load('../apps/newone/src/features/chat/conversation-pane.tsx');
   // Server access is honored; the one explicit exception is the requester's
   // own pending direct request, where the server enforces the message cap.
-  assert.match(pane, /conversation\.isReadOnly === true \|\| \(conversation\.canPost === false && !outgoingRequest\)/);
+  // Consumer message requests are gone (the server accepts any direct thread),
+  // so the client-side `!outgoingRequest` exception went with them: the
+  // composer now follows the server's effective access with no local override.
+  assert.match(pane, /conversation\.isReadOnly === true \|\| conversation\.canPost === false/);
+  assert.doesNotMatch(pane, /canPost === false && !outgoingRequest/);
   assert.match(pane, /chat\.adminsOnlyPosting/);
   assert.match(pane, /chat\.directPostingUnavailable/);
   assert.match(pane, /updateConversationControls/);
@@ -36,9 +40,11 @@ test('group discovery includes request state and history disclosure', async () =
 
 test('conversation controls have complete English, Korean, and Spanish copy', async () => {
   const catalog = await load('../apps/newone/src/i18n/catalog.ts');
-  assert.match(catalog, /Only conversation administrators can post right now/);
-  assert.match(catalog, /현재는 대화 관리자만 메시지를 보낼 수 있습니다/);
-  assert.match(catalog, /Solo los administradores de la conversación pueden publicar ahora/);
+  // Reworded for consumers in d7854dd (2026-09-05); the property is unchanged:
+  // an admins-only lock must explain itself in all three locales.
+  assert.match(catalog, /'chat\.adminsOnlyPosting': 'Only admins can send messages right now\./);
+  assert.match(catalog, /'chat\.adminsOnlyPosting': '지금은 관리자만 메시지를 보낼 수 있습니다\./);
+  assert.match(catalog, /'chat\.adminsOnlyPosting': 'Ahora solo los administradores pueden enviar mensajes\./);
   assert.equal((catalog.match(/'chat\.accessControls':/g) ?? []).length, 3);
   assert.equal((catalog.match(/'chat\.requestToJoin':/g) ?? []).length, 3);
 });

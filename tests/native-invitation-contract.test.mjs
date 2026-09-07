@@ -18,7 +18,13 @@ test('native OTP uses the bounded Newone gateway with installation binding', () 
   assert.match(webAuth, /'X-Newone-Client-Platform': Platform\.OS/);
   assert.match(webAuth, /'X-Newone-Installation-Id': installationId/);
   assert.match(webAuth, /body: JSON\.stringify\(\{ \.\.\.body, installationId \}\)/);
-  assert.match(auth, /verifyNativeOtp\(input\)[\s\S]*nativeClient\.auth\.setSession/);
+  // The gateway session reaches the native client only through the shared
+  // activateNativeSession helper (4f9cf65, 2026-09-06), which the OTP flow
+  // calls with the user id the server named.
+  assert.match(
+    auth,
+    /const gatewaySession = await verifyNativeOtp\(input\);\s*await activateNativeSession\(\s*gatewaySession\.session,\s*gatewaySession\.user\.id,/,
+  );
   assert.match(
     auth,
     /activationInFlight\.current = true;[\s\S]*try \{[\s\S]*nativeClient\.auth\.setSession[\s\S]*finally \{[\s\S]*activationInFlight\.current = false;/,

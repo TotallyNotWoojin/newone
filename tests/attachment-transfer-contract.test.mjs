@@ -9,6 +9,10 @@ const nativeCleanup = readFileSync('apps/newone/src/data/attachment-cleanup.nati
 const webCleanup = readFileSync('apps/newone/src/data/attachment-cleanup.web.ts', 'utf8');
 const workspace = readFileSync('apps/newone/src/state/workspace.tsx', 'utf8');
 const pane = readFileSync('apps/newone/src/features/chat/conversation-pane.tsx', 'utf8');
+// Cancel/retry/cleanup live in one shared TransferControls component that both
+// the file card in the pane and the inline media attachment render (3e56060,
+// 2026-09-05).
+const mediaAttachment = readFileSync('apps/newone/src/features/chat/media-attachment.tsx', 'utf8');
 const catalog = readFileSync('apps/newone/src/i18n/catalog.ts', 'utf8');
 
 test('native attachments use a foreground cancellable binary task with progress', () => {
@@ -59,11 +63,17 @@ test('workspace keeps failed placeholders and exposes progress, cancel, retry, a
 test('attachment cards expose accessible progress, cancel, retry, and cancelled cleanup controls', () => {
   assert.match(pane, /accessibilityRole="progressbar"/);
   assert.match(pane, /accessibilityValue=\{\{ min: 0, max: 100, now: progressPercent/);
-  assert.match(pane, /workspace\.cancelAttachmentUpload\(message\)/);
-  assert.match(pane, /workspace\.retryAttachmentUpload\(message\)/);
+  assert.match(mediaAttachment, /accessibilityRole="progressbar"/);
+  assert.match(mediaAttachment, /workspace\.cancelAttachmentUpload\(message\)/);
+  assert.match(mediaAttachment, /workspace\.retryAttachmentUpload\(message\)/);
   assert.match(pane, /transfer\?\.state === 'failed'/);
   assert.match(pane, /transfer\?\.state === 'cancelled'/);
-  assert.match(pane, /chat\.attachmentFinishCleanup/);
+  assert.match(mediaAttachment, /chat\.attachmentFinishCleanup/);
+  // Both cards must reach the shared controls, or one of them strands an
+  // upload with no way to cancel or retry it.
+  assert.match(pane, /<TransferControls message=\{message\}/);
+  assert.match(mediaAttachment, /<TransferControls message=\{message\}/);
+  assert.match(mediaAttachment, /export function TransferControls/);
   assert.match(catalog, /'chat\.attachmentCancel': 'Cancel upload'/);
   assert.match(catalog, /'chat\.attachmentCancel': '업로드 취소'/);
   assert.match(catalog, /'chat\.attachmentCancel': 'Cancelar carga'/);

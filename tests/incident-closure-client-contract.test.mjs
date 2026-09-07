@@ -13,7 +13,9 @@ test('authorized incident controls require a reason and render retained read-onl
   assert.match(pane, /incidentCloseReason\.trim\(\)\.length < 3/);
   assert.match(pane, /workspace\.closeIncident\(conversation\.id, reason\)/);
   assert.match(pane, /disabled=\{composerDisabled\}/);
-  assert.match(pane, /conversation\.isReadOnly === true \|\| \(conversation\.canPost === false && !outgoingRequest\)/);
+  // Message requests were removed for consumers; the composer follows the
+  // server's effective access with no local exception.
+  assert.match(pane, /conversation\.isReadOnly === true \|\| conversation\.canPost === false/);
   assert.match(pane, /conversation\.closureReason \?\? t\('chat\.incidentClosedBody'\)/);
 });
 

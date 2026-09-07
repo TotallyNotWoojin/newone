@@ -117,9 +117,19 @@ test('history paging rejects stale cursors and the UI preserves position without
   assert.match(reads, /compareMessageIds\(cursor, input\.after\) >= 0/);
   assert.match(workspace, /latest\.cursors\[conversationId\] !== cursor/);
   assert.match(workspace, /mergeMessages\(latest\.messages\[conversationId\] \?\? \[\], page\.items\)/);
-  assert.match(pane, /prependAnchor\.offset \+ height - prependAnchor\.height/);
-  assert.match(pane, /nearBottomRef\.current \|\| tail\?\.isOwn/);
-  assert.match(pane, /setNewMessageCount\(\(count\) => count \+ addedCount\)/);
-  assert.match(pane, /positionAtUnreadDivider/);
+  // The timeline is an inverted list (3e56060, 2026-09-05), so prepending older
+  // pages no longer needs the hand-rolled prependAnchor offset maths: the
+  // platform pins the visible content instead. The property — a page of history
+  // must not move what the reader is looking at — is asserted on that guarantee.
+  assert.match(pane, /\binverted\b/);
+  assert.match(pane, /maintainVisibleContentPosition=\{\{ minIndexForVisible: 0/);
+  // Arriving messages still only pull the view down when the reader is already
+  // at the bottom, or when the message is their own.
+  assert.match(pane, /if \(tail\?\.isOwn\) \{[\s\S]{0,200}scrollToOffset\(\{ offset: 0/);
+  assert.match(pane, /if \(nearBottomRef\.current\) \{/);
+  assert.match(
+    pane,
+    /setNewMessageCount\(\(count\) => count \+ appendedMessageCount\(messages, previousTailRef\.current\)\)/,
+  );
   assert.match(pane, /styles\.newMessageJump/);
 });

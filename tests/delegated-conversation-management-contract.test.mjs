@@ -9,6 +9,7 @@ const paths = {
   domain: 'apps/newone/src/domain/types.ts',
   workspace: 'apps/newone/src/state/workspace.tsx',
   conversationPane: 'apps/newone/src/features/chat/conversation-pane.tsx',
+  summarySheet: 'apps/newone/src/features/chat/summary-sheet.tsx',
   conversationList: 'apps/newone/src/features/chat/conversation-list.tsx',
   chatIndex: 'apps/newone/src/app/index.tsx',
   managedSection: 'apps/newone/src/features/admin/managed-conversation-section.tsx',
@@ -165,7 +166,9 @@ test('client keeps owner authority distinct from delegated conversation manageme
     /conversation\.canManageConversation[\s\S]{0,120}!conversation\.policyManaged[\s\S]{0,120}\['group', 'team'\]\.includes/);
   assert.match(files.conversationPane,
     /conversation\.canManage && \['group', 'team', 'shift', 'incident'\]\.includes/);
-  assert.match(files.conversationPane, /const canManageSummary = conversation\.canManage === true/);
+  // Summary management moved to the summary sheet (524a2c8, 2026-09-05) and
+  // narrowed: consumers never manage a summary at all.
+  assert.match(files.summarySheet, /const canManage = !consumer && conversation\.canManage === true/);
   assert.match(files.conversationPane,
     /conversation\.canManage && conversation\.kind === 'incident'/);
   assert.match(files.conversationPane, /conversation\.canManage && person\.id !== currentUserId/);
