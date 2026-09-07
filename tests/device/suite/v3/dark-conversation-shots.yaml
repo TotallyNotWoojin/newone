@@ -1,0 +1,83 @@
+appId: com.totallynotwoojin.newone
+---
+# A dark-mode contact sheet for the owner: the conversation is where the green
+# bubbles have to hold up, and the appearance step only reaches Chats and
+# Settings. Sets Dark, walks the screens worth judging, then restores System.
+# Env: PEER (the person to open), SHOT.
+- launchApp
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- extendedWaitUntil:
+    visible: "Search chats, people and messages"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "setting-appearance"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "setting-appearance"
+- extendedWaitUntil:
+    visible: "Dark"
+    timeout: 10000
+- tapOn: "Dark"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-dark-settings
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Search chats, people and messages"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-dark-chats
+- tapOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: ${SHOT}-dark-conversation
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-dark-conversation-settings
+- tapOn: "Close dialog"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Back to chats"
+- extendedWaitUntil:
+    visible: "Search chats, people and messages"
+    timeout: 15000
+- tapOn: "Contacts"
+- extendedWaitUntil:
+    visible: "Your people"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-dark-contacts
+# Leave the phone as it was found.
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "setting-appearance"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    id: "setting-appearance"
+- extendedWaitUntil:
+    visible: "System"
+    timeout: 10000
+- tapOn: "System"
+- waitForAnimationToEnd:
+    timeout: 1500
+- tapOn: "Close settings"

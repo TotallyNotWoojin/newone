@@ -238,6 +238,16 @@ export async function run(ctx) {
     expected: 'The Appearance row opens "Appearance: System / Light / Dark"; picking one repaints the app before the sheet closes; Settings and Chats are photographed light, dark and back on System',
     screen: 'settings → General',
   });
+  // 7b. A dark contact sheet the owner can actually judge: the conversation is
+  //     where the green bubbles have to hold up, and the step above only reaches
+  //     Chats and Settings. Restores System before it leaves.
+  await ctx.step({
+    id: 'v3-10b-dark-contact-sheet', title: 'Dark mode across the screens worth looking at (screenshots for the owner)', device: devA,
+    flow: 'v3/dark-conversation-shots.yaml', env: { PEER: B.displayName },
+    expected: 'Settings, Chats, a conversation, its controls and Contacts photographed in dark, then Appearance back to System',
+    screen: 'settings → conversation → contacts',
+  });
+
   // 7c. Show my translations (backlog 33): A's own Spanish bubble carries the
   //     Korean B reads. v3-05a already waited for that translation to finish.
   await ctx.step({
