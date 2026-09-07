@@ -31,7 +31,7 @@ const mockTranslate = (key: string) => key;
 
 let mockLocale: 'en' | 'ko' | 'es' = 'en';
 let mockPermission: PermissionState = 'granted';
-let mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null, theme: 'system' as 'system' | 'light' | 'dark' };
+let mockLocalPreferences = { translatedOnly: false, showOwnTranslations: false, enterSends: true, notificationsPromptedAt: null as string | null, theme: 'system' as 'system' | 'light' | 'dark' };
 let mockWorkspace: Record<string, any>;
 let mockAuth: Record<string, any>;
 
@@ -233,7 +233,7 @@ function nativeMfaClient(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   mockLocale = 'en';
   mockPermission = 'granted';
-  mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null, theme: 'system' };
+  mockLocalPreferences = { translatedOnly: false, showOwnTranslations: false, enterSends: true, notificationsPromptedAt: null, theme: 'system' };
   mockWorkspace = baseWorkspace();
   mockAuth = {
     assuranceLevel: 'aal2',
@@ -402,9 +402,13 @@ describe('settings screen', () => {
     const view = await renderAndHydrate();
     expect(screen.getByText('settings.translatedOnlyHint')).toBeTruthy();
     expect(switchValue('settings.translatedOnly')).toBe(false);
+    expect(switchValue('settings.ownTranslations')).toBe(false);
     expect(switchValue('settings.enterSends')).toBe(true);
     await fireEvent(screen.getByLabelText('settings.translatedOnly'), 'valueChange', true);
     expect(mockSetLocalPreference).toHaveBeenCalledWith('translatedOnly', true);
+    expect(screen.getByText('settings.ownTranslationsHint')).toBeTruthy();
+    await fireEvent(screen.getByLabelText('settings.ownTranslations'), 'valueChange', true);
+    expect(mockSetLocalPreference).toHaveBeenCalledWith('showOwnTranslations', true);
     await fireEvent(screen.getByLabelText('settings.enterSends'), 'valueChange', false);
     expect(mockSetLocalPreference).toHaveBeenCalledWith('enterSends', false);
     await view.unmount();

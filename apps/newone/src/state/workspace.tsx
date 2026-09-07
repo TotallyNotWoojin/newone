@@ -4072,7 +4072,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           ? {
               ...current.messages,
               [conversationId]: (current.messages[conversationId] ?? []).map((message) => {
-                const { translatedText: _translatedText, targetLanguage: _targetLanguage, translation: _translation, ...original } = message;
+                const { translatedText: _translatedText, targetLanguage: _targetLanguage, translation: _translation, outgoingTranslation: _outgoingTranslation, ...original } = message;
                 return { ...original, translationState: 'not_requested' as const };
               }),
             }

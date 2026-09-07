@@ -918,6 +918,50 @@ describe('authoritative web read repository', () => {
     });
   });
 
+  test('carries the translation your own message becomes for everyone else', async () => {
+    const payload = bootstrapPayload();
+    // This phone reads Spanish, so the row aimed at a Korean reader is the one
+    // the sender never sees through the normal pick. It rides the same
+    // response: nothing extra is fetched for it.
+    (payload.timeline as any).messages[0].translations.push(translationVariant('702', 'completed', {
+      targetLanguage: 'ko', translatedBody: '18시에 북문을 잠그세요.',
+    }));
+    mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+    const repo = repository();
+    const workspace = await repo.loadWorkspace(currentUserId, conversationId);
+
+    const own = workspace.messages[conversationId]![0]!;
+    expect(own.isOwn).toBe(true);
+    expect(own.translation?.targetLanguage).toBe('es');
+    expect(own.outgoingTranslation).toMatchObject({
+      targetLanguage: 'ko', status: 'completed', translatedText: '18시에 북문을 잠그세요.',
+    });
+    // A message you received carries no such thing: it is already yours to read.
+    expect(workspace.messages[conversationId]![1]!.outgoingTranslation).toBeUndefined();
+  });
+
+  test('leaves your own message without an outgoing translation when nobody needed one', async () => {
+    const payload = bootstrapPayload();
+    (payload.timeline as any).messages[0].translations = [];
+    mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+    const repo = repository();
+    const workspace = await repo.loadWorkspace(currentUserId, conversationId);
+    expect(workspace.messages[conversationId]![0]!.outgoingTranslation).toBeUndefined();
+  });
+
+  test('an outgoing translation still queued keeps its state so the bubble can stay quiet', async () => {
+    const payload = bootstrapPayload();
+    (payload.timeline as any).messages[0].translations = [
+      translationVariant('703', 'queued', { targetLanguage: 'ko' }),
+    ];
+    mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+    const repo = repository();
+    const workspace = await repo.loadWorkspace(currentUserId, conversationId);
+    const own = workspace.messages[conversationId]![0]!;
+    expect(own.translation).toBeUndefined();
+    expect(own.outgoingTranslation).toMatchObject({ targetLanguage: 'ko', status: 'queued', translatedText: null });
+  });
+
   test('parses alternate authoritative lifecycle states without inventing client data', async () => {
     mockFetch.mockImplementationOnce(async () => response({ data: alternateBootstrapPayload() }));
     const workspace = await repository().loadWorkspace(currentUserId, 'conversation-managed');

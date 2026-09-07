@@ -103,7 +103,7 @@ jest.mock('@/state/workspace', () => ({
   useWorkspace: () => mockWorkspace,
 }));
 
-const mockPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null };
+const mockPreferences = { translatedOnly: false, showOwnTranslations: false, enterSends: true, notificationsPromptedAt: null as string | null };
 
 jest.mock('@/state/device-preferences', () => ({
   useDevicePreferences: () => ({ preferences: mockPreferences, ready: true, setPreference: jest.fn() }),
@@ -309,6 +309,43 @@ function translatedMessage(overrides: Record<string, unknown> = {}) {
     reactions: [{ emoji: '✅', count: 2, reactedByMe: true }],
     ...overrides,
   } as any;
+}
+
+// Your own message as it really arrives: the translation on it is aimed at
+// the other person's language, so the normal selection leaves the bubble
+// with nothing but your original.
+function outgoingTranslation(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'translation-outgoing',
+    sourceLanguage: 'en',
+    targetLanguage: 'ko',
+    sourceBodySha256: 'outgoing-source-hash',
+    status: 'completed',
+    translatedText: '18시에 북문을 잠그세요.',
+    provider: 'openrouter',
+    model: 'qwen/tested-model',
+    confidence: 0.94,
+    policyVersion: 4,
+    policyState: 'current',
+    reviewedByUserId: null,
+    reviewedAt: null,
+    failureCode: null,
+    createdAt: '2026-08-04T18:00:00.000Z',
+    updatedAt: '2026-08-04T18:00:01.000Z',
+    correction: null,
+    ...overrides,
+  };
+}
+
+function ownMessage(overrides: Record<string, unknown> = {}) {
+  return translatedMessage({
+    translatedText: undefined,
+    targetLanguage: undefined,
+    translation: undefined,
+    translationState: 'not_requested',
+    outgoingTranslation: outgoingTranslation(),
+    ...overrides,
+  });
 }
 
 function incomingMessage(overrides: Record<string, unknown> = {}) {
@@ -522,6 +559,7 @@ function buildWorkspace() {
 beforeEach(() => {
   mockWorkspace = buildWorkspace();
   mockPreferences.translatedOnly = false;
+  mockPreferences.showOwnTranslations = false;
   mockPreferences.enterSends = true;
   mockCameraPermission.mockImplementation(async () => ({ granted: true }));
   mockLibraryPermission.mockImplementation(async () => ({ granted: true }));
@@ -2637,6 +2675,113 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     // Without a completed translation the original stays, with one quiet status line and no toggle.
     expect(screen.getByText('La válvula necesita revisión.')).toBeTruthy();
     expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
+    expect(screen.getAllByLabelText('chat.showOriginal')).toHaveLength(1);
+  });
+
+  test('shows your own message the way the other side reads it once the device asks for it', async () => {
+    mockPreferences.showOwnTranslations = true;
+    await render(<ConversationPane conversation={conversation()} messages={[ownMessage()]} onSend={noopSend} />);
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.getByText('18시에 북문을 잠그세요.')).toBeTruthy();
+    // Both lines are already there, so the collapsed form's toggle stays away.
+    expect(screen.queryByLabelText('chat.showOriginal')).toBeNull();
+  });
+
+  test('leaves your own messages alone while the setting is off', async () => {
+    await render(<ConversationPane conversation={conversation()} messages={[ownMessage()]} onSend={noopSend} />);
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.queryByText('18시에 북문을 잠그세요.')).toBeNull();
+  });
+
+  test('an approved correction is what your own message shows, because it is what they read', async () => {
+    mockPreferences.showOwnTranslations = true;
+    const corrected = ownMessage({
+      outgoingTranslation: outgoingTranslation({
+        correction: {
+          id: 'correction-outgoing',
+          status: 'approved',
+          correctedText: '18시에 북쪽 출입구를 잠그세요.',
+          rationale: 'Uses the site term.',
+          proposedByUserId: colleague.id,
+          reviewedByUserId: colleague.id,
+          reviewedAt: '2026-08-04T18:02:00.000Z',
+          reviewNote: null,
+          createdAt: '2026-08-04T18:01:00.000Z',
+          updatedAt: '2026-08-04T18:02:00.000Z',
+        },
+      }),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[corrected]} onSend={noopSend} />);
+    expect(screen.getByText('18시에 북쪽 출입구를 잠그세요.')).toBeTruthy();
+    expect(screen.queryByText('18시에 북문을 잠그세요.')).toBeNull();
+  });
+
+  test('a translation still in flight adds nothing to your own bubble', async () => {
+    mockPreferences.showOwnTranslations = true;
+    const inFlight = ownMessage({
+      outgoingTranslation: outgoingTranslation({ status: 'queued', translatedText: null, provider: null, model: null }),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[inFlight]} onSend={noopSend} />);
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.queryByText('18시에 북문을 잠그세요.')).toBeNull();
+    // No status line either: the bubble must not grow a line seconds after it lands.
+    expect(screen.queryByText('chat.translating')).toBeNull();
+    expect(screen.queryByText('chat.translationDelayed')).toBeNull();
+  });
+
+  test('a message nobody needed translated stays a single line', async () => {
+    mockPreferences.showOwnTranslations = true;
+    await render(
+      <ConversationPane
+        conversation={conversation()}
+        messages={[ownMessage({ outgoingTranslation: undefined })]}
+        onSend={noopSend}
+      />,
+    );
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.queryByText('chat.translating')).toBeNull();
+    expect(screen.queryByText('chat.translationUnavailable')).toBeNull();
+  });
+
+  test('a failed outgoing translation says nothing on your own bubble', async () => {
+    mockPreferences.showOwnTranslations = true;
+    const failed = ownMessage({
+      outgoingTranslation: outgoingTranslation({
+        status: 'failed', translatedText: null, provider: null, model: null, failureCode: 'provider_timeout',
+      }),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[failed]} onSend={noopSend} />);
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.queryByText('chat.translationUnavailable')).toBeNull();
+    expect(screen.queryByLabelText('chat.retryTranslation')).toBeNull();
+  });
+
+  test('translated-only keeps its collapsed form for incoming messages while your own show both lines', async () => {
+    mockPreferences.translatedOnly = true;
+    mockPreferences.showOwnTranslations = true;
+    // An own message that also carries a translation into this reader's own
+    // language: the collapsed form would hide the original it is meant to show.
+    const own = translatedMessage({ outgoingTranslation: outgoingTranslation() });
+    const incoming = incomingMessage({
+      attachment: undefined,
+      translatedText: 'The valve needs a check.',
+      translationState: 'translated',
+      translation: {
+        id: 'translation-incoming', sourceLanguage: 'es', targetLanguage: 'en',
+        sourceBodySha256: 'incoming-source-hash', status: 'completed',
+        translatedText: 'The valve needs a check.', provider: 'openrouter',
+        model: 'qwen/tested-model', confidence: 0.93, policyVersion: 4,
+        policyState: 'current', reviewedByUserId: null, reviewedAt: null,
+        failureCode: null, createdAt: '2026-08-04T18:02:00.000Z',
+        updatedAt: '2026-08-04T18:02:05.000Z', correction: null,
+      },
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[own, incoming]} onSend={noopSend} />);
+    expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
+    expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    expect(screen.getByText('The valve needs a check.')).toBeTruthy();
+    expect(screen.queryByText('La válvula necesita revisión.')).toBeNull();
+    // Only the incoming bubble offers to reveal an original.
     expect(screen.getAllByLabelText('chat.showOriginal')).toHaveLength(1);
   });
 

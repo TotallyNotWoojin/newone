@@ -10,6 +10,8 @@ import { isThemePreference, type ThemePreference } from '@/theme/scheme';
  *
  * - translatedOnly: show only the translation in a bubble, with a per-message
  *   control to reveal the original.
+ * - showOwnTranslations: under your own sent messages, show the translation
+ *   the other side reads, in the same two lines as an incoming message.
  * - enterSends: the keyboard's return/enter key sends the message instead of
  *   inserting a newline (default on; a Settings toggle turns it off).
  * - notificationsPromptedAt: when the app first asked for notification
@@ -19,6 +21,7 @@ import { isThemePreference, type ThemePreference } from '@/theme/scheme';
  */
 export interface DevicePreferences {
   translatedOnly: boolean;
+  showOwnTranslations: boolean;
   enterSends: boolean;
   notificationsPromptedAt: string | null;
   theme: ThemePreference;
@@ -26,6 +29,7 @@ export interface DevicePreferences {
 
 export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   translatedOnly: false,
+  showOwnTranslations: false,
   enterSends: true,
   notificationsPromptedAt: null,
   theme: 'system',
@@ -55,6 +59,7 @@ export function parseDevicePreferences(raw: string | null | undefined): DevicePr
     const parsed = JSON.parse(raw) as Partial<Record<keyof DevicePreferences, unknown>>;
     return {
       translatedOnly: typeof parsed.translatedOnly === 'boolean' ? parsed.translatedOnly : DEFAULT_DEVICE_PREFERENCES.translatedOnly,
+      showOwnTranslations: typeof parsed.showOwnTranslations === 'boolean' ? parsed.showOwnTranslations : DEFAULT_DEVICE_PREFERENCES.showOwnTranslations,
       enterSends: typeof parsed.enterSends === 'boolean' ? parsed.enterSends : DEFAULT_DEVICE_PREFERENCES.enterSends,
       notificationsPromptedAt: typeof parsed.notificationsPromptedAt === 'string' ? parsed.notificationsPromptedAt : null,
       theme: isThemePreference(parsed.theme) ? parsed.theme : DEFAULT_DEVICE_PREFERENCES.theme,

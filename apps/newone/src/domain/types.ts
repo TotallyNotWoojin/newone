@@ -294,6 +294,12 @@ export interface Message {
   targetLanguage?: LanguageCode;
   translationState: TranslationState;
   translation?: MessageTranslation;
+  /**
+   * On your own messages: the translation the other side reads. It targets
+   * their language, not yours, so `translation` above never holds it. Only
+   * set for own messages; a Settings toggle decides whether it is shown.
+   */
+  outgoingTranslation?: MessageTranslation;
   languageDetection?: MessageLanguageDetection;
   createdAt?: string;
   sentAt: string;
