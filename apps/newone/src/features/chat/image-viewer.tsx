@@ -1,6 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
@@ -13,6 +22,8 @@ const MAX_SCALE = 5;
 const DOUBLE_TAP_SCALE = 2.5;
 const DISMISS_DISTANCE = 110;
 const DISMISS_VELOCITY = 900;
+// A sideways drag past this much means "the next one", not a wobbly dismiss.
+const STEP_DISTANCE = 60;
 const SNAP = { duration: 140 };
 // The safe-area hook throws outside its provider (tests, detached trees); the
 // viewer reads the context directly and simply pads nothing when it is absent.
@@ -31,12 +42,18 @@ export function ImageViewerModal({
   name,
   onClose,
   onDownload,
+  onNext,
+  onPrevious,
 }: {
   visible: boolean;
   uri: string | null | undefined;
   name?: string | null;
   onClose: () => void;
   onDownload?: () => void;
+  /** Given when the viewer sits on a list: a swipe, a chevron or an arrow key
+   * moves along it. Left undefined for a single photo in a bubble. */
+  onNext?: () => void;
+  onPrevious?: () => void;
 }) {
   const { t } = useI18n();
   const { width, height } = useWindowDimensions();
@@ -63,7 +80,25 @@ export function ImageViewerModal({
     savedX.value = 0;
     savedY.value = 0;
     dismissY.value = 0;
-  }, [dismissY, savedScale, savedX, savedY, scale, translateX, translateY, visible]);
+  }, [dismissY, savedScale, savedX, savedY, scale, translateX, translateY, uri, visible]);
+
+  // A mouse has no swipe: the arrow keys walk the same list on the web app.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible) return undefined;
+    if (typeof globalThis.addEventListener !== 'function') return undefined;
+    const onKey = (event: { key?: string; preventDefault?: () => void }) => {
+      const step = event.key === 'ArrowRight'
+        ? onNext
+        : event.key === 'ArrowLeft'
+          ? onPrevious
+          : undefined;
+      if (!step) return;
+      event.preventDefault?.();
+      step();
+    };
+    globalThis.addEventListener('keydown', onKey as EventListener);
+    return () => globalThis.removeEventListener('keydown', onKey as EventListener);
+  }, [onNext, onPrevious, visible]);
 
   const toggleChrome = () => setChromeVisible((current) => !current);
 
@@ -102,6 +137,14 @@ export function ImageViewerModal({
       if (dismissY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
         dismissY.value = 0;
         scheduleOnRN(onClose);
+        return;
+      }
+      // Sideways beats downwards: moving along the grid must not close it.
+      if (Math.abs(event.translationX) > STEP_DISTANCE
+        && Math.abs(event.translationX) > Math.abs(event.translationY)) {
+        const step = event.translationX < 0 ? onNext : onPrevious;
+        dismissY.value = withTiming(0, SNAP);
+        if (step) scheduleOnRN(step);
         return;
       }
       dismissY.value = withTiming(0, SNAP);
@@ -175,6 +218,26 @@ export function ImageViewerModal({
                 <Ionicons name="close" size={24} color={colors.white} />
               </Pressable>
               <Text numberOfLines={1} style={styles.title}>{name ?? ''}</Text>
+              {onPrevious ? (
+                <Pressable
+                  accessibilityLabel={t('chat.imageViewerPrevious')}
+                  accessibilityRole="button"
+                  hitSlop={12}
+                  onPress={onPrevious}
+                  style={({ pressed }) => [styles.barButton, pressed && styles.pressed]}>
+                  <Ionicons name="chevron-back" size={24} color={colors.white} />
+                </Pressable>
+              ) : null}
+              {onNext ? (
+                <Pressable
+                  accessibilityLabel={t('chat.imageViewerNext')}
+                  accessibilityRole="button"
+                  hitSlop={12}
+                  onPress={onNext}
+                  style={({ pressed }) => [styles.barButton, pressed && styles.pressed]}>
+                  <Ionicons name="chevron-forward" size={24} color={colors.white} />
+                </Pressable>
+              ) : null}
               {onDownload ? (
                 <Pressable
                   accessibilityLabel={t('chat.imageViewerDownload')}

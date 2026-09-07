@@ -59,6 +59,8 @@ import {
 } from '@/features/chat/media-attachment';
 import { notificationCopy } from '@/features/chat/notification-copy';
 import { ReactionRow } from '@/features/chat/reaction-row';
+import { PinnedMessagesModal } from '@/features/chat/pinned-messages';
+import { SharedMediaModal } from '@/features/chat/shared-media';
 import { SummarySheet } from '@/features/chat/summary-sheet';
 import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
 import { swipeReplyAvailable } from '@/features/chat/swipe-to-reply';
@@ -116,6 +118,8 @@ export function ConversationPane({
   const [selectedMentionUserIds, setSelectedMentionUserIds] = useState<string[]>([]);
   const [showMentionPicker, setShowMentionPicker] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showPinned, setShowPinned] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [reportingSummaryId, setReportingSummaryId] = useState<string | null>(null);
   const [conversationName, setConversationName] = useState('');
@@ -490,6 +494,14 @@ export function ConversationPane({
               })) setShowControls(false);
             }}
             people={workspace.people}
+            onOpenPinned={() => {
+              setShowControls(false);
+              setShowPinned(true);
+            }}
+            onOpenSharedMedia={() => {
+              setShowControls(false);
+              setShowMedia(true);
+            }}
             onToggleFavorite={() => void workspace.updateConversationPreferences(conversation.id, { isFavorite: !conversation.favorite })}
             onUpdateNotificationSettings={(notificationLevel, mutedUntil) =>
               workspace.updateConversationPreferences(conversation.id, { notificationLevel, mutedUntil })}
@@ -792,6 +804,14 @@ export function ConversationPane({
           })) setShowControls(false);
         }}
         people={workspace.people}
+        onOpenPinned={() => {
+          setShowControls(false);
+          setShowPinned(true);
+        }}
+        onOpenSharedMedia={() => {
+          setShowControls(false);
+          setShowMedia(true);
+        }}
         onToggleFavorite={() => void workspace.updateConversationPreferences(conversation.id, { isFavorite: !conversation.favorite })}
         onUpdateNotificationSettings={(notificationLevel, mutedUntil) =>
           workspace.updateConversationPreferences(conversation.id, { notificationLevel, mutedUntil })}
@@ -799,6 +819,21 @@ export function ConversationPane({
           workspace.updateConversationPreferences(conversation.id, { translationMode })}
         visible={showControls}
       />
+      {showPinned ? (
+        <PinnedMessagesModal
+          conversationId={conversation.id}
+          onClose={() => setShowPinned(false)}
+          onOpenMessage={(_conversationId, messageId) => jumpToQuoted(messageId)}
+          visible
+        />
+      ) : null}
+      {showMedia ? (
+        <SharedMediaModal
+          conversationId={conversation.id}
+          onClose={() => setShowMedia(false)}
+          visible
+        />
+      ) : null}
       <SummarySheet
         key={`${conversation.id}:${showSummary ? 'open' : 'closed'}`}
         conversation={conversation}
@@ -2323,6 +2358,8 @@ function ConversationControlsModal({
   onLeave,
   onToggleFavorite,
   onOpenSummary,
+  onOpenPinned,
+  onOpenSharedMedia,
   onUpdateNotificationSettings,
   onUpdateTranslationMode,
   onCloseIncident,
@@ -2351,6 +2388,8 @@ function ConversationControlsModal({
   onLeave: (replacementOwnerPersonId?: string) => Promise<void>;
   onToggleFavorite: () => void;
   onOpenSummary?: () => void;
+  onOpenPinned: () => void;
+  onOpenSharedMedia: () => void;
   onUpdateNotificationSettings: (
     notificationLevel: NonNullable<Conversation['notificationLevel']>,
     mutedUntil: string | null,
@@ -2499,6 +2538,8 @@ function ConversationControlsModal({
       {!conversation.managementOnly ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon={conversation.favorite ? 'star' : 'star-outline'} label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')} onPress={onToggleFavorite} tone="light" />
+          <PrimaryButton icon="pin-outline" label={t('chat.pinnedTitle')} onPress={onOpenPinned} tone="light" />
+          <PrimaryButton icon="images-outline" label={t('chat.sharedMediaTitle')} onPress={onOpenSharedMedia} tone="light" />
           {onOpenSummary ? (
             <PrimaryButton icon="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} tone="light" />
           ) : null}

@@ -132,6 +132,7 @@ export function ConversationList({
   onOpenSuggestion,
   onOpenAdvancedSearch,
   onRowAction,
+  onOpenPinned,
   markedUnreadIds = [],
 }: {
   conversations: Conversation[];
@@ -154,6 +155,8 @@ export function ConversationList({
   onOpenSuggestion?: (suggestion: SearchSuggestion) => void;
   onOpenAdvancedSearch?: () => void;
   onRowAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
+  /** Opens the pins gathered from every chat. */
+  onOpenPinned?: () => void;
   /** Chats the reader put back to unread by hand. */
   markedUnreadIds?: readonly string[];
 }) {
@@ -262,6 +265,14 @@ export function ConversationList({
             selected={filter === item}
           />
         ))}
+        {onOpenPinned ? (
+          <Chip
+            accessibilityLabel={t('chat.pinnedOpen')}
+            icon="pin-outline"
+            label={t('chat.pinnedTitle')}
+            onPress={onOpenPinned}
+          />
+        ) : null}
       </ScrollView>
 
       <ScrollView

@@ -50,8 +50,10 @@ import type {
   LinkPreviewMetadata,
   MessageReceiptInput,
   OrganizationUnitOption,
+  PinnedMessage,
   ReadRepository,
   SendMessageInput,
+  SharedMediaPage,
   UpdateAudiencePreview,
   UpdateAudienceSpec,
   UserSearchResult,
@@ -338,6 +340,14 @@ interface WorkspaceState {
   toggleReaction: (message: Message, emoji: string) => Promise<boolean>;
   loadLinkPreview: (url: string) => Promise<LinkPreviewMetadata | null>;
   setMessagePinned: (message: Message, pinned: boolean) => Promise<boolean>;
+  /** A chat's pins, or every chat's when no chat is named. Newest first. */
+  loadPinnedMessages: (conversationId?: string | null) => Promise<PinnedMessage[] | null>;
+  /** Unpin straight from a pinned list, where there is no Message to hand. */
+  unpinMessage: (conversationId: string, messageId: string) => Promise<boolean>;
+  loadSharedMedia: (
+    conversationId: string,
+    cursor?: SharedMediaPage['cursor'],
+  ) => Promise<SharedMediaPage | null>;
   reportMessage: (
     message: Message,
     category: Parameters<CommandRepository['reportMessage']>[0]['category'],
@@ -3714,23 +3724,67 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [repositories.commands, snapshot],
   );
 
-  const setMessagePinned = useCallback(
-    async (message: Message, pinned: boolean) => {
-      if (!snapshot || !message.serverId || message.deleted) return false;
+  const setPinned = useCallback(
+    async (conversationId: string, messageId: string, pinned: boolean) => {
+      if (!snapshot) return false;
       const result = await executeImmediate('message-pin', () =>
         repositories.commands.setMessagePin({
           organizationId: snapshot.organizationId,
-          conversationId: message.conversationId,
-          messageId: message.serverId as string,
+          conversationId,
+          messageId,
           pinned,
           idempotencyKey: createClientId(),
         }),
       );
       if (result === null) return false;
-      patchServerMessage(message.serverId, { pinned });
+      patchServerMessage(messageId, { pinned });
       return true;
     },
     [executeImmediate, patchServerMessage, repositories.commands, snapshot],
+  );
+
+  const setMessagePinned = useCallback(
+    async (message: Message, pinned: boolean) => {
+      if (!message.serverId || message.deleted) return false;
+      return setPinned(message.conversationId, message.serverId, pinned);
+    },
+    [setPinned],
+  );
+
+  // The pinned lists carry an id, not a Message: a pin can point at something
+  // that scrolled out of memory long ago.
+  const unpinMessage = useCallback(
+    (conversationId: string, messageId: string) => setPinned(conversationId, messageId, false),
+    [setPinned],
+  );
+
+  const loadPinnedMessages = useCallback(
+    async (conversationId?: string | null) => {
+      if (!snapshot || !repositories.reads) return null;
+      const reads = repositories.reads;
+      return executeImmediate('pinned-messages', () =>
+        reads.loadPinnedMessages({
+          organizationId: snapshot.organizationId,
+          conversationId: conversationId ?? null,
+        }),
+      );
+    },
+    [executeImmediate, repositories.reads, snapshot],
+  );
+
+  const loadSharedMedia = useCallback(
+    async (conversationId: string, cursor?: SharedMediaPage['cursor']) => {
+      if (!snapshot || !repositories.reads) return null;
+      const reads = repositories.reads;
+      return executeImmediate('shared-media', () =>
+        reads.loadSharedMedia({
+          organizationId: snapshot.organizationId,
+          conversationId,
+          cursor: cursor ?? null,
+        }),
+      );
+    },
+    [executeImmediate, repositories.reads, snapshot],
   );
 
   const reportMessage = useCallback(
@@ -5949,6 +6003,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       toggleReaction,
       loadLinkPreview,
       setMessagePinned,
+      loadPinnedMessages,
+      unpinMessage,
+      loadSharedMedia,
       reportMessage,
       reportGroup,
       reportMember,
@@ -6146,6 +6203,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       toggleReaction,
       loadLinkPreview,
       setMessagePinned,
+      loadPinnedMessages,
+      unpinMessage,
+      loadSharedMedia,
       setConversationSummaryPolicy,
       updateConversation,
       updateConversationControls,
