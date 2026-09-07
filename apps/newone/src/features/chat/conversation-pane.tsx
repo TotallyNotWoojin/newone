@@ -58,6 +58,8 @@ import {
 import { notificationCopy } from '@/features/chat/notification-copy';
 import { ReactionRow } from '@/features/chat/reaction-row';
 import { SummarySheet } from '@/features/chat/summary-sheet';
+import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
+import { swipeReplyAvailable } from '@/features/chat/swipe-to-reply';
 import {
   appendedMessageCount,
   buildTimelineRows,
@@ -294,6 +296,11 @@ export function ConversationPane({
   const downloadMessageAttachment = useCallback((message: Message) => {
     void downloadAttachment(message);
   }, [downloadAttachment]);
+  // The swipe and the sheet's Reply land in the same place.
+  const replyToMessage = useCallback((message: Message) => {
+    setSelectedMessage(null);
+    setReplyingTo(message);
+  }, []);
   const translatedOnly = preferences.translatedOnly;
   const unreadDividerLabel = t('chat.unreadMessages');
   const renderRow = useCallback(({ item }: { item: TimelineRow }) => {
@@ -319,13 +326,21 @@ export function ConversationPane({
             message={message}
             onDownload={downloadMessageAttachment}
             onOpenActions={openActions}
+            onReply={replyToMessage}
             showSender={item.showSender}
             translatedOnly={translatedOnly}
           />
         )}
       </View>
     );
-  }, [downloadMessageAttachment, focusMessageId, openActions, translatedOnly, unreadDividerLabel]);
+  }, [
+    downloadMessageAttachment,
+    focusMessageId,
+    openActions,
+    replyToMessage,
+    translatedOnly,
+    unreadDividerLabel,
+  ]);
 
   if (!currentUserId) {
     return (
@@ -984,12 +999,14 @@ const MessageBubble = memo(function MessageBubble({
   showSender,
   translatedOnly,
   onOpenActions,
+  onReply,
   onDownload,
 }: {
   message: Message;
   showSender: boolean;
   translatedOnly: boolean;
   onOpenActions: (message: Message) => void;
+  onReply: (message: Message) => void;
   onDownload: (message: Message) => void;
 }) {
   const workspace = useWorkspace();
@@ -1185,6 +1202,10 @@ const MessageBubble = memo(function MessageBubble({
       ) : null}
       <View style={[styles.messageStack, message.isOwn && styles.messageStackOwn]}>
         {showSender ? <Text style={styles.senderName}>{message.senderName}</Text> : null}
+        <SwipeToReply
+          enabled={swipeReplyAvailable(message)}
+          onReply={() => onReply(message)}
+          own={message.isOwn}>
         <Pressable
           // Not an accessibility element itself: iOS would otherwise flatten the whole
           // bubble into one node and hide the controls inside it from VoiceOver.
@@ -1289,6 +1310,7 @@ const MessageBubble = memo(function MessageBubble({
 
           {mediaOnly ? null : meta(false)}
         </Pressable>
+        </SwipeToReply>
 
         {message.reactions?.length ? (
           <View style={[styles.reactions, message.isOwn && styles.reactionsOwn]}>
