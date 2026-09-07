@@ -74,7 +74,7 @@ export function ReactionRow({
       {pickerOpen ? (
         <View style={styles.picker}>
           <TextInput
-            accessibilityLabel={t('chat.reactMore')}
+            accessibilityLabel={t('chat.reactAnyEmoji')}
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus

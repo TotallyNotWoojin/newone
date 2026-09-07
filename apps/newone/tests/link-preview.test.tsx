@@ -105,6 +105,37 @@ describe('the card under the message', () => {
     expect(openURL).toHaveBeenCalledWith('https://example.com/story');
   });
 
+  test('falls back to the host when the page never says what it is called', async () => {
+    mockLoadLinkPreview.mockImplementation(async () => ({
+      url: 'https://news.example.com/story',
+      title: 'The north gate is closed',
+      siteName: null,
+      imageUrl: null,
+      status: 'ready',
+    }));
+    const view = await render(<LinkPreviewCard url="https://news.example.com/story" />);
+    await waitFor(() => expect(view.getByText('The north gate is closed')).toBeTruthy());
+    expect(view.getByText('news.example.com')).toBeTruthy();
+    expect(view.getByLabelText('The north gate is closed · news.example.com')).toBeTruthy();
+  });
+
+  test('a card whose message scrolls away before the answer arrives sets no state', async () => {
+    let settle: ((value: LinkPreviewMetadata | null) => void) | undefined;
+    mockLoadLinkPreview.mockImplementation(() => new Promise((resolve) => {
+      settle = resolve;
+    }));
+    const view = await render(<LinkPreviewCard url="https://example.com/slow" />);
+    await view.unmount();
+    settle?.({
+      url: 'https://example.com/slow',
+      title: 'Too late',
+      siteName: null,
+      imageUrl: null,
+      status: 'ready',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
   test('shows nothing at all when the page could not be read', async () => {
     mockLoadLinkPreview.mockImplementation(async () => ({
       url: 'https://example.com/story',

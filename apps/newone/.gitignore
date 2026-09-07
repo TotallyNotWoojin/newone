@@ -1,7 +1,8 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
-node_modules/
+# dependencies. No trailing slash: a symlink named node_modules is not a
+# directory, and one committed by mistake replaced the real tree for everyone.
+node_modules
 
 # Expo
 .expo/

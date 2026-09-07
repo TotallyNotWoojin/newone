@@ -25,6 +25,16 @@ describe('what a pointer gets instead of a gesture', () => {
     expect(desktopPointer('android')).toBe(false);
   });
 
+  test('reads the running platform when it is not told one', () => {
+    // The tests around this one pass a platform; the app does not.
+    expect(desktopPointer()).toBe(Platform.OS === 'web');
+    const handlers = {
+      onHoverChange: jest.fn<(hovered: boolean) => void>(),
+      onContextMenu: jest.fn<() => void>(),
+    };
+    expect(Object.keys(desktopMessageProps(handlers)).length).toBe(Platform.OS === 'web' ? 3 : 0);
+  });
+
   test('a phone build carries no extra props and no extra listeners', () => {
     const handlers = {
       onHoverChange: jest.fn<(hovered: boolean) => void>(),

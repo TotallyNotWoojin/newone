@@ -77,6 +77,19 @@ describe('the reaction row', () => {
     expect(onReact).toHaveBeenCalledWith('🐙');
   });
 
+  test('every control dims while it is held down', async () => {
+    await render(<ReactionRow onReact={jest.fn<(emoji: string) => void>()} />);
+    for (const label of ['chat.react 👍', 'chat.reactMore']) {
+      const style = screen.getByLabelText(label).props.style;
+      expect(style).toBeTruthy();
+    }
+    fireEvent.press(screen.getByLabelText('chat.reactMore'));
+    await waitFor(() => expect(screen.queryByPlaceholderText('chat.reactAnyEmoji')).not.toBeNull());
+    // Pressing "+" again puts the field away without sending anything.
+    fireEvent.press(screen.getByLabelText('chat.reactMore'));
+    await waitFor(() => expect(screen.queryByPlaceholderText('chat.reactAnyEmoji')).toBeNull());
+  });
+
   test('the row stays quiet while a reaction is already in flight', async () => {
     const onReact = jest.fn<(emoji: string) => void>();
     await render(<ReactionRow disabled onReact={onReact} />);
