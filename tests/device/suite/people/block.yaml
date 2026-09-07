@@ -4,6 +4,15 @@ appId: com.totallynotwoojin.newone
 # "…" menu (accessibility label "Manage contact and privacy"). The row then
 # shows a "Blocked" badge in place of its Message button.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

@@ -4,6 +4,15 @@ appId: com.totallynotwoojin.newone
 # offers "Remove photo" (the picture replaced the initials) and the server
 # profile carries a path. Owner backlog v2: profile pictures.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

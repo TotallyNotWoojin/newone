@@ -4,6 +4,15 @@ appId: com.totallynotwoojin.newone
 # unread count: the Unread filter chip carries the count ("Unread 1") after the
 # peer sent TEXT (run-2026-09-04T09-40-33 screenshot).
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 45000

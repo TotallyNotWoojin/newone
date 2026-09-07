@@ -5,6 +5,15 @@ appId: com.totallynotwoojin.newone
 # look is the owner's to judge, not something to assert — and the setting is
 # left back on System.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

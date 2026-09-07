@@ -3,6 +3,15 @@ appId: com.totallynotwoojin.newone
 # Force-quit and reopen: the session must persist straight into Chats.
 - stopApp
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 40000

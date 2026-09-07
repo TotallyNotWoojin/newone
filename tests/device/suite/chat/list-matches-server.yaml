@@ -4,6 +4,15 @@ appId: com.totallynotwoojin.newone
 # the newest text as its preview. NAME_n/PREVIEW_n come from the server; HAS_2
 # and HAS_3 are "true"/"false".
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

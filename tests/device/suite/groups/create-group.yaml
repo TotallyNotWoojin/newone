@@ -14,6 +14,15 @@ appId: com.totallynotwoojin.newone
 # everyone else underneath ("Search everyone"), so MEMBERn_QUERY is what gets
 # typed (the @username) and "Add MEMBERn" is the row that must appear.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

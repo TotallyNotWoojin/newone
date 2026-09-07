@@ -5,6 +5,15 @@ appId: com.totallynotwoojin.newone
 # been scrolled past 240 points, so an account with a handful of chats never
 # sees it — that case is recorded as unreachable rather than forced.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

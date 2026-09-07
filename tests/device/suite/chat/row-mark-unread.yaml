@@ -5,6 +5,15 @@ appId: com.totallynotwoojin.newone
 # the one a driver can aim). Marking it unread makes the Unread filter list it
 # and turns the same action into "Mark read", which puts it back.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000

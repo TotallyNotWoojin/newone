@@ -6,6 +6,15 @@ appId: com.totallynotwoojin.newone
 # appears with its EXPECT_BUTTON ("Message" for anyone, "Blocked" for a blocked
 # person). The search runs as you type; there is no submit button.
 - launchApp
+# A previous step may have left Settings open, and its "CHATS" section header
+# satisfies a wait for "Chats" (text matching ignores case). Close it first.
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+      - waitForAnimationToEnd:
+          timeout: 2000
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
