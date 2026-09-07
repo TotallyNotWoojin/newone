@@ -50,6 +50,14 @@ const post = (user, path, label, body) => gatewayPost('newone-api', path, keys, 
   idempotencyKey: `window-${runId}-${label}`,
   body: { organizationId: PERSONAL_REALM_ID, ...body },
 });
+
+const request = await post(ana, '/v2/contacts/message-requests', 'req', {
+  targetUserId: eli.userId,
+  body: 'Hi Eli, testing edits.',
+});
+if (request.status !== 201) fail(`message request failed (${request.status})`, request.payload);
+const conversationId = data(request)?.conversationId;
+
 const patchMessage = (user, messageId, label, body) => gatewayRequest(
   'newone-api',
   'PATCH',
@@ -59,16 +67,11 @@ const patchMessage = (user, messageId, label, body) => gatewayRequest(
     installationId: user.installationId,
     accessToken: user.accessToken,
     idempotencyKey: `window-${runId}-${label}`,
-    body: { organizationId: PERSONAL_REALM_ID, ...body },
+    // The route names the conversation as well as the message, the way the app
+    // does; without it the request never reaches the window guard.
+    body: { organizationId: PERSONAL_REALM_ID, conversationId, ...body },
   },
 );
-
-const request = await post(ana, '/v2/contacts/message-requests', 'req', {
-  targetUserId: eli.userId,
-  body: 'Hi Eli, testing edits.',
-});
-if (request.status !== 201) fail(`message request failed (${request.status})`, request.payload);
-const conversationId = data(request)?.conversationId;
 const accept = await post(eli, `/v2/contacts/connections/${ana.userId}/respond`, 'acc', {
   decision: 'accepted',
 });
