@@ -298,7 +298,7 @@ export function TransferControls({ message, tone }: { message: Message; tone: 'l
 }
 
 const buildStyles = (colors: ThemeColors) => StyleSheet.create({
-  frame: { borderRadius: 14, overflow: 'hidden', backgroundColor: 'rgba(16,46,39,0.08)' },
+  frame: { borderRadius: 14, overflow: 'hidden', backgroundColor: colors.tintFaint },
   fill: { width: '100%', height: '100%' },
   center: { alignItems: 'center', justifyContent: 'center' },
   overlay: { position: 'absolute', top: 0, left: 0 },

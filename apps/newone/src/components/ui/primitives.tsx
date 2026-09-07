@@ -15,7 +15,7 @@ import {
 
 import type { Presence } from '@/domain/types';
 import { radii, spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -101,7 +101,7 @@ export function IconButton({
   const palette = {
     neutral: { background: colors.paperMuted, foreground: colors.ink },
     inverse: { background: 'rgba(255,255,255,0.1)', foreground: colors.white },
-    accent: { background: colors.mint, foreground: colors.forest },
+    accent: { background: colors.mint, foreground: colors.onAccent },
     danger: { background: colors.redSoft, foreground: colors.red },
   }[tone];
   const isDisabled = disabled || !onPress;
@@ -148,11 +148,13 @@ export function SearchField({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   return (
     <View style={[styles.search, compact && styles.searchCompact]}>
       <Ionicons name="search-outline" size={18} color={colors.inkSubtle} />
       <TextInput
+        keyboardAppearance={keyboardAppearance}
         accessibilityLabel={placeholder}
         autoCapitalize="none"
         autoCorrect={false}
@@ -273,7 +275,7 @@ export function PrimaryButton({
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const palette = {
-    accent: { background: colors.mint, foreground: colors.forest },
+    accent: { background: colors.mint, foreground: colors.onAccent },
     dark: { background: colors.forest, foreground: colors.white },
     light: { background: colors.paperMuted, foreground: colors.ink },
     danger: { background: colors.red, foreground: colors.white },

@@ -186,7 +186,7 @@ function DesktopRail({ current }: { current: NavigationKey }) {
               ]}>
               <View>
                 <Ionicons
-                  color={selected ? colors.forest : 'rgba(255,255,255,0.72)'}
+                  color={selected ? colors.onAccent : 'rgba(255,255,255,0.72)'}
                   name={selected ? item.iconActive : item.icon}
                   size={22}
                 />
@@ -263,7 +263,7 @@ function MobileTabs({ current }: { current: NavigationKey }) {
               <Ionicons
                 name={selected ? item.iconActive : item.icon}
                 size={20}
-                color={selected ? colors.forest : colors.inkSubtle}
+                color={selected ? colors.onAccent : colors.inkSubtle}
               />
               {badge > 0 ? <View style={styles.mobileBadge} /> : null}
             </View>
@@ -457,7 +457,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '700',
   },
   railLabelSelected: {
-    color: colors.forest,
+    color: colors.onAccent,
     fontWeight: '900',
   },
   railBadge: {
@@ -468,7 +468,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 16,
     paddingHorizontal: 4,
     borderRadius: 8,
-    backgroundColor: colors.red,
+    backgroundColor: colors.redStrong,
     alignItems: 'center',
     justifyContent: 'center',
     borderColor: colors.forest,

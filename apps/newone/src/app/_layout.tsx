@@ -22,7 +22,8 @@ import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 import { I18nProvider } from '@/i18n/provider';
 import { DevicePreferencesProvider } from '@/state/device-preferences';
 import { spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { ThemeProvider, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useSystemChrome } from '@/theme/system-chrome';
 // Metro selects the native notification bridge or the web no-op.
 // eslint-disable-next-line import/no-unresolved
 import { useNotificationNavigation } from '@/device/notification-navigation';
@@ -31,8 +32,27 @@ import { consumeWebDeepLink } from '@/lib/web-deep-link';
 
 installCrashGuard();
 
+/**
+ * The appearance providers sit outside the view tree so the shell itself, the
+ * status bar and the root background all read the same resolved theme. Nothing
+ * below this point may import colours from the module-level palette.
+ */
 export default function RootLayout() {
+  return (
+    <I18nProvider>
+      <DevicePreferencesProvider>
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
+      </DevicePreferencesProvider>
+    </I18nProvider>
+  );
+}
+
+function AppShell() {
   const styles = useThemedStyles(buildStyles);
+  const { scheme } = useTheme();
+  useSystemChrome();
   const [privacyShielded, setPrivacyShielded] = useState(
     Platform.OS !== 'web' && AppState.currentState !== 'active',
   );
@@ -46,10 +66,8 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <I18nProvider>
-          <DevicePreferencesProvider>
           <Head>
             <title>Newone · Workplace communication</title>
             <meta
@@ -58,11 +76,10 @@ export default function RootLayout() {
             />
           </Head>
           <AuthProvider>
-            <StatusBar style="dark" />
+            {/* The bar's glyphs must contrast with the app, not with the phone. */}
+            <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
             <ProtectedNavigator />
           </AuthProvider>
-          </DevicePreferencesProvider>
-        </I18nProvider>
       </SafeAreaProvider>
       {privacyShielded ? (
         <View
@@ -184,6 +201,7 @@ function AuthLoadingScreen({ label }: { label: string }) {
 }
 
 const buildStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.canvas },
   privacyShield: {
     position: 'absolute',
     inset: 0,
@@ -208,7 +226,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.mint,
   },
   loadingMarkText: {
-    color: colors.forest,
+    color: colors.onAccent,
     fontFamily: type.display,
     fontSize: 31,
     fontWeight: '900',

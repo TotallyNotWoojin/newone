@@ -590,7 +590,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 11,
   },
   discoveryButton: {
-    backgroundColor: colors.ink,
+    backgroundColor: colors.inkStrong,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -751,7 +751,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.mint,
   },
   unreadBadgeSafety: {
-    backgroundColor: colors.red,
+    backgroundColor: colors.redStrong,
   },
   unreadBadgeText: {
     color: colors.white,

@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import type { SearchChip, SearchSuggestion } from '@/features/search/chat-search';
 import { useI18n } from '@/i18n/provider';
 import { radii, spacing } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * One field for the whole of Chats. Finished names sit in it as chips, the
@@ -35,6 +35,7 @@ export function ChatSearchField({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   // The visible text is only the unfinished tail; the finished parts are chips.
   const draft = value.includes(',') ? value.slice(value.lastIndexOf(',') + 1).trimStart() : value;
@@ -70,6 +71,7 @@ export function ChatSearchField({
             </Pressable>
           ))}
           <TextInput
+            keyboardAppearance={keyboardAppearance}
             accessibilityLabel={t('search.fieldPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}

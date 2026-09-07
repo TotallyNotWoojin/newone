@@ -12,6 +12,7 @@
       "fallbackToCacheTimeout": 0
     },
     "orientation": "default",
+    "backgroundColor": "#F3F5F1",
     "icon": "./assets/images/newone-app-icon.png",
     "scheme": "newone",
     "userInterfaceStyle": "automatic",
@@ -55,7 +56,12 @@
         {
           "backgroundColor": "#102E27",
           "image": "./assets/images/newone-splash.png",
-          "imageWidth": 104
+          "imageWidth": 104,
+          "dark": {
+            "backgroundColor": "#0B211C",
+            "image": "./assets/images/newone-splash.png",
+            "imageWidth": 104
+          }
         }
       ],
       "expo-sqlite",

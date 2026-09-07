@@ -1820,7 +1820,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.5,
   },
   translationText: {
-    color: '#245C4C',
+    color: colors.mintDark,
     fontSize: 13,
     lineHeight: 20,
   },
@@ -1898,7 +1898,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   validationError: { color: colors.red, fontSize: 10, fontWeight: '700' },
   audienceNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.mintSoft },
   audienceNoticeCopy: { flex: 1, minWidth: 0 },
-  audienceNoticeTitle: { color: colors.forest, fontSize: 11, fontWeight: '900' },
+  audienceNoticeTitle: { color: colors.accentInk, fontSize: 11, fontWeight: '900' },
   audienceNoticeText: { color: colors.inkMuted, fontSize: 10, lineHeight: 15, marginTop: 2 },
   successNotice: {
     flexDirection: 'row',
@@ -1911,7 +1911,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.mint,
     backgroundColor: colors.mintSoft,
   },
-  successNoticeText: { flex: 1, color: colors.forest, fontSize: 12, fontWeight: '800' },
+  successNoticeText: { flex: 1, color: colors.accentInk, fontSize: 12, fontWeight: '800' },
   policyHint: { color: colors.inkMuted, fontSize: 10, lineHeight: 16 },
   policyPanel: {
     gap: spacing.sm,
@@ -1930,7 +1930,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.mint,
     backgroundColor: colors.mintSoft,
   },
-  previewTitle: { color: colors.forest, fontSize: 12, fontWeight: '900' },
+  previewTitle: { color: colors.accentInk, fontSize: 12, fontWeight: '900' },
   previewMetric: { color: colors.mintDark, fontSize: 14, fontWeight: '900' },
   previewText: { color: colors.inkMuted, fontSize: 11, lineHeight: 16 },
   previewHint: { color: colors.inkSubtle, fontSize: 9, lineHeight: 14 },
@@ -1992,7 +1992,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.mintSoft,
   },
-  privacyNoticeText: { flex: 1, color: colors.forest, fontSize: 11, lineHeight: 17 },
+  privacyNoticeText: { flex: 1, color: colors.accentInk, fontSize: 11, lineHeight: 17 },
   publisherSection: { gap: spacing.md, paddingTop: spacing.xxxl },
   publisherHeader: {
     flexDirection: 'row',

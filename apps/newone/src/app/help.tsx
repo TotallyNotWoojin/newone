@@ -35,7 +35,7 @@ export default function HelpScreen() {
       <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         <View style={[styles.intro, shadow]}>
           <View style={styles.introIcon}>
-            <Ionicons color={colors.forest} name="help-buoy-outline" size={26} />
+            <Ionicons color={colors.onAccent} name="help-buoy-outline" size={26} />
           </View>
           <View style={styles.introCopy}>
             <Text style={styles.introTitle}>{t('help.introTitle')}</Text>

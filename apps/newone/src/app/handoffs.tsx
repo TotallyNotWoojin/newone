@@ -275,7 +275,7 @@ function HandoffsWorkplaceScreen() {
                     onPress={() => toggleSource(messageId)}
                     style={[styles.sourceRow, selected && styles.sourceRowSelected]}>
                     <View style={[styles.sourceCheck, selected && styles.sourceCheckSelected]}>
-                      {selected ? <Ionicons name="checkmark" size={14} color={colors.forest} /> : null}
+                      {selected ? <Ionicons name="checkmark" size={14} color={colors.onAccent} /> : null}
                     </View>
                     <View style={styles.sourceCopy}>
                       <Text style={styles.sourceSender}>{message.senderName} · {message.sentAt}</Text>
@@ -436,7 +436,7 @@ function HandoffsWorkplaceScreen() {
                       onPress={() => toggleCorrectionSource(messageId)}
                       style={[styles.sourceRow, selected && styles.sourceRowSelected]}>
                       <View style={[styles.sourceCheck, selected && styles.sourceCheckSelected]}>
-                        {selected ? <Ionicons name="checkmark" size={14} color={colors.forest} /> : null}
+                        {selected ? <Ionicons name="checkmark" size={14} color={colors.onAccent} /> : null}
                       </View>
                       <View style={styles.sourceCopy}>
                         <Text style={styles.sourceSender}>
@@ -708,7 +708,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.lg,
     backgroundColor: colors.plumSoft,
     borderWidth: 1,
-    borderColor: '#DED0F0',
+    borderColor: colors.plumBorder,
   },
   workflowIcon: {
     width: 44,
@@ -723,12 +723,12 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     minWidth: 0,
   },
   workflowTitle: {
-    color: '#493168',
+    color: colors.plumStrong,
     fontSize: 13,
     fontWeight: '900',
   },
   workflowText: {
-    color: '#67527E',
+    color: colors.plumMuted,
     fontSize: 11,
     lineHeight: 17,
     marginTop: 3,

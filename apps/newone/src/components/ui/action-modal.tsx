@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { radii, shadow, spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 /** A sheet settles in one quick beat; closing is immediate. The system
@@ -120,10 +120,12 @@ export function FormField({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
+        keyboardAppearance={keyboardAppearance}
         accessibilityLabel={label}
         keyboardType={keyboardType}
         multiline={multiline}
@@ -157,7 +159,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(5, 22, 18, 0.62)',
+    backgroundColor: colors.overlay,
   },
   overlay: {
     flex: 1,

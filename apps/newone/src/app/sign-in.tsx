@@ -21,7 +21,7 @@ import { CaptchaChallenge } from '@/components/security/captcha-challenge';
 import { publicRuntimeConfig } from '@/config/runtime';
 import { isWebAuthBlocked } from '@/lib/supabase';
 import { radii, shadow, spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useAuth } from '@/state/auth';
 import { useI18n } from '@/i18n/provider';
 import { errorMessageKey } from '@/i18n/errors';
@@ -92,6 +92,7 @@ type AuthStep = 'identity' | 'password' | 'verify' | 'new-password';
 export default function SignInScreen() {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const router = useRouter();
   const auth = useAuth();
   const { locale, setLocale, t } = useI18n();
@@ -577,6 +578,7 @@ export default function SignInScreen() {
               <View style={styles.inputWrap}>
                 <Ionicons name="key-outline" size={18} color={colors.inkSubtle} />
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityLabel={t('auth.invitationTokenLabel')}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -592,6 +594,7 @@ export default function SignInScreen() {
               <View style={styles.inputWrap}>
                 <Ionicons name="id-card-outline" size={18} color={colors.inkSubtle} />
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityLabel={t('auth.employeeCodeLabel')}
                   autoCapitalize="characters"
                   autoCorrect={false}
@@ -620,6 +623,7 @@ export default function SignInScreen() {
                 />
                 {authStep === 'verify' ? (
                   <TextInput
+                    keyboardAppearance={keyboardAppearance}
                     accessibilityLabel={t('auth.codeA11y')}
                     autoComplete="one-time-code"
                     keyboardType="number-pad"
@@ -636,6 +640,7 @@ export default function SignInScreen() {
                   />
                 ) : (
                   <TextInput
+                    keyboardAppearance={keyboardAppearance}
                     accessibilityHint={
                       enrollmentMode
                         ? t('auth.emailInviteHint')
@@ -731,6 +736,7 @@ export default function SignInScreen() {
               <View style={styles.inputWrap}>
                 <Ionicons name="at-outline" size={18} color={colors.inkSubtle} />
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityLabel={t('auth.usernameLabel')}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -747,6 +753,7 @@ export default function SignInScreen() {
               <View style={styles.inputWrap}>
                 <Ionicons name="person-outline" size={18} color={colors.inkSubtle} />
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityLabel={t('auth.displayNameLabel')}
                   autoCorrect={false}
                   maxLength={80}

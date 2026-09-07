@@ -37,7 +37,7 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 const allTypes: SearchResultType[] = [
@@ -68,6 +68,7 @@ export function WorkspaceSearchPanel({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -539,6 +540,7 @@ export function WorkspaceSearchPanel({
               <View style={styles.dateField}>
                 <Text style={styles.filterLabel}>{copy.fromDate}</Text>
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityHint={copy.dateHint}
                   accessibilityLabel={copy.fromDate}
                   autoCapitalize="none"
@@ -557,6 +559,7 @@ export function WorkspaceSearchPanel({
               <View style={styles.dateField}>
                 <Text style={styles.filterLabel}>{copy.toDate}</Text>
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityHint={copy.dateHint}
                   accessibilityLabel={copy.toDate}
                   autoCapitalize="none"

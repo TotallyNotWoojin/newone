@@ -67,7 +67,7 @@ export function LinkPreviewCard({ url }: { url: string }) {
 const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     alignItems: 'center',
-    backgroundColor: 'rgba(16,46,39,0.05)',
+    backgroundColor: colors.tintFaint,
     borderRadius: radii.xs,
     flexDirection: 'row',
     gap: spacing.xs,

@@ -82,7 +82,7 @@ import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const rowKey = (row: TimelineRow) => row.key;
 
@@ -1892,6 +1892,7 @@ function Composer({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   const bottomInset = useComposerBottomInset(mobile);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -1994,6 +1995,7 @@ function Composer({
       {!disabled && !recording ? <View style={styles.composer}>
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={36} />
         <TextInput
+          keyboardAppearance={keyboardAppearance}
           accessibilityLabel={t('chat.message')}
           testID="composer-input"
           multiline
@@ -2057,6 +2059,7 @@ function MentionSelector({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { locale } = useI18n();
   const copy = mentionCopy(locale);
   const [query, setQuery] = useState('');
@@ -2117,6 +2120,7 @@ function MentionSelector({
         <View style={styles.mentionPanel}>
           <Text style={styles.mentionTitle}>{copy.title}</Text>
           <TextInput
+            keyboardAppearance={keyboardAppearance}
             accessibilityLabel={copy.searchLabel}
             autoCapitalize="none"
             onChangeText={setQuery}
@@ -3272,7 +3276,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F4C5BC',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   safetyIcon: {
@@ -3292,7 +3296,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '900',
   },
   safetyText: {
-    color: '#7E4A44',
+    color: colors.red,
     fontSize: 11,
     lineHeight: 16,
     marginTop: 2,
@@ -3307,7 +3311,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.xs,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E7C998',
+    borderColor: colors.amberBorder,
     backgroundColor: colors.amberSoft,
   },
   translationBoundaryText: {
@@ -3326,7 +3330,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F4C5BC',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   incidentBannerClosed: { borderColor: colors.lineStrong, backgroundColor: colors.paperMuted },
@@ -3379,7 +3383,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   reactionMine: {
     backgroundColor: colors.mintSoft,
-    borderColor: '#B4E8D4',
+    borderColor: colors.mintBorder,
   },
   reactionEmoji: {
     fontSize: 12,
@@ -3419,7 +3423,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: colors.mint,
   },
-  mentionCountText: { color: colors.forest, fontSize: 9, fontWeight: '900' },
+  mentionCountText: { color: colors.onAccent, fontSize: 9, fontWeight: '900' },
   selectedMentions: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   selectedMention: {
     minHeight: 30,
@@ -3430,7 +3434,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: spacing.xs,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: '#B4E8D4',
+    borderColor: colors.mintBorder,
     backgroundColor: colors.mintSoft,
   },
   selectedMentionText: { flexShrink: 1, color: colors.mintDark, fontSize: 10, fontWeight: '900' },
@@ -3738,7 +3742,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   reply: {
     borderLeftWidth: 3,
     borderLeftColor: colors.mint,
-    backgroundColor: 'rgba(16,46,39,0.05)',
+    backgroundColor: colors.tintFaint,
     borderRadius: radii.xs,
     paddingHorizontal: spacing.xs,
     paddingVertical: 5,
@@ -3754,7 +3758,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(16,46,39,0.2)',
+    borderTopColor: colors.tintLine,
   },
   quietRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   quietLine: { color: colors.inkSubtle, fontSize: 12, lineHeight: 16, marginTop: 4 },
@@ -3781,14 +3785,14 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   timeTextOverlay: { color: colors.white },
   reactions: { flexDirection: 'row', marginTop: -6, marginLeft: 8, gap: 4 },
   reactionsOwn: { marginLeft: 0, marginRight: 8 },
-  fileCard: { minWidth: 210, marginBottom: 4, borderRadius: radii.sm, backgroundColor: 'rgba(16,46,39,0.05)' },
-  fileCardOwn: { backgroundColor: 'rgba(16,46,39,0.07)' },
+  fileCard: { minWidth: 210, marginBottom: 4, borderRadius: radii.sm, backgroundColor: colors.tintFaint },
+  fileCardOwn: { backgroundColor: colors.tintSoft },
   fileRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs },
   fileCopy: { flex: 1, minWidth: 0 },
   fileName: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   fileMeta: { color: colors.inkSubtle, fontSize: 11, marginTop: 1 },
   fileProgressRow: { paddingHorizontal: spacing.xs, paddingBottom: 6 },
-  fileProgressTrack: { height: 3, overflow: 'hidden', borderRadius: radii.pill, backgroundColor: 'rgba(16,46,39,0.12)' },
+  fileProgressTrack: { height: 3, overflow: 'hidden', borderRadius: radii.pill, backgroundColor: colors.tintMedium },
   fileProgressFill: { height: '100%', borderRadius: radii.pill, backgroundColor: colors.mint },
   fileControls: { paddingHorizontal: spacing.xs, paddingBottom: 6 },
   detailsBlock: { gap: 4, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.paperMuted },
@@ -3838,8 +3842,8 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  voiceBubbleOwn: { backgroundColor: 'rgba(16,46,39,0.07)' },
-  voicePlayButtonOwn: { backgroundColor: 'rgba(16,46,39,0.12)' },
+  voiceBubbleOwn: { backgroundColor: colors.tintSoft },
+  voicePlayButtonOwn: { backgroundColor: colors.tintMedium },
   pressed: {
     opacity: 0.72,
   },

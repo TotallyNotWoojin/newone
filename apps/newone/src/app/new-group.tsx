@@ -348,7 +348,7 @@ export default function NewGroupScreen() {
           onPress={() => toggle(candidate)}
           style={styles.personMain}>
           <View style={[styles.check, role && styles.checkSelected]}>
-            {role ? <Ionicons name="checkmark" size={15} color={colors.forest} /> : null}
+            {role ? <Ionicons name="checkmark" size={15} color={colors.onAccent} /> : null}
           </View>
           <Avatar
             color={candidateColor(candidate)}
@@ -827,7 +827,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm,
     borderWidth: 1,
-    borderColor: '#E7C690',
+    borderColor: colors.amberBorder,
     borderRadius: radii.md,
     backgroundColor: colors.amberSoft,
   },
@@ -874,7 +874,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F0C9C1',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   incidentNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
@@ -905,7 +905,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E7C690',
+    borderColor: colors.amberBorder,
     backgroundColor: colors.amberSoft,
   },
   guestDisclosureText: { flex: 1, color: colors.amber, fontSize: 11, lineHeight: 16 },

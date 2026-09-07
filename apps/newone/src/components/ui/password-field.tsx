@@ -13,7 +13,7 @@ import {
 
 import { useI18n } from '@/i18n/provider';
 import { radii, spacing } from '@/theme/tokens';
-import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 // The only password rule (owner decision, Sep 2026). The gateway enforces the
 // same bounds; GoTrue's minimum_password_length must be set to match.
@@ -45,6 +45,7 @@ export function PasswordField({
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   return (
@@ -53,6 +54,7 @@ export function PasswordField({
       <View style={styles.inputWrap}>
         <Ionicons name="lock-closed-outline" size={18} color={colors.inkSubtle} />
         <TextInput
+          keyboardAppearance={keyboardAppearance}
           accessibilityLabel={label}
           autoCapitalize="none"
           autoComplete={autoComplete === 'new-password' ? 'off' : autoComplete}
