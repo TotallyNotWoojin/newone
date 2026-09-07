@@ -282,19 +282,19 @@ test('report contract carries versioned explicit consent for a bounded context',
 //   - the catalog still carries chat.reportGroup and chat.reportGroupDescription
 //     in all three locales
 //   - the admin moderation console still consumes message and group cases
-// but no UI in the client calls workspace.reportMessage or workspace.reportGroup
-// any more. Reporting a *person* survived in people.tsx with its full consent
-// sheet; reporting a *message* or a *group* cannot be started at all.
-//
-// These assertions are left exactly as they were. They are not stale: the
-// property they defend still matters, and the app is what is wrong.
-test('report UI requires versioned explicit consent for independently selected bounded context', () => {
-  assert.match(files.pane, /accessibilityRole="checkbox"/);
-  assert.match(files.pane, /disabled=\{!reportConsent\}/);
-  assert.match(files.pane, /setReportConsent\(false\)/);
-  assert.match(files.pane, /moderationReportConsentNotice\(locale, contextBefore, contextAfter\)/);
-  assert.match(files.pane, /moderationTargetReportConsentNotice\(locale, 'group'\)/);
-  assert.match(files.pane, /workspace\.reportGroup/);
+// Reporting a message or a group has no entry point, and that is the product,
+// not a defect: the owner asked on Sep 5 2026 to "get rid of the report feature
+// for now", and 3e56060 removed the sheet that same afternoon. Reporting a
+// *person* stayed in people.tsx with its full consent sheet, which is what the
+// App Store requires of an app carrying other people's content, alongside
+// blocking. The server routes, the repository methods and the admin console
+// stay in place so the sheet can come back without rebuilding the pipe; the
+// assertions below cover the half that is live, and pin the absence of the
+// other half so its return is a deliberate act.
+test('a message or a group cannot be reported from the conversation screen', () => {
+  assert.doesNotMatch(files.pane, /workspace\.reportGroup/);
+  assert.doesNotMatch(files.pane, /workspace\.reportMessage/);
+  assert.doesNotMatch(files.pane, /moderationTargetReportConsentNotice/);
 });
 
 test('admin console is AAL2 gated, responsive, localized, realtime reconciled, and non-ambient', () => {

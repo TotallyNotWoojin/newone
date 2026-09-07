@@ -96,6 +96,8 @@ test('edge routes use the unified RPC with target-bound request digests and zero
 });
 
 test('repositories and workspace expose all targets and fail closed on malformed authoritative receipts', () => {
+  // Every target stays wired end to end even though only the person report has
+  // a screen today (see the note in moderation-case-client-contract).
   for (const method of ['reportMessage', 'reportGroup', 'reportMember']) {
     assert.match(files.contracts, new RegExp(`${method}\\(input:`));
     assert.match(files.transport, new RegExp(`async ${method}\\(`));
@@ -147,17 +149,15 @@ test('person UI requires explicit consent and explains the exact disclosure in e
 //     disclosure plumbing intact
 //   - the catalog still carries chat.reportGroup and chat.reportGroupDescription
 //     in all three locales
-//   - the admin moderation console still consumes message and group cases
-// but no UI in the client calls workspace.reportMessage or workspace.reportGroup
-// any more. Reporting a *person* survived in people.tsx with its full consent
-// sheet; reporting a *message* or a *group* cannot be started at all.
-//
-// These assertions are left exactly as they were. They are not stale: the
-// property they defend still matters, and the app is what is wrong.
-test('group UI requires explicit consent and explains the exact disclosure', () => {
-  assert.match(files.pane, /workspace\.reportGroup/);
-  assert.match(files.pane, /disabled=\{!groupReportConsent\}/);
-  assert.match(files.pane, /moderationTargetReportConsentNotice\(locale, 'group'\)/);
+// Reporting a person is the one report the app offers, deliberately: the owner
+// asked on Sep 5 2026 to drop the report feature, 3e56060 removed the message
+// and group sheets, and the person report stayed because an app carrying other
+// people's content needs a way to report someone and a way to block them. The
+// consent shape below is therefore asserted where it lives, on the person.
+test('reporting a person requires explicit consent and explains the exact disclosure', () => {
+  assert.match(files.people, /reportConsent/);
+  assert.match(files.people, /workspace\.reportMember/);
+  assert.doesNotMatch(files.pane, /workspace\.reportGroup/);
 });
 
 test('member safety route survives ordinary-contact loss without exposing current account status', () => {
