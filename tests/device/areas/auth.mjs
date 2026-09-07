@@ -109,7 +109,7 @@ export async function run(ctx) {
   });
   await ctx.step({
     id: 'profile-02-language-es', title: 'Language → Español changes visible UI text', device,
-    flow: 'profile/language-to-es.yaml', expected: 'Settings chrome ("Cerrar configuración", "Idioma" row) and tabs ("Ajustes", "Personas") render in Spanish', screen: 'settings',
+    flow: 'profile/language-to-es.yaml', expected: 'Settings chrome ("Cerrar configuración", "Idioma" row) and tabs ("Ajustes", "Contactos") render in Spanish', screen: 'settings',
     serverTruth: async () => { const row = await server.profileByUsername(username); return { ok: true, detail: `server preferred_language stays ${row?.preferred_language} (display language is a device setting)` }; },
   });
   await ctx.step({ id: 'profile-03-language-en', title: 'Language → English restores English UI', device, flow: 'profile/language-to-en.yaml', expected: 'Settings and tabs render in English again', screen: 'settings' });

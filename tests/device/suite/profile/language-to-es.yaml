@@ -34,5 +34,5 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Ajustes"
     timeout: 15000
-- assertVisible: "Personas"
+- assertVisible: "Contactos"
 - takeScreenshot: ${SHOT}-spanish-tabs
