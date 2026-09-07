@@ -80,6 +80,7 @@ export function groupNameFromPeople(names: string[], fallback: string): string {
   const shown = cleaned.slice(0, 3).join(', ');
   const rest = cleaned.length - 3;
   const title = rest > 0 ? `${shown} +${rest}` : shown;
+  if (title.length < 2) return fallback;
   return title.length > 160 ? `${title.slice(0, 157)}…` : title;
 }
 

@@ -79,6 +79,8 @@ describe('group name fallback', () => {
     expect(groupNameFromPeople(['Ana', 'Ben'], 'New group')).toBe('Ana, Ben');
     expect(groupNameFromPeople(['Ana', 'Ben', 'Cara', 'Dee'], 'New group')).toBe('Ana, Ben, Cara +1');
     expect(groupNameFromPeople(['  ', ''], 'New group')).toBe('New group');
+    // Too short to be a name the service will take.
+    expect(groupNameFromPeople(['A'], 'New group')).toBe('New group');
     expect(groupNameFromPeople(['x'.repeat(200)], 'New group')).toHaveLength(158);
   });
 });
