@@ -72,18 +72,14 @@ export function useChatSearch(parsed: ParsedSearch): ChatSearchResults {
   // rows locally, because membership is already on the device.
   const words = parsed.terms.join(' ').trim();
 
+  const wantsPeople = needle.trim().length >= MINIMUM_QUERY;
+  const wantsMessages = words.length >= MINIMUM_QUERY;
+
   useEffect(() => {
-    const wantsPeople = needle.trim().length >= MINIMUM_QUERY;
-    const wantsMessages = words.length >= MINIMUM_QUERY;
+    if (!wantsPeople && !wantsMessages) return undefined;
     const sequence = ++generation.current;
-    if (!wantsPeople && !wantsMessages) {
-      setStrangers([]);
-      setMessages([]);
-      setLoading(false);
-      return undefined;
-    }
-    setLoading(true);
     const timer = setTimeout(() => {
+      setLoading(true);
       const settle = () => {
         if (generation.current === sequence) setLoading(false);
       };
@@ -92,7 +88,7 @@ export function useChatSearch(parsed: ParsedSearch): ChatSearchResults {
             if (generation.current !== sequence) return;
             setStrangers((results ?? []).map(asPerson));
           }).catch(() => undefined)
-        : Promise.resolve(setStrangers([]));
+        : Promise.resolve();
       const messageRequest = wantsMessages
         ? repository.search({
             organizationId,
@@ -108,11 +104,21 @@ export function useChatSearch(parsed: ParsedSearch): ChatSearchResults {
           }).catch(() => {
             if (generation.current === sequence) setMessages([]);
           })
-        : Promise.resolve(setMessages([]));
+        : Promise.resolve();
       void Promise.all([peopleRequest, messageRequest]).then(settle, settle);
     }, CHAT_SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [needle, organizationId, repository, searchUsers, words]);
+    return () => {
+      clearTimeout(timer);
+      // Whatever was in flight belongs to a query nobody is looking at now.
+      generation.current += 1;
+    };
+  }, [needle, organizationId, repository, searchUsers, wantsMessages, wantsPeople, words]);
 
-  return { strangers, messages, loading };
+  // The last answers stay in state, but a field that is no longer asking for
+  // them shows nothing, so a cleared query never leaves stale rows behind.
+  return {
+    strangers: wantsPeople ? strangers : [],
+    messages: wantsMessages ? messages : [],
+    loading: (wantsPeople || wantsMessages) && loading,
+  };
 }

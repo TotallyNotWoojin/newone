@@ -9,7 +9,7 @@ import {
 } from '@/components/navigation/app-scaffold';
 import { ActionModal } from '@/components/ui/action-modal';
 import { ScreenErrorBoundary } from '@/components/ui/error-boundary';
-import { IconButton } from '@/components/ui/primitives';
+import { IconButton, PrimaryButton } from '@/components/ui/primitives';
 import {
   WorkspaceStatePanel,
   WorkspaceStatusBanner,
@@ -32,7 +32,6 @@ import { WorkspaceSearchPanel } from '@/features/search/workspace-search-panel';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import type { Conversation } from '@/domain/types';
 import { useWorkspace } from '@/state/workspace';
-import { PrimaryButton } from '@/components/ui/primitives';
 import { colors, radii, shadow, spacing } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';

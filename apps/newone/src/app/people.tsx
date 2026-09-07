@@ -86,6 +86,14 @@ export default function PeopleScreen() {
   const [addFriendOpen, setAddFriendOpen] = useState(false);
   const [requestedIds, setRequestedIds] = useState<string[]>([]);
   const addParam = useLocalSearchParams<{ add?: string }>().add;
+  const [seenAddParam, setSeenAddParam] = useState<string | undefined>(undefined);
+  // The "+" menu on Chats routes here with ?add=1, so one control on one
+  // screen is the only way in. The parameter is read as it arrives rather than
+  // in an effect, which would render the screen twice on the way in.
+  if (addParam !== seenAddParam) {
+    setSeenAddParam(addParam);
+    if (addParam === '1') setAddFriendOpen(true);
+  }
 
   const openAddFriend = () => {
     setPeopleQuery('');
@@ -96,12 +104,6 @@ export default function PeopleScreen() {
     setAddFriendOpen(true);
   };
 
-  // The "+" menu on Chats routes here with ?add=1, so one control on one
-  // screen is the only way in.
-  useEffect(() => {
-    if (addParam !== '1') return;
-    setAddFriendOpen(true);
-  }, [addParam]);
 
   const handlePeopleQueryChange = (value: string) => {
     // Search matches names as well as handles and the service is
