@@ -44,7 +44,10 @@ test('guest sends and reply previews are online-only and never reach durable enq
   const durableEnqueue = send.indexOf('clientStore.enqueue(command)');
   assert.ok(guestBranch >= 0 && durableEnqueue > guestBranch);
   assert.ok(send.indexOf('return;', guestBranch) < durableEnqueue);
-  assert.match(send, /replyPreview: \{ senderName: replyTo\.senderName, preview:/);
+  // The preview also carries the quoted message's id, so tapping the quote can
+  // go to it even before the send has come back from the server.
+  assert.match(send, /replyPreview: \{\s*messageId: replyTo\.serverId,/);
+  assert.match(send, /senderName: replyTo\.senderName,\s*preview: replyTo\.originalText/);
   assert.match(send, /errors\.guestOnlineRequired/);
 
   const receipts = section('const enqueueMessageReceipt', 'const observeConversation');
