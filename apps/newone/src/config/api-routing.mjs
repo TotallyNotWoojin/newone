@@ -40,6 +40,10 @@ const READ_PATHS = new Set([
   '/v2/search',
   '/v2/users/search',
   '/v2/admin/audit/query',
+  // A chat's pins and every chat's pins are one read served by newone-read.
+  // Missing here they routed to the API function and answered 404, so the
+  // Pinned view was always empty (found by the web suite, Sep 2026).
+  '/v2/pins/query',
 ]);
 
 function safeApiPath(path) {
@@ -174,7 +178,7 @@ export function edgeFunctionForPath(path) {
   ) return 'newone-auth';
   if (
     READ_PATHS.has(path)
-    || /^\/v2\/conversations\/[0-9a-f-]{36}\/messages\/query$/i.test(path)
+    || /^\/v2\/conversations\/[0-9a-f-]{36}\/(?:messages|media)\/query$/i.test(path)
   ) return 'newone-read';
   return 'newone-api';
 }

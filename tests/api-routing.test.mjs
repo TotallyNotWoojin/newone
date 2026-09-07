@@ -34,6 +34,8 @@ test('native Edge routing inserts the exact function for auth, read, and command
     ['/v2/search', 'newone-read'],
     ['/v2/admin/audit/query', 'newone-read'],
     ['/v2/conversations/00000000-0000-4000-8000-000000000001/messages/query', 'newone-read'],
+    ['/v2/pins/query', 'newone-read'],
+    ['/v2/conversations/00000000-0000-4000-8000-000000000001/media/query', 'newone-read'],
     ['/v2/conversations/direct', 'newone-api'],
     ['/v2/admin/role-assignments/query', 'newone-api'],
     ['/v2/admin/audit/export', 'newone-api'],

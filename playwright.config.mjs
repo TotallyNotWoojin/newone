@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import { E2E_BASE_URL } from './tests/e2e/support/base-url.mjs';
+
 // Two halves, described in docs/WEB.md:
 //  - `desktop` runs against the exported static bundle alone and touches no
 //    backend, so it is safe to run anywhere and is what `npm run e2e` runs.
@@ -24,14 +26,14 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 8_000 },
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: E2E_BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
   webServer: {
     command: 'npm run e2e:serve',
-    url: 'http://127.0.0.1:4173/sign-in',
+    url: `${E2E_BASE_URL}/sign-in`,
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,
   },
@@ -51,7 +53,9 @@ export default defineConfig({
       ? [{
           name: 'desktop-live',
           testMatch: '**/live/**/*.spec.mjs',
-          // Real signups, a real gateway and a real sign-in per test.
+          // Real signups, a real gateway, and one signed-in page shared by the
+          // whole project (see tests/e2e/support/live-fixtures.mjs).
+          fullyParallel: false,
           timeout: 180_000,
           use: desktop,
         }]
