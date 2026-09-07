@@ -44,6 +44,9 @@ import {
 } from '../_shared/validation.ts';
 
 const MAX_RESPONSE_BYTES = 2_000_000;
+// A thumbnail grid stays open longer than a download does; five minutes covers
+// scrolling the grid and opening the viewer without outliving the sheet.
+const MEDIA_PREVIEW_SECONDS = 300;
 
 interface ResolvedOrganization {
   organizationId: string;
@@ -54,6 +57,20 @@ interface MessageQueryInput {
   organizationId: string;
   conversationId: string;
   beforeMessageId: string | null;
+  limit: number;
+}
+
+interface PinQueryInput {
+  organizationId: string;
+  conversationId: string | null;
+  limit: number;
+}
+
+interface MediaQueryInput {
+  organizationId: string;
+  conversationId: string;
+  beforeCreatedAt: string | null;
+  beforeAttachmentId: string | null;
   limit: number;
 }
 
@@ -169,6 +186,8 @@ export interface ReadDependencies {
   ): Promise<unknown>;
   loadPreferences(actor: AuthenticatedActor, organizationId: string): Promise<unknown>;
   loadMessages(actor: AuthenticatedActor, input: MessageQueryInput): Promise<unknown>;
+  loadPins(actor: AuthenticatedActor, input: PinQueryInput): Promise<unknown>;
+  loadMedia(actor: AuthenticatedActor, input: MediaQueryInput): Promise<unknown>;
   loadSearch(actor: AuthenticatedActor, input: SearchInput): Promise<unknown>;
   loadUserSearch(actor: AuthenticatedActor, input: UserSearchInput): Promise<unknown>;
   loadAudit(actor: AuthenticatedActor, input: AuditQueryInput): Promise<unknown>;
@@ -232,6 +251,76 @@ async function loadMessagesDefault(
       p_limit: input.limit,
     }),
   );
+}
+
+/** The chat's pins, or every chat's pins when no conversation is named. */
+async function loadPinsDefault(
+  actor: AuthenticatedActor,
+  input: PinQueryInput,
+): Promise<unknown> {
+  return camelize(
+    await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_pinned_messages', {
+      p_actor_user_id: actor.user.id,
+      p_organization_id: input.organizationId,
+      p_session_id: actor.claims.sessionId,
+      p_conversation_id: input.conversationId,
+      p_limit: input.limit,
+    }),
+  );
+}
+
+/**
+ * A page of a chat's attachments. The database hands back the bucket and path
+ * of every row; this signs the viewable ones in a single storage call and
+ * strips both before the device ever sees them, so a grid of thumbnails costs
+ * one request instead of one download grant per photo.
+ */
+async function loadMediaDefault(
+  actor: AuthenticatedActor,
+  input: MediaQueryInput,
+): Promise<unknown> {
+  const page = asObject(
+    camelize(
+      await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_conversation_media', {
+        p_actor_user_id: actor.user.id,
+        p_organization_id: input.organizationId,
+        p_session_id: actor.claims.sessionId,
+        p_conversation_id: input.conversationId,
+        p_before_created_at: input.beforeCreatedAt,
+        p_before_attachment_id: input.beforeAttachmentId,
+        p_limit: input.limit,
+      }),
+    ),
+  );
+  const rows = Array.isArray(page.items) ? page.items.map((item) => asObject(item)) : [];
+  const previewable = rows.filter((row) =>
+    (row.kind === 'image' || row.kind === 'video' || row.kind === 'voice') &&
+    typeof row.bucketId === 'string' && typeof row.storagePath === 'string'
+  );
+  const signed = new Map<string, string>();
+  for (const bucket of new Set(previewable.map((row) => row.bucketId as string))) {
+    const paths = previewable
+      .filter((row) => row.bucketId === bucket)
+      .map((row) => row.storagePath as string);
+    const { data } = await actor.adminClient.storage.from(bucket).createSignedUrls(
+      paths,
+      MEDIA_PREVIEW_SECONDS,
+    );
+    for (const entry of data ?? []) {
+      // One unsigned path is a missing thumbnail, never a failed page.
+      if (entry.error || !entry.signedUrl || typeof entry.path !== 'string') continue;
+      signed.set(bucket + '\u001f' + entry.path, entry.signedUrl);
+    }
+  }
+  return {
+    ...page,
+    items: rows.map(({ bucketId, storagePath, ...row }) => ({
+      ...row,
+      previewUrl: typeof bucketId === 'string' && typeof storagePath === 'string'
+        ? signed.get(bucketId + '\u001f' + storagePath) ?? null
+        : null,
+    })),
+  };
 }
 
 async function loadBootstrapRpcDefault(
@@ -576,6 +665,8 @@ export function defaultReadDependencies(): ReadDependencies {
     loadBootstrap: loadBootstrapRpcDefault,
     loadPreferences: loadPreferencesDefault,
     loadMessages: loadMessagesDefault,
+    loadPins: loadPinsDefault,
+    loadMedia: loadMediaDefault,
     loadSearch: loadSearchDefault,
     loadUserSearch: loadUserSearchDefault,
     loadAudit: loadAuditDefault,
@@ -602,6 +693,17 @@ function boundedResponse(meta: RequestMeta, body: unknown): Response {
 
 function matchMessages(path: string): string | null {
   const match = /^\/v2\/conversations\/([^/]+)\/messages\/query$/.exec(path);
+  if (!match?.[1]) return null;
+  try {
+    return uuid(decodeURIComponent(match[1]));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'bad_request');
+  }
+}
+
+function matchMedia(path: string): string | null {
+  const match = /^\/v2\/conversations\/([^/]+)\/media\/query$/.exec(path);
   if (!match?.[1]) return null;
   try {
     return uuid(decodeURIComponent(match[1]));
@@ -960,6 +1062,56 @@ export function createReadHandler(
         return boundedResponse(
           meta,
           await dependencies.loadPreferences(actor, organizationId),
+        );
+      }
+
+      if (path === '/v2/pins/query') {
+        onlyKeys(parsed, ['organizationId', 'conversationId', 'limit']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        const pinConversationId = optionalUuid(parsed, 'conversationId', true) ?? null;
+        const limit = optionalInteger(parsed, 'limit', 1, 100) ?? 50;
+        await dependencies.authorize(actor, organizationId, { operation: 'read.pins' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.pins');
+        return boundedResponse(
+          meta,
+          await dependencies.loadPins(actor, {
+            organizationId,
+            conversationId: pinConversationId,
+            limit,
+          }),
+        );
+      }
+
+      const mediaConversationId = matchMedia(path);
+      if (mediaConversationId) {
+        onlyKeys(parsed, [
+          'organizationId',
+          'beforeCreatedAt',
+          'beforeAttachmentId',
+          'limit',
+        ]);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        const beforeCreatedAt = parsed.beforeCreatedAt === null
+            || parsed.beforeCreatedAt === undefined
+          ? null
+          : isoDate(parsed.beforeCreatedAt);
+        const beforeAttachmentId = optionalUuid(parsed, 'beforeAttachmentId', true) ?? null;
+        // Both halves of the keyset travel together or the page is meaningless.
+        if ((beforeCreatedAt === null) !== (beforeAttachmentId === null)) {
+          throw new ApiError(400, 'bad_request');
+        }
+        const limit = optionalInteger(parsed, 'limit', 1, 60) ?? 30;
+        await dependencies.authorize(actor, organizationId, { operation: 'read.media' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.media');
+        return boundedResponse(
+          meta,
+          await dependencies.loadMedia(actor, {
+            organizationId,
+            conversationId: mediaConversationId,
+            beforeCreatedAt,
+            beforeAttachmentId,
+            limit,
+          }),
         );
       }
 
