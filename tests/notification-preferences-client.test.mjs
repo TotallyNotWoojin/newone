@@ -52,8 +52,20 @@ test('conversation controls expose all, mentions, indefinite, and timed choices 
   assert.match(commands, /\/preferences/);
   assert.match(commands, /notificationLevel: input\.notificationLevel/);
   assert.match(commands, /mutedUntil: input\.mutedUntil/);
-  assert.match(copy, /en:\s*\{/);
-  assert.match(copy, /ko:\s*\{/);
-  assert.match(copy, /es:\s*\{/);
-  assert.match(copy, /critical-alert policy is evaluated separately by the server/);
+  // The "critical-alert policy is evaluated separately by the server" line was
+  // dropped with the rest of the workplace vocabulary in d7854dd (2026-09-05,
+  // "Terminology: consumer copy reads like a texting app, not a workplace
+  // tool"); there is no consumer-facing critical-alert policy to disclaim.
+  //
+  // The three /en:\s*\{/ style regexes that stood here matched a brace and
+  // proved nothing about the locales. Replaced with a real parity check: every
+  // locale block must carry exactly the same keys, so a new choice cannot ship
+  // English-only.
+  const blocks = [...copy.matchAll(/\b(en|ko|es): \{([\s\S]*?)\n  \}/g)];
+  assert.equal(blocks.length, 3);
+  const keysFor = (block) => [...block.matchAll(/^\s{4}([a-zA-Z]+):/gm)].map((m) => m[1]).sort();
+  const [en, ko, es] = blocks.map((block) => keysFor(block[2]));
+  assert.ok(en.length >= 10, `suspiciously few notification copy keys (${en.length})`);
+  assert.deepEqual(ko, en);
+  assert.deepEqual(es, en);
 });

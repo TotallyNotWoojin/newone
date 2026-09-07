@@ -844,6 +844,7 @@ function groupCandidate(overrides = {}) {
   return {
     userId: ids.user,
     displayName: 'Coverage Person',
+    username: null,
     avatarPath: null,
     jobTitle: null,
     membershipRole: 'member',
@@ -917,6 +918,10 @@ test('group creation parsers cover candidate, disclosure, policy, and role bound
     ['name type', { candidates: [groupCandidate({ displayName: 7 })], limit: 1 }],
     ['name empty', { candidates: [groupCandidate({ displayName: '' })], limit: 1 }],
     ['name long', { candidates: [groupCandidate({ displayName: 'x'.repeat(161) })], limit: 1 }],
+    ['username type', { candidates: [groupCandidate({ username: 7 })], limit: 1 }],
+    ['username empty', { candidates: [groupCandidate({ username: '' })], limit: 1 }],
+    ['username long', { candidates: [groupCandidate({ username: 'x'.repeat(65) })], limit: 1 }],
+    ['username spaced', { candidates: [groupCandidate({ username: 'two words' })], limit: 1 }],
     ['avatar empty', { candidates: [groupCandidate({ avatarPath: '' })], limit: 1 }],
     ['avatar long', { candidates: [groupCandidate({ avatarPath: 'x'.repeat(1025) })], limit: 1 }],
     ['job empty', { candidates: [groupCandidate({ jobTitle: '' })], limit: 1 }],

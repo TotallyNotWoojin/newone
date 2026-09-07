@@ -73,7 +73,10 @@ test('client and Edge contracts require explicit confirmation and optional trans
   assert.match(repository, /replacementOwnerMembershipId: input\.replacementOwnerMembershipId \?\? null/);
   assert.match(routes, /bff_leave_conversation/);
   assert.match(routes, /bool\(body\.confirmHistoryAndAccessLoss\) !== true/);
-  assert.match(copy, /Existing messages and company records stay preserved/);
-  assert.match(copy, /기존 메시지와 회사 기록은 보존됩니다/);
-  assert.match(copy, /Los mensajes y registros existentes de la empresa se conservan/);
+  // Reworded for consumers in d7854dd (2026-09-05). The property is unchanged:
+  // the leave dialog must say, in all three locales, that leaving stops
+  // delivery without deleting what was already said.
+  assert.match(copy, /You’ll stop receiving messages from this group\. Your earlier messages stay\./);
+  assert.match(copy, /이 그룹의 메시지를 더 받지 않게 됩니다\. 이전에 보낸 메시지는 남습니다\./);
+  assert.match(copy, /Dejarás de recibir mensajes de este grupo\. Tus mensajes anteriores se conservan\./);
 });

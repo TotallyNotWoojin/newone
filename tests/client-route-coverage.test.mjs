@@ -14,6 +14,10 @@ const CLIENT_SOURCES = [
   'apps/newone/src/data/repositories/web-read-repository.ts',
   'apps/newone/src/data/repositories/bff-command-repository.ts',
   'apps/newone/src/data/repositories/bff-search-repository.ts',
+  // These two also call /v2 paths from client code and were missing from the
+  // sweep, so their endpoints were never run through the real routing table.
+  'apps/newone/src/data/repositories/moderation-case-repository.ts',
+  'apps/newone/src/data/repositories/recovery-case-repository.ts',
 ];
 
 test('every client-referenced /v2 path resolves on web and native', () => {
