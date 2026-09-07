@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 
 import type { Presence } from '@/domain/types';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -34,6 +35,8 @@ export function Avatar({
   icon?: IconName;
   imageUri?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const dotSize = Math.max(10, Math.round(size * 0.25));
   return (
     <View style={{ width: size, height: size }}>
@@ -93,10 +96,12 @@ export function IconButton({
   tone?: 'neutral' | 'inverse' | 'accent' | 'danger';
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const palette = {
     neutral: { background: colors.paperMuted, foreground: colors.ink },
     inverse: { background: 'rgba(255,255,255,0.1)', foreground: colors.white },
-    accent: { background: colors.mint, foreground: colors.forest },
+    accent: { background: colors.mint, foreground: colors.onAccent },
     danger: { background: colors.redSoft, foreground: colors.red },
   }[tone];
   const isDisabled = disabled || !onPress;
@@ -141,11 +146,15 @@ export function SearchField({
   /** Stable identifier for UI drivers. */
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   return (
     <View style={[styles.search, compact && styles.searchCompact]}>
       <Ionicons name="search-outline" size={18} color={colors.inkSubtle} />
       <TextInput
+        keyboardAppearance={keyboardAppearance}
         accessibilityLabel={placeholder}
         autoCapitalize="none"
         autoCorrect={false}
@@ -181,6 +190,8 @@ export function Chip({
   count?: number;
   icon?: IconName;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <Pressable
       // The count badge is part of the chip's meaning ("Unread 1"), so it is read
@@ -223,6 +234,8 @@ export function StatusBadge({
   tone?: 'neutral' | 'success' | 'info' | 'warning' | 'danger' | 'purple';
   icon?: IconName;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const palette = {
     neutral: { background: colors.paperMuted, foreground: colors.inkMuted },
     success: { background: colors.mintSoft, foreground: colors.mintDark },
@@ -259,8 +272,10 @@ export function PrimaryButton({
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const palette = {
-    accent: { background: colors.mint, foreground: colors.forest },
+    accent: { background: colors.mint, foreground: colors.onAccent },
     dark: { background: colors.forest, foreground: colors.white },
     light: { background: colors.paperMuted, foreground: colors.ink },
     danger: { background: colors.red, foreground: colors.white },
@@ -302,6 +317,8 @@ export function EmptyState({
   body: string;
   action?: ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
@@ -315,10 +332,11 @@ export function EmptyState({
 }
 
 export function SectionEyebrow({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  const styles = useThemedStyles(buildStyles);
   return <Text style={[styles.eyebrow, style]}>{children}</Text>;
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   avatar: {
     alignItems: 'center',
     justifyContent: 'center',

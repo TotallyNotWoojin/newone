@@ -4,13 +4,16 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Avatar, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export function ManagedConversationSection({
   onOpen,
 }: {
   onOpen: (conversationId: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const conversations = workspace.conversations
@@ -75,7 +78,7 @@ export function ManagedConversationSection({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.lineStrong,

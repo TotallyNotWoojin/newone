@@ -8,7 +8,8 @@ import type { OrganizationAiUseCase } from '@/data/repositories/ai-policy-dto.mj
 import { aiPolicyCopy } from '@/features/admin/ai-policy-copy';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const PROVIDER_PATTERN = /^[a-z0-9][a-z0-9._/-]{1,159}$/;
 const USE_CASES: OrganizationAiUseCase[] = ['language_detection', 'translation', 'summary'];
@@ -29,6 +30,8 @@ export function AiPolicySection({
   privilegedReady: boolean;
   onSignInAgain: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { locale } = useI18n();
   const copy = aiPolicyCopy(locale);
@@ -215,7 +218,7 @@ export function AiPolicySection({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     backgroundColor: colors.paper,
     borderColor: colors.line,

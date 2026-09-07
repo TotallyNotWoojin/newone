@@ -3,7 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { quickReactionEmojis, normalizeReactionEmoji } from '@/features/chat/message-reactions';
 import { useI18n } from '@/i18n/provider';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * The six reactions in one compact row, plus a "+" for anything else.
@@ -21,6 +22,9 @@ export function ReactionRow({
   onReact: (emoji: string) => void;
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -74,6 +78,7 @@ export function ReactionRow({
       {pickerOpen ? (
         <View style={styles.picker}>
           <TextInput
+            keyboardAppearance={keyboardAppearance}
             accessibilityLabel={t('chat.reactAnyEmoji')}
             autoCapitalize="none"
             autoCorrect={false}
@@ -104,7 +109,7 @@ export function ReactionRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   row: { marginTop: 2 },
   rowContent: { alignItems: 'center', gap: spacing.xs, paddingRight: spacing.sm },
   emojiButton: {
@@ -118,7 +123,7 @@ const styles = StyleSheet.create({
     width: 44,
   },
   moreButton: { backgroundColor: colors.mintSoft, borderColor: colors.mint },
-  moreText: { color: colors.forest, fontSize: 22, fontWeight: '600' },
+  moreText: { color: colors.accentInk, fontSize: 22, fontWeight: '600' },
   emojiText: { fontSize: 22 },
   pressed: { opacity: 0.7 },
   picker: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs },
@@ -137,6 +142,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
-  pickerSendText: { color: colors.forest, fontSize: 12, fontWeight: '700' },
+  pickerSendText: { color: colors.onAccent, fontSize: 12, fontWeight: '700' },
   rejected: { color: colors.red, fontSize: 12, marginTop: spacing.xs },
 });

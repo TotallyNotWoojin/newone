@@ -5,11 +5,14 @@ import type { Conversation } from '@/domain/types';
 import { Avatar, StatusBadge } from '@/components/ui/primitives';
 import { activeMutedUntil } from '@/data/notification-preferences.mjs';
 import { notificationCopy } from '@/features/chat/notification-copy';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 
 export function ConversationDetails({ conversation }: { conversation: Conversation }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const workspace = useWorkspace();
   const notification = notificationCopy(locale);
@@ -63,7 +66,7 @@ export function ConversationDetails({ conversation }: { conversation: Conversati
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     width: 278,
     padding: spacing.lg,

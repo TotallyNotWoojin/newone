@@ -38,7 +38,8 @@ import { createClientId } from '@/lib/client-id';
 import { getSupabaseClient } from '@/lib/supabase';
 import { useAuth } from '@/state/auth';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 
 type UpdatePriority = 'normal' | 'important' | 'emergency';
@@ -72,6 +73,8 @@ function toggledValue<Value extends string>(values: Value[], value: Value) {
 }
 
 function UpdatesWorkplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -1277,6 +1280,8 @@ function SummaryCard({
   value: string;
   tone: 'danger' | 'success' | 'neutral';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const palette = {
     danger: { background: colors.redSoft, foreground: colors.red },
     success: { background: colors.mintSoft, foreground: colors.mintDark },
@@ -1306,6 +1311,8 @@ function UpdateCard({
   onOpen: () => void;
   desktop: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const copy = updateCopy(locale);
   const critical = update.severity === 'critical';
@@ -1424,6 +1431,8 @@ function PublisherControlCenter({
   onRefresh: () => void;
   updates: ManagedUpdate[];
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.publisherSection}>
       <View style={styles.publisherHeader}>
@@ -1613,6 +1622,7 @@ function PublisherMetric({
   tone?: 'neutral' | 'danger' | 'warning';
   value: number;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={[
       styles.publisherMetric,
@@ -1632,6 +1642,7 @@ function NonResponderRow({
   copy: ReturnType<typeof updateCopy>;
   person: UpdateNonAcknowledger;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const reachabilityLabel = {
     delivered: copy.deliveredReachability,
     pending: copy.pendingReachability,
@@ -1672,7 +1683,7 @@ function NonResponderRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
@@ -1809,7 +1820,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   translationText: {
-    color: '#245C4C',
+    color: colors.mintDark,
     fontSize: 13,
     lineHeight: 20,
   },
@@ -1887,7 +1898,7 @@ const styles = StyleSheet.create({
   validationError: { color: colors.red, fontSize: 10, fontWeight: '700' },
   audienceNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.mintSoft },
   audienceNoticeCopy: { flex: 1, minWidth: 0 },
-  audienceNoticeTitle: { color: colors.forest, fontSize: 11, fontWeight: '900' },
+  audienceNoticeTitle: { color: colors.accentInk, fontSize: 11, fontWeight: '900' },
   audienceNoticeText: { color: colors.inkMuted, fontSize: 10, lineHeight: 15, marginTop: 2 },
   successNotice: {
     flexDirection: 'row',
@@ -1900,7 +1911,7 @@ const styles = StyleSheet.create({
     borderColor: colors.mint,
     backgroundColor: colors.mintSoft,
   },
-  successNoticeText: { flex: 1, color: colors.forest, fontSize: 12, fontWeight: '800' },
+  successNoticeText: { flex: 1, color: colors.accentInk, fontSize: 12, fontWeight: '800' },
   policyHint: { color: colors.inkMuted, fontSize: 10, lineHeight: 16 },
   policyPanel: {
     gap: spacing.sm,
@@ -1919,7 +1930,7 @@ const styles = StyleSheet.create({
     borderColor: colors.mint,
     backgroundColor: colors.mintSoft,
   },
-  previewTitle: { color: colors.forest, fontSize: 12, fontWeight: '900' },
+  previewTitle: { color: colors.accentInk, fontSize: 12, fontWeight: '900' },
   previewMetric: { color: colors.mintDark, fontSize: 14, fontWeight: '900' },
   previewText: { color: colors.inkMuted, fontSize: 11, lineHeight: 16 },
   previewHint: { color: colors.inkSubtle, fontSize: 9, lineHeight: 14 },
@@ -1981,7 +1992,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.mintSoft,
   },
-  privacyNoticeText: { flex: 1, color: colors.forest, fontSize: 11, lineHeight: 17 },
+  privacyNoticeText: { flex: 1, color: colors.accentInk, fontSize: 11, lineHeight: 17 },
   publisherSection: { gap: spacing.md, paddingTop: spacing.xxxl },
   publisherHeader: {
     flexDirection: 'row',

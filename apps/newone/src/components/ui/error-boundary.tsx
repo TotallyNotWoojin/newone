@@ -1,7 +1,8 @@
 import { Component, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { type ThemeColors, useThemedStyles } from '@/theme/provider';
 
 type Props = {
   children: ReactNode;
@@ -30,23 +31,43 @@ export class ScreenErrorBoundary extends Component<Props, State> {
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
-    const identifier = `${error.name}: ${error.message}`.slice(0, 400);
     return (
-      <View accessibilityRole="alert" style={styles.card} testID="screen-error">
-        <Text style={styles.title}>{this.props.labels.title}</Text>
-        <Text selectable style={styles.identifier}>{identifier}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => this.setState({ error: null })}
-          style={styles.button}>
-          <Text style={styles.buttonLabel}>{this.props.labels.retry}</Text>
-        </Pressable>
-      </View>
+      <ScreenErrorCard
+        error={error}
+        labels={this.props.labels}
+        onRetry={() => this.setState({ error: null })}
+      />
     );
   }
 }
 
-const styles = StyleSheet.create({
+/** The card itself is a function component so it can read the theme. */
+function ScreenErrorCard({
+  error,
+  labels,
+  onRetry,
+}: {
+  error: Error;
+  labels: Props['labels'];
+  onRetry: () => void;
+}) {
+  const styles = useThemedStyles(buildStyles);
+  const identifier = `${error.name}: ${error.message}`.slice(0, 400);
+  return (
+    <View accessibilityRole="alert" style={styles.card} testID="screen-error">
+      <Text style={styles.title}>{labels.title}</Text>
+      <Text selectable style={styles.identifier}>{identifier}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onRetry}
+        style={styles.button}>
+        <Text style={styles.buttonLabel}>{labels.retry}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     margin: spacing.lg,
     padding: spacing.lg,

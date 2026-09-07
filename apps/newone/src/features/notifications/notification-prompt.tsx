@@ -9,7 +9,8 @@ import { getNotificationPermissionState, openNotificationSettings, type Notifica
 import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * One friendly ask for notification permission on the first signed-in launch.
@@ -18,6 +19,8 @@ import { colors, radii, spacing } from '@/theme/tokens';
  * permission is registered silently by the workspace and never sees the card.
  */
 export function NotificationPrompt() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { preferences, ready, setPreference } = useDevicePreferences();
   const workspace = useWorkspace();
   const { t } = useI18n();
@@ -101,7 +104,7 @@ export function NotificationPrompt() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -81,7 +81,8 @@ import { GroupMembersSection } from '@/features/chat/group-members-section';
 import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const rowKey = (row: TimelineRow) => row.key;
 
@@ -100,6 +101,8 @@ export function ConversationPane({
   mobile?: boolean;
   focusMessageId?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList<TimelineRow>>(null);
   const router = useRouter();
@@ -375,6 +378,8 @@ export function ConversationPane({
     jumpToQuoted,
     openActions,
     replyToMessage,
+    // The sheet is a new object when the palette changes, so the rows repaint.
+    styles,
     translatedOnly,
     unreadDividerLabel,
   ]);
@@ -937,6 +942,8 @@ function ConversationHeader({
   mobile: boolean;
   typingLabel?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   // One meta line: the @handle for a direct chat, the member count for a
@@ -1005,6 +1012,8 @@ function ConversationHeader({
 }
 
 function SystemEventRow({ message }: { message: Message }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const event = message.systemEvent;
@@ -1079,6 +1088,8 @@ const MessageBubble = memo(function MessageBubble({
   onJumpToQuoted: (messageId: string) => void;
   onDownload: (message: Message) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { locale, t } = useI18n();
   const { width: windowWidth } = useWindowDimensions();
@@ -1418,6 +1429,7 @@ const MessageBubble = memo(function MessageBubble({
 
 /** Language and translation provenance, reachable from the actions sheet. */
 function TranslationDetails({ message }: { message: Message }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const conversation = workspace.conversations.find((item) => item.id === message.conversationId);
@@ -1499,6 +1511,7 @@ function TranslationDetails({ message }: { message: Message }) {
 }
 
 function TranslationCorrectionModal({ message, onClose }: { message: Message; onClose: () => void }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [correctionText, setCorrectionText] = useState(message.translatedText ?? '');
@@ -1526,6 +1539,7 @@ function TranslationCorrectionModal({ message, onClose }: { message: Message; on
 }
 
 function TranslationReviewModal({ message, onClose }: { message: Message; onClose: () => void }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [reviewNote, setReviewNote] = useState('');
@@ -1579,6 +1593,8 @@ function AiOutputErrorReportModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const categories: AiOutputErrorCategory[] = outputKind === 'translation'
@@ -1680,6 +1696,8 @@ function formatPlaybackTime(seconds: number) {
 }
 
 function AudioAttachmentBubble({ message }: { message: Message }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const attachment = message.attachment;
@@ -1728,6 +1746,8 @@ function AudioAttachmentBubble({ message }: { message: Message }) {
 
 /** Compact one-line card for files that are not shown inline: icon, name, size, download. */
 function AttachmentCard({ message, onDownload }: { message: Message; onDownload: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const attachment = message.attachment;
@@ -1872,6 +1892,9 @@ function Composer({
   replyingTo: Message | null;
   onCancelReply: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   const bottomInset = useComposerBottomInset(mobile);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -1974,6 +1997,7 @@ function Composer({
       {!disabled && !recording ? <View style={styles.composer}>
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={36} />
         <TextInput
+          keyboardAppearance={keyboardAppearance}
           accessibilityLabel={t('chat.message')}
           testID="composer-input"
           multiline
@@ -2035,6 +2059,9 @@ function MentionSelector({
   onChange: (value: string[]) => void;
   onChangeOpen: (value: boolean) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { locale } = useI18n();
   const copy = mentionCopy(locale);
   const [query, setQuery] = useState('');
@@ -2095,6 +2122,7 @@ function MentionSelector({
         <View style={styles.mentionPanel}>
           <Text style={styles.mentionTitle}>{copy.title}</Text>
           <TextInput
+            keyboardAppearance={keyboardAppearance}
             accessibilityLabel={copy.searchLabel}
             autoCapitalize="none"
             onChangeText={setQuery}
@@ -2191,6 +2219,7 @@ function MessageActionsModal({
   onProposeCorrection?: () => void;
   onReviewCorrection?: () => void;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   // Action items, translation provenance, corrections and their review are
@@ -2399,6 +2428,8 @@ function ConversationControlsModal({
   ) => Promise<boolean>;
   onCloseIncident: (reason: string) => Promise<void>;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const workspace = useWorkspace();
   // Workplace-only notes and discovery controls stay out of the personal realm.
@@ -3059,6 +3090,8 @@ function AttachmentPickerModal({
   imageMode: 'optimized' | 'original';
   onChangeImageMode: (value: 'optimized' | 'original') => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   return (
@@ -3116,7 +3149,7 @@ function AttachmentPickerModal({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   systemEventRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3245,7 +3278,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F4C5BC',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   safetyIcon: {
@@ -3265,7 +3298,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   safetyText: {
-    color: '#7E4A44',
+    color: colors.red,
     fontSize: 11,
     lineHeight: 16,
     marginTop: 2,
@@ -3280,7 +3313,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E7C998',
+    borderColor: colors.amberBorder,
     backgroundColor: colors.amberSoft,
   },
   translationBoundaryText: {
@@ -3299,7 +3332,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F4C5BC',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   incidentBannerClosed: { borderColor: colors.lineStrong, backgroundColor: colors.paperMuted },
@@ -3312,7 +3345,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.sm,
-    backgroundColor: colors.red,
+    backgroundColor: colors.redStrong,
   },
   acknowledgeText: {
     color: colors.white,
@@ -3352,7 +3385,7 @@ const styles = StyleSheet.create({
   },
   reactionMine: {
     backgroundColor: colors.mintSoft,
-    borderColor: '#B4E8D4',
+    borderColor: colors.mintBorder,
   },
   reactionEmoji: {
     fontSize: 12,
@@ -3392,7 +3425,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     backgroundColor: colors.mint,
   },
-  mentionCountText: { color: colors.forest, fontSize: 9, fontWeight: '900' },
+  mentionCountText: { color: colors.onAccent, fontSize: 9, fontWeight: '900' },
   selectedMentions: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   selectedMention: {
     minHeight: 30,
@@ -3403,7 +3436,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: '#B4E8D4',
+    borderColor: colors.mintBorder,
     backgroundColor: colors.mintSoft,
   },
   selectedMentionText: { flexShrink: 1, color: colors.mintDark, fontSize: 10, fontWeight: '900' },
@@ -3711,7 +3744,7 @@ const styles = StyleSheet.create({
   reply: {
     borderLeftWidth: 3,
     borderLeftColor: colors.mint,
-    backgroundColor: 'rgba(16,46,39,0.05)',
+    backgroundColor: colors.tintFaint,
     borderRadius: radii.xs,
     paddingHorizontal: spacing.xs,
     paddingVertical: 5,
@@ -3727,7 +3760,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(16,46,39,0.2)',
+    borderTopColor: colors.tintLine,
   },
   quietRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   quietLine: { color: colors.inkSubtle, fontSize: 12, lineHeight: 16, marginTop: 4 },
@@ -3754,14 +3787,14 @@ const styles = StyleSheet.create({
   timeTextOverlay: { color: colors.white },
   reactions: { flexDirection: 'row', marginTop: -6, marginLeft: 8, gap: 4 },
   reactionsOwn: { marginLeft: 0, marginRight: 8 },
-  fileCard: { minWidth: 210, marginBottom: 4, borderRadius: radii.sm, backgroundColor: 'rgba(16,46,39,0.05)' },
-  fileCardOwn: { backgroundColor: 'rgba(16,46,39,0.07)' },
+  fileCard: { minWidth: 210, marginBottom: 4, borderRadius: radii.sm, backgroundColor: colors.tintFaint },
+  fileCardOwn: { backgroundColor: colors.tintSoft },
   fileRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs },
   fileCopy: { flex: 1, minWidth: 0 },
   fileName: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   fileMeta: { color: colors.inkSubtle, fontSize: 11, marginTop: 1 },
   fileProgressRow: { paddingHorizontal: spacing.xs, paddingBottom: 6 },
-  fileProgressTrack: { height: 3, overflow: 'hidden', borderRadius: radii.pill, backgroundColor: 'rgba(16,46,39,0.12)' },
+  fileProgressTrack: { height: 3, overflow: 'hidden', borderRadius: radii.pill, backgroundColor: colors.tintMedium },
   fileProgressFill: { height: '100%', borderRadius: radii.pill, backgroundColor: colors.mint },
   fileControls: { paddingHorizontal: spacing.xs, paddingBottom: 6 },
   detailsBlock: { gap: 4, padding: spacing.sm, borderRadius: radii.md, backgroundColor: colors.paperMuted },
@@ -3779,7 +3812,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: spacing.sm,
     borderRadius: radii.pill,
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.accentStrong,
   },
   composerWrap: {
     paddingHorizontal: spacing.sm,
@@ -3811,8 +3844,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  voiceBubbleOwn: { backgroundColor: 'rgba(16,46,39,0.07)' },
-  voicePlayButtonOwn: { backgroundColor: 'rgba(16,46,39,0.12)' },
+  voiceBubbleOwn: { backgroundColor: colors.tintSoft },
+  voicePlayButtonOwn: { backgroundColor: colors.tintMedium },
   pressed: {
     opacity: 0.72,
   },

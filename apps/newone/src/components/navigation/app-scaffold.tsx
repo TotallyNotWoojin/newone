@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { Avatar } from '@/components/ui/primitives';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
@@ -92,6 +93,7 @@ export function AppScaffold({
   mobileHeader?: ReactNode;
   hideMobileTabs?: boolean;
 }) {
+  const styles = useThemedStyles(buildStyles);
   const { width } = useHydrationSafeWindowDimensions();
   const insets = useSafeAreaInsets();
   const desktop = width >= 920;
@@ -120,6 +122,7 @@ export function AppScaffold({
 }
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   // Consumer accounts see the plain product mark; the workplace tag remains
   // the brand treatment for workspace organizations only.
@@ -141,6 +144,8 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
 }
 
 function DesktopRail({ current }: { current: NavigationKey }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const workspace = useWorkspace();
   const ownAvatarUrl = useProfileAvatar(workspace.currentUser?.id ?? null);
@@ -181,7 +186,7 @@ function DesktopRail({ current }: { current: NavigationKey }) {
               ]}>
               <View>
                 <Ionicons
-                  color={selected ? colors.forest : 'rgba(255,255,255,0.72)'}
+                  color={selected ? colors.onAccent : 'rgba(255,255,255,0.72)'}
                   name={selected ? item.iconActive : item.icon}
                   size={22}
                 />
@@ -227,6 +232,8 @@ function DesktopRail({ current }: { current: NavigationKey }) {
 }
 
 function MobileTabs({ current }: { current: NavigationKey }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const workspace = useWorkspace();
@@ -256,7 +263,7 @@ function MobileTabs({ current }: { current: NavigationKey }) {
               <Ionicons
                 name={selected ? item.iconActive : item.icon}
                 size={20}
-                color={selected ? colors.forest : colors.inkSubtle}
+                color={selected ? colors.accentInk : colors.inkSubtle}
               />
               {badge > 0 ? <View style={styles.mobileBadge} /> : null}
             </View>
@@ -289,6 +296,7 @@ export function MobileBrandHeader({
   subtitle?: string;
   right?: ReactNode;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.mobileHeader}>
       <View style={styles.mobileHeaderBrand}>
@@ -314,6 +322,7 @@ export function DesktopPageHeader({
   description?: string;
   actions?: ReactNode;
 }) {
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.pageHeader}>
       <View style={styles.pageHeaderCopy}>
@@ -326,7 +335,7 @@ export function DesktopPageHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.canvas,
@@ -448,7 +457,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   railLabelSelected: {
-    color: colors.forest,
+    color: colors.onAccent,
     fontWeight: '900',
   },
   railBadge: {
@@ -459,7 +468,7 @@ const styles = StyleSheet.create({
     height: 16,
     paddingHorizontal: 4,
     borderRadius: 8,
-    backgroundColor: colors.red,
+    backgroundColor: colors.redStrong,
     alignItems: 'center',
     justifyContent: 'center',
     borderColor: colors.forest,

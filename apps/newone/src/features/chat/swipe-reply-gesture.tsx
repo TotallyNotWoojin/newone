@@ -14,7 +14,8 @@ import {
   swipeReplyTriggered,
 } from '@/features/chat/swipe-to-reply';
 import { useI18n } from '@/i18n/provider';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const SNAP = { duration: 160 };
 
@@ -42,6 +43,8 @@ export function SwipeToReply({
   onReply: () => void;
   onOpenActions: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const translateX = useSharedValue(0);
@@ -113,7 +116,7 @@ export function SwipeToReply({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   row: { justifyContent: 'center' },
   arrow: {
     alignItems: 'center',

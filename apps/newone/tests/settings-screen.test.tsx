@@ -31,7 +31,7 @@ const mockTranslate = (key: string) => key;
 
 let mockLocale: 'en' | 'ko' | 'es' = 'en';
 let mockPermission: PermissionState = 'granted';
-let mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null };
+let mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null as string | null, theme: 'system' as 'system' | 'light' | 'dark' };
 let mockWorkspace: Record<string, any>;
 let mockAuth: Record<string, any>;
 
@@ -233,7 +233,7 @@ function nativeMfaClient(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   mockLocale = 'en';
   mockPermission = 'granted';
-  mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null };
+  mockLocalPreferences = { translatedOnly: false, enterSends: true, notificationsPromptedAt: null, theme: 'system' };
   mockWorkspace = baseWorkspace();
   mockAuth = {
     assuranceLevel: 'aal2',
@@ -313,6 +313,29 @@ describe('settings screen', () => {
     expect(mockRouter.back).toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: 'settings.help' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./help');
+    await view.unmount();
+  });
+
+  test('offers System, Light and Dark on one row and stores the choice for this device', async () => {
+    const view = await renderAndHydrate();
+    expect(screen.getByTestId('setting-appearance')).toBeTruthy();
+    expect(screen.getByText('settings.appearanceSystem')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('setting-appearance'));
+    for (const option of ['settings.appearanceSystem', 'settings.appearanceLight', 'settings.appearanceDark']) {
+      expect(screen.getByLabelText(`settings.appearance: ${option}`)).toBeTruthy();
+    }
+
+    await fireEvent.press(screen.getByLabelText('settings.appearance: settings.appearanceDark'));
+    expect(mockSetLocalPreference).toHaveBeenCalledWith('theme', 'dark');
+    await waitFor(() => expect(screen.queryByLabelText('settings.appearance: settings.appearanceDark')).toBeNull());
+    await view.unmount();
+  });
+
+  test('the appearance row shows the stored override, not the phone', async () => {
+    mockLocalPreferences = { ...mockLocalPreferences, theme: 'light' };
+    const view = await renderAndHydrate();
+    expect(screen.getByText('settings.appearanceLight')).toBeTruthy();
     await view.unmount();
   });
 

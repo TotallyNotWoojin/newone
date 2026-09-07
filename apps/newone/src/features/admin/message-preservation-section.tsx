@@ -5,13 +5,15 @@ import { ActionError, FormField } from '@/components/ui/action-modal';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MESSAGE_ID_PATTERN = /^[1-9][0-9]{0,18}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 
 export function MessagePreservationSection({ privilegedReady }: { privilegedReady: boolean }) {
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [conversationId, setConversationId] = useState('');
@@ -141,7 +143,7 @@ export function MessagePreservationSection({ privilegedReady }: { privilegedRead
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: {
     backgroundColor: colors.paper,
     borderColor: colors.line,

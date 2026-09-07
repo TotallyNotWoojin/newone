@@ -15,7 +15,8 @@ import {
 } from '@/features/admin/recovery-copy';
 import { useI18n } from '@/i18n/provider';
 import { createClientId } from '@/lib/client-id';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export interface SelfRecoveryRequestProps {
   accessToken: string | null;
@@ -32,6 +33,8 @@ export function SelfRecoveryRequest({
   organizationId,
   presentation = 'card',
 }: SelfRecoveryRequestProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale } = useI18n();
   const copy = recoveryCopy(locale);
   const repository = useMemo(
@@ -269,7 +272,7 @@ export function SelfRecoveryRequest({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { overflow: 'hidden', borderRadius: radii.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.paper },
   cardTop: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
   icon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.mintSoft },

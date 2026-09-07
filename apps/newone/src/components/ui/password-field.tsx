@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 
 import { useI18n } from '@/i18n/provider';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 // The only password rule (owner decision, Sep 2026). The gateway enforces the
 // same bounds; GoTrue's minimum_password_length must be set to match.
@@ -42,6 +43,9 @@ export function PasswordField({
   returnKeyType?: ReturnKeyTypeOptions;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   return (
@@ -50,6 +54,7 @@ export function PasswordField({
       <View style={styles.inputWrap}>
         <Ionicons name="lock-closed-outline" size={18} color={colors.inkSubtle} />
         <TextInput
+          keyboardAppearance={keyboardAppearance}
           accessibilityLabel={label}
           autoCapitalize="none"
           autoComplete={autoComplete === 'new-password' ? 'off' : autoComplete}
@@ -86,7 +91,7 @@ export function PasswordField({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   field: { gap: 6 },
   label: { color: colors.ink, fontSize: 11, fontWeight: '900' },
   inputWrap: {

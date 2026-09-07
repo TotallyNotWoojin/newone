@@ -6,7 +6,8 @@ import type { LinkPreviewMetadata } from '@/data/repositories/contracts';
 import { previewSiteLabel } from '@/features/chat/link-preview';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
  * The card under a message that holds a link: what the page calls itself and
@@ -21,6 +22,8 @@ import { colors, radii, spacing } from '@/theme/tokens';
  * phone fetching a third-party address, which is the thing this avoids.
  */
 export function LinkPreviewCard({ url }: { url: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [preview, setPreview] = useState<LinkPreviewMetadata | null>(null);
@@ -61,10 +64,10 @@ export function LinkPreviewCard({ url }: { url: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     alignItems: 'center',
-    backgroundColor: 'rgba(16,46,39,0.05)',
+    backgroundColor: colors.tintFaint,
     borderRadius: radii.xs,
     flexDirection: 'row',
     gap: spacing.xs,

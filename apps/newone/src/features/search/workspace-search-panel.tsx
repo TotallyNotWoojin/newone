@@ -36,7 +36,8 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 const allTypes: SearchResultType[] = [
@@ -65,6 +66,9 @@ export function WorkspaceSearchPanel({
   initialQuery?: string;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const keyboardAppearance = useKeyboardAppearance();
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -536,6 +540,7 @@ export function WorkspaceSearchPanel({
               <View style={styles.dateField}>
                 <Text style={styles.filterLabel}>{copy.fromDate}</Text>
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityHint={copy.dateHint}
                   accessibilityLabel={copy.fromDate}
                   autoCapitalize="none"
@@ -554,6 +559,7 @@ export function WorkspaceSearchPanel({
               <View style={styles.dateField}>
                 <Text style={styles.filterLabel}>{copy.toDate}</Text>
                 <TextInput
+                  keyboardAppearance={keyboardAppearance}
                   accessibilityHint={copy.dateHint}
                   accessibilityLabel={copy.toDate}
                   autoCapitalize="none"
@@ -677,6 +683,8 @@ function PersonResultRow({
   result: UserSearchResult;
   onMessage: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const avatarUrl = useProfileAvatar(result.userId);
   const name = result.displayName ?? result.username;
@@ -692,7 +700,7 @@ function PersonResultRow({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   keyboard: { flex: 1 },
   panel: { flex: 1, backgroundColor: colors.canvas },
   panelHeader: {

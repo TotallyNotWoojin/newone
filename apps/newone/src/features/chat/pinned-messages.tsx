@@ -7,7 +7,8 @@ import type { PinnedMessage } from '@/data/repositories/contracts';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 export interface PinnedGroup {
   conversationId: string;
@@ -73,6 +74,8 @@ function PinnedRow({
   onUnpin: () => void;
   busy: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const preview = pinnedPreview(pin, t);
   return (
@@ -118,6 +121,8 @@ export function PinnedMessagesModal({
   onClose: () => void;
   onOpenMessage: (conversationId: string, messageId: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const loadPinnedMessages = workspace.loadPinnedMessages;
@@ -199,7 +204,7 @@ export function PinnedMessagesModal({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   list: { gap: 2 },
   group: { gap: 2, marginBottom: spacing.xs },
   groupTitle: {

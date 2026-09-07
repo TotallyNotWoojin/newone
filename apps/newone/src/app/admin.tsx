@@ -9,7 +9,8 @@ import { ActionError, ActionModal, FormField } from '@/components/ui/action-moda
 import { Avatar, Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { WorkspaceStatePanel, WorkspaceStatusBanner } from '@/components/workspace/workspace-state';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import type { AdminRoleName } from '@/domain/types';
 import type { IssuedInvitation } from '@/data/repositories/contracts';
@@ -28,6 +29,8 @@ import { useAuth } from '@/state/auth';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 export default function AdminScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const auth = useAuth();
   const { width } = useHydrationSafeWindowDimensions();
@@ -789,6 +792,8 @@ function MetricCard({
   note: string;
   tone?: 'neutral' | 'danger';
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={[styles.metricCard, shadow]}>
       <View style={[styles.metricIcon, tone === 'danger' && styles.metricIconDanger]}>
@@ -801,7 +806,7 @@ function MetricCard({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   deniedPage: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   deniedIcon: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, backgroundColor: colors.amberSoft },
   deniedTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', marginTop: spacing.md },
@@ -810,11 +815,11 @@ const styles = StyleSheet.create({
   pageMobile: { padding: spacing.md, paddingBottom: 100 },
   content: { width: '100%', maxWidth: 1140, alignSelf: 'center' },
   contentDesktop: { paddingHorizontal: spacing.xxl },
-  securityBanner: { padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radii.lg, backgroundColor: colors.mintSoft, borderWidth: 1, borderColor: '#BCE8D7' },
+  securityBanner: { padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radii.lg, backgroundColor: colors.mintSoft, borderWidth: 1, borderColor: colors.mintBorder },
   securityBannerIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md, backgroundColor: colors.paper },
   securityBannerCopy: { flex: 1, minWidth: 0 },
   securityBannerActions: { alignItems: 'flex-end', gap: spacing.xs },
-  securityBannerTitle: { color: colors.forest, fontSize: 14, fontWeight: '900' },
+  securityBannerTitle: { color: colors.accentInk, fontSize: 14, fontWeight: '900' },
   securityBannerText: { color: colors.inkMuted, fontSize: 11, lineHeight: 17, marginTop: 3 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   metricCard: { minWidth: 210, flex: 1, minHeight: 138, padding: spacing.md, borderRadius: radii.lg, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.line },

@@ -41,7 +41,8 @@ import { outboxCopy } from '@/features/settings/outbox-copy';
 import { useAuth } from '@/state/auth';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { THEME_PREFERENCES, type ThemePreference, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 interface MfaFactor {
   id: string;
@@ -55,7 +56,7 @@ interface MfaEnrollment {
   secret: string;
 }
 
-type Picker = 'language' | 'messageLanguage' | 'readVisibility' | 'quietHours';
+type Picker = 'appearance' | 'language' | 'messageLanguage' | 'readVisibility' | 'quietHours';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -63,6 +64,8 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 export default function SettingsScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const workspace = useWorkspace();
   // Consumer accounts have no authenticator, recovery-case, or shift tooling;
@@ -460,7 +463,12 @@ export default function SettingsScreen() {
   const quietHoursValue = preferenceDraft?.quietHoursStart && preferenceDraft.quietHoursEnd
     ? `${preferenceDraft.quietHoursStart.slice(0, 5)}–${preferenceDraft.quietHoursEnd.slice(0, 5)}`
     : t('settings.disabled');
-  const pickerTitle = picker === 'language'
+  const appearanceLabel = (value: ThemePreference) => value === 'light'
+    ? t('settings.appearanceLight')
+    : value === 'dark' ? t('settings.appearanceDark') : t('settings.appearanceSystem');
+  const pickerTitle = picker === 'appearance'
+    ? t('settings.appearance')
+    : picker === 'language'
     ? t('settings.displayLanguage')
     : picker === 'messageLanguage'
       ? t('settings.messageLanguage')
@@ -530,6 +538,14 @@ export default function SettingsScreen() {
         <PasswordSection />
 
         <Group title={t('settings.generalTitle')}>
+          <Row
+            disabled={false}
+            icon="contrast-outline"
+            label={t('settings.appearance')}
+            onPress={() => setPicker('appearance')}
+            testID="setting-appearance"
+            value={appearanceLabel(localPreferences.theme)}
+          />
           <Row
             disabled={false}
             icon="language-outline"
@@ -787,6 +803,19 @@ export default function SettingsScreen() {
       </ActionModal>
 
       <ActionModal onClose={() => setPicker(null)} title={pickerTitle} visible={picker !== null}>
+        {picker === 'appearance' ? (
+          <OptionList
+            onSelect={(value) => {
+              // Written straight to the device preference the theme provider
+              // reads, so the whole app repaints before the sheet closes.
+              setLocalPreference('theme', value);
+              setPicker(null);
+            }}
+            options={THEME_PREFERENCES.map((value) => [value, appearanceLabel(value)])}
+            selected={localPreferences.theme}
+            title={pickerTitle}
+          />
+        ) : null}
         {picker === 'language' ? (
           <OptionList
             onSelect={(value) => {
@@ -946,6 +975,7 @@ export default function SettingsScreen() {
 
 /** A titled card of rows separated by hairlines, like a messenger's settings list. */
 function Group({ title, children }: { title?: string; children: ReactNode }) {
+  const styles = useThemedStyles(buildStyles);
   const rows = Children.toArray(children).filter(Boolean);
   return (
     <View style={styles.group}>
@@ -972,6 +1002,7 @@ function Row({
   tone = 'default',
   muted = false,
   disabled = false,
+  testID,
 }: {
   icon: IconName;
   label: string;
@@ -982,7 +1013,10 @@ function Row({
   tone?: 'default' | 'danger';
   muted?: boolean;
   disabled?: boolean;
+  testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const content = (
     <>
       <Ionicons
@@ -1014,7 +1048,8 @@ function Row({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      testID={testID}>
       {content}
     </Pressable>
   );
@@ -1037,6 +1072,7 @@ function SwitchRow({
   disabled?: boolean;
   testID?: string;
 }) {
+  const { colors } = useTheme();
   return (
     <Row
       hint={hint}
@@ -1053,7 +1089,7 @@ function SwitchRow({
           // (owner, Sep 6 2026); both states get real contrast.
           ios_backgroundColor={colors.switchOff}
           thumbColor={colors.white}
-          trackColor={{ false: colors.switchOff, true: colors.mintDark }}
+          trackColor={{ false: colors.switchOff, true: colors.accentStrong }}
           value={value}
         />
       )}
@@ -1073,6 +1109,8 @@ function RowAction({
   tone?: 'accent' | 'danger';
   loading?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <Pressable
       accessibilityLabel={label}
@@ -1102,6 +1140,8 @@ function OptionList<T extends string | null>({
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.options}>
       {options.map(([value, label]) => (
@@ -1120,7 +1160,7 @@ function OptionList<T extends string | null>({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   loadingScreen: { flex: 1 },
   errorBanner: { paddingHorizontal: spacing.md, paddingTop: spacing.xs },

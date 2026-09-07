@@ -7,7 +7,8 @@ import { Avatar, IconButton, PrimaryButton, StatusBadge } from '@/components/ui/
 import type { Conversation, Person } from '@/domain/types';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, spacing, type } from '@/theme/tokens';
+import { radii, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /** One row's worth of a member, resolved from the roster and the directory. */
 interface GroupMember {
@@ -41,6 +42,8 @@ function initialsOf(displayName: string): string {
  * settings for a group; it renders nothing for a one-to-one chat.
  */
 export function GroupMembersSection({ conversation, onOpenConversation }: GroupMembersSectionProps) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const router = useRouter();
@@ -68,7 +71,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
         person,
       };
     }).filter((member) => member.displayName.length > 0);
-  }, [currentUserId, memberIds, memberProfiles, memberRoles, people]);
+  }, [colors.forest, currentUserId, memberIds, memberProfiles, memberRoles, people]);
 
   if (conversation.kind === 'direct') return null;
   // A management-only view belongs to someone who manages the group without
@@ -175,7 +178,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
 
 export default GroupMembersSection;
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   section: { gap: spacing.xs },
   title: { color: colors.ink, fontFamily: type.display, fontSize: 14, fontWeight: '900' },
   empty: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },

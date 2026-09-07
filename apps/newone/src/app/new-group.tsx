@@ -24,7 +24,8 @@ import type { Person } from '@/domain/types';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 type GroupKind = 'group' | 'team' | 'shift' | 'incident';
@@ -85,6 +86,8 @@ export function groupNameFromPeople(names: string[], fallback: string): string {
 }
 
 export default function NewGroupScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const workspace = useWorkspace();
@@ -345,7 +348,7 @@ export default function NewGroupScreen() {
           onPress={() => toggle(candidate)}
           style={styles.personMain}>
           <View style={[styles.check, role && styles.checkSelected]}>
-            {role ? <Ionicons name="checkmark" size={15} color={colors.forest} /> : null}
+            {role ? <Ionicons name="checkmark" size={15} color={colors.onAccent} /> : null}
           </View>
           <Avatar
             color={candidateColor(candidate)}
@@ -760,7 +763,7 @@ export default function NewGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas },
   header: {
     minHeight: 76,
@@ -824,7 +827,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm,
     borderWidth: 1,
-    borderColor: '#E7C690',
+    borderColor: colors.amberBorder,
     borderRadius: radii.md,
     backgroundColor: colors.amberSoft,
   },
@@ -871,7 +874,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#F0C9C1',
+    borderColor: colors.redBorder,
     backgroundColor: colors.redSoft,
   },
   incidentNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs },
@@ -902,7 +905,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#E7C690',
+    borderColor: colors.amberBorder,
     backgroundColor: colors.amberSoft,
   },
   guestDisclosureText: { flex: 1, color: colors.amber, fontSize: 11, lineHeight: 16 },

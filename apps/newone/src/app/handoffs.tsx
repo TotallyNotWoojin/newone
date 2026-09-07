@@ -25,11 +25,14 @@ import type { ShiftHandoff } from '@/domain/types';
 import { handoffCorrectionCopy } from '@/features/handoffs/handoff-correction-copy';
 import { handoffAcknowledgementCopy } from '@/features/handoffs/handoff-acknowledgement-copy';
 import { useWorkspace } from '@/state/workspace';
-import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
+import { radii, shadow, spacing, type } from '@/theme/tokens';
+import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 function HandoffsWorkplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -272,7 +275,7 @@ function HandoffsWorkplaceScreen() {
                     onPress={() => toggleSource(messageId)}
                     style={[styles.sourceRow, selected && styles.sourceRowSelected]}>
                     <View style={[styles.sourceCheck, selected && styles.sourceCheckSelected]}>
-                      {selected ? <Ionicons name="checkmark" size={14} color={colors.forest} /> : null}
+                      {selected ? <Ionicons name="checkmark" size={14} color={colors.onAccent} /> : null}
                     </View>
                     <View style={styles.sourceCopy}>
                       <Text style={styles.sourceSender}>{message.senderName} · {message.sentAt}</Text>
@@ -433,7 +436,7 @@ function HandoffsWorkplaceScreen() {
                       onPress={() => toggleCorrectionSource(messageId)}
                       style={[styles.sourceRow, selected && styles.sourceRowSelected]}>
                       <View style={[styles.sourceCheck, selected && styles.sourceCheckSelected]}>
-                        {selected ? <Ionicons name="checkmark" size={14} color={colors.forest} /> : null}
+                        {selected ? <Ionicons name="checkmark" size={14} color={colors.onAccent} /> : null}
                       </View>
                       <View style={styles.sourceCopy}>
                         <Text style={styles.sourceSender}>
@@ -506,6 +509,8 @@ function HandoffCard({
   onCorrect: () => void;
   onOpenSource: (messageId: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
   const { locale, t } = useI18n();
   const copy = handoffCorrectionCopy(locale);
   const status = {
@@ -648,7 +653,7 @@ function HandoffCard({
   );
 }
 
-const styles = StyleSheet.create({
+const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
@@ -703,7 +708,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     backgroundColor: colors.plumSoft,
     borderWidth: 1,
-    borderColor: '#DED0F0',
+    borderColor: colors.plumBorder,
   },
   workflowIcon: {
     width: 44,
@@ -718,12 +723,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   workflowTitle: {
-    color: '#493168',
+    color: colors.plumStrong,
     fontSize: 13,
     fontWeight: '900',
   },
   workflowText: {
-    color: '#67527E',
+    color: colors.plumMuted,
     fontSize: 11,
     lineHeight: 17,
     marginTop: 3,
