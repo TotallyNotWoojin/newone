@@ -164,6 +164,16 @@ describe('the row on screen', () => {
     expect(onSelect).toHaveBeenCalledWith('conversation-beach');
   });
 
+  test('the browsing row carries a Pinned entry, and only when there is one to open', async () => {
+    await render(<ConversationList {...listProps({})} />);
+    expect(screen.queryByRole('button', { name: 'chat.pinnedOpen' })).toBeNull();
+
+    const onOpenPinned = jest.fn();
+    await render(<ConversationList {...listProps({ onOpenPinned })} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.pinnedOpen' }));
+    expect(onOpenPinned).toHaveBeenCalledTimes(1);
+  });
+
   test('a row with no actions wired stays a plain row', async () => {
     const onSelect = jest.fn();
     await render(<ConversationList {...listProps({ onSelect })} />);

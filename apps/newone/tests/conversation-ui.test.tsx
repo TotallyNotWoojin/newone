@@ -472,6 +472,9 @@ function buildWorkspace() {
     editMessage: successfulAction(),
     toggleReaction: successfulAction(),
     setMessagePinned: successfulAction(),
+    loadPinnedMessages: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
+    unpinMessage: successfulAction(),
+    loadSharedMedia: jest.fn(async (..._mockArgs: unknown[]) => ({ items: [], cursor: null })),
     reportMessage: successfulAction(),
     updateConversation: successfulAction(),
     updateConversationPreferences: successfulAction(),
@@ -1450,6 +1453,29 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       });
       expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(management.id, { isArchived: true });
     });
+  });
+
+  test('conversation settings open the chat\u2019s pins and its photos and files', async () => {
+    const chat = conversation();
+    const view = await render(<ConversationPane conversation={chat} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    expect(screen.getByLabelText('chat.pinnedTitle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.sharedMediaTitle')).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText('chat.pinnedTitle'));
+    await waitFor(() => expect(mockWorkspace.loadPinnedMessages).toHaveBeenCalledWith(chat.id));
+    // One sheet at a time: settings yield to the pins.
+    expect(screen.queryByText('chat.controlsTitle')).toBeNull();
+    await waitFor(() => expect(screen.getByText('chat.pinnedEmpty')).toBeTruthy());
+    await view.unmount();
+
+    mockWorkspace = buildWorkspace();
+    const mediaView = await render(<ConversationPane conversation={chat} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    await fireEvent.press(screen.getByLabelText('chat.sharedMediaTitle'));
+    await waitFor(() => expect(mockWorkspace.loadSharedMedia).toHaveBeenCalledWith(chat.id));
+    await waitFor(() => expect(screen.getByText('chat.sharedMediaEmpty')).toBeTruthy());
+    await mediaView.unmount();
   });
 
   test('closes active incidents and handles rejected join requests with authoritative reasons', async () => {
