@@ -265,11 +265,16 @@ export default function PeopleScreen() {
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        {desktop && !personalRealm ? (
+        {/* The consumer wording exists, is translated and is asserted by
+            localized-security-copy; gating the whole header on !personalRealm
+            meant a consumer saw neither variant. No eyebrow on the consumer
+            side: people.eyebrowConsumer already labels the contacts list a few
+            lines down, and repeating it is noise. */}
+        {desktop ? (
           <DesktopPageHeader
-            description={t('people.description')}
-            eyebrow={t('people.eyebrow')}
-            title={t('people.heading')}
+            description={t(personalRealm ? 'people.descriptionConsumer' : 'people.description')}
+            eyebrow={personalRealm ? undefined : t('people.eyebrow')}
+            title={t(personalRealm ? 'people.contactsTitle' : 'people.heading')}
           />
         ) : null}
 
@@ -453,6 +458,11 @@ export default function PeopleScreen() {
           onPress={() => setFavoriteContact((current) => !current)}
           tone={favoriteContact ? 'dark' : 'light'}
         />
+        {/* people.blockNoticeConsumer stays unrendered on purpose. 75d0cbc
+            ("no explanatory copy") stripped it from the consumer manage sheet
+            and left an assertion saying so; the cleanliness audit read that as
+            the same defect as the header above, but it is a decision. Deleting
+            the key is the owner's call, not this change's. */}
         {personalRealm ? null : (
           <View style={styles.privacyNote}>
             <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />

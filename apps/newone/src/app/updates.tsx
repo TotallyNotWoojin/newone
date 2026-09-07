@@ -15,6 +15,7 @@ import {
   DesktopPageHeader,
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
+import { WorkplaceOnlyRoute } from '@/components/navigation/workplace-only-route';
 import { Chip, IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import {
@@ -70,7 +71,7 @@ function toggledValue<Value extends string>(values: Value[], value: Value) {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
-export default function UpdatesScreen() {
+function UpdatesWorkplaceScreen() {
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -2121,3 +2122,9 @@ const styles = StyleSheet.create({
   nonResponderFacts: { gap: 3 },
   nonResponderFact: { color: colors.inkMuted, fontSize: 10, lineHeight: 15 },
 });
+
+/** Workplace-only: a personal-realm account is sent back to Chats instead of
+ *  being shown this screen. See components/navigation/workplace-only-route. */
+export default function UpdatesScreen() {
+  return <WorkplaceOnlyRoute screen={<UpdatesWorkplaceScreen />} />;
+}

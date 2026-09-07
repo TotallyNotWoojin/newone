@@ -189,9 +189,26 @@ Handlers do not become automatic merely because they are deployed. Configure [Su
 1. Store the exact project URL, secret API key, and independent worker token in Vault. Never put literal credentials in a migration or cron command history.
 2. Enable `pg_cron` and `pg_net` in the target environment.
 3. Schedule short, overlapping-safe POST claims with `Content-Type: application/json`, the server `apikey`, and `X-Newone-Worker-Token`. These self-authenticating handlers reject an `Authorization` header, browser Origin, and cookies; Supabase gateway JWT verification is disabled for them. The body contains only bounded limits, while topic and tenant authority remain server-derived.
-4. Start with AI processing every 10 seconds, attachment scan every 10 seconds, moderation/revocation/control/purge/dynamic-group outbox every 5 seconds, push dispatch every 5 seconds when enabled, push receipts every 30 seconds, and scheduled-update/notice/handoff maintenance every minute. Adjust only from synthetic load/queue-age evidence.
-5. Record `cron.job`, recent `cron.job_run_details`, Edge invocation results, queue age/dead letters, retry behavior, and kill-switch tests. Alert before the applicable delivery/revocation target is missed.
+4. Start with AI processing every 10 seconds, attachment scan every 10 seconds, and push receipts every 30 seconds. The outbox (moderation, revocation, control, purge, dynamic-group, and push dispatch when enabled) is woken from the enqueue by `private.wake_outbox_worker_on_enqueue` and swept every minute; the sweep is the safety net for a wake that could not be posted and for jobs deferred by a retry backoff, so do not remove it. Scheduled-update/notice/handoff maintenance is deliberately unscheduled (migration `20260908061000`) because announcements and handoffs are empty by construction in the consumer product; that migration carries the exact command to put it back. Adjust only from synthetic load/queue-age evidence.
+5. Record `cron.job`, recent `cron.job_run_details`, Edge invocation results, queue age/dead letters, retry behavior, and kill-switch tests. Alert before the applicable delivery/revocation target is missed. `cron.job_run_details` is pruned daily by `newone-cron-log-retention` (succeeded runs kept 3 days, everything else 30); capture the evidence you need before it ages out.
 6. Unschedule a worker before rotating or removing a credential that it requires; verify non-dependent workers continue.
+
+After deploying the three cron migrations (`20260908060000`, `20260908061000`, `20260908062000`), confirm on the live project:
+
+```sql
+-- 1. six jobs become six with a different shape: outbox at one minute,
+--    maintenance gone, retention added.
+select jobname, schedule, active from cron.job order by jobname;
+-- 2. the log stopped being the database.
+select count(*), pg_size_pretty(pg_total_relation_size('cron.job_run_details')),
+       min(start_time), pg_size_pretty(pg_database_size(current_database()))
+from cron.job_run_details;
+-- 3. a day later, the outbox should be near 1,440 runs, not 17,000.
+select j.jobname, count(*) from cron.job_run_details d join cron.job j using (jobid)
+where d.start_time > now() - interval '24 hours' group by 1 order by 2 desc;
+```
+
+Then send one message from a phone and confirm the push still arrives in seconds, not in up to a minute: the wake, not the sweep, must be what delivers it.
 
 The scheduling SQL is environment state, not a portable schema migration. Archive a redacted export of job names/schedules and the secret names (never values) with release evidence.
 

@@ -462,3 +462,41 @@ describe('personal realm known-people list', () => {
     await alone.unmount();
   });
 });
+
+// The consumer variants of these two strings were written, translated into
+// three languages and asserted by localized-security-copy, but both blocks were
+// gated on !personalRealm, so a consumer rendered neither variant.
+describe('consumer copy on Contacts', () => {
+  const withFriend = () => baseWorkspace({
+    people: [self, person({ id: 'user-friend', displayName: 'Ana Friend', connectionState: 'connected' })],
+  });
+
+  test('the desktop header carries the consumer description, not the directory pitch', async () => {
+    mockWorkspace = withFriend();
+    const view = await render(<PeopleScreen />);
+
+    expect(screen.getByText('people.descriptionConsumer')).toBeTruthy();
+    expect(screen.queryByText('people.description')).toBeNull();
+    expect(screen.queryByText('people.heading')).toBeNull();
+    expect(screen.queryByText('people.eyebrow')).toBeNull();
+    // The list below already says "Your people"; the header does not repeat it.
+    expect(screen.getAllByText('people.eyebrowConsumer')).toHaveLength(1);
+    await view.unmount();
+  });
+
+  test('a phone gets no page header, and the manage sheet stays free of both notices', async () => {
+    mockWidth = 600;
+    mockWorkspace = withFriend();
+    const view = await render(<PeopleScreen />);
+
+    // No desktop page header on a phone, so no description at all.
+    expect(screen.queryByText('people.descriptionConsumer')).toBeNull();
+
+    // Neither variant: 75d0cbc removed the explanatory copy from the consumer
+    // manage sheet deliberately. The workplace notice stays workplace-only.
+    await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
+    expect(screen.queryByText('people.blockNoticeConsumer')).toBeNull();
+    expect(screen.queryByText('people.blockNotice')).toBeNull();
+    await view.unmount();
+  });
+});
