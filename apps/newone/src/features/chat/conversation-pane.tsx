@@ -645,9 +645,6 @@ export function ConversationPane({
         onDelete={async () => {
           if (selectedMessage && await workspace.deleteMessage(selectedMessage)) setSelectedMessage(null);
         }}
-        onHide={async () => {
-          if (selectedMessage && await workspace.hideMessageForMe(selectedMessage)) setSelectedMessage(null);
-        }}
         onForward={async (targetConversationId) => {
           if (selectedMessage && await workspace.forwardMessage(selectedMessage, targetConversationId)) {
             setSelectedMessage(null);
@@ -2055,7 +2052,6 @@ function MessageActionsModal({
   onChangeEditDraft,
   onEdit,
   onDelete,
-  onHide,
   onForward,
   onProposeAction,
   onReact,
@@ -2075,7 +2071,6 @@ function MessageActionsModal({
   onChangeEditDraft: (value: string) => void;
   onEdit: () => void;
   onDelete: () => void;
-  onHide: () => void;
   onForward: (targetConversationId: string) => Promise<void>;
   onProposeAction: (title: string, details: string) => Promise<void>;
   onReact: (emoji: string) => void;
@@ -2088,10 +2083,13 @@ function MessageActionsModal({
 }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
-  // Action items are a workplace concept; the personal realm never surfaces
-  // the affordance to propose one from a message.
+  // Action items, translation provenance, corrections and their review are
+  // workplace concepts. In the personal realm the sheet is exactly: the
+  // reaction row, Reply, Copy, Pin, Forward, Translate for me, and — on your
+  // own messages — Edit and Delete.
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [forwardTargetId, setForwardTargetId] = useState('');
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [actionTitle, setActionTitle] = useState('');
   const [actionDetails, setActionDetails] = useState('');
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -2102,19 +2100,33 @@ function MessageActionsModal({
     : undefined;
   const translationEnabled = conversation?.translationMode !== 'off';
   const translation = message && translationEnabled ? message.translation : undefined;
-  const hasDetails = Boolean(message && translationEnabled && (translation || message.languageDetection));
-  const canCorrect = Boolean(message?.translatedText && translation?.status === 'completed');
-  const canReview = translation?.correction?.status === 'pending' && workspace.hasCapability('language.review');
+  const hasDetails = Boolean(
+    !personalRealm && message && translationEnabled && (translation || message.languageDetection),
+  );
+  const canCorrect = Boolean(!personalRealm && message?.translatedText && translation?.status === 'completed');
+  const canReview = !personalRealm
+    && translation?.correction?.status === 'pending'
+    && workspace.hasCapability('language.review');
+  const live = Boolean(message?.serverId && !message.deleted);
   return (
     <ActionModal
       onClose={onClose}
       title={t('chat.actionsTitle')}
       visible={Boolean(message)}>
+      {live ? <ReactionRow disabled={busy === 'message-reaction'} onReact={onReact} /> : null}
       {message ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon="arrow-undo-outline" label={t('chat.reply')} onPress={onReply} tone="light" />
           <PrimaryButton icon="copy-outline" label={t('chat.copy')} onPress={onCopy} tone="light" />
           <PrimaryButton icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? t('chat.unpin') : t('chat.pin')} loading={busy === 'message-pin'} onPress={onPin} tone="light" />
+          {live ? (
+            <PrimaryButton
+              icon="arrow-redo-outline"
+              label={t('chat.forward')}
+              onPress={() => setForwardOpen((open) => !open)}
+              tone="light"
+            />
+          ) : null}
           {onTranslate ? (
             <PrimaryButton icon="language-outline" label={t('chat.translateForMe')} onPress={onTranslate} tone="light" />
           ) : null}
@@ -2135,12 +2147,6 @@ function MessageActionsModal({
         </View>
       ) : null}
       {message && detailsOpen ? <TranslationDetails message={message} /> : null}
-      {message?.serverId && !message.deleted ? (
-        <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('chat.react')}</Text>
-          <ReactionRow onReact={onReact} />
-        </View>
-      ) : null}
       {message?.isOwn && message.serverId && !message.deleted ? (
         <View style={styles.modalSection}>
           <FormField label={t('chat.editMessage')} multiline onChangeText={onChangeEditDraft} value={editDraft} />
@@ -2165,7 +2171,7 @@ function MessageActionsModal({
       ) : null}
       {message?.serverId && !message.deleted ? (
         <>
-          {message.attachment ? (
+          {!forwardOpen ? null : message.attachment ? (
             <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>{t('chat.forwardUnavailable')}</Text>
               <Text style={styles.modalNote}>{t('chat.attachmentForwardUnavailable')}</Text>
@@ -2215,16 +2221,6 @@ function MessageActionsModal({
               />
             </View>
           ) : null}
-          <View style={styles.modalSection}>
-            <Text style={styles.modalNote}>{t('chat.deleteMeHint')}</Text>
-            <PrimaryButton
-              icon="eye-off-outline"
-              label={t('chat.deleteMe')}
-              loading={busy === 'message-hide'}
-              onPress={onHide}
-              tone="danger"
-            />
-          </View>
         </>
       ) : null}
       <ActionError message={error} />
