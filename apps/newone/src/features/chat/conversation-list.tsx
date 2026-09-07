@@ -135,7 +135,7 @@ export function ConversationList({
               {unread ? <StatusBadge label={`${unread} ${t('chat.unreadCount')}`} tone="success" /> : null}
             </View>
           </View>
-          <IconButton name="create-outline" label={t('chat.compose')} onPress={onCompose} />
+          <IconButton name="add" label={t('chat.newMenu')} onPress={onCompose} />
         </View>
       ) : null}
 

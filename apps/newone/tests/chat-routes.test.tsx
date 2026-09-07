@@ -252,6 +252,7 @@ describe('chats index route', () => {
     }));
 
     await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newGroup' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
 
     await act(async () => {
@@ -304,8 +305,25 @@ describe('chats index route', () => {
       params: { id: 'conversation-secondary' },
     });
 
+    await view.unmount();
+  });
+
+  test('the "+" on the header is two rows: add a friend, or make a group', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+    expect(screen.queryByRole('button', { name: 'chat.newGroup' })).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newMenu' }));
+    expect(screen.getByRole('button', { name: 'people.addFriendTitle' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'chat.newGroup' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'people.addFriendTitle' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/people', params: { add: '1' } });
+    expect(screen.queryByRole('button', { name: 'chat.newGroup' })).toBeNull();
+
+    // The list's own compose control opens the same two rows.
     await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'chat.compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newGroup' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
 
     await view.unmount();

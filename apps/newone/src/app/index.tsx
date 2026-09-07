@@ -1,11 +1,13 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   AppScaffold,
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
+import { ActionModal } from '@/components/ui/action-modal';
 import { ScreenErrorBoundary } from '@/components/ui/error-boundary';
 import { IconButton } from '@/components/ui/primitives';
 import {
@@ -52,6 +54,7 @@ export default function ChatsScreen() {
   const realmKnown = Boolean(workspace.organizationId);
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const search = workspace.inboxSearch;
   const knownPeople = useMemo<SearchPersonRef[]>(
     () => workspace.people
@@ -118,7 +121,7 @@ export default function ChatsScreen() {
     conversations: workspace.conversations,
     filter: workspace.inboxFilter,
     onCancelJoin: workspace.cancelConversationJoinRequest,
-    onCompose: () => router.push('./new-group'),
+    onCompose: () => setNewMenuOpen(true),
     onFilterChange: workspace.setInboxFilter,
     onOpenSuggestion: openSuggestion,
     onRequestJoin: workspace.requestConversationJoin,
@@ -143,9 +146,9 @@ export default function ChatsScreen() {
           right={
             <View style={styles.mobileHeaderActions}>
               <IconButton
-                label={t('chat.compose')}
-                name="create-outline"
-                onPress={() => router.push('./new-group')}
+                label={t('chat.newMenu')}
+                name="add"
+                onPress={() => setNewMenuOpen(true)}
                 size={38}
                 tone="accent"
               />
@@ -184,11 +187,75 @@ export default function ChatsScreen() {
       ) : (
         <ConversationList {...listProps} />
       )}
+      <ActionModal
+        onClose={() => setNewMenuOpen(false)}
+        title={t('chat.newMenu')}
+        visible={newMenuOpen}>
+        <NewMenuRow
+          icon="person-add-outline"
+          label={t('people.addFriendTitle')}
+          onPress={() => {
+            setNewMenuOpen(false);
+            router.push({ pathname: '/people', params: { add: '1' } });
+          }}
+        />
+        <NewMenuRow
+          icon="people-outline"
+          label={t('chat.newGroup')}
+          onPress={() => {
+            setNewMenuOpen(false);
+            router.push('./new-group');
+          }}
+        />
+      </ActionModal>
     </AppScaffold>
   );
 }
 
+/** Two rows and nothing else: the whole of the "+" menu. */
+function NewMenuRow({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: 'person-add-outline' | 'people-outline';
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.newMenuRow, pressed && styles.newMenuRowPressed]}>
+      <View style={styles.newMenuIcon}>
+        <Ionicons color={colors.mintDark} name={icon} size={18} />
+      </View>
+      <Text style={styles.newMenuLabel}>{label}</Text>
+      <Ionicons color={colors.inkSubtle} name="chevron-forward" size={17} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  newMenuRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.md,
+  },
+  newMenuRowPressed: { opacity: 0.7 },
+  newMenuIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mintSoft,
+  },
+  newMenuLabel: { flex: 1, color: colors.ink, fontSize: 15, fontWeight: '700' },
   desktopCanvas: {
     flex: 1,
     padding: spacing.md,
