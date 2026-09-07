@@ -8285,7 +8285,7 @@
     },
     {
       "key": "search.placeholderPeopleMessages",
-      "en": "Search people and messages",
+      "en": "Search chats, people and messages",
       "usedIn": [
         "features/search/workspace-search-panel.tsx:428"
       ],

@@ -60,7 +60,17 @@ export async function runPair(ctx, cfg) {
   });
   ctx.note({ id: 'trans-02b-latency', title: `Measured translation latency (send tap → ${cfg.code} text visible on B)`, status: seen.uiOk ? 'INFO' : 'FAIL', observed: `${Math.round((seen.entry.latencyMs ?? 0) / 100) / 10}s on device (includes B flow startup); server row: ${JSON.stringify(seen.serverResult?.detail ?? null)}` });
   await ctx.observe(devB, { id: 'trans-02c-spanish-render', title: `Exact ${cfg.code} rendering on B`, screen: 'conversation' });
-  await ctx.step({ id: 'trans-03-details', title: 'Translation details from the long-press sheet (Message actions → Show details)', device: devB, flow: 'translation/show-details.yaml', env: { TARGET: en1, LANG: cfg.code }, expected: `"Source language · EN · Target language · ${cfg.code}" in the details block; Hide details; sheet closes`, screen: 'conversation → Message actions' });
+  // v3.3 (backlog 44): the provenance panel is workplace-only now — the consumer
+  // sheet deliberately carries no "Show details", and the suite signs in as a
+  // consumer. The panel itself is still covered by the workplace contract tests.
+  ctx.note({
+    id: 'trans-03-details',
+    title: 'Translation details from the long-press sheet',
+    status: 'UNREACHABLE',
+    expected: 'A "Show details" entry in the message sheet',
+    observed: 'Consumers have no provenance panel: conversation-pane.tsx gates it on !personalRealm, so the entry does not exist for this account.',
+    screen: 'conversation',
+  });
 
   const es1 = cfg.reply(tag);
   const sentEs = Date.now();

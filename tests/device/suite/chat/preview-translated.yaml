@@ -20,11 +20,11 @@ appId: com.totallynotwoojin.newone
           timeout: 1500
 - runFlow:
     when:
-      notVisible: "Search people and messages"
+      notVisible: "Search chats, people and messages"
     commands:
       - tapOn: "Chats"
 - extendedWaitUntil:
-    visible: "Search people and messages"
+    visible: "Search chats, people and messages"
     timeout: 30000
 - extendedWaitUntil:
     visible: ".*${PEER}.*"
