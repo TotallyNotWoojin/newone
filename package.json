@@ -51,9 +51,10 @@
     "supply-chain:sbom": "node scripts/generate-sboms.mjs",
     "supply-chain:signatures": "npm audit signatures && npm audit signatures --prefix apps/newone",
     "supply-chain:evidence": "npm run supply-chain:inventory && npm run supply-chain:licenses && npm run supply-chain:sbom",
-    "e2e:build": "npm --prefix apps/newone run build:web -- --clear",
+    "e2e:build": "EXPO_PUBLIC_WEB_AUTH_MODE=direct npm --prefix apps/newone run build:web -- --clear",
     "e2e:serve": "npm run e2e:build && node scripts/serve-expo-dist.mjs",
     "e2e": "playwright test",
+    "e2e:live": "NEWONE_WEB_E2E_LIVE=1 playwright test",
     "audit": "npm audit --omit=dev --audit-level=high && npm audit --omit=dev --audit-level=high --prefix apps/newone",
     "check": "npm test && npm run backend:functions:check && npm run backend:functions:test && npm run edge-db:contract:check && npm run ai:policy:check && npm run security:scan && npm run env:check && npm run docs:check",
     "verify:full": "npm run check && npm run coverage && npm run backend:reset && npm run backend:types:check && npm run backend:test && npm run backend:lint && npm run hosted:test:self && npm run hosted:test:dry-run && npm run e2e && npm run audit && npm run supply-chain:signatures && npm run supply-chain:evidence"
