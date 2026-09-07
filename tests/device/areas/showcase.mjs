@@ -2,6 +2,7 @@
 // Play screenshots on a 6.9-inch simulator (NEWONE_SHOT_DEVICE) that is booted
 // here in addition to the pool device (B). A lives on the screenshot device.
 import { bootAndInstall } from '../lib/devices.mjs';
+import { setupThirdPerson } from '../lib/accounts.mjs';
 export const meta = { id: 'showcase', devices: 1, title: 'SHOWCASE screenshots (A on the shot device, B in the pool)' };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -17,10 +18,13 @@ export async function run(ctx) {
   ]);
   if (!A.signedIn || !B.signedIn) { ctx.note({ id: 'showcase-blocked', title: 'signup failed', status: 'FAIL', observed: `A=${A.signedIn} B=${B.signedIn}` }); return; }
   await ctx.shot(devA, 'shot-00-chats-empty');
-  await ctx.step({ id: 'show-01-search', title: 'A finds B', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with Message', screen: 'people' });
+  // v3.3 (backlog 36): the group screenshot needs three people, and only two
+  // devices are in play, so the third is an account nobody holds.
+  const C = await setupThirdPerson(ctx, { label: 'show_c', displayName: 'Priya Nair' });
+  await ctx.step({ id: 'show-01-search', title: 'A finds B (Contacts → Add a friend)', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with Message', screen: 'contacts → Add a friend' });
   await ctx.shot(devA, 'shot-01-people-search');
   const intro = 'Hi Diego! Are you coming to the design review on Monday?';
-  const request = await ctx.step({ id: 'show-02-request', title: 'A taps Message and sends the first text (no request)', device: devA, flow: 'people/message-from-result.yaml', env: { TEXT: intro }, expected: 'conversation', screen: 'people → conversation' });
+  const request = await ctx.step({ id: 'show-02-request', title: 'A taps Message and sends the first text (no request)', device: devA, flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: intro }, expected: 'conversation', screen: 'contacts → conversation' });
   if (!request.uiOk) return;
   const convId = (await server.directConversation(A.userId, B.userId)).id;
   // Nothing to accept any more: B opens the chat from Chats.
@@ -41,11 +45,11 @@ export async function run(ctx) {
   await ctx.step({ id: 'show-13-b-sends-unread', title: 'B sends while A is on the list', device: devB, flow: 'chat/send-text.yaml', env: { TEXT: '¿Nos vemos a las 10 en la sala grande?' }, expected: 'bubble', screen: 'conversation' });
   await sleep(6000);
   await ctx.shot(devA, 'shot-04-chats-unread');
-  await ctx.step({ id: 'show-14-group', title: 'A creates a group with B', device: devA, flow: 'groups/create-group.yaml', env: { NAME: 'Launch crew', MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'false', MEMBER2: '', MEMBER2_QUERY: '' }, expected: 'group conversation', screen: 'new group', optional: true });
+  await ctx.step({ id: 'show-14-group', title: 'A creates a group with B and a third person (v3.3: three people)', device: devA, flow: 'groups/create-group.yaml', env: { NAME: 'Launch crew', MEMBER1: B.displayName, MEMBER1_QUERY: B.username, HAS_MEMBER2: 'true', MEMBER2: C.displayName, MEMBER2_QUERY: C.username ?? '' }, expected: 'group conversation', screen: 'new group', optional: true });
   await ctx.step({ id: 'show-15-group-text', title: 'A posts in the group', device: devA, flow: 'chat/send-text.yaml', env: { TEXT: 'Welcome to the launch crew! Agenda for Monday is pinned.' }, expected: 'bubble', screen: 'conversation', optional: true });
   await sleep(2000);
   await ctx.shot(devA, 'shot-05-group');
   await ctx.step({ id: 'show-16-settings', title: 'A opens Settings', device: devA, flow: 'showcase/open-settings.yaml', expected: 'Settings', screen: 'settings', optional: true });
   await ctx.shot(devA, 'shot-06-settings');
-  ctx.accounts = { A, B };
+  ctx.accounts = { A, B, C };
 }

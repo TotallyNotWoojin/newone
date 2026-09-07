@@ -103,6 +103,14 @@ export async function run(ctx) {
   await ctx.step({ id: 'groups-10-mention', title: 'A @mentions B in the group', device: devA, flow: 'groups/mention.yaml', env: { NAME: B.displayName, TEXT: m1 }, expected: 'Mention picker ("People" list) works; message sends', screen: 'group → Mention people' });
   await ctx.step({ id: 'groups-11-b-sees-mention', title: 'B sees the mention message', device: devB, flow: 'chat/see-text.yaml', env: { TEXT: m1, TIMEOUT: '30000' }, expected: 'visible', screen: 'group' });
   await ctx.observe(devB, { id: 'groups-11b-mention-render', title: 'Mention rendering on B', screen: 'group' });
+  // v3.3 (backlog 47f): an "@" mention notifies the people named. The message
+  // itself and its mention chip are proved above; the push is not.
+  ctx.note({
+    id: 'groups-11c-mention-notifies', title: 'An "@" mention notifies the person named', status: 'INFO',
+    expected: 'B gets a notification for the mention even in a group B has muted',
+    observed: 'Not provable on a simulator: it never obtains a push token (Device.isDevice is false), so no delivery is attempted to it at all. The server side — a mention row per named member and a delivery raised for each, ahead of the conversation mute — is covered by migration 20260908022000_mention_notifications.sql and tests/hosted/mention-push-smoke.mjs; groups-10/11 prove the mention is written and rendered.',
+    screen: 'group',
+  });
 
   await ctx.step({
     id: 'groups-12-promote', title: 'A promotes B to Admin', device: devA, flow: 'groups/set-role.yaml', env: { ROLE: 'Admin', NAME: B.displayName },
