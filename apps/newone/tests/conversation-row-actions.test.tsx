@@ -5,6 +5,7 @@ import {
   ConversationList,
   attachContextMenu,
   conversationRowActions,
+  filterConversations,
 } from '@/features/chat/conversation-list';
 
 let mockWorkspace: any;
@@ -131,7 +132,7 @@ describe('the row on screen', () => {
     await render(<ConversationList {...listProps({ onRowAction })} />);
     expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
 
-    const row = screen.getByRole('button', { name: 'Beach trip' });
+    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
     await fireEvent(row, 'hoverIn');
     expect(screen.getByRole('button', { name: 'chat.archive' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'chat.leaveGroup' })).toBeTruthy();
@@ -145,7 +146,7 @@ describe('the row on screen', () => {
     const onSelect = jest.fn();
     await render(<ConversationList {...listProps({ onRowAction, onSelect })} />);
 
-    const row = screen.getByRole('button', { name: 'Beach trip' });
+    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
     await fireEvent(row, 'longPress');
     expect(screen.getByRole('button', { name: 'chat.markUnread' })).toBeTruthy();
 
@@ -177,7 +178,7 @@ describe('the row on screen', () => {
   test('a row with no actions wired stays a plain row', async () => {
     const onSelect = jest.fn();
     await render(<ConversationList {...listProps({ onSelect })} />);
-    const row = screen.getByRole('button', { name: 'Beach trip' });
+    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
     await fireEvent(row, 'longPress');
     expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
     await fireEvent.press(row);
@@ -192,7 +193,7 @@ describe('the row on screen', () => {
     })} />);
 
     expect(screen.getByText('1')).toBeTruthy();
-    const row = screen.getByRole('button', { name: 'Beach trip' });
+    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
     await fireEvent(row, 'hoverIn');
     expect(screen.getByRole('button', { name: 'chat.markRead' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'chat.markUnread' })).toBeNull();
@@ -214,5 +215,46 @@ describe('the row on screen', () => {
     // Near the top it stays out of the way.
     await fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 12 } } });
     expect(screen.queryByRole('button', { name: 'chat.jumpToLatest' })).toBeNull();
+  });
+
+  test('the row reads out its newest message, not only the name', async () => {
+    await render(<ConversationList {...listProps({})} />);
+    expect(screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' })).toBeTruthy();
+
+    // A chat nobody has written in yet says so rather than reading as blank.
+    await render(<ConversationList {...listProps({
+      conversations: [conversation({ lastMessage: '' })],
+    })} />);
+    expect(screen.getByRole('button', { name: 'Beach trip: chat.noMessagesYet' })).toBeTruthy();
+  });
+
+  test('a chat put back to unread from its row is there under the Unread filter', async () => {
+    // Nothing is unread on the server: without the row's own mark the filter
+    // would answer "no chats found" for the chat just marked.
+    await render(<ConversationList {...listProps({ filter: 'unread' })} />);
+    expect(screen.queryByRole('button', { name: 'Beach trip: Bring the umbrella' })).toBeNull();
+
+    await render(<ConversationList {...listProps({
+      filter: 'unread',
+      markedUnreadIds: ['conversation-beach'],
+    })} />);
+    expect(screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' })).toBeTruthy();
+  });
+});
+
+describe('which chats a filter keeps', () => {
+  const beach = conversation();
+  const busy = conversation({ id: 'conversation-busy', title: 'Busy chat', unreadCount: 2 });
+
+  test('unread means an unread count or a row marked unread by hand', () => {
+    expect(filterConversations([beach, busy], 'unread', '').map((item) => item.id))
+      .toEqual(['conversation-busy']);
+    expect(filterConversations([beach, busy], 'unread', '', [], undefined, ['conversation-beach'])
+      .map((item) => item.id))
+      .toEqual(['conversation-beach', 'conversation-busy']);
+    // A hand-made mark says nothing about any other filter.
+    expect(filterConversations([beach, busy], 'groups', '', [], undefined, ['conversation-beach'])
+      .map((item) => item.id))
+      .toEqual(['conversation-beach', 'conversation-busy']);
   });
 });
