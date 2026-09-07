@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+# Chats → the Pinned entry on the browsing row → pins from every chat, grouped
+# by the chat that holds them; tapping one opens that chat at the message.
+# The flow may start inside a conversation, so it walks back first.
+- runFlow:
+    when:
+      visible: "(Back to chats|Volver a chats)"
+    commands:
+      - tapOn: "(Back to chats|Volver a chats)"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 15000
+- tapOn: "Open pinned messages"
+- extendedWaitUntil:
+    visible: "Pinned messages"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TARGET}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-pinned-across-chats
+- tapOn: "Go to this message.*${TARGET}.*"
+- extendedWaitUntil:
+    notVisible: "Pinned messages"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*${TARGET}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-pinned-across-chats-opened

@@ -58,7 +58,8 @@ function Thumbnail({ item, onPress }: { item: SharedMediaItem; onPress: () => vo
       accessibilityLabel={item.name || t(mediaKindKey(item.kind))}
       accessibilityRole="imagebutton"
       onPress={onPress}
-      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+      testID="shared-media-tile">
       <Image
         accessibilityIgnoresInvertColors
         resizeMode="cover"

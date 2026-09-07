@@ -1,0 +1,35 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Photos and files → the grid lists what the chat has carried, and a
+# photo opens the full-screen viewer. A chat that has carried nothing says so
+# instead, and the flow still passes through the sheet.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Photos and files"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Photos and files"
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${SHOT}-shared-media
+- runFlow:
+    when:
+      visible:
+        id: "shared-media-tile"
+    commands:
+      - tapOn:
+          id: "shared-media-tile"
+          index: 0
+      - extendedWaitUntil:
+          visible: "Close image"
+          timeout: 15000
+      - takeScreenshot: ${SHOT}-shared-media-viewer
+      - tapOn: "Close image"
+- tapOn: "Close dialog"

@@ -93,7 +93,23 @@ export async function run(ctx) {
     expected: 'Sheet offers Unpin afterwards; server message_pins row', screen: 'conversation → Message actions',
     serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, r1), (r) => r?.pinned === true, { timeoutMs: 20_000 }); return { ok: w.ok, detail: `pinned=${w.row?.pinned}` }; },
   });
-  await ctx.note({ id: 'chat-10b-pinned-view', title: 'Pinned-messages view', status: 'UNREACHABLE', observed: 'No pinned-messages surface exists in the consumer UI: the only pin affordance is Pin/Unpin in the Message actions sheet (conversation-pane.tsx:2610); no banner or list renders message.pinned.', expected: 'A place to see pinned messages' });
+  await ctx.step({
+    id: 'chat-10b-pinned-view', title: 'A opens the chat’s pins from conversation settings and jumps to one', device: devA,
+    flow: 'chat/pinned-list.yaml', env: { TARGET: r1 },
+    expected: 'Pinned lists the reply with its sender and time; tapping the row closes the sheet and lands on the message',
+    screen: 'conversation → Conversation controls → Pinned',
+  });
+  await ctx.step({
+    id: 'chat-10c-pinned-across-chats', title: 'A opens the pins gathered from every chat on Chats', device: devA,
+    flow: 'chat/pinned-across-chats.yaml', env: { TARGET: r1 },
+    expected: 'Pinned messages groups the row under its chat; tapping it opens that chat at the message',
+    screen: 'chats → Pinned messages',
+  });
+  await ctx.step({
+    id: 'chat-10d-return-to-conversation', title: 'A is back in the conversation for the unpin', device: devA,
+    flow: 'chat/see-text.yaml', env: { TEXT: r1, TIMEOUT: '20000' },
+    expected: 'The reply is on screen again', screen: 'conversation',
+  });
   await ctx.step({
     id: 'chat-11-unpin', title: 'A unpins the reply', device: devA, flow: 'chat/unpin.yaml', env: { TARGET: r1 },
     expected: 'Pin offered again; server row removed', screen: 'conversation → Message actions',
@@ -209,6 +225,16 @@ export async function run(ctx) {
   await ctx.step({ id: 'media-04-b-plays-voice', title: 'B sees the voice note and plays it', device: devB, flow: 'media/see-voice-note.yaml', expected: 'Play → Pause state', screen: 'conversation', timeoutMs: 420_000 });
   const doc = await ctx.step({ id: 'media-05-document', title: 'A sends a document from the Files picker', device: devA, flow: 'media/choose-file.yaml', expected: 'A document is selectable and uploads clean (simulator may offer none)', screen: 'conversation → Choose file', optional: true, timeoutMs: 300_000 });
   if (!doc.uiOk) await ctx.step({ id: 'media-05b-cancel-picker', title: 'Dismiss the document picker', device: devA, flow: 'media/cancel-picker.yaml', expected: 'composer visible', screen: 'conversation' });
+
+  // Photos and files: everything the chat has carried, in one grid.
+  await openA();
+  await ctx.step({
+    id: 'media-06-shared-media', title: 'A opens Photos and files for the chat', device: devA, flow: 'chat/shared-media.yaml',
+    expected: 'The grid lists the photo as a thumbnail and the voice note and document as rows, newest first; tapping the photo opens the full-screen viewer',
+    screen: 'conversation → Conversation controls → Photos and files',
+    serverTruth: async () => { const rows = await server.attachments(convId); return { ok: rows.length > 0, detail: rows.map((r) => ({ mime: r.mime_type, scan: r.scan_status })) }; },
+    timeoutMs: 300_000,
+  });
 
   // Summary sheet (header "Summarize"; replaced the in-list briefing card).
   await openA();
