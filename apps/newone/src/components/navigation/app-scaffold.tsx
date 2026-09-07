@@ -53,7 +53,7 @@ const navItems: {
   },
   {
     key: 'people',
-    labelKey: 'nav.people',
+    labelKey: 'nav.contacts',
     icon: 'people-outline',
     iconActive: 'people',
     href: '/people',

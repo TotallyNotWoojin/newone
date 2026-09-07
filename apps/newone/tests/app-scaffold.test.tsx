@@ -73,7 +73,7 @@ describe('application navigation scaffold', () => {
     expect(screen.getByRole('button', { name: 'nav.handoffs' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'nav.admin' })).toBeNull();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'nav.people' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'nav.contacts' }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/people');
     await fireEvent.press(screen.getByRole('button', { name: 'nav.settingsTab' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings');
@@ -133,7 +133,7 @@ describe('application navigation scaffold', () => {
     );
 
     expect(screen.getByRole('button', { name: 'nav.chats' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'nav.people' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'nav.contacts' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'nav.settingsTab' })).toBeTruthy();
     // Search has no tab of its own; the field on Chats does that job.
     expect(screen.queryByRole('button', { name: 'nav.search' })).toBeNull();
@@ -152,7 +152,7 @@ describe('application navigation scaffold', () => {
     );
 
     expect(screen.getByRole('button', { name: 'nav.chats' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'nav.people' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'nav.contacts' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'nav.search' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'nav.updates' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'nav.handoffs' })).toBeNull();

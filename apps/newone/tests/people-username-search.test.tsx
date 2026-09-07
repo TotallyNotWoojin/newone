@@ -16,8 +16,11 @@ const mockRouter = {
 let mockWidth = 1280;
 let mockWorkspace: Record<string, any>;
 
+let mockParams: { add?: string } = {};
+
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
+  useLocalSearchParams: () => mockParams,
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -146,11 +149,16 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mockWidth = 1280;
+  mockParams = {};
   mockWorkspace = baseWorkspace();
 });
 
-describe('personal-realm people search', () => {
-  test('debounces queries as typed, lists compact rows with handles, and opens a chat with anyone on desktop', async () => {
+describe('adding a friend from Contacts', () => {
+  async function openAddFriend() {
+    await fireEvent.press(screen.getByLabelText('people.addFriendOpen'));
+  }
+
+  test('the sheet debounces queries, offers Add and Message on every row, and opens a chat on desktop', async () => {
     mockWorkspace.searchUsers.mockResolvedValue([
       searchResult(),
       searchResult({
@@ -165,13 +173,12 @@ describe('personal-realm people search', () => {
     const view = await render(<PeopleScreen />);
 
     expect(isPersonalRealm(mockWorkspace.organizationId)).toBe(true);
-    // No explanatory chrome: the search field stands alone above the list.
-    expect(screen.queryByText('people.descriptionConsumer')).toBeNull();
-    expect(screen.queryByText('people.heading')).toBeNull();
+    // Contacts is the surface; the stranger search is behind one control.
+    expect(screen.queryByLabelText('people.usernameSearch')).toBeNull();
+    expect(screen.getByLabelText('people.searchContacts')).toBeTruthy();
     expect(screen.getByText('people.emptyConsumer')).toBeTruthy();
-    expect(screen.getByText('people.emptyConsumerBody')).toBeTruthy();
-    expect(screen.queryByText('status.emptyPeople')).toBeNull();
 
+    await openAddFriend();
     const input = screen.getByLabelText('people.usernameSearch');
     await fireEvent.changeText(input, 'S');
     await fireEvent.changeText(input, 'SA');
@@ -185,37 +192,47 @@ describe('personal-realm people search', () => {
     expect(screen.getByText('@sam_stranger')).toBeTruthy();
     // A null display name falls back to the username.
     expect(screen.getByText('ana_accepted')).toBeTruthy();
-    // While a search is active the known-people list steps aside.
-    expect(screen.queryByText('people.eyebrowConsumer')).toBeNull();
-    // Every result carries the same single action, whatever its connection
-    // state: strangers, pending requests and friends alike.
+    // Only somebody with no connection yet can be asked; the other two are
+    // already answered.
+    expect(screen.getAllByRole('button', { name: 'people.addFriendAction' })).toHaveLength(1);
+    expect(screen.getAllByText('people.addFriendSent')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'people.message' })).toHaveLength(3);
-    for (const gone of [
-      'people.connect', 'people.accept', 'people.decline', 'people.cancelRequest',
-    ]) {
-      expect(screen.queryByRole('button', { name: gone })).toBeNull();
-    }
+
+    await fireEvent.press(screen.getByRole('button', { name: 'people.addFriendAction' }));
+    await waitFor(() => expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-stranger'));
+    await waitFor(() => expect(screen.getAllByText('people.addFriendSent')).toHaveLength(3));
 
     await fireEvent.press(screen.getAllByRole('button', { name: 'people.message' })[0]!);
     await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith(
       'user-stranger', { displayName: 'Sam Stranger', username: 'sam_stranger' },
     ));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
-    // The hint falls back to the handle when there is no display name.
-    await fireEvent.press(screen.getAllByRole('button', { name: 'people.message' })[2]!);
-    await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith(
-      'user-ana', { displayName: 'ana_accepted', username: 'ana_accepted' },
-    ));
+    await view.unmount();
+  });
+
+  test('the "+" menu on Chats opens the sheet straight away, and a refused request stays put', async () => {
+    mockParams = { add: '1' };
+    mockWorkspace.searchUsers.mockResolvedValue([searchResult()]);
+    mockWorkspace.updateConnection.mockResolvedValue(false);
+    const view = await render(<PeopleScreen />);
+
+    const input = screen.getByLabelText('people.usernameSearch');
+    await fireEvent.changeText(input, 'sam');
+    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'people.addFriendAction' }));
+    await waitFor(() => expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-stranger'));
+    expect(screen.queryByText('people.addFriendSent')).toBeNull();
     await view.unmount();
   });
 
   test('enforces the minimum query, renders empty results, ignores stale responses, and routes on mobile', async () => {
     mockWidth = 390;
     mockWorkspace.searchUsers
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([searchResult()]);
+      .mockResolvedValue([searchResult()])
+      .mockResolvedValueOnce([]);
     mockWorkspace.openOrCreateDirectConversation.mockResolvedValueOnce(null);
     const view = await render(<PeopleScreen />);
+    await openAddFriend();
 
     const input = screen.getByLabelText('people.usernameSearch');
     await fireEvent.changeText(input, 'z');
@@ -233,6 +250,10 @@ describe('personal-realm people search', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'people.message' }));
     await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledTimes(1));
     expect(mockRouter.push).not.toHaveBeenCalled();
+
+    await openAddFriend();
+    await fireEvent.changeText(screen.getByLabelText('people.usernameSearch'), 'sam');
+    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
     await fireEvent.press(screen.getByRole('button', { name: 'people.message' }));
     await waitFor(() => expect(mockRouter.push).toHaveBeenCalledWith({
       pathname: '/conversation/[id]',
@@ -240,41 +261,72 @@ describe('personal-realm people search', () => {
     }));
 
     // A response for a superseded query is discarded.
+    await openAddFriend();
     let resolveSearch!: (value: unknown) => void;
     mockWorkspace.searchUsers.mockImplementationOnce(
       () => new Promise((resolve) => { resolveSearch = resolve; }),
     );
-    await fireEvent.changeText(input, 'stale');
+    const reopened = screen.getByLabelText('people.usernameSearch');
+    await fireEvent.changeText(reopened, 'stale');
     await waitFor(() => expect(mockWorkspace.searchUsers).toHaveBeenCalledWith('stale'));
-    await fireEvent.changeText(input, '');
+    await fireEvent.changeText(reopened, '');
     resolveSearch([searchResult({ userId: 'user-stale', username: 'stale_user', displayName: 'Stale User' })]);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(screen.queryByText('Stale User')).toBeNull();
-    // Clearing the query brings the known-people list back.
-    expect(screen.getByText('people.emptyConsumer')).toBeTruthy();
     await view.unmount();
   });
 
-  test('keeps the search and its first results above the iOS keyboard on a 390-wide device', async () => {
-    mockWidth = 390;
-    mockWorkspace.searchUsers.mockResolvedValue([searchResult()]);
+  test('Contacts searches only the people already known, asking the server nothing', async () => {
+    const friend = person({
+      id: 'user-friend', displayName: 'Ana Friend', username: 'ana_friend',
+      connectionState: 'connected', site: '', department: '',
+    });
+    const other = person({
+      id: 'user-other', displayName: 'Sam Available', username: 'sam_available',
+      site: '', department: '', contactAlias: 'Coach',
+    });
+    mockWorkspace = baseWorkspace({ people: [self, friend, other] });
     const view = await render(<PeopleScreen />);
-    const input = screen.getByLabelText('people.usernameSearch');
+
+    const contacts = screen.getByLabelText('people.searchContacts');
+    await fireEvent.changeText(contacts, 'ana');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
+    expect(screen.getByText('Ana Friend')).toBeTruthy();
+    expect(screen.queryByText('Sam Available')).toBeNull();
+
+    // Handles and saved aliases match too.
+    await fireEvent.changeText(contacts, 'coach');
+    expect(screen.getByText('Sam Available')).toBeTruthy();
+    await fireEvent.changeText(contacts, 'sam_avail');
+    expect(screen.getByText('Sam Available')).toBeTruthy();
+
+    await fireEvent.changeText(contacts, 'nobody at all');
+    expect(screen.getByText('people.noContactMatch')).toBeTruthy();
+    expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
+    await view.unmount();
+  });
+
+  test('keeps the contacts search and its rows above the iOS keyboard on a 390-wide device', async () => {
+    mockWidth = 390;
+    mockWorkspace = baseWorkspace({
+      people: [self, person({
+        id: 'user-friend', displayName: 'Ana Friend', username: 'ana_friend',
+        site: '', department: '',
+      })],
+    });
+    const view = await render(<PeopleScreen />);
     const surface = screen.getAllByTestId(/^controlled-keyboard-surface:/)
-      .find((instance) => within(instance).queryByLabelText('people.usernameSearch'));
+      .find((instance) => within(instance).queryByLabelText('people.searchContacts'));
     expect(surface).toBeDefined();
     // iOS pads the surface by the keyboard height; the scroll surface keeps
-    // result taps alive and lets a drag dismiss the keyboard interactively.
+    // row taps alive and lets a drag dismiss the keyboard interactively.
     expect(surface!.props.testID).toBe('controlled-keyboard-surface:padding');
     const scroll = surface!.queryAll((instance) => instance.props.keyboardShouldPersistTaps === 'handled')[0];
     expect(scroll).toBeDefined();
     expect(scroll!.props.keyboardDismissMode).toBe('interactive');
-    expect(within(scroll!).getByLabelText('people.usernameSearch')).toBeTruthy();
-
-    await fireEvent.changeText(input, 'sam');
-    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
-    // The first result renders inside the same keyboard-aware surface as the field.
-    expect(within(surface!).getByText('Sam Stranger')).toBeTruthy();
+    expect(within(scroll!).getByLabelText('people.searchContacts')).toBeTruthy();
+    expect(within(surface!).getByText('Ana Friend')).toBeTruthy();
     await view.unmount();
   });
 
@@ -286,13 +338,14 @@ describe('personal-realm people search', () => {
     mockWorkspace = baseWorkspace({ people: [self, known] });
     mockWorkspace.searchUsers.mockResolvedValue([searchResult()]);
     const view = await render(<PeopleScreen />);
+    await openAddFriend();
     await fireEvent.changeText(screen.getByLabelText('people.usernameSearch'), 'sam');
-    await waitFor(() => expect(screen.getByText('Sam Stranger')).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText('Sam Stranger').length).toBeGreaterThan(0));
     // The directory's block state wins over the raw result: no Message button,
     // the badge instead, and the manage control leads to Unblock.
     expect(screen.queryByRole('button', { name: 'people.message' })).toBeNull();
-    expect(screen.getByText('people.blocked')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('people.manage'));
+    expect(screen.getAllByText('people.blocked').length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
     expect(screen.getByText('people.manageTitle · Sam Stranger')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'people.unblock' }));
     await waitFor(() => expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-stranger', false));
