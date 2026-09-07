@@ -416,7 +416,7 @@ export default function NewGroupScreen() {
           disabled={
             !createdConversationId && (
               (!personalRealm && name.trim().length < 2) ||
-              Object.keys(selected).length < 1 ||
+              Object.keys(selected).length < (personalRealm ? 2 : 1) ||
               (kind === 'incident' && !incidentClassification.trim())
             )
           }
@@ -667,7 +667,10 @@ export default function NewGroupScreen() {
               <StatusBadge icon="shield-checkmark" label={joinPolicyLabel} tone="success" />
             )}
           </View>
-          {personalRealm ? null : (
+          {personalRealm ? (
+            // Said plainly on the form; the service refuses a smaller group too.
+            <Text style={styles.minimumNote}>{t('group.minimumPeople')}</Text>
+          ) : (
             <Text style={styles.candidatePrivacy}>{t('group.candidatePrivacy')}</Text>
           )}
           <SearchField
@@ -860,6 +863,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   candidatePrivacy: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },
+  minimumNote: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },
   guestDisclosure: {
     flexDirection: 'row',
     alignItems: 'flex-start',

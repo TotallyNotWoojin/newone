@@ -9,6 +9,8 @@ const accessToken = loadAccessToken();
 const keys = projectKeys(accessToken);
 const ana = await signupUser(keys, { runId, label: 'ana', language: 'en' });
 const ben = await signupUser(keys, { runId, label: 'ben', language: 'en' });
+// A group is three people or more (backlog 36), so the smoke brings a third.
+const cara = await signupUser(keys, { runId, label: 'cara', language: 'en' });
 const post = (user, path, label, body) => gatewayPost('newone-api', path, keys, {
   installationId: user.installationId, accessToken: user.accessToken, idempotencyKey: `role-${runId}-${label}`,
   body: { organizationId: PERSONAL_REALM_ID, ...body },
@@ -18,7 +20,7 @@ if (request.status !== 201) fail(`message request failed (${request.status})`, r
 const accept = await post(ben, `/v2/contacts/connections/${ana.userId}/respond`, 'acc', { decision: 'accepted' });
 if (accept.status !== 200) fail(`accept failed (${accept.status})`, accept.payload);
 const group = await post(ana, '/v2/conversations/group', 'grp', {
-  name: `Role smoke ${runId}`, kind: 'group', memberAssignments: [{ membershipId: ben.userId, role: 'member' }],
+  name: `Role smoke ${runId}`, kind: 'group', memberAssignments: [{ membershipId: ben.userId, role: 'member' }, { membershipId: cara.userId, role: 'member' }],
 });
 if (group.status !== 201) fail(`group creation failed (${group.status})`, group.payload);
 const conversationId = (group.payload?.data ?? group.payload)?.conversationId;

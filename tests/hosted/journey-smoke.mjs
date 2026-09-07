@@ -536,30 +536,36 @@ expectStatus(
 expect(await connectionState(alice, chae) === 'accepted', 'A does not see C accepted');
 done('friends_connected_a_c', acConversationId);
 
+// A group is three people or more (backlog 36): A, B and C open it, and D
+// joins afterwards so the add-member route is still exercised.
+const dana = await signupUser(keys, { runId, label: 'dana', language: 'en' });
 const groupName = `Journey ${runEntropy} lounge`;
 const group = expectStatus(
   await api(alice, 'POST', '/v2/conversations/group', 'group-create', {
     name: groupName,
     kind: 'group',
-    memberAssignments: [{ membershipId: bruno.userId, role: 'member' }],
+    memberAssignments: [
+      { membershipId: bruno.userId, role: 'member' },
+      { membershipId: chae.userId, role: 'member' },
+    ],
   }),
   201,
   'group creation',
 );
 expect(
   isUuid(group.conversationId) && group.kind === 'group' && group.name === groupName &&
-    group.memberCount === 2 && group.isReadOnly === false && group.postingMode === 'all_members',
+    group.memberCount === 3 && group.isReadOnly === false && group.postingMode === 'all_members',
   'group creation receipt shape',
   group,
 );
 const groupConversationId = group.conversationId;
 expectStatus(
-  await api(alice, 'POST', `/v2/conversations/${groupConversationId}/members`, 'group-add-c', {
-    membershipId: chae.userId,
+  await api(alice, 'POST', `/v2/conversations/${groupConversationId}/members`, 'group-add-d', {
+    membershipId: dana.userId,
     role: 'member',
   }),
   201,
-  'group member add (C)',
+  'group member add (D)',
 );
 
 const groupA = assertSendReceipt(
@@ -581,10 +587,11 @@ const membershipRows = allRows(await sql(`
   where organization_id = '${ORG}' and conversation_id = '${groupConversationId}'
 `));
 const memberRole = (user) => membershipRows.find((row) => row.user_id === user.userId);
-expect(membershipRows.length === 3, 'expected 3 group members', membershipRows);
+expect(membershipRows.length === 4, 'expected 4 group members', membershipRows);
 expect(memberRole(alice)?.role === 'owner' && memberRole(alice)?.status === 'active', 'A must own the group', membershipRows);
 expect(memberRole(bruno)?.role === 'member' && memberRole(bruno)?.status === 'active', 'B membership', membershipRows);
 expect(memberRole(chae)?.role === 'member' && memberRole(chae)?.status === 'active', 'C membership', membershipRows);
+expect(memberRole(dana)?.role === 'member' && memberRole(dana)?.status === 'active', 'D membership', membershipRows);
 const groupMessages = firstRow(await sql(`
   select count(*) as message_count,
     count(distinct sender_user_id) as sender_count

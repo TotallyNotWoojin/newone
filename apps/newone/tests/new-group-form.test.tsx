@@ -103,6 +103,7 @@ describe('new group form', () => {
     await render(<NewGroupScreen />);
     await fireEvent.changeText(screen.getByLabelText('group.nameOptional'), '  Weekend trip  ');
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Pat Pending' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(mockWorkspace.createGroupConversation).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Weekend trip' }),
@@ -124,6 +125,7 @@ describe('new group form', () => {
 
     // The summary is not decoration: it is what gets sent.
     await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Pat Pending' }));
     await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
     await waitFor(() => expect(mockWorkspace.createGroupConversation).toHaveBeenCalledWith(
       expect.objectContaining({ postingMode: 'admins_only', historyPolicy: 'all' }),
@@ -169,5 +171,31 @@ describe('new group form', () => {
     await fireEvent.changeText(screen.getByLabelText('people.usernameSearch'), 'zzz');
     await waitFor(() => expect(screen.getByText('group.contactsEmpty')).toBeTruthy());
     expect(screen.getByText('people.usernameNoResults')).toBeTruthy();
+  });
+});
+
+describe('the three-person rule', () => {
+  test('the form says it, and Create stays off until you and two others are in', async () => {
+    await render(<NewGroupScreen />);
+    expect(screen.getByText('group.minimumPeople')).toBeTruthy();
+    const create = () => screen.getByRole('button', { name: 'group.create' });
+    expect(create().props.accessibilityState.disabled).toBe(true);
+
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    expect(create().props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(create());
+    expect(mockWorkspace.createGroupConversation).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Pat Pending' }));
+    expect(create().props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(create());
+    await waitFor(() => expect(mockWorkspace.createGroupConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        members: [
+          { membershipId: 'user-contact', role: 'member' },
+          { membershipId: 'user-pat', role: 'member' },
+        ],
+      }),
+    ));
   });
 });
