@@ -113,6 +113,11 @@ jest.mock('@/features/chat/conversation-list', () => {
             accessibilityRole="button"
             onPress={props.onOpenAdvancedSearch}
           />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open pinned"
+            accessibilityRole="button"
+            onPress={props.onOpenPinned}
+          />
           <ReactNative.Text>{`controlled-unread:${(props.markedUnreadIds ?? []).join('|')}`}</ReactNative.Text>
           {['markUnread', 'markRead', 'mute', 'unmute', 'archive', 'delete', 'leave'].map((action) => (
             <ReactNative.Pressable
@@ -152,6 +157,22 @@ jest.mock('@/features/chat/conversation-pane', () => {
         </ReactNative.View>
       );
     },
+  };
+});
+
+jest.mock('@/features/chat/pinned-messages', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    PinnedMessagesModal: (props: Record<string, any>) => (
+      <ReactNative.View testID="controlled-pinned-sheet">
+        <ReactNative.Text>{`controlled-pinned:${props.conversationId ?? 'every-chat'}`}</ReactNative.Text>
+        <ReactNative.Pressable
+          accessibilityLabel="controlled open pinned message"
+          accessibilityRole="button"
+          onPress={() => props.onOpenMessage('conversation-secondary', 'message-secondary')}
+        />
+      </ReactNative.View>
+    ),
   };
 });
 
@@ -285,6 +306,24 @@ describe('chats index route', () => {
       'reply-message',
       ['user-mentioned'],
     );
+
+    await view.unmount();
+  });
+
+  test('the chats browsing row opens the pins from every chat and lands on one', async () => {
+    const view = await render(<ChatsScreen />);
+    expect(screen.queryByTestId('controlled-pinned-sheet')).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open pinned' }));
+    // No chat is named, so the sheet gathers pins across the whole inbox.
+    expect(screen.getByText('controlled-pinned:every-chat')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open pinned message' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary', messageId: 'message-secondary' },
+    });
 
     await view.unmount();
   });

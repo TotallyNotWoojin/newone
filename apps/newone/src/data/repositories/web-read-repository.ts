@@ -28,8 +28,11 @@ import type {
   AuditPage,
   MessagePage,
   OrganizationUnitOption,
+  PinnedMessage,
   ReadRepository,
   RepositoryContext,
+  SharedMediaItem,
+  SharedMediaPage,
   UserSearchResult,
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
@@ -591,6 +594,47 @@ function attachmentFrom(value: unknown): Message['attachment'] {
         ? `${Math.ceil(byteSize / 1024)} KB`
         : `${(byteSize / (1024 * 1024)).toFixed(1)} MB`,
     status,
+  };
+}
+
+const ATTACHMENT_KINDS = ['image', 'video', 'voice', 'file'] as const;
+
+function attachmentKind(value: unknown): SharedMediaItem['kind'] | null {
+  const kind = ATTACHMENT_KINDS.find((entry) => entry === value);
+  return kind ?? null;
+}
+
+function pinnedMessageFromDto(row: JsonRecord): PinnedMessage {
+  return {
+    conversationId: requiredString(row.conversationId, 'pinned conversation'),
+    messageId: requiredString(row.messageId, 'pinned message'),
+    senderId: requiredString(row.senderUserId, 'pinned message sender'),
+    senderName: optionalString(row.senderDisplayName) ?? '',
+    text: optionalString(row.body) ?? '',
+    attachmentKind: attachmentKind(row.attachmentKind),
+    sentAt: requiredDate(row.sentAt, 'pinned message time'),
+    pinnedAt: requiredDate(row.pinnedAt, 'pin time'),
+    canUnpin: row.canUnpin === true,
+  };
+}
+
+function sharedMediaItemFromDto(row: JsonRecord): SharedMediaItem {
+  const mimeType = optionalString(row.mimeType) ?? 'application/octet-stream';
+  return {
+    attachmentId: requiredString(row.attachmentId, 'attachment'),
+    messageId: requiredString(row.messageId, 'attachment message'),
+    name: optionalString(row.fileName) ?? '',
+    mimeType,
+    byteSize: integer(row.byteSize, 0),
+    kind: attachmentKind(row.kind) ?? 'file',
+    createdAt: requiredDate(row.createdAt, 'attachment time'),
+    senderId: requiredString(row.senderUserId, 'attachment sender'),
+    senderName: optionalString(row.senderDisplayName) ?? '',
+    // Only a signed https preview is ever shown; anything else is dropped so a
+    // rogue payload cannot point the viewer somewhere unexpected.
+    previewUrl: optionalString(row.previewUrl)?.startsWith('https://')
+      ? optionalString(row.previewUrl)
+      : null,
   };
 }
 
@@ -1491,6 +1535,60 @@ export class WebReadRepository implements ReadRepository {
       if (!firstMessageId || compareMessageIds(cursor, firstMessageId) !== 0) {
         throw new RepositoryError('The service returned an unstable message cursor.', 'invalid_response', true);
       }
+    }
+    return { items, cursor };
+  }
+
+  async loadPinnedMessages(
+    input: Parameters<ReadRepository['loadPinnedMessages']>[0],
+  ): Promise<PinnedMessage[]> {
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+    const payload = await readRequest(this.context, '/v2/pins/query', {
+      organizationId: input.organizationId,
+      conversationId: input.conversationId ?? null,
+      limit,
+    });
+    if (payload.schemaVersion !== 1 || !Array.isArray(payload.pins) || payload.pins.length > limit) {
+      throw new RepositoryError('The service returned an invalid pinned list.', 'invalid_response', true);
+    }
+    return values(payload.pins).map(pinnedMessageFromDto);
+  }
+
+  async loadSharedMedia(
+    input: Parameters<ReadRepository['loadSharedMedia']>[0],
+  ): Promise<SharedMediaPage> {
+    const limit = Math.min(Math.max(input.limit ?? 30, 1), 60);
+    const payload = await readRequest(
+      this.context,
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/media/query`,
+      {
+        organizationId: input.organizationId,
+        beforeCreatedAt: input.cursor?.beforeCreatedAt ?? null,
+        beforeAttachmentId: input.cursor?.beforeAttachmentId ?? null,
+        limit,
+      },
+    );
+    if (
+      payload.schemaVersion !== 1
+      || payload.conversationId !== input.conversationId
+      || !Array.isArray(payload.items)
+      || payload.items.length > limit
+      || typeof payload.hasMore !== 'boolean'
+    ) {
+      throw new RepositoryError('The service returned an invalid media page.', 'invalid_response', true);
+    }
+    const items = values(payload.items).map(sharedMediaItemFromDto);
+    const beforeCreatedAt = optionalString(payload.nextBeforeCreatedAt);
+    const beforeAttachmentId = optionalString(payload.nextBeforeAttachmentId);
+    const cursor = payload.hasMore && beforeCreatedAt && beforeAttachmentId
+      ? { beforeCreatedAt, beforeAttachmentId }
+      : null;
+    // A page that claims more without a whole keyset would loop forever.
+    if (payload.hasMore !== Boolean(cursor)) {
+      throw new RepositoryError('The service returned a non-advancing media cursor.', 'invalid_response', true);
+    }
+    if (input.cursor && items.some((item) => item.createdAt > input.cursor!.beforeCreatedAt)) {
+      throw new RepositoryError('The service returned media outside the requested page.', 'invalid_response', true);
     }
     return { items, cursor };
   }

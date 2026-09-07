@@ -20,6 +20,7 @@ import {
   type ConversationRowActionKey,
 } from '@/features/chat/conversation-list';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { PinnedMessagesModal } from '@/features/chat/pinned-messages';
 import { NotificationPrompt } from '@/features/notifications/notification-prompt';
 import {
   buildSearchSuggestions,
@@ -67,6 +68,7 @@ export default function ChatsScreen() {
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
   const [unreadMarks, setUnreadMarks] = useState<string[]>(() => [...markedUnread]);
   const [departing, setDeparting] = useState<{ id: string; title: string; group: boolean } | null>(null);
   const search = workspace.inboxSearch;
@@ -187,6 +189,7 @@ export default function ChatsScreen() {
     onSelect: openConversation,
     markedUnreadIds: unreadMarks,
     onRowAction: runRowAction,
+    onOpenPinned: () => setPinnedOpen(true),
     organizationName: workspace.organizationName,
     people: searchPeople,
     search,
@@ -264,6 +267,19 @@ export default function ChatsScreen() {
         />
         <PrimaryButton label={t('chat.keepChat')} onPress={() => setDeparting(null)} tone="light" />
       </ActionModal>
+      {pinnedOpen ? (
+        <PinnedMessagesModal
+          onClose={() => setPinnedOpen(false)}
+          onOpenMessage={(conversationId, messageId) => {
+            workspace.selectConversation(conversationId);
+            router.push({
+              pathname: '/conversation/[id]',
+              params: { id: conversationId, messageId },
+            });
+          }}
+          visible
+        />
+      ) : null}
       <ActionModal
         onClose={() => setNewMenuOpen(false)}
         title={t('chat.newMenu')}

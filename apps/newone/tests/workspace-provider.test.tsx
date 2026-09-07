@@ -22,6 +22,8 @@ import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
 const mockLoadWorkspace = jest.fn();
 const mockLoadMessages = jest.fn();
 const mockSearchUsers = jest.fn();
+const mockLoadPinnedMessages = jest.fn();
+const mockLoadSharedMedia = jest.fn();
 const mockCommand = jest.fn<(method: string, input: unknown) => Promise<unknown>>();
 const mockEndAccess = jest.fn();
 const mockListOutbox = jest.fn();
@@ -101,6 +103,14 @@ jest.mock('@/data/repositories/web-read-repository', () => ({
 
     searchUsers(...mockArgs: unknown[]) {
       return mockSearchUsers(...mockArgs);
+    }
+
+    loadPinnedMessages(...mockArgs: unknown[]) {
+      return mockLoadPinnedMessages(...mockArgs);
+    }
+
+    loadSharedMedia(...mockArgs: unknown[]) {
+      return mockLoadSharedMedia(...mockArgs);
     }
 
     queryAudit(...mockArgs: unknown[]) {
@@ -1070,6 +1080,8 @@ beforeEach(() => {
   mockRequestDeviceRegistration.mockImplementation(async () => null);
   mockQueryAudit.mockImplementation(async () => ({ events: [], nextCursor: null }));
   mockSearchUsers.mockImplementation(async () => []);
+  mockLoadPinnedMessages.mockImplementation(async () => []);
+  mockLoadSharedMedia.mockImplementation(async () => ({ items: [], cursor: null }));
   mockCommand.mockImplementation(async () => undefined);
 });
 
@@ -2140,6 +2152,53 @@ describe('authoritative workspace provider', () => {
       hasMore: false,
       loading: false,
     });
+  });
+
+  test('reads pins and shared media through the authorized repository, and unpins by identifier', async () => {
+    const pin = {
+      conversationId: 'conversation-a',
+      messageId: '90',
+      senderId: otherUserId,
+      senderName: 'Connected Employee',
+      text: 'Bring the tickets',
+      attachmentKind: null,
+      sentAt: '2026-08-04T08:00:00.000Z',
+      pinnedAt: '2026-08-04T09:00:00.000Z',
+      canUnpin: true,
+    };
+    mockLoadPinnedMessages.mockImplementation(async () => [pin]);
+    mockLoadSharedMedia.mockImplementation(async () => ({ items: [], cursor: null }));
+    await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+
+    let pins: unknown;
+    let media: unknown;
+    let unpinned = false;
+    await act(async () => {
+      pins = await currentWorkspace().loadPinnedMessages();
+      media = await currentWorkspace().loadSharedMedia('conversation-a');
+      unpinned = await currentWorkspace().unpinMessage('conversation-a', '90');
+    });
+    expect(pins).toEqual([pin]);
+    expect(media).toEqual({ items: [], cursor: null });
+    expect(mockLoadPinnedMessages).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: null,
+    }));
+    expect(mockLoadSharedMedia).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'conversation-a',
+      cursor: null,
+    }));
+    // A pin knows only an identifier, so unpinning must not need a Message.
+    expect(unpinned).toBe(true);
+    expect(mockCommand).toHaveBeenCalledWith('setMessagePin', expect.objectContaining({
+      conversationId: 'conversation-a',
+      messageId: '90',
+      pinned: false,
+    }));
   });
 
   test('runs translation, summary, and consented AI quality-review workflows through commands', async () => {

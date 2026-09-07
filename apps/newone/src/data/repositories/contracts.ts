@@ -226,6 +226,41 @@ export interface UserSearchResult {
   connectionState: 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted';
 }
 
+/** One row of a pinned-message list, in a chat or across every chat. */
+export interface PinnedMessage {
+  conversationId: string;
+  messageId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  /** Set when the pinned message carried a file instead of words. */
+  attachmentKind: 'image' | 'video' | 'voice' | 'file' | null;
+  sentAt: string;
+  pinnedAt: string;
+  canUnpin: boolean;
+}
+
+/** One photo, video, voice note or file a chat has carried. */
+export interface SharedMediaItem {
+  attachmentId: string;
+  messageId: string;
+  name: string;
+  mimeType: string;
+  byteSize: number;
+  kind: 'image' | 'video' | 'voice' | 'file';
+  createdAt: string;
+  senderId: string;
+  senderName: string;
+  /** Short-lived preview for the viewable kinds; files have none. */
+  previewUrl: string | null;
+}
+
+export interface SharedMediaPage {
+  items: SharedMediaItem[];
+  /** Both halves travel together, or there is no next page. */
+  cursor: { beforeCreatedAt: string; beforeAttachmentId: string } | null;
+}
+
 export interface ReadRepository {
   loadWorkspace(userId: string, selectedConversationId?: string | null): Promise<WorkspaceSnapshot>;
   loadMessages(input: {
@@ -234,6 +269,17 @@ export interface ReadRepository {
     userId: string;
     after?: string | null;
   }): Promise<MessagePage>;
+  loadPinnedMessages(input: {
+    organizationId: string;
+    conversationId?: string | null;
+    limit?: number;
+  }): Promise<PinnedMessage[]>;
+  loadSharedMedia(input: {
+    organizationId: string;
+    conversationId: string;
+    cursor?: SharedMediaPage['cursor'];
+    limit?: number;
+  }): Promise<SharedMediaPage>;
   searchUsers(input: {
     organizationId: string;
     query: string;

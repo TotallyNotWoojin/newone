@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+# Controls → Pinned → the pinned message is listed → tapping it closes the sheet
+# and lands on the message in the conversation.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Pinned"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Pinned"
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*${TARGET}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-pinned-list
+- tapOn: "Go to this message.*${TARGET}.*"
+- extendedWaitUntil:
+    notVisible: "Go to this message.*"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*${TARGET}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-pinned-jumped
