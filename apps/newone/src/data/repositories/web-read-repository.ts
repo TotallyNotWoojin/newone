@@ -421,6 +421,7 @@ function personFromDirectory(
     contactAlias: optionalString(saved?.alias),
     favoriteContact: saved?.isFavorite === true,
     blockedByMe: row.isBlocked === true || blockedIds.has(userId),
+    mutedByMe: row.isMuted === true,
     avatarColor: stableColor(userId),
     suspended: row.membershipStatus === 'suspended',
   };

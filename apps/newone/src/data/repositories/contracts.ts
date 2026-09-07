@@ -1105,6 +1105,13 @@ export interface CommandRepository {
     blocked: boolean;
     idempotencyKey: string;
   }): Promise<void>;
+  /** Personal notification silence for one person; nothing is hidden. */
+  setPersonMuted(input: {
+    organizationId: string;
+    membershipId: string;
+    muted: boolean;
+    idempotencyKey: string;
+  }): Promise<void>;
   queryRoleAssignments(input: {
     organizationId: string;
     targetMembershipId: string;

@@ -3134,6 +3134,14 @@ export class BffCommandRepository implements CommandRepository {
     });
   }
 
+  async setPersonMuted(input: Parameters<CommandRepository['setPersonMuted']>[0]) {
+    await this.request(`/v2/people/${encodeURIComponent(input.membershipId)}/mute`, {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      method: input.muted ? 'PUT' : 'DELETE',
+    });
+  }
+
   async queryRoleAssignments(input: Parameters<CommandRepository['queryRoleAssignments']>[0]) {
     const payload = await this.request('/v2/admin/role-assignments/query', {
       organizationId: input.organizationId,

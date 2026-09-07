@@ -243,6 +243,8 @@ export interface Person {
   contactAlias?: string | null;
   favoriteContact?: boolean;
   blockedByMe?: boolean;
+  /** The reader silenced this person's notifications everywhere. */
+  mutedByMe?: boolean;
   avatarColor: string;
   suspended?: boolean;
 }

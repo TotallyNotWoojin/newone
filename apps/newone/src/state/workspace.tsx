@@ -474,6 +474,7 @@ interface WorkspaceState {
   saveContact: (personId: string, alias: string, isFavorite: boolean) => Promise<boolean>;
   removeSavedContact: (personId: string) => Promise<boolean>;
   setPersonBlocked: (personId: string, blocked: boolean) => Promise<boolean>;
+  setPersonMuted: (personId: string, muted: boolean) => Promise<boolean>;
   loadRoleAssignments: (personId: string) => Promise<boolean>;
   queryAudit: (input: Omit<AuditQueryInput, 'organizationId'>) => Promise<AuditPage | null>;
   exportAudit: (input: Omit<AuditQueryInput, 'organizationId' | 'cursor' | 'limit'> & {
@@ -5242,6 +5243,32 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [executeImmediate, refresh, repositories.commands, snapshot],
   );
 
+  // Muting is a personal notification setting: the roster row flips at once,
+  // and nothing about the person is hidden.
+  const setPersonMuted = useCallback(
+    async (personId: string, muted: boolean) => {
+      const person = snapshot?.people.find((item) => item.id === personId);
+      if (!snapshot || !person || person.id === snapshot.currentUser.id) return false;
+      const result = await executeImmediate(muted ? 'person-mute' : 'person-unmute', () =>
+        repositories.commands.setPersonMuted({
+          organizationId: snapshot.organizationId,
+          membershipId: person.membershipId ?? person.id,
+          muted,
+          idempotencyKey: createClientId(),
+        }),
+      );
+      if (result === null) return false;
+      setSnapshot((current) => current ? {
+        ...current,
+        people: current.people.map((item) => (
+          item.id === personId ? { ...item, mutedByMe: muted } : item
+        )),
+      } : current);
+      return true;
+    },
+    [executeImmediate, repositories.commands, snapshot],
+  );
+
   const loadRoleAssignments = useCallback(
     async (personId: string) => {
       const person = snapshot?.people.find((item) => item.id === personId);
@@ -5934,6 +5961,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       saveContact,
       removeSavedContact,
       setPersonBlocked,
+      setPersonMuted,
       loadRoleAssignments,
       queryAudit,
       exportAudit,
@@ -6028,6 +6056,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       saveContact,
       removeSavedContact,
       setPersonBlocked,
+      setPersonMuted,
       loadRoleAssignments,
       queryAudit,
       exportAudit,
