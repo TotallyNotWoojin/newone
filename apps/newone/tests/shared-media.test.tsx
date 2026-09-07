@@ -138,6 +138,53 @@ describe('SharedMediaModal', () => {
     expect(screen.queryByLabelText('chat.sharedMediaMore')).toBeNull();
   });
 
+  test('a video is marked as one and a voice note gets its own row', async () => {
+    mockWorkspace.loadSharedMedia = jest.fn(async () => ({
+      items: [
+        item({ attachmentId: 'a', name: 'clip.mp4', kind: 'video', mimeType: 'video/mp4' }),
+        item({
+          attachmentId: 'b',
+          name: '',
+          kind: 'voice',
+          mimeType: 'audio/mpeg',
+          previewUrl: null,
+          byteSize: 400,
+        }),
+      ],
+      cursor: null,
+    }));
+    await render(
+      <SharedMediaModal conversationId="chat-a" onClose={() => undefined} visible />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('clip.mp4')).toBeTruthy());
+    // A voice note has no thumbnail, so it falls back to its kind on a row.
+    expect(screen.getByText('chat.attachmentVoice')).toBeTruthy();
+    expect(screen.getByText('Ana Torres · 400 B')).toBeTruthy();
+  });
+
+  test('a read the server refuses is an empty grid, not a stuck spinner', async () => {
+    mockWorkspace.loadSharedMedia = jest.fn(async () => null);
+    await render(
+      <SharedMediaModal conversationId="chat-a" onClose={() => undefined} visible />,
+    );
+    await waitFor(() => expect(screen.getByText('chat.sharedMediaEmpty')).toBeTruthy());
+  });
+
+  test('a refused next page leaves the grid and its control alone', async () => {
+    const cursor = { beforeCreatedAt: '2026-09-03T10:00:00.000Z', beforeAttachmentId: 'a' };
+    mockWorkspace.loadSharedMedia = jest.fn(async (_id: string, page?: unknown) => (
+      page ? null : { items: [item({ attachmentId: 'a', name: 'beach.jpg' })], cursor }
+    ));
+    await render(
+      <SharedMediaModal conversationId="chat-a" onClose={() => undefined} visible />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('chat.sharedMediaMore')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('chat.sharedMediaMore'));
+    await waitFor(() => expect(mockWorkspace.loadSharedMedia).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText('beach.jpg')).toBeTruthy();
+    expect(screen.getByLabelText('chat.sharedMediaMore')).toBeTruthy();
+  });
+
   test('a photo opens the viewer and the chevrons walk the grid', async () => {
     mockWorkspace.loadSharedMedia = jest.fn(async () => ({
       items: [

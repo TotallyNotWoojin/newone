@@ -91,6 +91,43 @@ describe('stepping between photos', () => {
     platform.restore();
   });
 
+  test('a closed viewer listens for nothing', async () => {
+    const listeners: string[] = [];
+    globalScope.addEventListener = (type: string) => {
+      listeners.push(type);
+    };
+    globalScope.removeEventListener = () => undefined;
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    await render(
+      <ImageViewerModal
+        name="photo.jpg"
+        onClose={() => undefined}
+        onNext={() => undefined}
+        uri="https://cdn.test/photo.jpg"
+        visible={false}
+      />,
+    );
+    expect(listeners).toEqual([]);
+    platform.restore();
+  });
+
+  test('a runtime with no window to listen on is left alone', async () => {
+    const platform = jest.replaceProperty(Platform, 'OS', 'web');
+    const onNext = jest.fn();
+    const view = await render(
+      <ImageViewerModal
+        name="photo.jpg"
+        onClose={() => undefined}
+        onNext={onNext}
+        uri="https://cdn.test/photo.jpg"
+        visible
+      />,
+    );
+    // No addEventListener exists here; the viewer must still render.
+    expect(view.getByLabelText('chat.imageViewerNext')).toBeTruthy();
+    platform.restore();
+  });
+
   test('on a list the chevrons step forwards and back', async () => {
     const onNext = jest.fn();
     const onPrevious = jest.fn();

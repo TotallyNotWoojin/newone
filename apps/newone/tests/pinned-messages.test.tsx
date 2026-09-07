@@ -61,6 +61,14 @@ describe('pin rows', () => {
     expect(pinnedTimeLabel('nonsense', 'en')).toBe('');
     expect(pinnedTimeLabel('2026-09-01T10:00:00.000Z', 'en')).not.toBe('');
   });
+
+  test('today shows a clock and another day shows a date', () => {
+    const today = new Date();
+    today.setHours(9, 5, 0, 0);
+    // A time today reads as a time; anything older reads as a day.
+    expect(pinnedTimeLabel(today.toISOString(), 'en')).toMatch(/[0-9]:[0-9]{2}/);
+    expect(pinnedTimeLabel('2026-01-02T10:00:00.000Z', 'en')).not.toMatch(/:/);
+  });
 });
 
 describe('grouping pins by chat', () => {
@@ -162,6 +170,31 @@ describe('PinnedMessagesModal', () => {
     );
     await waitFor(() => expect(screen.getByLabelText(/Bring the tickets/)).toBeTruthy());
     expect(screen.queryByLabelText('chat.unpin: Ana Torres')).toBeNull();
+  });
+
+  test('a refused unpin leaves the row where it is', async () => {
+    mockWorkspace.loadPinnedMessages = jest.fn(async () => [pin({ senderName: 'Sam Diaz' })]);
+    mockWorkspace.unpinMessage = jest.fn(async () => false);
+    await render(
+      <PinnedMessagesModal
+        conversationId="chat-a"
+        onClose={() => undefined}
+        onOpenMessage={() => undefined}
+        visible
+      />,
+    );
+    await waitFor(() => expect(screen.getByLabelText('chat.unpin: Sam Diaz')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('chat.unpin: Sam Diaz'));
+    await waitFor(() => expect(mockWorkspace.unpinMessage).toHaveBeenCalled());
+    expect(screen.getByLabelText('chat.unpin: Sam Diaz')).toBeTruthy();
+  });
+
+  test('no pins anywhere invites the reader to make one', async () => {
+    mockWorkspace.loadPinnedMessages = jest.fn(async () => []);
+    await render(
+      <PinnedMessagesModal onClose={() => undefined} onOpenMessage={() => undefined} visible />,
+    );
+    await waitFor(() => expect(screen.getByText('chat.pinnedEmptyAll')).toBeTruthy());
   });
 
   test('across every chat the rows sit under the chat that holds them', async () => {
