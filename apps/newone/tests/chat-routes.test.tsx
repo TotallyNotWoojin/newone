@@ -113,6 +113,15 @@ jest.mock('@/features/chat/conversation-list', () => {
             accessibilityRole="button"
             onPress={props.onOpenAdvancedSearch}
           />
+          <ReactNative.Text>{`controlled-unread:${(props.markedUnreadIds ?? []).join('|')}`}</ReactNative.Text>
+          {['markUnread', 'markRead', 'mute', 'unmute', 'archive', 'delete', 'leave'].map((action) => (
+            <ReactNative.Pressable
+              accessibilityLabel={`controlled row ${action}`}
+              accessibilityRole="button"
+              key={action}
+              onPress={() => props.onRowAction(action, props.conversations[0])}
+            />
+          ))}
         </ReactNative.View>
       );
     },
@@ -199,6 +208,9 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     },
     inboxFilter: 'all',
     inboxSearch: '',
+    markConversationRead: jest.fn(async () => undefined),
+    updateConversationPreferences: jest.fn(async (..._mockArgs: unknown[]) => true),
+    leaveConversation: jest.fn(async (..._mockArgs: unknown[]) => true),
     people: [],
     searchUsers: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
     discoverableConversations: [{ id: 'conversation-discoverable' }],
@@ -376,6 +388,59 @@ describe('chats index route', () => {
     const consumerView = await render(<ChatsScreen />);
     expect(mockConversationListProps?.onOpenAdvancedSearch).toBeUndefined();
     await consumerView.unmount();
+  });
+
+  test('row actions reach the preferences the server already has, and unread is remembered here', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markUnread' }));
+    expect(screen.getByText('controlled-unread:conversation-primary')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markRead' }));
+    expect(screen.getByText('controlled-unread:')).toBeTruthy();
+    expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-primary');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row mute' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { notificationLevel: 'none' },
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row unmute' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { notificationLevel: 'all', mutedUntil: null },
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row archive' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { isArchived: true },
+    );
+
+    await view.unmount();
+  });
+
+  test('leaving a group says leaving, deleting a chat says deleting, and both can be kept', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row leave' }));
+    expect(screen.getByText('chat.leaveGroupTitle')).toBeTruthy();
+    expect(screen.getByText('chat.leaveGroupBody')).toBeTruthy();
+    expect(screen.queryByText('chat.deleteChatBody')).toBeNull();
+    // Keeping it does nothing at all.
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.keepChat' }));
+    expect(mockWorkspace.leaveConversation).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row leave' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.leaveGroup' }));
+    expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith('conversation-primary');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row delete' }));
+    expect(screen.getByText('chat.deleteChatTitle')).toBeTruthy();
+    expect(screen.getByText('chat.deleteChatBody')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.deleteChat' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { isArchived: true },
+    );
+
+    await view.unmount();
   });
 
   test('replaces the workspace subtitle with the consumer handle in the personal realm', async () => {

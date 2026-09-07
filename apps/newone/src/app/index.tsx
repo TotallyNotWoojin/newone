@@ -15,7 +15,10 @@ import {
   WorkspaceStatusBanner,
 } from '@/components/workspace/workspace-state';
 import { ConversationDetails } from '@/features/chat/conversation-details';
-import { ConversationList } from '@/features/chat/conversation-list';
+import {
+  ConversationList,
+  type ConversationRowActionKey,
+} from '@/features/chat/conversation-list';
 import { ConversationPane } from '@/features/chat/conversation-pane';
 import { NotificationPrompt } from '@/features/notifications/notification-prompt';
 import {
@@ -27,10 +30,20 @@ import {
 import { useChatSearch } from '@/features/search/use-chat-search';
 import { WorkspaceSearchPanel } from '@/features/search/workspace-search-panel';
 import { isPersonalRealm } from '@/constants/personal-realm';
+import type { Conversation } from '@/domain/types';
 import { useWorkspace } from '@/state/workspace';
+import { PrimaryButton } from '@/components/ui/primitives';
 import { colors, radii, shadow, spacing } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
+
+/**
+ * Marking a chat unread has no home on the server: read receipts only ever
+ * move forward, and there is no per-reader "unread again" flag to write. The
+ * mark therefore lives on the device for as long as the app is open, which is
+ * as far as this stream can honestly take it.
+ */
+const markedUnread = new Set<string>();
 
 export default function ChatsScreen() {
   const router = useRouter();
@@ -55,6 +68,8 @@ export default function ChatsScreen() {
   const personalRealm = isPersonalRealm(workspace.organizationId);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [unreadMarks, setUnreadMarks] = useState<string[]>(() => [...markedUnread]);
+  const [departing, setDeparting] = useState<{ id: string; title: string; group: boolean } | null>(null);
   const search = workspace.inboxSearch;
   const knownPeople = useMemo<SearchPersonRef[]>(
     () => workspace.people
@@ -117,6 +132,50 @@ export default function ChatsScreen() {
     });
   };
 
+  const setMarkedUnread = (conversationId: string, unread: boolean) => {
+    if (unread) markedUnread.add(conversationId);
+    else markedUnread.delete(conversationId);
+    setUnreadMarks([...markedUnread]);
+  };
+
+  const runRowAction = (action: ConversationRowActionKey, conversation: Conversation) => {
+    if (action === 'markUnread') {
+      setMarkedUnread(conversation.id, true);
+      return;
+    }
+    if (action === 'markRead') {
+      setMarkedUnread(conversation.id, false);
+      void workspace.markConversationRead(conversation.id);
+      return;
+    }
+    if (action === 'mute' || action === 'unmute') {
+      void workspace.updateConversationPreferences(conversation.id, action === 'mute'
+        ? { notificationLevel: 'none' }
+        : { notificationLevel: 'all', mutedUntil: null });
+      return;
+    }
+    if (action === 'archive') {
+      void workspace.updateConversationPreferences(conversation.id, { isArchived: true });
+      return;
+    }
+    // Leaving a group and being done with a one-to-one chat are different
+    // things, so they are asked differently.
+    setDeparting({
+      id: conversation.id,
+      title: conversation.title,
+      group: action === 'leave',
+    });
+  };
+
+  const confirmDeparture = () => {
+    if (!departing) return;
+    const { id, group } = departing;
+    setDeparting(null);
+    setMarkedUnread(id, false);
+    if (group) void workspace.leaveConversation(id);
+    else void workspace.updateConversationPreferences(id, { isArchived: true });
+  };
+
   const listProps = {
     conversations: workspace.conversations,
     filter: workspace.inboxFilter,
@@ -129,6 +188,8 @@ export default function ChatsScreen() {
     onSelect: openConversation,
     organizationName: workspace.organizationName,
     people: searchPeople,
+    markedUnreadIds: unreadMarks,
+    onRowAction: runRowAction,
     search,
     searchLoading,
     selectedId: workspace.selectedConversationId,
@@ -187,6 +248,23 @@ export default function ChatsScreen() {
       ) : (
         <ConversationList {...listProps} />
       )}
+      <ActionModal
+        description={departing ? t(departing.group ? 'chat.leaveGroupBody' : 'chat.deleteChatBody')
+          .replace('{name}', departing.title) : undefined}
+        onClose={() => setDeparting(null)}
+        title={departing
+          ? t(departing.group ? 'chat.leaveGroupTitle' : 'chat.deleteChatTitle')
+            .replace('{name}', departing.title)
+          : ''}
+        visible={Boolean(departing)}>
+        <PrimaryButton
+          icon={departing?.group ? 'exit-outline' : 'trash-outline'}
+          label={t(departing?.group ? 'chat.leaveGroup' : 'chat.deleteChat')}
+          onPress={confirmDeparture}
+          tone="danger"
+        />
+        <PrimaryButton label={t('chat.keepChat')} onPress={() => setDeparting(null)} tone="light" />
+      </ActionModal>
       <ActionModal
         onClose={() => setNewMenuOpen(false)}
         title={t('chat.newMenu')}
