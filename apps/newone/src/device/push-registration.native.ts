@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { Linking, Platform } from 'react-native';
 
 import { publicRuntimeConfig } from '@/config/runtime';
+import { announcesVisibleConversation } from '@/device/visible-conversation';
 import { RepositoryError, type RegisterDeviceInput } from '@/data/repositories/contracts';
 import { createClientId } from '@/lib/client-id';
 // Metro selects a stable device-protected native installation identity.
@@ -14,7 +15,18 @@ const EXPO_TOKEN_PATTERN = /^(?:ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]{
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
-    const visible = Boolean(notification.request.content.title || notification.request.content.body);
+    const content = notification.request.content;
+    // Nothing is announced for the chat already on screen: the message has
+    // just arrived in the conversation the reader is looking at.
+    if (announcesVisibleConversation(content.data)) {
+      return {
+        shouldShowBanner: false,
+        shouldShowList: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      };
+    }
+    const visible = Boolean(content.title || content.body);
     return {
       shouldShowBanner: visible,
       shouldShowList: visible,

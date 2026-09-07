@@ -20,6 +20,12 @@ let mockConversationDetailsProps: Record<string, any> | null = null;
 jest.mock('expo-router', () => ({
   useRouter: () => mockRouter,
   useLocalSearchParams: () => mockParams,
+  // The screen marks itself as the chat on screen while it is focused, so the
+  // notification handler can stay quiet for it.
+  useFocusEffect: (effect: () => undefined | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    useEffect(effect, [effect]);
+  },
 }));
 
 jest.mock('@/hooks/use-hydration-safe-window-dimensions', () => ({

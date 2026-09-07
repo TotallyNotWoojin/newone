@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 
 import { AppScaffold } from '@/components/navigation/app-scaffold';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { setVisibleConversation } from '@/device/visible-conversation';
 import { WorkspaceStatePanel } from '@/components/workspace/workspace-state';
 import { ScreenErrorBoundary } from '@/components/ui/error-boundary';
 import { useI18n } from '@/i18n/provider';
@@ -19,6 +20,13 @@ export default function ConversationScreen() {
   useEffect(() => {
     if (id) selectConversation(id);
   }, [id, selectConversation]);
+
+  // While this chat is on screen it announces nothing: a push for the
+  // conversation the reader is already reading is noise.
+  useFocusEffect(useCallback(() => {
+    setVisibleConversation(id ?? null);
+    return () => setVisibleConversation(null);
+  }, [id]));
 
   return (
     <AppScaffold current="chats" hideMobileTabs>
