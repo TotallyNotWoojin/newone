@@ -143,6 +143,7 @@ import {
   requestDeviceRegistration,
 } from '@/device/push-registration'; // eslint-disable-line import/no-unresolved
 import { useAuth } from '@/state/auth';
+import { currentDevicePreferences as readDevicePreferences } from '@/state/device-preferences';
 
 /** Group creation found the group instead of making one. */
 export interface ExistingGroupOutcome {
@@ -1476,7 +1477,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       || conversation.translationMode === 'off'
       || !conversation.lastMessage
       || conversation.lastMessageTranslated
-      || conversation.lastMessageSenderId === snapshot.currentUser.id
+      || (conversation.lastMessageSenderId === snapshot.currentUser.id
+        // A sender normally has nothing to wait for: their own preview is
+        // never translated. With "show my translations" on they do.
+        && !readDevicePreferences().showOwnTranslations)
     ) return;
     const tail = snapshot.messages[conversationId]?.at(-1);
     if (tail?.serverId && tail.translationState !== 'queued' && tail.translationState !== 'translating') return;

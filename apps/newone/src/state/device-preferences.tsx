@@ -41,6 +41,17 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
 // is off by default and had stayed on for whoever had once tried it.
 const STORAGE_KEY = 'preferences.device.v2';
 
+/**
+ * The latest preferences, readable outside React. The workspace's translation
+ * follow-up runs in a callback with no provider in scope and needs to know
+ * whether a sender is waiting to see their own translation.
+ */
+let latestPreferences: DevicePreferences = DEFAULT_DEVICE_PREFERENCES;
+
+export function currentDevicePreferences(): DevicePreferences {
+  return latestPreferences;
+}
+
 interface DevicePreferencesValue {
   preferences: DevicePreferences;
   ready: boolean;
@@ -72,6 +83,11 @@ export function parseDevicePreferences(raw: string | null | undefined): DevicePr
 export function DevicePreferencesProvider({ children }: PropsWithChildren) {
   const [preferences, setPreferences] = useState<DevicePreferences>(DEFAULT_DEVICE_PREFERENCES);
   const [ready, setReady] = useState(false);
+
+  // Mirror the choice where code outside React can read it.
+  useEffect(() => {
+    latestPreferences = preferences;
+  }, [preferences]);
 
   useEffect(() => {
     let active = true;

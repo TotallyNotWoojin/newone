@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { DEFAULT_DEVICE_PREFERENCES, parseDevicePreferences } from '@/state/device-preferences';
+import { DEFAULT_DEVICE_PREFERENCES, parseDevicePreferences, currentDevicePreferences } from '@/state/device-preferences';
 
 describe('device preferences', () => {
   test('defaults: enter sends, both languages shown, never prompted, appearance follows the phone', () => {
@@ -31,5 +31,13 @@ describe('device preferences', () => {
     expect(parseDevicePreferences(JSON.stringify({ theme: 'system' })).theme).toBe('system');
     expect(parseDevicePreferences(JSON.stringify({ theme: 'sepia' })).theme).toBe('system');
     expect(parseDevicePreferences(JSON.stringify({ theme: 3 })).theme).toBe('system');
+  });
+});
+
+describe('the preference mirror read outside React', () => {
+  test('starts at the documented defaults', () => {
+    expect(currentDevicePreferences().showOwnTranslations).toBe(false);
+    expect(currentDevicePreferences().translatedOnly).toBe(false);
+    expect(currentDevicePreferences().enterSends).toBe(true);
   });
 });
