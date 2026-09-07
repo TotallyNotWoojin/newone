@@ -1,0 +1,52 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 44/45): what the long-press sheet holds for a consumer, on a
+# message of your own sent moments ago. Exactly: the reaction row, Reply, Copy,
+# Pin, Forward, Translate for me when a translation is warranted, and — inside
+# the fifteen-minute window — Edit and Delete for everyone. The workplace review
+# items are gone, and "Delete for me" no longer exists at all.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
+    timeout: 15000
+- longPressOn:
+    text: ".*${TARGET}.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-sheet
+- assertVisible: "Reply"
+- assertVisible: "Copy"
+- assertVisible: "Pin"
+- assertVisible: "Forward"
+# Own message, minutes old: both fifteen-minute actions are offered.
+- scrollUntilVisible:
+    element:
+      text: "Delete for everyone"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Edit message"
+- assertVisible: "Save edit"
+- takeScreenshot: ${SHOT}-own-actions
+# None of the workplace review machinery, and no delete-for-me anywhere.
+- assertNotVisible: "Propose correction"
+- assertNotVisible: "Review correction"
+- assertNotVisible: "Show details"
+- assertNotVisible: "Hide details"
+- assertNotVisible: "Create action item"
+- assertNotVisible: "Delete for me"
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 15000

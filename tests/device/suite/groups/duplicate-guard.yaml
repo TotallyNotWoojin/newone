@@ -1,0 +1,94 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 37): a group is its member set, so picking exactly the people
+# who are already in one does not make a second group. Create answers with
+# "You already have a group with these people." and an "Open it" button that
+# lands in the group that exists.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "New"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+# A different name changes nothing: the rule is who is in it.
+- tapOn:
+    text: "Group name.*"
+    index: 1
+- inputText: ${NAME}
+- tapOn: "Create a group"
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- scrollUntilVisible:
+    element:
+      text: "Search by name or @username"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Search by name or @username"
+- inputText: ${MEMBER1_QUERY}
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER1}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Add ${MEMBER1}"
+- tapOn: "Clear search"
+- tapOn: "Search by name or @username"
+- inputText: ${MEMBER2_QUERY}
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER2}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Add ${MEMBER2}"
+- takeScreenshot: ${SHOT}-same-people-selected
+- scrollUntilVisible:
+    element:
+      text: "Create"
+    direction: UP
+    timeout: 30000
+- tapOn: "Create"
+- extendedWaitUntil:
+    visible: "You already have a group with these people."
+    timeout: 30000
+- assertVisible: "Open it"
+- takeScreenshot: ${SHOT}-duplicate-offered
+- tapOn: "Open it"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 30000
+- assertVisible: ".*${EXISTING}.*"
+- assertNotVisible: ".*${NAME}.*"
+- takeScreenshot: ${SHOT}-opened-existing

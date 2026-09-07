@@ -1,0 +1,37 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47b): the same row gesture on a group is named for what it does.
+# The row offers "Leave", never "Delete", and the confirmation names the group
+# and says the group carries on without you.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${NAME}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- longPressOn: ".*${NAME}.*"
+- extendedWaitUntil:
+    visible: "Leave"
+    timeout: 15000
+- assertNotVisible: "Delete"
+- takeScreenshot: ${SHOT}-group-row-actions
+- tapOn: "Leave"
+- extendedWaitUntil:
+    visible: "Leave ${NAME}.*"
+    timeout: 15000
+- assertVisible: ".*The group carries on without you.*"
+- assertVisible: "Keep it"
+- takeScreenshot: ${SHOT}-leave-confirmation
+- tapOn: "Leave"
+- extendedWaitUntil:
+    notVisible: ".*${NAME}.*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-left

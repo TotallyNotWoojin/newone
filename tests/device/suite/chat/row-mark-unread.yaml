@@ -1,0 +1,50 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47a): a chat row can be put back to unread. The row's actions
+# open with a long press (a short drag left opens the same set; a long press is
+# the one a driver can aim). Marking it unread makes the Unread filter list it
+# and turns the same action into "Mark read", which puts it back.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${PEER}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Mark unread"
+    timeout: 15000
+# The whole set a chat row offers.
+- assertVisible: "Mute"
+- assertVisible: "Archive"
+- takeScreenshot: ${SHOT}-row-actions
+- tapOn: "Mark unread"
+- extendedWaitUntil:
+    notVisible: "Mark unread"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-marked-unread
+- tapOn: "Unread( [0-9]+)?"
+- extendedWaitUntil:
+    visible: ".*${PEER}.*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-unread-filter
+- tapOn: "All"
+- waitForAnimationToEnd:
+    timeout: 2000
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Mark read"
+    timeout: 15000
+- tapOn: "Mark read"
+- extendedWaitUntil:
+    notVisible: "Mark read"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-marked-read

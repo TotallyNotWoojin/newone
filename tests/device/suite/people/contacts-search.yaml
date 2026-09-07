@@ -1,0 +1,40 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 31): Contacts searches only the people you already know.
+# KNOWN is somebody this account has chatted with; STRANGER is an account that
+# exists but is not a contact, and Contacts must not find them — finding
+# strangers is what "Add a friend" is for.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Contacts"
+- extendedWaitUntil:
+    visible: "Your people"
+    timeout: 20000
+- assertVisible: "Search your contacts"
+- takeScreenshot: ${SHOT}-contacts
+- tapOn:
+    id: "people-search"
+- eraseText: 80
+- inputText: ${KNOWN_QUERY}
+- extendedWaitUntil:
+    visible: ".*${KNOWN}.*"
+    timeout: 20000
+- assertVisible: "Message"
+- takeScreenshot: ${SHOT}-known-found
+- tapOn:
+    id: "people-search"
+- eraseText: 80
+- inputText: ${STRANGER_QUERY}
+- extendedWaitUntil:
+    visible: "No one in your contacts matches that."
+    timeout: 20000
+- assertNotVisible: ".*${STRANGER}.*"
+- takeScreenshot: ${SHOT}-stranger-not-found
+- tapOn:
+    id: "people-search"
+- eraseText: 80
+- extendedWaitUntil:
+    visible: ".*${KNOWN}.*"
+    timeout: 20000

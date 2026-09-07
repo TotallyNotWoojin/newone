@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47b): archive from the chat row. Archiving takes the row off
+# the list at once (workspace drops archived conversations from the snapshot),
+# so the row going away is the on-screen proof; the area checks the server flag.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${PEER}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Archive"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-before-archive
+- tapOn: "Archive"
+- extendedWaitUntil:
+    notVisible: ".*${PEER}.*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-archived

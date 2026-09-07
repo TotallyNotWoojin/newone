@@ -1,0 +1,39 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 31): a contact row's main action is to start a chat. Search the
+# contact so exactly one row is on screen, then tap its Message: the direct
+# conversation opens and takes a message.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Contacts"
+- extendedWaitUntil:
+    visible: "Your people"
+    timeout: 20000
+- tapOn:
+    id: "people-search"
+- eraseText: 80
+- inputText: ${QUERY}
+- extendedWaitUntil:
+    visible: ".*${NAME}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-contact-row
+- tapOn:
+    text: "Message"
+    rightOf:
+      text: ".*${NAME}.*"
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-chat-open
+- tapOn:
+    id: "composer-input"
+- eraseText: 60
+- inputText: ${TEXT}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-sent

@@ -1,0 +1,32 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 50): "Message" on a group member opens the one-to-one chat with
+# them. The button is taken from that member's own row; the post-conditions
+# (the composer, the header naming NAME and the group gone) say where the tap
+# actually landed if it ever picks up the composer's own "Message" label.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Options for ${NAME}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Options for ${NAME}"
+- extendedWaitUntil:
+    visible: "Add as friend"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-member-actions
+- tapOn:
+    text: "Message"
+    below: "Options for ${NAME}"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 15000
+- assertVisible: ".*${NAME}.*"
+- assertNotVisible: ".*${GROUP}.*"
+- takeScreenshot: ${SHOT}-direct-chat

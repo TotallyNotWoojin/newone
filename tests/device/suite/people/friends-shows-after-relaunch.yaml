@@ -1,13 +1,13 @@
 appId: com.totallynotwoojin.newone
 ---
-# Fallback: force-quit + relaunch, then check the People tab lists NAME under
+# Fallback: force-quit + relaunch, then check the Contacts tab lists NAME under
 # "Your people" (used when the live update did not arrive on its own in time).
 - stopApp
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 40000
-- tapOn: "People"
+- tapOn: "Contacts"
 - extendedWaitUntil:
     visible: "Your people"
     timeout: 15000

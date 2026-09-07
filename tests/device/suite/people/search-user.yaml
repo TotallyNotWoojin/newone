@@ -1,7 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# People → search a name or @username; the matching person row must appear
-# with its EXPECT_BUTTON ("Message" for anyone, "Blocked" for a blocked
+# v3.3 (backlog 31/32): finding a stranger moved off the Contacts list and into
+# "Add a friend" — Contacts searches only people you already know. So: Contacts
+# → the "Add a friend" control → search a name or @username → the matching row
+# appears with its EXPECT_BUTTON ("Message" for anyone, "Blocked" for a blocked
 # person). The search runs as you type; there is no submit button.
 - launchApp
 - extendedWaitUntil:
@@ -9,12 +11,12 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 3000
-- tapOn: "People"
+- tapOn: "Contacts"
 # A tab tap right after navigation settled elsewhere once on a 6.9-inch
-# simulator (Settings opened instead). Recover and tap People again.
+# simulator (Settings opened instead). Recover and tap Contacts again.
 - runFlow:
     when:
-      notVisible: "Search by name or @username"
+      notVisible: "Add a friend"
     commands:
       - waitForAnimationToEnd:
           timeout: 3000
@@ -25,13 +27,25 @@ appId: com.totallynotwoojin.newone
             - tapOn: "Close settings"
       - runFlow:
           when:
-            notVisible: "Search by name or @username"
+            notVisible: "Add a friend"
           commands:
-            - tapOn: "People"
+            - tapOn: "Contacts"
 - extendedWaitUntil:
-    visible: "Search by name or @username"
+    visible: "Add a friend"
     timeout: 15000
-- tapOn: "Search by name or @username"
+# The sheet may already be open (the "+" menu opens Contacts with add=1).
+- runFlow:
+    when:
+      notVisible:
+        id: "add-friend-search"
+    commands:
+      - tapOn: "Add a friend"
+- extendedWaitUntil:
+    visible:
+      id: "add-friend-search"
+    timeout: 15000
+- tapOn:
+    id: "add-friend-search"
 - eraseText: 40
 - inputText: ${USERNAME}
 - extendedWaitUntil:

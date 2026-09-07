@@ -1,0 +1,39 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 46): a short drag right on a bubble starts a reply to it — the
+# iMessage gesture with the quoted reply the app already renders. The gesture
+# triggers past 56 points, so a full-width drag from the bubble is well past it.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
+    timeout: 15000
+- takeScreenshot: ${SHOT}-before-swipe
+- swipe:
+    from:
+      text: ".*${TARGET}.*"
+    direction: RIGHT
+    duration: 400
+- extendedWaitUntil:
+    visible: ".*Replying to.*"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-replying
+- tapOn:
+    id: "composer-input"
+- inputText: ${REPLY}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${REPLY}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-swipe-reply-sent

@@ -1,0 +1,17 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47g): a message holding a link grows a card saying what the page
+# calls itself. The phone never fetches the page — the gateway did, once — so
+# the card appears a moment after the bubble. TITLE is what the page calls
+# itself ("Example Domain" for https://example.com/).
+- tapOn:
+    id: "composer-input"
+- inputText: ${TEXT}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TITLE}.*"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-link-preview

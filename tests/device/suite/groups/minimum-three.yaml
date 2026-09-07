@@ -1,0 +1,89 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 36): a group is you and at least two others. With one person
+# picked the form says so and Create stays disabled; the second person enables
+# it. Nothing is created — the form is cancelled at the end — so this can run
+# before the real creation step.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "New"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Search by name or @username"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Search by name or @username"
+- inputText: ${MEMBER1_QUERY}
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER1}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Add ${MEMBER1}"
+- scrollUntilVisible:
+    element:
+      text: "1 selected"
+    direction: UP
+    timeout: 30000
+- assertVisible: "A group needs three people — you and two others."
+- assertVisible:
+    text: "Create"
+    enabled: false
+- takeScreenshot: ${SHOT}-one-person-refused
+- scrollUntilVisible:
+    element:
+      text: "Search by name or @username"
+    direction: DOWN
+    timeout: 45000
+- tapOn: "Clear search"
+- tapOn: "Search by name or @username"
+- inputText: ${MEMBER2_QUERY}
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - hideKeyboard:
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 1500
+- scrollUntilVisible:
+    element:
+      text: "Add ${MEMBER2}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Add ${MEMBER2}"
+- scrollUntilVisible:
+    element:
+      text: "2 selected"
+    direction: UP
+    timeout: 30000
+- assertVisible:
+    text: "Create"
+    enabled: true
+- takeScreenshot: ${SHOT}-two-people-allowed
+- tapOn: "Cancel group creation"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000

@@ -1,0 +1,52 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 32): the "+" on the Chats header opens two plainly named rows
+# and nothing else. "Add a friend" reaches the stranger search on Contacts;
+# "New group" reaches the creation screen.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "New"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "Add a friend"
+    timeout: 15000
+- assertVisible: "New group"
+# The menu is the two rows; nothing from the old compose idea survives.
+- assertNotVisible: "Start a conversation"
+- takeScreenshot: ${SHOT}-new-menu
+- tapOn: "Add a friend"
+# Contacts opens with the add-a-friend sheet already up: the stranger search.
+- extendedWaitUntil:
+    visible: "Search by name or @username"
+    timeout: 20000
+- assertVisible: "Search a name or @handle, then send a request."
+- takeScreenshot: ${SHOT}-add-a-friend
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    notVisible: "Search a name or @handle, then send a request."
+    timeout: 15000
+- tapOn: "Chats"
+- extendedWaitUntil:
+    visible: "New"
+    timeout: 20000
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+- assertVisible:
+    text: "Group name.*"
+- takeScreenshot: ${SHOT}-new-group
+- tapOn: "Cancel group creation"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000

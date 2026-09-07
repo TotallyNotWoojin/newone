@@ -1,0 +1,32 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 41): a pin can be taken back from the list it lives in.
+# Controls → Pinned → the row's "Unpin: <sender>" → the row goes and the list
+# says there is nothing pinned.
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Pinned"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Pinned"
+- extendedWaitUntil:
+    notVisible: "Conversation controls"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*${TARGET}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-pinned-list
+- tapOn: "Unpin: ${SENDER}"
+- extendedWaitUntil:
+    visible: "Nothing pinned yet"
+    timeout: 20000
+- assertNotVisible: ".*${TARGET}.*"
+- takeScreenshot: ${SHOT}-unpinned
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: ".*Write a message….*"
+    timeout: 20000

@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.newone
+---
+# Scrolled back through a conversation, a message that arrives shows a pill
+# instead of yanking the thread; tapping it returns to the newest message.
+# The thread is inverted, so "up the history" is a downward drag.
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 400
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-scrolled-back
+- extendedWaitUntil:
+    visible: ".*new messages.*"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ${SHOT}-jump-pill
+- tapOn: ".*new messages.*"
+- extendedWaitUntil:
+    notVisible: ".*new messages.*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${TEXT}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-at-newest

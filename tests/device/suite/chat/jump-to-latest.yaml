@@ -1,0 +1,39 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47c): scrolled a screenful down the Chats list, a control
+# appears that takes you back to the newest. It only exists once the list has
+# been scrolled past 240 points, so an account with a handful of chats never
+# sees it — that case is recorded as unreachable rather than forced.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "Search chats, people and messages"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- swipe:
+    start: "50%, 80%"
+    end: "50%, 20%"
+    duration: 400
+- swipe:
+    start: "50%, 80%"
+    end: "50%, 20%"
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-scrolled
+- extendedWaitUntil:
+    visible: "Back to the newest"
+    timeout: 10000
+- tapOn: "Back to the newest"
+- extendedWaitUntil:
+    notVisible: "Back to the newest"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-back-at-top

@@ -1,0 +1,65 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 30/38): Chats owns the search. Type a name, tap the person
+# underneath, and the name becomes a chip with the comma already written; a
+# second chip means "the conversations holding both", which is how a group is
+# found without its name; one tap clears a chip.
+#
+# PERSON1 / PERSON2 are display names, BOTH is the conversation that holds both
+# of them, ONLY1 a conversation that holds PERSON1 but not PERSON2 and must
+# therefore disappear once the second chip is added.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "Search chats, people and messages"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- tapOn:
+    id: "chat-search-field"
+- inputText: ${PERSON1}
+# People come first under the field; the row reads "<name> · @<handle>".
+- extendedWaitUntil:
+    visible: ".*${PERSON1}.* · @.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-suggestions
+- tapOn: ".*${PERSON1}.* · @.*"
+# The chip is the proof the comma was written: parseSearch only makes a chip
+# out of a comma-terminated part, so a chip cannot exist without it.
+- extendedWaitUntil:
+    visible: "Remove ${PERSON1}"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-one-chip
+- tapOn:
+    id: "chat-search-field"
+- inputText: ${PERSON2}
+- extendedWaitUntil:
+    visible: ".*${PERSON2}.* · @.*"
+    timeout: 20000
+- tapOn: ".*${PERSON2}.* · @.*"
+- extendedWaitUntil:
+    visible: "Remove ${PERSON2}"
+    timeout: 15000
+- assertVisible: "Remove ${PERSON1}"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-two-chips
+# Two people chipped: only what holds both survives.
+- assertVisible: ".*${BOTH}.*"
+- assertNotVisible: ".*${ONLY1}.*"
+- tapOn: "Remove ${PERSON1}"
+- extendedWaitUntil:
+    notVisible: "Remove ${PERSON1}"
+    timeout: 15000
+- assertVisible: "Remove ${PERSON2}"
+- takeScreenshot: ${SHOT}-chip-cleared
+- tapOn: "Clear search"
+- extendedWaitUntil:
+    notVisible: "Remove ${PERSON2}"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-cleared

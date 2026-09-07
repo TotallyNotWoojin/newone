@@ -1,13 +1,18 @@
 appId: com.totallynotwoojin.newone
 ---
-# From a People search result (people/search-user.yaml left the row on
-# screen): tap Message → the direct conversation opens at once (no message
-# request, no approval; consumers can message anyone) → type TEXT → send.
-# The recipient simply sees the message in Chats.
+# From an "Add a friend" search result (people/search-user.yaml left the row on
+# screen): tap that row's Message → the direct conversation opens at once (no
+# message request, no approval; consumers can message anyone) → type TEXT →
+# send. The recipient simply sees the message in Chats.
+#
+# v3.3: the search lives in a sheet over the Contacts list, and the contacts
+# behind it have Message buttons of their own — so the button is taken from
+# NAME's own row rather than by position.
 - assertVisible: "Message"
 - tapOn:
     text: "Message"
-    index: 0
+    rightOf:
+      text: ".*${NAME}.*"
 - extendedWaitUntil:
     visible:
       id: "composer-input"
