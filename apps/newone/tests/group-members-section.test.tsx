@@ -28,6 +28,9 @@ function person(overrides: Record<string, unknown>) {
 
 function workspaceWith(overrides: Record<string, unknown> = {}) {
   return {
+    // The section is a consumer feature: the workplace realm keeps its own
+    // member controls, so the component renders only in the personal realm.
+    organizationId: '11111111-1111-4111-8111-111111111111',
     currentUser: self,
     people: [
       self,

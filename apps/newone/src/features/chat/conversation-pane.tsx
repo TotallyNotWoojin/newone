@@ -67,7 +67,9 @@ import { translationPreferenceCopy } from '@/features/chat/translation-preferenc
 import {
   conversationDepartureCopy,
   conversationDepartureRestrictionCopy,
+  conversationDepartureSectionVisible,
 } from '@/features/chat/conversation-departure-copy';
+import { GroupMembersSection } from '@/features/chat/group-members-section';
 import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
@@ -2840,7 +2842,8 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-      {!conversation.managementOnly && conversation.departure ? (
+      <GroupMembersSection conversation={conversation} />
+      {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{departureCopy.title}</Text>
           <Text style={styles.modalNote}>
