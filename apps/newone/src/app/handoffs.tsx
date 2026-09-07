@@ -14,6 +14,7 @@ import {
   DesktopPageHeader,
   MobileBrandHeader,
 } from '@/components/navigation/app-scaffold';
+import { WorkplaceOnlyRoute } from '@/components/navigation/workplace-only-route';
 import { IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import {
@@ -28,7 +29,7 @@ import { colors, radii, shadow, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
-export default function HandoffsScreen() {
+function HandoffsWorkplaceScreen() {
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
@@ -932,3 +933,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
 });
+
+/** Workplace-only: a personal-realm account is sent back to Chats instead of
+ *  being shown this screen. See components/navigation/workplace-only-route. */
+export default function HandoffsScreen() {
+  return <WorkplaceOnlyRoute screen={<HandoffsWorkplaceScreen />} />;
+}
