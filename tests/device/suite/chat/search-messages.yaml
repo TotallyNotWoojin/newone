@@ -24,8 +24,10 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
     timeout: 30000
-# The Search tab and its route no longer exist.
-- assertNotVisible: "Search chats, people and messages"
+# The Search tab is gone: searching happens in the field on Chats itself.
+- assertNotVisible: "Search"
+- assertVisible:
+    id: "chat-search-field"
 - tapOn:
     id: "chat-search-field"
 - inputText: ${QUERY}
