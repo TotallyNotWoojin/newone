@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
@@ -80,6 +80,30 @@ export default function PeopleScreen() {
   const peopleSequenceRef = useRef(0);
   const searchUsers = workspace.searchUsers;
   const searching = peopleQuery.trim().length >= 2;
+  // Contacts searches the people already known; finding a stranger is a
+  // deliberate, separate act that lives in its own sheet.
+  const [contactQuery, setContactQuery] = useState('');
+  const [addFriendOpen, setAddFriendOpen] = useState(false);
+  const [requestedIds, setRequestedIds] = useState<string[]>([]);
+  const addParam = useLocalSearchParams<{ add?: string }>().add;
+  const [seenAddParam, setSeenAddParam] = useState<string | undefined>(undefined);
+  // The "+" menu on Chats routes here with ?add=1, so one control on one
+  // screen is the only way in. The parameter is read as it arrives rather than
+  // in an effect, which would render the screen twice on the way in.
+  if (addParam !== seenAddParam) {
+    setSeenAddParam(addParam);
+    if (addParam === '1') setAddFriendOpen(true);
+  }
+
+  const openAddFriend = () => {
+    setPeopleQuery('');
+    setPeopleResults([]);
+    setPeopleSearched(false);
+    peopleSequenceRef.current += 1;
+    setRequestedIds([]);
+    setAddFriendOpen(true);
+  };
+
 
   const handlePeopleQueryChange = (value: string) => {
     // Search matches names as well as handles and the service is
@@ -96,7 +120,7 @@ export default function PeopleScreen() {
 
   useEffect(() => {
     const normalized = peopleQuery.trim();
-    if (!personalRealm || normalized.length < 2) return;
+    if (!personalRealm || !addFriendOpen || normalized.length < 2) return;
     const sequence = ++peopleSequenceRef.current;
     const timer = setTimeout(() => {
       void searchUsers(normalized).then((results) => {
@@ -106,7 +130,7 @@ export default function PeopleScreen() {
       });
     }, PEOPLE_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [personalRealm, searchUsers, peopleQuery]);
+  }, [addFriendOpen, personalRealm, searchUsers, peopleQuery]);
 
   const safetyCopy = moderationCopy(locale);
   const reportCategoryLabels = {
@@ -138,11 +162,20 @@ export default function PeopleScreen() {
     });
   }, [currentSite, filter, search, workspace.people]);
   // Consumer accounts list everyone they have chatted with or connected to;
-  // anyone else is one search away.
+  // anyone else is one "Add a friend" away.
   const consumerPeople = useMemo(
     () => workspace.people.filter((person) => person.connectionState !== 'self'),
     [workspace.people],
   );
+  const contactMatches = useMemo(() => {
+    const query = contactQuery.trim().toLocaleLowerCase();
+    if (!query) return consumerPeople;
+    return consumerPeople.filter((person) => (
+      person.displayName.toLocaleLowerCase().includes(query)
+      || (person.username ?? '').toLocaleLowerCase().includes(query)
+      || (person.contactAlias ?? '').toLocaleLowerCase().includes(query)
+    ));
+  }, [consumerPeople, contactQuery]);
 
   const openConversation = (conversationId: string) => {
     if (desktop) {
@@ -216,7 +249,7 @@ export default function PeopleScreen() {
       mobileHeader={
         <MobileBrandHeader
           subtitle={t(personalRealm ? 'people.subtitleConsumer' : 'people.subtitle')}
-          title={t('people.title')}
+          title={t(personalRealm ? 'people.contactsTitle' : 'people.title')}
         />
       }>
       <WorkspaceStatusBanner />
@@ -243,53 +276,45 @@ export default function PeopleScreen() {
         <View style={[styles.content, desktop && styles.contentDesktop]}>
           {personalRealm ? (
             <View style={styles.consumerSections}>
-              <SearchField
-                onChangeText={handlePeopleQueryChange}
-                placeholder={t('people.usernameSearch')}
-                testID="people-search"
-                value={peopleQuery}
-              />
-              {searching ? (
-                peopleResults.length ? (
-                  <View style={styles.rows}>
-                    {peopleResults.map((result) => {
-                      const known = workspace.people.find((person) => person.id === result.userId);
-                      return (
-                        <PersonRow
-                          key={result.userId}
-                          onManage={known ? () => openManage(known) : undefined}
-                          onMessage={() => void openSearchResult(result)}
-                          person={searchResultPerson(result)}
-                        />
-                      );
-                    })}
-                  </View>
-                ) : peopleSearched ? (
-                  <Text style={styles.rowsEmpty}>{t('people.usernameNoResults')}</Text>
-                ) : null
-              ) : (
-                <View style={styles.consumerSection}>
-                  <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
-                  {consumerPeople.length ? (
-                    <View style={styles.rows}>
-                      {consumerPeople.map((person) => (
-                        <PersonRow
-                          key={person.id}
-                          onManage={() => openManage(person)}
-                          onMessage={() => void openMessage(person)}
-                          person={person}
-                        />
-                      ))}
-                    </View>
-                  ) : (
-                    <EmptyState
-                      body={t('people.emptyConsumerBody')}
-                      icon="people-outline"
-                      title={t('people.emptyConsumer')}
-                    />
-                  )}
+              <View style={styles.contactTools}>
+                <View style={styles.contactSearch}>
+                  <SearchField
+                    onChangeText={setContactQuery}
+                    placeholder={t('people.searchContacts')}
+                    testID="people-search"
+                    value={contactQuery}
+                  />
                 </View>
-              )}
+                <IconButton
+                  label={t('people.addFriendOpen')}
+                  name="person-add-outline"
+                  onPress={openAddFriend}
+                  tone="accent"
+                />
+              </View>
+              <View style={styles.consumerSection}>
+                <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
+                {contactMatches.length ? (
+                  <View style={styles.rows}>
+                    {contactMatches.map((person) => (
+                      <PersonRow
+                        key={person.id}
+                        onManage={() => openManage(person)}
+                        onMessage={() => void openMessage(person)}
+                        person={person}
+                      />
+                    ))}
+                  </View>
+                ) : contactQuery.trim() ? (
+                  <Text style={styles.rowsEmpty}>{t('people.noContactMatch')}</Text>
+                ) : (
+                  <EmptyState
+                    body={t('people.emptyConsumerBody')}
+                    icon="people-outline"
+                    title={t('people.emptyConsumer')}
+                  />
+                )}
+              </View>
             </View>
           ) : (
             <>
@@ -348,6 +373,50 @@ export default function PeopleScreen() {
       </ScrollView>
       </KeyboardAvoidingScreen>
       )}
+      <ActionModal
+        description={t('people.addFriendBody')}
+        onClose={() => setAddFriendOpen(false)}
+        title={t('people.addFriendTitle')}
+        visible={addFriendOpen}>
+        <SearchField
+          onChangeText={handlePeopleQueryChange}
+          placeholder={t('people.usernameSearch')}
+          testID="add-friend-search"
+          value={peopleQuery}
+        />
+        {searching ? (
+          peopleResults.length ? (
+            <View style={styles.rows}>
+              {peopleResults.map((result) => {
+                const known = workspace.people.find((person) => person.id === result.userId);
+                const alreadyAsked = result.connectionState !== 'none'
+                  || requestedIds.includes(result.userId)
+                  || known?.connectionState === 'connected'
+                  || known?.connectionState === 'pending';
+                return (
+                  <PersonRow
+                    key={result.userId}
+                    onAdd={alreadyAsked ? undefined : async () => {
+                      if (await workspace.updateConnection(result.userId)) {
+                        setRequestedIds((current) => [...current, result.userId]);
+                      }
+                    }}
+                    onManage={known ? () => openManage(known) : undefined}
+                    onMessage={() => {
+                      setAddFriendOpen(false);
+                      void openSearchResult(result);
+                    }}
+                    person={searchResultPerson(result)}
+                    requested={alreadyAsked}
+                  />
+                );
+              })}
+            </View>
+          ) : peopleSearched ? (
+            <Text style={styles.rowsEmpty}>{t('people.usernameNoResults')}</Text>
+          ) : null
+        ) : null}
+      </ActionModal>
       <ActionModal
         description={decliningPerson ? t('people.declineConfirmBody').replace('{name}', decliningPerson.displayName) : undefined}
         onClose={() => setDecliningPersonId('')}
@@ -504,10 +573,15 @@ function PersonRow({
   person,
   onMessage,
   onManage,
+  onAdd,
+  requested = false,
 }: {
   person: Person;
   onMessage: () => void;
   onManage?: () => void;
+  /** Only the add-a-friend sheet offers this; Contacts never does. */
+  onAdd?: () => void;
+  requested?: boolean;
 }) {
   const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
@@ -528,7 +602,14 @@ function PersonRow({
       {person.blockedByMe ? (
         <StatusBadge icon="ban-outline" label={t('people.blocked')} tone="danger" />
       ) : (
-        <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+        <>
+          {onAdd ? (
+            <PrimaryButton icon="person-add-outline" label={t('people.addFriendAction')} onPress={onAdd} tone="dark" />
+          ) : requested ? (
+            <StatusBadge icon="checkmark" label={t('people.addFriendSent')} tone="success" />
+          ) : null}
+          <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+        </>
       )}
       {onManage ? (
         <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
@@ -660,6 +741,15 @@ const styles = StyleSheet.create({
   },
   consumerSections: {
     gap: spacing.md,
+  },
+  contactTools: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  contactSearch: {
+    flex: 1,
+    minWidth: 0,
   },
   consumerSection: {
     gap: spacing.xs,

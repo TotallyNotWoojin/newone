@@ -1,15 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo } from 'react';
+import type { ComponentProps } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import type { Conversation, DiscoverableConversation, InboxFilter } from '@/domain/types';
-import { Avatar, Chip, IconButton, SearchField, StatusBadge } from '@/components/ui/primitives';
+import type { MessageKey } from '@/i18n/catalog';
+import { Avatar, Chip, IconButton, StatusBadge } from '@/components/ui/primitives';
+import { ChatSearchField } from '@/features/search/chat-search-field';
+import {
+  addPersonToSearch,
+  conversationMatchesSearch,
+  parseSearch,
+  removeChipFromSearch,
+  type SearchPersonRef,
+  type SearchSuggestion,
+} from '@/features/search/chat-search';
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
@@ -17,20 +30,78 @@ import { useWorkspace } from '@/state/workspace';
 
 const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements'];
 
-function filterConversations(
+/** A row is dragged this far before its actions stay open. */
+const REVEAL_DISTANCE = 56;
+
+export type ConversationRowActionKey =
+  | 'markUnread'
+  | 'markRead'
+  | 'mute'
+  | 'unmute'
+  | 'archive'
+  | 'delete'
+  | 'leave';
+
+export interface ConversationRowAction {
+  key: ConversationRowActionKey;
+  labelKey: MessageKey;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  destructive: boolean;
+}
+
+/**
+ * What a chat row offers, whether it is swiped on a phone, hovered with a
+ * mouse or right-clicked. Leaving a group is the same gesture as deleting a
+ * one-to-one chat, because that is what it means to be done with it — but it
+ * is named for what it does, never "delete".
+ */
+export function conversationRowActions(conversation: {
+  kind?: string;
+  unreadCount?: number;
+  muted?: boolean;
+}): ConversationRowAction[] {
+  const group = conversation.kind !== 'direct';
+  return [
+    conversation.unreadCount
+      ? { key: 'markRead', labelKey: 'chat.markRead', icon: 'mail-open-outline', destructive: false }
+      : { key: 'markUnread', labelKey: 'chat.markUnread', icon: 'mail-unread-outline', destructive: false },
+    conversation.muted
+      ? { key: 'unmute', labelKey: 'chat.unmute', icon: 'notifications-outline', destructive: false }
+      : { key: 'mute', labelKey: 'chat.mute', icon: 'notifications-off-outline', destructive: false },
+    { key: 'archive', labelKey: 'chat.archive', icon: 'archive-outline', destructive: false },
+    group
+      ? { key: 'leave', labelKey: 'chat.leaveGroup', icon: 'exit-outline', destructive: true }
+      : { key: 'delete', labelKey: 'chat.deleteChat', icon: 'trash-outline', destructive: true },
+  ];
+}
+
+/**
+ * A mouse has no swipe. On web the same actions open with a right-click; the
+ * listener is attached to the row's own DOM node, and on a phone the ref is
+ * not a DOM node at all, so this quietly does nothing.
+ */
+export function attachContextMenu(node: unknown, open: () => void) {
+  const target = node as { addEventListener?: Function; removeEventListener?: Function } | null;
+  if (!target || typeof target.addEventListener !== 'function') return undefined;
+  const handler = (event: { preventDefault?: () => void }) => {
+    event.preventDefault?.();
+    open();
+  };
+  target.addEventListener('contextmenu', handler);
+  return () => target.removeEventListener?.('contextmenu', handler);
+}
+
+export function filterConversations(
   conversations: Conversation[],
   filter: InboxFilter,
   search: string,
+  people: readonly SearchPersonRef[] = [],
+  messageConversationIds?: ReadonlySet<string>,
 ) {
-  const query = search.trim().toLocaleLowerCase();
+  const parsed = parseSearch(search, people);
   return conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
-    const matchesQuery =
-      !query ||
-      conversation.title.toLocaleLowerCase().includes(query) ||
-      conversation.lastMessage.toLocaleLowerCase().includes(query) ||
-      conversation.subtitle.toLocaleLowerCase().includes(query);
-    if (!matchesQuery) return false;
+    if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) return false;
     if (filter === 'unread') return conversation.unreadCount > 0;
     if (filter === 'direct') return conversation.kind === 'direct';
     if (filter === 'groups') {
@@ -55,6 +126,13 @@ export function ConversationList({
   discoverableConversations = [],
   onRequestJoin,
   onCancelJoin,
+  people = [],
+  suggestions = [],
+  searchLoading = false,
+  onOpenSuggestion,
+  onOpenAdvancedSearch,
+  onRowAction,
+  markedUnreadIds = [],
 }: {
   conversations: Conversation[];
   selectedId?: string;
@@ -69,10 +147,29 @@ export function ConversationList({
   discoverableConversations?: DiscoverableConversation[];
   onRequestJoin?: (conversationId: string) => Promise<boolean>;
   onCancelJoin?: (request: NonNullable<DiscoverableConversation['myJoinRequest']>) => Promise<boolean>;
+  /** Everybody a typed or tapped name can resolve to. */
+  people?: readonly SearchPersonRef[];
+  suggestions?: readonly SearchSuggestion[];
+  searchLoading?: boolean;
+  onOpenSuggestion?: (suggestion: SearchSuggestion) => void;
+  onOpenAdvancedSearch?: () => void;
+  onRowAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
+  /** Chats the reader put back to unread by hand. */
+  markedUnreadIds?: readonly string[];
 }) {
+  const listRef = useRef<ScrollView>(null);
+  const [scrolledAway, setScrolledAway] = useState(false);
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const parsedSearch = useMemo(() => parseSearch(search, people), [people, search]);
+  const messageConversationIds = useMemo(
+    () => new Set(suggestions
+      .filter((item) => item.kind === 'message')
+      .map((item) => item.conversationId)),
+    [suggestions],
+  );
   const visible = useMemo(
-    () => filterConversations(conversations, filter, search),
-    [conversations, filter, search],
+    () => filterConversations(conversations, filter, search, people, messageConversationIds),
+    [conversations, filter, messageConversationIds, people, search],
   );
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
@@ -111,15 +208,37 @@ export function ConversationList({
               {unread ? <StatusBadge label={`${unread} ${t('chat.unreadCount')}`} tone="success" /> : null}
             </View>
           </View>
-          <IconButton name="create-outline" label={t('chat.compose')} onPress={onCompose} />
+          <IconButton name="add" label={t('chat.newMenu')} onPress={onCompose} />
         </View>
       ) : null}
 
       <View style={[styles.searchWrap, !desktop && styles.searchWrapMobile]}>
-        <SearchField
-          value={search}
+        <ChatSearchField
+          chips={parsedSearch.chips}
+          loading={searchLoading}
           onChangeText={onSearchChange}
-          placeholder={t('chat.search')}
+          onRemoveChip={(index) => onSearchChange(removeChipFromSearch(search, index))}
+          onSelectSuggestion={(suggestion) => {
+            // A person becomes a chip so the next name can follow; a chat or a
+            // message is somewhere to go.
+            if (suggestion.kind === 'person') {
+              onSearchChange(addPersonToSearch(search, suggestion.title));
+              return;
+            }
+            onOpenSuggestion?.(suggestion);
+          }}
+          suggestions={[...suggestions]}
+          trailing={onOpenAdvancedSearch ? (
+            <Pressable
+              accessibilityLabel={t('search.moreFilters')}
+              accessibilityRole="button"
+              hitSlop={6}
+              onPress={onOpenAdvancedSearch}
+              style={({ pressed }) => [styles.moreFilters, pressed && styles.rowPressed]}>
+              <Ionicons color={colors.mintDark} name="options-outline" size={17} />
+            </Pressable>
+          ) : null}
+          value={search}
         />
       </View>
 
@@ -148,7 +267,11 @@ export function ConversationList({
       <ScrollView
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        onScroll={(event) => setScrolledAway(event.nativeEvent.contentOffset.y > 240)}
+        ref={listRef}
+        scrollEventThrottle={64}
+        showsVerticalScrollIndicator={false}
+        testID="conversation-list">
         {visibleDiscoverableConversations.length ? (
           <View style={styles.discoverySection}>
             <View style={styles.sectionDivider}>
@@ -185,9 +308,13 @@ export function ConversationList({
         {visible.length ? (
           visible.map((conversation, index) => (
             <ConversationRow
+              actionsOpen={openRowId === conversation.id}
               conversation={conversation}
               key={conversation.id}
+              markedUnread={markedUnreadIds.includes(conversation.id)}
+              onAction={onRowAction}
               onPress={() => onSelect(conversation.id)}
+              onToggleActions={(open) => setOpenRowId(open ? conversation.id : null)}
               selected={desktop && selectedId === conversation.id}
               showPinnedDivider={
                 index > 0 && !conversation.pinned && visible[index - 1]?.pinned === true
@@ -204,6 +331,18 @@ export function ConversationList({
           </View>
         )}
       </ScrollView>
+      {scrolledAway ? (
+        <Pressable
+          accessibilityLabel={t('chat.jumpToLatest')}
+          accessibilityRole="button"
+          onPress={() => {
+            listRef.current?.scrollTo({ y: 0, animated: true });
+            setScrolledAway(false);
+          }}
+          style={({ pressed }) => [styles.jumpToLatest, pressed && styles.rowPressed]}>
+          <Ionicons color={colors.white} name="arrow-up" size={17} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -213,28 +352,63 @@ function ConversationRow({
   selected,
   onPress,
   showPinnedDivider,
+  actionsOpen = false,
+  markedUnread = false,
+  onAction,
+  onToggleActions,
 }: {
   conversation: Conversation;
   selected: boolean;
   onPress: () => void;
   showPinnedDivider: boolean;
+  actionsOpen?: boolean;
+  markedUnread?: boolean;
+  onAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
+  onToggleActions?: (open: boolean) => void;
 }) {
   const directAvatarUrl = useProfileAvatar(conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null);
   const { t } = useI18n();
   const workspace = useWorkspace();
   const official = conversation.kind === 'announcement';
-  return (
-    <>
-      {showPinnedDivider ? (
-        <View style={styles.sectionDivider}>
-          <Text style={styles.sectionDividerText}>{t('chat.recent')}</Text>
-          <View style={styles.sectionDividerLine} />
-        </View>
-      ) : null}
+  const [hovered, setHovered] = useState(false);
+  const rowRef = useRef<View>(null);
+  const openActions = useCallback(() => onToggleActions?.(true), [onToggleActions]);
+  const actionable = Boolean(onAction);
+  const showActions = actionable && (actionsOpen || hovered);
+  const unreadCount = markedUnread && !conversation.unreadCount ? 1 : conversation.unreadCount;
+  const actions = useMemo(
+    () => conversationRowActions({ ...conversation, unreadCount }),
+    [conversation, unreadCount],
+  );
+
+  useEffect(() => {
+    if (!actionable || Platform.OS !== 'web') return undefined;
+    return attachContextMenu(rowRef.current, openActions);
+  }, [actionable, openActions]);
+
+  // A short drag opens the same actions; released early it simply snaps back.
+  const swipe = useMemo(
+    () => Gesture.Pan()
+      .activeOffsetX([-12, 12])
+      .failOffsetY([-8, 8])
+      .onEnd((event) => {
+        if (event.translationX <= -REVEAL_DISTANCE) onToggleActions?.(true);
+        else if (event.translationX >= REVEAL_DISTANCE) onToggleActions?.(false);
+      })
+      .runOnJS(true),
+    [onToggleActions],
+  );
+
+  const row = (
+    <View accessible={false} ref={rowRef} style={styles.rowShell}>
       <Pressable
+        accessibilityLabel={conversation.title}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        onPress={onPress}
+        onHoverIn={actionable ? () => setHovered(true) : undefined}
+        onHoverOut={actionable ? () => setHovered(false) : undefined}
+        onLongPress={actionable ? openActions : undefined}
+        onPress={() => (actionsOpen ? onToggleActions?.(false) : onPress())}
         style={({ pressed }) => [
           styles.row,
           selected && styles.rowSelected,
@@ -261,7 +435,7 @@ function ConversationRow({
             <Text
               style={[
                 styles.rowTime,
-                conversation.unreadCount > 0 && styles.rowTimeUnread,
+                unreadCount > 0 && styles.rowTimeUnread,
               ]}>
               {conversation.lastActivity}
             </Text>
@@ -277,28 +451,111 @@ function ConversationRow({
                 numberOfLines={1}
                 style={[
                   styles.rowPreview,
-                  conversation.unreadCount > 0 && styles.rowPreviewUnread,
+                  unreadCount > 0 && styles.rowPreviewUnread,
                 ]}>
                 {conversation.lastMessage || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet')}
               </Text>
             </View>
-            {conversation.unreadCount ? (
+            {unreadCount ? (
               <View
                 style={[
                   styles.unreadBadge,
                   conversation.priority === 'safety' && styles.unreadBadgeSafety,
                 ]}>
-                <Text style={styles.unreadBadgeText}>{conversation.unreadCount}</Text>
+                <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
               </View>
             ) : null}
           </View>
         </View>
       </Pressable>
+      {showActions ? (
+        <View
+          accessibilityLabel={t('chat.rowActions')}
+          accessible={false}
+          style={styles.rowActions}>
+          {actions.map((action) => (
+            <Pressable
+              accessibilityLabel={t(action.labelKey)}
+              accessibilityRole="button"
+              key={action.key}
+              onPress={() => {
+                onToggleActions?.(false);
+                onAction?.(action.key, conversation);
+              }}
+              style={({ pressed }) => [
+                styles.rowAction,
+                action.destructive && styles.rowActionDestructive,
+                pressed && styles.rowPressed,
+              ]}>
+              <Ionicons
+                color={action.destructive ? colors.red : colors.mintDark}
+                name={action.icon}
+                size={17}
+              />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <>
+      {showPinnedDivider ? (
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionDividerText}>{t('chat.recent')}</Text>
+          <View style={styles.sectionDividerLine} />
+        </View>
+      ) : null}
+      {actionable ? <GestureDetector gesture={swipe}>{row}</GestureDetector> : row}
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  rowShell: {
+    position: 'relative',
+  },
+  rowActions: {
+    position: 'absolute',
+    right: spacing.sm,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  rowAction: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  rowActionDestructive: {
+    borderColor: colors.red,
+  },
+  jumpToLatest: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.lg,
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: colors.forest,
+  },
+  moreFilters: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+  },
   discoverySection: {
     gap: spacing.xs,
     paddingBottom: spacing.md,

@@ -211,7 +211,6 @@ describe('root application boundary', () => {
       'index',
       'conversation/[id]',
       'updates',
-      'search',
       'handoffs',
       'people',
       'new-group',

@@ -112,7 +112,7 @@ describe('conversation list branch behavior', () => {
     expect(screen.getByText('chat.recent')).toBeTruthy();
     await fireEvent.press(screen.getByText('Safety Group'));
     expect(onSelect).toHaveBeenCalledWith('safety');
-    await fireEvent.press(screen.getByRole('button', { name: 'chat.compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newMenu' }));
   });
 
   test('shows only discoverable groups outside the management shell and handles join/cancel actions', async () => {

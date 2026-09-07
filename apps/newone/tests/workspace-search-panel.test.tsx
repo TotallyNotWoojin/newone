@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
-import SearchScreen from '@/app/search';
+import { WorkspaceSearchPanel } from '@/features/search/workspace-search-panel';
 import { PERSONAL_REALM_ORGANIZATION_ID } from '@/constants/personal-realm';
 import { RepositoryError } from '@/data/repositories/contracts';
 import { searchCopy } from '@/features/search/search-copy';
@@ -11,6 +11,7 @@ jest.setTimeout(20_000);
 
 const copy = searchCopy('en');
 const mockRouter = { push: jest.fn(), replace: jest.fn() };
+const mockClose = jest.fn();
 let mockWidth = 1280;
 let mockWorkspace: Record<string, any>;
 let mockSearch: jest.Mock<(..._args: unknown[]) => Promise<any>>;
@@ -127,7 +128,7 @@ beforeEach(() => {
 describe('authorized workspace search screen', () => {
   test('keeps the query field above the iOS keyboard on a 390-wide device', async () => {
     mockWidth = 390;
-    const view = await render(<SearchScreen />);
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     const surface = screen.getAllByTestId(/^controlled-keyboard-surface:/)
       .find((instance) => within(instance).queryByLabelText('search.placeholder'));
     expect(surface).toBeDefined();
@@ -140,7 +141,7 @@ describe('authorized workspace search screen', () => {
   });
 
   test('applies server filters, paginates without duplicates, suppresses management-only results, and routes every result type', async () => {
-    const view = await render(<SearchScreen />);
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     expect(screen.getByText('search.privateTitle')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Suspended User' })).toBeNull();
 
@@ -203,7 +204,7 @@ describe('authorized workspace search screen', () => {
   test('validates query and calendar ranges locally, then maps repository failures to localized stable copy', async () => {
     mockSearch = jest.fn<(..._args: unknown[]) => Promise<any>>()
       .mockRejectedValue(new RepositoryError('raw upstream detail', 'network_unavailable', true));
-    const view = await render(<SearchScreen />);
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     await fireEvent.changeText(screen.getByLabelText('search.placeholder'), 'x');
     await fireEvent.press(screen.getByRole('button', { name: 'search.submit' }));
     expect(screen.getByText('search.validation')).toBeTruthy();
@@ -235,7 +236,7 @@ describe('authorized workspace search screen', () => {
   test('invalidates in-flight results immediately when conversation authorization changes', async () => {
     let resolveSearch!: (value: unknown) => void;
     mockSearch = jest.fn(() => new Promise((resolve) => { resolveSearch = resolve; }));
-    const view = await render(<SearchScreen />);
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     await fireEvent.changeText(screen.getByLabelText('search.placeholder'), 'pump safety');
     await fireEvent.press(screen.getByRole('button', { name: 'search.submit' }));
     await waitFor(() => expect(mockSearch).toHaveBeenCalledTimes(1));
@@ -246,7 +247,7 @@ describe('authorized workspace search screen', () => {
         conversation.id === 'conversation-main' ? { ...conversation, managementOnly: true } : conversation
       )),
     };
-    await view.rerender(<SearchScreen />);
+    await view.rerender(<WorkspaceSearchPanel onClose={mockClose} />);
     resolveSearch({ ...firstPage, nextCursor: null, hasMore: false });
     await waitFor(() => expect(screen.getByText('search.privateTitle')).toBeTruthy());
     expect(screen.queryByText('Message result')).toBeNull();
@@ -264,7 +265,7 @@ describe('authorized workspace search screen', () => {
     mockSearch = jest.fn<(..._args: unknown[]) => Promise<any>>().mockResolvedValue({
       results: [], nextCursor: null, hasMore: false,
     });
-    const emptyView = await render(<SearchScreen />);
+    const emptyView = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     expect(screen.queryByText('search.heading')).toBeNull();
     await expect(mockSearchRepositoryContext.getSession()).resolves.toBeNull();
     const controlledSession = { access_token: 'controlled-access-token' };
@@ -279,7 +280,7 @@ describe('authorized workspace search screen', () => {
 
     mockSearch = jest.fn<(..._args: unknown[]) => Promise<any>>()
       .mockRejectedValue(new TypeError('controlled non-repository failure'));
-    const errorView = await render(<SearchScreen />);
+    const errorView = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     await fireEvent.changeText(screen.getByLabelText('search.placeholder'), 'generic failure');
     await fireEvent.press(screen.getByRole('button', { name: 'search.submit' }));
     await waitFor(() => expect(screen.getByText('search.error')).toBeTruthy());
@@ -312,7 +313,7 @@ describe('personal realm search', () => {
 
   test('searches people and messages as you type, lists people first, and opens a chat from a result on desktop', async () => {
     mockWorkspace = consumerWorkspace();
-    const view = await render(<SearchScreen />);
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
     // Compact consumer surface: no page header, no filter panel, no submit
     // button; one line says what to type.
     expect(screen.queryByText('search.heading')).toBeNull();
@@ -353,7 +354,9 @@ describe('personal realm search', () => {
     await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith(
       'user-sam', { displayName: 'Sam Stranger', username: 'sam_stranger' },
     ));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/');
+    await waitFor(() => expect(mockWorkspace.selectConversation)
+      .toHaveBeenCalledWith('conversation-direct'));
+    expect(mockClose).toHaveBeenCalled();
     await view.unmount();
   });
 
@@ -363,9 +366,8 @@ describe('personal realm search', () => {
     mockSearch = jest.fn<(..._args: unknown[]) => Promise<any>>().mockResolvedValue({
       results: [], nextCursor: null, hasMore: false,
     });
-    const view = await render(<SearchScreen />);
-    expect(screen.getByText('search.subtitleConsumer')).toBeTruthy();
-    expect(screen.queryByText('search.subtitle')).toBeNull();
+    const view = await render(<WorkspaceSearchPanel onClose={mockClose} />);
+    expect(screen.getByText('search.title')).toBeTruthy();
 
     const input = screen.getByLabelText('search.placeholderPeopleMessages');
     await fireEvent.changeText(input, 'nobody');
@@ -400,11 +402,14 @@ describe('personal realm search', () => {
   test('keeps workspace copy and the submit flow for organizations', async () => {
     mockWidth = 390;
     mockWorkspace = workspace();
-    await render(<SearchScreen />);
-    expect(screen.getByText('search.subtitle')).toBeTruthy();
+    await render(<WorkspaceSearchPanel onClose={mockClose} />);
+    expect(screen.getByText('search.title')).toBeTruthy();
     expect(screen.getByLabelText('search.placeholder')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'search.submit' })).toBeTruthy();
-    expect(screen.queryByText('search.subtitleConsumer')).toBeNull();
     expect(screen.queryByText('search.startHint')).toBeNull();
+
+    // The panel is opened from the Chats field, so it can be closed again.
+    await fireEvent.press(screen.getByRole('button', { name: 'search.closeFilters' }));
+    expect(mockClose).toHaveBeenCalled();
   });
 });

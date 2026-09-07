@@ -126,7 +126,6 @@ function ProtectedNavigator() {
       <Stack.Screen name="index" />
       <Stack.Screen name="conversation/[id]" options={motion.push} />
       <Stack.Screen name="updates" />
-      <Stack.Screen name="search" />
       <Stack.Screen name="handoffs" />
       <Stack.Screen name="people" />
       <Stack.Screen name="new-group" options={{ presentation: 'modal' }} />

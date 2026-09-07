@@ -12,11 +12,7 @@ import {
   View,
 } from 'react-native';
 
-import {
-  AppScaffold,
-  DesktopPageHeader,
-  MobileBrandHeader,
-} from '@/components/navigation/app-scaffold';
+import { DesktopPageHeader } from '@/components/navigation/app-scaffold';
 import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
 import { Avatar, Chip, EmptyState, PrimaryButton, SearchField } from '@/components/ui/primitives';
 import { BffSearchRepository } from '@/data/repositories/bff-search-repository';
@@ -57,14 +53,25 @@ function displayInitials(displayName: string) {
   return displayName.trim().split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toLocaleUpperCase() || 'N';
 }
 
-export default function SearchScreen() {
+/**
+ * The full search with its filters — sender, language, calendar, which field
+ * matched — kept for workspace organizations, now opened from the Chats field
+ * instead of a tab of its own.
+ */
+export function WorkspaceSearchPanel({
+  initialQuery = '',
+  onClose,
+}: {
+  initialQuery?: string;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const { width } = useHydrationSafeWindowDimensions();
   const desktop = width >= 920;
   const workspace = useWorkspace();
   const { locale, t } = useI18n();
   const copy = searchCopy(locale);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [selectedType, setSelectedType] = useState<SearchResultType | 'all'>('all');
   const [selectedSource, setSelectedSource] = useState<SearchMessageMatchSource | 'all'>('all');
   const [selectedSenderId, setSelectedSenderId] = useState<string | null>(null);
@@ -283,7 +290,8 @@ export default function SearchScreen() {
       username: result.username,
     });
     if (!conversationId) return;
-    if (desktop) router.replace('/');
+    onClose();
+    if (desktop) workspace.selectConversation(conversationId);
     else router.push({ pathname: '/conversation/[id]', params: { id: conversationId } });
   };
 
@@ -297,6 +305,7 @@ export default function SearchScreen() {
     }
     if (result.type === 'messages' && result.conversationId) {
       workspace.selectConversation(result.conversationId);
+      onClose();
       router.push({
         pathname: '/conversation/[id]',
         params: { id: result.conversationId, messageId: result.id },
@@ -305,9 +314,11 @@ export default function SearchScreen() {
     }
     if (result.type === 'conversations' && result.conversationId) {
       workspace.selectConversation(result.conversationId);
+      onClose();
       router.push({ pathname: '/conversation/[id]', params: { id: result.conversationId } });
       return;
     }
+    onClose();
     if (result.type === 'people') router.replace('/people');
     if (result.type === 'announcements') router.replace('/updates');
     if (result.type === 'handoffs') router.replace('/handoffs');
@@ -367,14 +378,18 @@ export default function SearchScreen() {
   );
 
   return (
-    <AppScaffold
-      current="search"
-      mobileHeader={(
-        <MobileBrandHeader
-          subtitle={t(personalRealm ? 'search.subtitleConsumer' : 'search.subtitle')}
-          title={t('search.title')}
-        />
-      )}>
+    <View style={styles.panel}>
+      <View style={styles.panelHeader}>
+        <Text style={styles.panelTitle}>{t('search.title')}</Text>
+        <Pressable
+          accessibilityLabel={t('search.closeFilters')}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={onClose}
+          style={({ pressed }) => [styles.panelClose, pressed && styles.pressed]}>
+          <Ionicons color={colors.ink} name="close" size={20} />
+        </Pressable>
+      </View>
       {/* Keeps the query field and the first results above the iOS keyboard;
           result taps must not be swallowed by keyboard dismissal. */}
       <KeyboardAvoidingScreen style={styles.keyboard}>
@@ -647,7 +662,7 @@ export default function SearchScreen() {
         </View>
       </ScrollView>
       </KeyboardAvoidingScreen>
-    </AppScaffold>
+    </View>
   );
 }
 
@@ -679,6 +694,15 @@ function PersonResultRow({
 
 const styles = StyleSheet.create({
   keyboard: { flex: 1 },
+  panel: { flex: 1, backgroundColor: colors.canvas },
+  panelHeader: {
+    minHeight: 48, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
+    backgroundColor: colors.paper,
+  },
+  panelTitle: { color: colors.ink, fontFamily: type.display, fontSize: 17, fontWeight: '800' },
+  panelClose: { padding: spacing.xs },
   section: { gap: spacing.xs },
   sectionLabel: { color: colors.mintDark, fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
   sectionEmpty: { color: colors.inkMuted, fontSize: 12, paddingVertical: spacing.xs },

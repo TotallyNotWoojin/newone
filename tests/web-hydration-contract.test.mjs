@@ -10,7 +10,7 @@ const responsiveSurfaces = [
   '../apps/newone/src/app/people.tsx',
   '../apps/newone/src/app/updates.tsx',
   '../apps/newone/src/app/handoffs.tsx',
-  '../apps/newone/src/app/search.tsx',
+  '../apps/newone/src/features/search/workspace-search-panel.tsx',
   '../apps/newone/src/app/admin.tsx',
   '../apps/newone/src/app/settings.tsx',
   '../apps/newone/src/app/new-group.tsx',

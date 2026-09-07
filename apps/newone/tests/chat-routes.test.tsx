@@ -84,6 +84,44 @@ jest.mock('@/features/chat/conversation-list', () => {
             accessibilityRole="button"
             onPress={props.onCompose}
           />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open message hit"
+            accessibilityRole="button"
+            onPress={() => props.onOpenSuggestion({
+              kind: 'message',
+              key: 'message:message-secondary',
+              conversationId: 'conversation-secondary',
+              messageId: 'message-secondary',
+              title: 'Secondary operations',
+              subtitle: 'hit',
+            })}
+          />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open chat hit"
+            accessibilityRole="button"
+            onPress={() => props.onOpenSuggestion({
+              kind: 'conversation',
+              key: 'conversation:conversation-secondary',
+              conversationId: 'conversation-secondary',
+              title: 'Secondary operations',
+              subtitle: '',
+              group: true,
+            })}
+          />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open filters"
+            accessibilityRole="button"
+            onPress={props.onOpenAdvancedSearch}
+          />
+          <ReactNative.Text>{`controlled-unread:${(props.markedUnreadIds ?? []).join('|')}`}</ReactNative.Text>
+          {['markUnread', 'markRead', 'mute', 'unmute', 'archive', 'delete', 'leave'].map((action) => (
+            <ReactNative.Pressable
+              accessibilityLabel={`controlled row ${action}`}
+              accessibilityRole="button"
+              key={action}
+              onPress={() => props.onRowAction(action, props.conversations[0])}
+            />
+          ))}
         </ReactNative.View>
       );
     },
@@ -114,6 +152,22 @@ jest.mock('@/features/chat/conversation-pane', () => {
         </ReactNative.View>
       );
     },
+  };
+});
+
+jest.mock('@/features/search/workspace-search-panel', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    WorkspaceSearchPanel: (props: Record<string, any>) => (
+      <ReactNative.View testID="controlled-search-panel">
+        <ReactNative.Text>{`controlled-filters:${props.initialQuery}`}</ReactNative.Text>
+        <ReactNative.Pressable
+          accessibilityLabel="controlled close filters"
+          accessibilityRole="button"
+          onPress={props.onClose}
+        />
+      </ReactNative.View>
+    ),
   };
 });
 
@@ -154,6 +208,11 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     },
     inboxFilter: 'all',
     inboxSearch: '',
+    markConversationRead: jest.fn(async () => undefined),
+    updateConversationPreferences: jest.fn(async (..._mockArgs: unknown[]) => true),
+    leaveConversation: jest.fn(async (..._mockArgs: unknown[]) => true),
+    people: [],
+    searchUsers: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
     discoverableConversations: [{ id: 'conversation-discoverable' }],
     selectConversation: jest.fn(),
     setInboxFilter: jest.fn(),
@@ -205,6 +264,7 @@ describe('chats index route', () => {
     }));
 
     await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newGroup' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
 
     await act(async () => {
@@ -257,9 +317,128 @@ describe('chats index route', () => {
       params: { id: 'conversation-secondary' },
     });
 
+    await view.unmount();
+  });
+
+  test('the "+" on the header is two rows: add a friend, or make a group', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+    expect(screen.queryByRole('button', { name: 'chat.newGroup' })).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newMenu' }));
+    expect(screen.getByRole('button', { name: 'people.addFriendTitle' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'chat.newGroup' })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'people.addFriendTitle' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/people', params: { add: '1' } });
+    expect(screen.queryByRole('button', { name: 'chat.newGroup' })).toBeNull();
+
+    // The list's own compose control opens the same two rows.
     await fireEvent.press(screen.getByRole('button', { name: 'controlled compose' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'chat.compose' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.newGroup' }));
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
+
+    await view.unmount();
+  });
+
+  test('opens a chat and an exact message from the one search field on Chats', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open chat hit' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary' },
+    });
+
+    mockRouter.push.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open message hit' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary', messageId: 'message-secondary' },
+    });
+
+    await view.unmount();
+  });
+
+  test('keeps a chat selected in place when a desktop search hit is a whole conversation', async () => {
+    mockWidth = 1500;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open chat hit' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).not.toHaveBeenCalled();
+
+    await view.unmount();
+  });
+
+  test('the workplace filter panel opens from the field and closes again; consumers never get it', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeInstanceOf(Function);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open filters' }));
+    expect(screen.getByText('controlled-filters:')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled close filters' }));
+    expect(screen.queryByTestId('controlled-search-panel')).toBeNull();
+    await view.unmount();
+
+    mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
+    const consumerView = await render(<ChatsScreen />);
+    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeUndefined();
+    await consumerView.unmount();
+  });
+
+  test('row actions reach the preferences the server already has, and unread is remembered here', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markUnread' }));
+    expect(screen.getByText('controlled-unread:conversation-primary')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markRead' }));
+    expect(screen.getByText('controlled-unread:')).toBeTruthy();
+    expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-primary');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row mute' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { notificationLevel: 'none' },
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row unmute' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { notificationLevel: 'all', mutedUntil: null },
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row archive' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { isArchived: true },
+    );
+
+    await view.unmount();
+  });
+
+  test('leaving a group says leaving, deleting a chat says deleting, and both can be kept', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row leave' }));
+    expect(screen.getByText('chat.leaveGroupTitle')).toBeTruthy();
+    expect(screen.getByText('chat.leaveGroupBody')).toBeTruthy();
+    expect(screen.queryByText('chat.deleteChatBody')).toBeNull();
+    // Keeping it does nothing at all.
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.keepChat' }));
+    expect(mockWorkspace.leaveConversation).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row leave' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.leaveGroup' }));
+    expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith('conversation-primary');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row delete' }));
+    expect(screen.getByText('chat.deleteChatTitle')).toBeTruthy();
+    expect(screen.getByText('chat.deleteChatBody')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'chat.deleteChat' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { isArchived: true },
+    );
 
     await view.unmount();
   });
