@@ -1,0 +1,928 @@
+{
+  "_note": "Which suite actions stand behind which inventory control. tests/device/lib/summary.mjs reads this when it builds the App surface inventory table: a control listed here takes the status of the actions named (FAIL wins, then PASS, then UNREACHABLE); a control with a `status` and no matching action keeps that status with its note; anything not listed is reported UNTESTED. This file has never been complete — it covers what the v3.3 pass added and the long-standing chat, groups and settings paths around it, and the rest of the 392 controls still report UNTESTED.",
+  "controls": {
+    "app-shell.tab-chats": {
+      "actions": [
+        "chat-21a-a-back",
+        "chat-31a-a-back"
+      ]
+    },
+    "app-shell.tab-people": {
+      "actions": [
+        "people-05e-contacts-search",
+        "people-10-a-sees-friend"
+      ]
+    },
+    "app-shell.tab-settings": {
+      "actions": [
+        "v3-10-appearance",
+        "v3-04a-enter-sends-off"
+      ]
+    },
+    "conversation-list.filter-unread": {
+      "actions": [
+        "chat-21-unread-badge",
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "conversation-list.jump-to-latest": {
+      "actions": [
+        "chat-44-jump-to-latest"
+      ]
+    },
+    "conversation-list.pinned-chip": {
+      "actions": [
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "conversation-list.row-actions": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "conversation-list.row-archive": {
+      "actions": [
+        "chat-43-row-archive"
+      ]
+    },
+    "conversation-list.row-delete": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "conversation-list.row-leave": {
+      "actions": [
+        "chat-18b-row-leave-group"
+      ]
+    },
+    "conversation-list.row-mark-read": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "conversation-list.row-mark-unread": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "conversation-list.row-mute": {
+      "actions": [
+        "chat-40-row-mute"
+      ]
+    },
+    "conversation-list.row-unmute": {
+      "actions": [
+        "chat-40-row-mute"
+      ]
+    },
+    "conversation-list.search-chip-remove": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "conversation-list.search-clear": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "conversation-list.search-field": {
+      "actions": [
+        "chat-19-search",
+        "chat-37-search-chips"
+      ]
+    },
+    "conversation-list.search-section-chats": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "conversation-list.search-section-messages": {
+      "actions": [
+        "chat-19-search",
+        "chat-20-search-filter"
+      ]
+    },
+    "conversation-list.search-section-people": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "group.advanced-options": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.candidate-toggle": {
+      "actions": [
+        "groups-01-create",
+        "groups-00b-minimum-three"
+      ]
+    },
+    "group.create": {
+      "actions": [
+        "groups-01-create",
+        "groups-00b-minimum-three"
+      ]
+    },
+    "group.description": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.duplicate-notice": {
+      "actions": [
+        "groups-01b-duplicate-guard"
+      ]
+    },
+    "group.minimum-note": {
+      "actions": [
+        "groups-00-create-form",
+        "groups-00b-minimum-three"
+      ]
+    },
+    "group.name": {
+      "actions": [
+        "groups-00-create-form",
+        "groups-01-create"
+      ]
+    },
+    "group.open-existing": {
+      "actions": [
+        "groups-01b-duplicate-guard"
+      ]
+    },
+    "group.photo": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.picker-contacts": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.picker-strangers": {
+      "actions": [
+        "groups-00-create-form",
+        "neg-06-group-with-non-friend"
+      ]
+    },
+    "index.delete-chat-confirm": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "index.keep-chat": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "index.leave-group-confirm": {
+      "actions": [
+        "chat-18b-row-leave-group"
+      ]
+    },
+    "index.new-menu": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "index.new-menu-add-friend": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "index.new-menu-new-group": {
+      "actions": [
+        "chat-38-new-menu",
+        "groups-01-create"
+      ]
+    },
+    "index.pinned-all": {
+      "actions": [
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "pane.action-delete-everyone": {
+      "actions": [
+        "chat-14-delete-for-everyone"
+      ]
+    },
+    "pane.action-edit-input": {
+      "actions": [
+        "chat-07-edit"
+      ]
+    },
+    "pane.action-forward-confirm": {
+      "actions": [
+        "chat-17-forward"
+      ]
+    },
+    "pane.action-pin": {
+      "actions": [
+        "chat-10-pin",
+        "chat-10f-repin"
+      ]
+    },
+    "pane.action-react": {
+      "actions": [
+        "chat-05-react",
+        "chat-13-reactions"
+      ]
+    },
+    "pane.action-reply": {
+      "actions": [
+        "chat-03-reply"
+      ]
+    },
+    "pane.action-save-edit": {
+      "actions": [
+        "chat-07-edit",
+        "chat-12-actions-sheet-contents"
+      ]
+    },
+    "pane.composer-input": {
+      "actions": [
+        "chat-01-send-text"
+      ]
+    },
+    "pane.controls-archive": {
+      "actions": [
+        "chat-34-archive"
+      ]
+    },
+    "pane.controls-avatar-save": {
+      "actions": [
+        "groups-20-avatar"
+      ]
+    },
+    "pane.controls-favorite": {
+      "actions": [
+        "chat-24-favorite"
+      ]
+    },
+    "pane.controls-leave": {
+      "actions": [
+        "groups-18-leave"
+      ]
+    },
+    "pane.controls-member-role": {
+      "actions": [
+        "groups-12-promote",
+        "groups-13-demote",
+        "groups-17-transfer-ownership"
+      ]
+    },
+    "pane.controls-notif-mentions": {
+      "actions": [
+        "chat-23-notification-level"
+      ]
+    },
+    "pane.controls-pinned": {
+      "actions": [
+        "chat-10b-pinned-view",
+        "chat-10e-unpin-from-list"
+      ]
+    },
+    "pane.controls-remove-member": {
+      "actions": [
+        "groups-15-remove-member"
+      ]
+    },
+    "pane.controls-shared-media": {
+      "actions": [
+        "media-06-shared-media"
+      ]
+    },
+    "pane.controls-translation-automatic": {
+      "actions": [
+        "chat-22-translation-toggle"
+      ]
+    },
+    "pane.controls-translation-off": {
+      "actions": [
+        "chat-22-translation-toggle"
+      ]
+    },
+    "pane.group-members": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "pane.image-viewer-next": {
+      "actions": [
+        "media-06-shared-media"
+      ]
+    },
+    "pane.link-preview": {
+      "actions": [
+        "chat-13d-link-preview"
+      ]
+    },
+    "pane.member-add-friend": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "pane.member-block": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "pane.member-message": {
+      "actions": [
+        "groups-14c-member-message"
+      ]
+    },
+    "pane.member-mute": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "pane.member-remove": {
+      "actions": [
+        "groups-05a-remove-from-member-row"
+      ]
+    },
+    "pane.mention-toggle": {
+      "actions": [
+        "groups-10-mention"
+      ]
+    },
+    "pane.new-message-jump": {
+      "actions": [
+        "chat-29c-new-messages-jump"
+      ]
+    },
+    "pane.pinned-empty": {
+      "actions": [
+        "chat-10e-unpin-from-list"
+      ]
+    },
+    "pane.pinned-go-to": {
+      "actions": [
+        "chat-10b-pinned-view",
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "pane.reaction-more": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "pane.reaction-send-emoji": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "pane.reply-quote-jump": {
+      "actions": [
+        "chat-13c-jump-to-quoted"
+      ]
+    },
+    "pane.send": {
+      "actions": [
+        "chat-01-send-text"
+      ]
+    },
+    "pane.summary-request": {
+      "actions": [
+        "chat-26-briefing",
+        "v3-07-summary-copy"
+      ]
+    },
+    "people.add-friend-open": {
+      "actions": [
+        "people-01-search-c",
+        "chat-38-new-menu"
+      ]
+    },
+    "people.add-friend-search": {
+      "actions": [
+        "people-01-search-c",
+        "people-06-search-b"
+      ]
+    },
+    "people.card-manage": {
+      "actions": [
+        "people-13-block"
+      ]
+    },
+    "people.contacts-search": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.manage-block": {
+      "actions": [
+        "people-13-block",
+        "people-15-unblock"
+      ]
+    },
+    "people.no-contact-match": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.result-message": {
+      "actions": [
+        "people-05f-contact-row-message",
+        "people-04-message-request"
+      ]
+    },
+    "settings.allow-notifications": {
+      "actions": [
+        "profile-04-enable-notifications",
+        "v3-09a-mute",
+        "v3-09b-unmute"
+      ]
+    },
+    "settings.appearance": {
+      "actions": [
+        "v3-10-appearance"
+      ]
+    },
+    "settings.choose-photo": {
+      "actions": [
+        "profile-01-set-photo"
+      ]
+    },
+    "settings.delete-account": {
+      "actions": [
+        "auth-19-delete-account"
+      ]
+    },
+    "settings.edit-profile": {
+      "actions": [
+        "people-12b-a-renames"
+      ]
+    },
+    "settings.enter-sends": {
+      "actions": [
+        "v3-04a-enter-sends-off",
+        "v3-04-enter-sends"
+      ]
+    },
+    "settings.own-translations": {
+      "actions": [
+        "v3-11a-own-translations-on",
+        "v3-11-own-translation-bubble"
+      ]
+    },
+    "settings.sign-out": {
+      "actions": [
+        "v3-02a-signout"
+      ]
+    },
+    "settings.translated-only": {
+      "actions": [
+        "v3-05b-translated-only-on",
+        "v3-05-translation-only-bubble"
+      ]
+    }
+  },
+  "keys": {
+    "chat.jumpToLatest": {
+      "actions": [
+        "chat-44-jump-to-latest"
+      ]
+    },
+    "chat.newMenu": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "chat.newGroup": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "chat.markUnread": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "chat.markRead": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "chat.mute": {
+      "actions": [
+        "chat-40-row-mute"
+      ]
+    },
+    "chat.unmute": {
+      "actions": [
+        "chat-40-row-mute"
+      ]
+    },
+    "chat.archive": {
+      "actions": [
+        "chat-43-row-archive"
+      ]
+    },
+    "chat.deleteChat": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "chat.deleteChatTitle": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "chat.deleteChatBody": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "chat.leaveGroup": {
+      "actions": [
+        "chat-18b-row-leave-group"
+      ]
+    },
+    "chat.leaveGroupTitle": {
+      "actions": [
+        "chat-18b-row-leave-group"
+      ]
+    },
+    "chat.leaveGroupBody": {
+      "actions": [
+        "chat-18b-row-leave-group"
+      ]
+    },
+    "chat.keepChat": {
+      "actions": [
+        "chat-41-row-delete-confirmation"
+      ]
+    },
+    "chat.rowActions": {
+      "actions": [
+        "chat-39-row-mark-unread"
+      ]
+    },
+    "search.fieldPlaceholder": {
+      "actions": [
+        "chat-19-search",
+        "chat-37-search-chips"
+      ]
+    },
+    "search.chipRemove": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "search.sectionPeople": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "search.sectionChats": {
+      "actions": [
+        "chat-37-search-chips"
+      ]
+    },
+    "search.sectionMessages": {
+      "actions": [
+        "chat-19-search",
+        "chat-20-search-filter"
+      ]
+    },
+    "nav.contacts": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.contactsTitle": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.searchContacts": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.noContactMatch": {
+      "actions": [
+        "people-05e-contacts-search"
+      ]
+    },
+    "people.addFriendOpen": {
+      "actions": [
+        "people-01-search-c",
+        "chat-38-new-menu"
+      ]
+    },
+    "people.addFriendTitle": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "people.addFriendBody": {
+      "actions": [
+        "chat-38-new-menu"
+      ]
+    },
+    "people.usernameSearch": {
+      "actions": [
+        "people-01-search-c",
+        "people-06-search-b"
+      ]
+    },
+    "chat.pinnedTitle": {
+      "actions": [
+        "chat-10b-pinned-view"
+      ]
+    },
+    "chat.pinnedAllTitle": {
+      "actions": [
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "chat.pinnedOpen": {
+      "actions": [
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "chat.pinnedGoTo": {
+      "actions": [
+        "chat-10b-pinned-view",
+        "chat-10c-pinned-across-chats"
+      ]
+    },
+    "chat.pinnedEmpty": {
+      "actions": [
+        "chat-10e-unpin-from-list"
+      ]
+    },
+    "chat.unpin": {
+      "actions": [
+        "chat-11-unpin",
+        "chat-10e-unpin-from-list"
+      ]
+    },
+    "chat.sharedMediaTitle": {
+      "actions": [
+        "media-06-shared-media"
+      ]
+    },
+    "chat.imageViewerNext": {
+      "actions": [
+        "media-06-shared-media"
+      ]
+    },
+    "chat.imageViewerPrevious": {
+      "actions": [
+        "media-06-shared-media"
+      ]
+    },
+    "chat.react": {
+      "actions": [
+        "chat-05-react",
+        "chat-13-reactions"
+      ]
+    },
+    "chat.reactMore": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "chat.reactAnyEmoji": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "chat.reactSendEmoji": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "chat.reactOneEmojiOnly": {
+      "actions": [
+        "chat-13-reactions"
+      ]
+    },
+    "chat.goToQuoted": {
+      "actions": [
+        "chat-13c-jump-to-quoted"
+      ]
+    },
+    "chat.reply": {
+      "actions": [
+        "chat-03-reply",
+        "chat-13b-swipe-reply"
+      ]
+    },
+    "chat.openLink": {
+      "actions": [
+        "chat-13d-link-preview"
+      ]
+    },
+    "chat.newMessages": {
+      "actions": [
+        "chat-29c-new-messages-jump"
+      ]
+    },
+    "chat.editMessage": {
+      "actions": [
+        "chat-07-edit",
+        "chat-12-actions-sheet-contents"
+      ]
+    },
+    "chat.saveEdit": {
+      "actions": [
+        "chat-07-edit",
+        "chat-12-actions-sheet-contents"
+      ]
+    },
+    "chat.deleteEveryone": {
+      "actions": [
+        "chat-14-delete-for-everyone",
+        "chat-12-actions-sheet-contents"
+      ]
+    },
+    "group.nameOptional": {
+      "actions": [
+        "groups-00-create-form",
+        "groups-01-create"
+      ]
+    },
+    "group.descriptionOptional": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.photoOptional": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.advancedOptions": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.postEveryone": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.historySinceJoinSummary": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.minimumPeople": {
+      "actions": [
+        "groups-00-create-form",
+        "groups-00b-minimum-three"
+      ]
+    },
+    "group.duplicateExists": {
+      "actions": [
+        "groups-01b-duplicate-guard"
+      ]
+    },
+    "group.openExisting": {
+      "actions": [
+        "groups-01b-duplicate-guard"
+      ]
+    },
+    "group.contacts": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.searchEveryone": {
+      "actions": [
+        "groups-00-create-form"
+      ]
+    },
+    "group.membersTitle": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberActions": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberMessage": {
+      "actions": [
+        "groups-14c-member-message"
+      ]
+    },
+    "group.memberAddFriend": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberRequested": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberMute": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberUnmute": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberMuted": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberBlock": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberUnblock": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberBlocked": {
+      "actions": [
+        "groups-14b-member-actions"
+      ]
+    },
+    "group.memberRemove": {
+      "actions": [
+        "groups-05a-remove-from-member-row"
+      ]
+    },
+    "settings.appearance": {
+      "actions": [
+        "v3-10-appearance"
+      ]
+    },
+    "settings.appearanceSystem": {
+      "actions": [
+        "v3-10-appearance"
+      ]
+    },
+    "settings.appearanceLight": {
+      "actions": [
+        "v3-10-appearance"
+      ]
+    },
+    "settings.appearanceDark": {
+      "actions": [
+        "v3-10-appearance"
+      ]
+    },
+    "settings.ownTranslations": {
+      "actions": [
+        "v3-11a-own-translations-on",
+        "v3-11-own-translation-bubble"
+      ]
+    },
+    "settings.ownTranslationsHint": {
+      "actions": [
+        "v3-11a-own-translations-on"
+      ]
+    },
+    "settings.translatedOnly": {
+      "actions": [
+        "v3-05b-translated-only-on"
+      ]
+    },
+    "settings.enterSends": {
+      "actions": [
+        "v3-04a-enter-sends-off",
+        "v3-04-enter-sends"
+      ]
+    },
+    "settings.notifications": {
+      "actions": [
+        "profile-04-enable-notifications",
+        "v3-09a-mute"
+      ]
+    },
+    "chat.editWindowClosed": {
+      "status": "UNREACHABLE",
+      "note": "The app stops offering Edit and Delete fifteen minutes after a message is sent, so this server refusal is never seen on screen; the window itself is enforced by private.validate_message_update() and covered by tests/hosted/message-window-smoke.mjs."
+    },
+    "chat.unsendWindowClosed": {
+      "status": "UNREACHABLE",
+      "note": "As above, for unsend."
+    },
+    "search.moreFilters": {
+      "status": "UNREACHABLE",
+      "note": "onOpenAdvancedSearch is undefined in the personal realm (index.tsx): the workspace filter panel is never offered to a consumer."
+    },
+    "search.closeFilters": {
+      "status": "UNREACHABLE",
+      "note": "As above."
+    }
+  }
+}

@@ -1,26 +1,32 @@
 appId: com.totallynotwoojin.newone
 ---
-# Chats → Start a conversation → name → find the MEMBER(s) through the picker's
+# Chats → "+" → New group → name → find the MEMBER(s) through the picker's
 # people search → Create.
 #
+# v3.3 (backlog 32): the compose entry is gone; the only way to the creation
+# screen is the "+" on the Chats header ("New" → "New group").
 # v3.3 (backlog 36): a group needs three people -- the creator and two others --
 # so every caller must pass HAS_MEMBER2: 'true' with a second member. A
-# two-person attempt is refused by the service with 400 and the Create button
-# stays disabled. The name field is now labelled "Group name (optional)", which
-# is why the taps below match "Group name.*". Anyone can be added (Sep 2026 social stream): the
-# picker lists the people this account already knows and finds everyone else
-# by name or @username, so MEMBERn_QUERY is what gets typed (the @username)
-# and "Add MEMBERn" is the row that must appear.
+# two-person attempt leaves Create disabled and the service refuses it too.
+# The name field is now labelled "Group name (optional)", which is why the taps
+# below match "Group name.*". Anyone can be added (Sep 2026 social stream): the
+# picker lists this account's contacts first ("Your contacts") and finds
+# everyone else underneath ("Search everyone"), so MEMBERn_QUERY is what gets
+# typed (the @username) and "Add MEMBERn" is the row that must appear.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
 - runFlow:
     when:
-      notVisible: "Start a conversation"
+      notVisible: "New"
     commands:
       - tapOn: "Chats"
-- tapOn: "Start a conversation"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
 - extendedWaitUntil:
     visible: "Create a group"
     timeout: 20000

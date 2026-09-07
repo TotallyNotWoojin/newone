@@ -1,9 +1,9 @@
 appId: com.totallynotwoojin.newone
 ---
-# The People tab lists NAME under "Your people" (everyone this account has
-# chatted with) with a Message button — no relaunch first, the app should
-# learn of the new chat on its own. The friends/requests sections are gone
-# since the Sep 2026 social stream.
+# The Contacts tab (v3.3: "People" became "Contacts") lists NAME under
+# "Your people" — everyone this account has chatted with — with a Message
+# button. No relaunch first: the app should learn of the new chat on its own.
+# The friends/requests sections are gone since the Sep 2026 social stream.
 # The device may still be inside a conversation from the previous step
 # (people-12c, run-2026-09-04T07-43-xx): leave it before using the tabs.
 - runFlow:
@@ -12,11 +12,8 @@ appId: com.totallynotwoojin.newone
     commands:
       - tapOn: "(Back to chats|Volver a chats)"
 - tapOn: "Chats"
-- tapOn: "People"
+- tapOn: "Contacts"
 # A search left over from an earlier step hides the list; clear it first.
-- tapOn:
-    text: "Clear text"
-    optional: true
 - runFlow:
     when:
       visible:
@@ -26,7 +23,7 @@ appId: com.totallynotwoojin.newone
           id: "people-search"
       - eraseText: 80
       - tapOn:
-          text: "People"
+          text: "Your people"
           index: 0
           optional: true
 - extendedWaitUntil:

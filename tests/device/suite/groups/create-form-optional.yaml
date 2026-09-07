@@ -1,0 +1,69 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 35/36/39): what the creation screen says before anything is
+# typed. Name, description and photo are all marked optional; the rest of the
+# settings are folded into "Advanced options", collapsed, with a one-line
+# summary of what they currently say; the three-person rule is stated plainly;
+# and the picker separates the people you know from everybody else.
+#
+# The screen is left the way it was found (Cancel), so this can run before the
+# real creation step.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: "New"
+    commands:
+      - tapOn: "Chats"
+- tapOn: "New"
+- extendedWaitUntil:
+    visible: "New group"
+    timeout: 15000
+- tapOn: "New group"
+- extendedWaitUntil:
+    visible: "Create a group"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-form
+- assertVisible: "Group name (optional)"
+- assertVisible: "Description (optional)"
+- assertVisible: "Add a photo (optional)"
+- assertVisible: "A group needs three people — you and two others."
+# Collapsed, the disclosure shows what the settings currently say.
+- assertVisible: "Advanced options"
+- assertVisible: "Everyone can post · new members start from when they join"
+# Consumer groups are private and invite-only: no group type or join policy.
+- assertNotVisible: "Group type"
+- assertNotVisible: "How people join"
+- tapOn: "Advanced options"
+- extendedWaitUntil:
+    visible: "Who can post"
+    timeout: 15000
+- assertVisible: "Chat history for people added later"
+- assertNotVisible: "Everyone can post · new members start from when they join"
+- takeScreenshot: ${SHOT}-advanced-open
+- tapOn: "Advanced options"
+- extendedWaitUntil:
+    visible: "Everyone can post · new members start from when they join"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-advanced-closed
+# The picker keeps contacts and strangers apart.
+- scrollUntilVisible:
+    element:
+      text: "Your contacts"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Search everyone"
+- takeScreenshot: ${SHOT}-picker-sections
+- scrollUntilVisible:
+    element:
+      text: "Cancel group creation"
+    direction: UP
+    timeout: 30000
+- tapOn: "Cancel group creation"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000

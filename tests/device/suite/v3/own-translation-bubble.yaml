@@ -1,0 +1,27 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 33): with "Show my translations" on, your own sent bubble
+# carries the translation the other side reads, in the same slim two-line form
+# as an incoming message — the original, then the translation under it. Only a
+# finished translation appears, so this waits for it.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TEXT}.*"
+    direction: DOWN
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${HIT}.*"
+    timeout: ${TIMEOUT}
+# Both lines belong to your own bubble: the original stays, and there is no
+# "Show original" control, because nothing was collapsed.
+- assertVisible: ".*${TEXT}.*"
+- assertNotVisible: "Show original"
+- takeScreenshot: ${SHOT}-own-translation

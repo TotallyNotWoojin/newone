@@ -1,29 +1,16 @@
 appId: com.totallynotwoojin.newone
 ---
-# Consumers have no type-filter chips (the "Messages" chip this flow used to
-# tap is workplace-only): the Search tab lists People, then Messages. Open
-# the Messages result; the conversation opens with the matched text.
-- runFlow:
-    when:
-      visible: "(.*(Typing Predictions|Dictate).*|space)"
-    commands:
-      - swipe:
-          start: "50%, 30%"
-          end: "50%, 88%"
-          duration: 600
-# The result is already on screen (waited for above); scrolling for 100%
-# visibility fails when the row sits under the tab bar. Dismiss the keyboard
-# with a short drag instead of hideKeyboard (flaky while a callout is up).
-- swipe:
-    start: "50%, 55%"
-    end: "50%, 65%"
-    duration: 300
-- waitForAnimationToEnd:
-    timeout: 1500
+# v3.3 (backlog 30/38): the type-filter chips and the "Open <title>" rows went
+# with the Search tab. A message suggestion under the Chats field reads
+# "<chat> · <the matched words>"; tapping it opens that chat at the message.
+# chat/search-messages.yaml has already typed QUERY and left the results up.
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 20000
 - takeScreenshot: ${SHOT}-result
 - tapOn:
-    text: ".*Open .*"
-    index: 0
+    text: ".* · .*${QUERY}.*"
+    below: "Messages"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000

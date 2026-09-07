@@ -4,7 +4,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
-- tapOn: "People"
+- tapOn: "Contacts"
 - extendedWaitUntil:
     visible: "Blocked"
     timeout: 30000

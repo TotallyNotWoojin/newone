@@ -1,0 +1,38 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47b): being done with a one-to-one chat is asked as a deletion,
+# and it names the other person. The confirmation is read and then declined
+# ("Keep it"), so the chat survives for the steps that follow.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${PEER}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Delete"
+    timeout: 15000
+# A one-to-one row says "Delete", never "Leave".
+- assertNotVisible: "Leave"
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "Delete this chat?"
+    timeout: 15000
+- assertVisible: ".*${PEER} keeps theirs.*"
+- assertVisible: "Keep it"
+- takeScreenshot: ${SHOT}-delete-confirmation
+- tapOn: "Keep it"
+- extendedWaitUntil:
+    notVisible: "Delete this chat?"
+    timeout: 15000
+- assertVisible: ".*${PEER}.*"
+- takeScreenshot: ${SHOT}-kept

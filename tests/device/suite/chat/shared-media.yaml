@@ -1,8 +1,10 @@
 appId: com.totallynotwoojin.newone
 ---
-# Controls → Photos and files → the grid lists what the chat has carried, and a
-# photo opens the full-screen viewer. A chat that has carried nothing says so
-# instead, and the flow still passes through the sheet.
+# v3.3 (backlog 42): Controls → Photos and files → the grid lists what the chat
+# has carried, newest first, with photos and videos as thumbnails and anything
+# else as a row. A thumbnail opens the full-screen viewer already built, and the
+# viewer steps along the grid's photos instead of closing. A chat that has
+# carried nothing says so instead, and the flow still passes through the sheet.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -31,5 +33,20 @@ appId: com.totallynotwoojin.newone
           visible: "Close image"
           timeout: 15000
       - takeScreenshot: ${SHOT}-shared-media-viewer
+      # "Next photo" is only offered when the grid holds another one; a chat
+      # with a single photo has nowhere to step to, which is not a failure.
+      - runFlow:
+          when:
+            visible: "Next photo"
+          commands:
+            - tapOn: "Next photo"
+            - waitForAnimationToEnd:
+                timeout: 2000
+            - takeScreenshot: ${SHOT}-shared-media-next
+            - assertVisible: "Previous photo"
+            - tapOn: "Previous photo"
+            - waitForAnimationToEnd:
+                timeout: 2000
+            - takeScreenshot: ${SHOT}-shared-media-previous
       - tapOn: "Close image"
 - tapOn: "Close dialog"

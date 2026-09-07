@@ -1,0 +1,29 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 50): an owner or admin removes somebody from the member row
+# itself. The row goes, and the thread records it the way any removal is
+# recorded ("… was removed from the group.").
+- tapOn: "Conversation settings"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Options for ${NAME}"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Options for ${NAME}"
+- extendedWaitUntil:
+    visible: "Remove from group"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-before-remove
+- tapOn: "Remove from group"
+- extendedWaitUntil:
+    notVisible: "Options for ${NAME}"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-removed
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: ".*was removed from the group.*"
+    timeout: 30000
+- takeScreenshot: ${SHOT}-system-row

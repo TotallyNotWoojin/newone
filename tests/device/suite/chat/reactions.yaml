@@ -1,0 +1,64 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 43): six reactions in one row, plus "+" for anything else.
+# The six are 👍 ❤️ 😂 😮 😢 🙏 in that order; "+" opens a one-character field
+# (no phone lets an app raise the emoji keyboard by itself), and what is typed
+# is checked before it is sent. EMOJI is the one this flow leaves on the
+# message; CUSTOM is what it types into the "+" field.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${TARGET}.*"
+    direction: DOWN
+    timeout: 15000
+- longPressOn:
+    text: ".*${TARGET}.*"
+- extendedWaitUntil:
+    visible: "Message actions"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-reaction-row
+# All six fit one row on a phone-sized screen (7 x 44pt buttons); if a narrower
+# device ever hides one, this is where it shows.
+- assertVisible: "React 👍"
+- assertVisible: "React ❤️"
+- assertVisible: "React 😂"
+- assertVisible: "React 😮"
+- assertVisible: "React 😢"
+- assertVisible: "React 🙏"
+- assertVisible: "More emoji"
+# The old four are gone: ✅ and 👀 were replaced.
+- assertNotVisible: "React ✅"
+- assertNotVisible: "React 👀"
+# The "+" route: a field that takes one emoji and refuses anything else.
+- tapOn: "More emoji"
+- extendedWaitUntil:
+    visible: "Any emoji"
+    timeout: 10000
+- takeScreenshot: ${SHOT}-emoji-field
+- tapOn: "Any emoji"
+- inputText: "not an emoji"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Pick one emoji."
+    timeout: 10000
+- takeScreenshot: ${SHOT}-rejected
+- tapOn: "Any emoji"
+- eraseText: 40
+- inputText: ${CUSTOM}
+- tapOn: "Send"
+- extendedWaitUntil:
+    notVisible: "Message actions"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*${CUSTOM}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-custom-reaction

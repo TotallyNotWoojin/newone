@@ -1,0 +1,34 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47d): the quote on a reply is a way back. Tapping it scrolls to
+# the message the reply answers and centres it (scrollToIndex, viewPosition 0.5).
+# The quote reads "<sender>: <preview of the original>" — the preview is the
+# first 240 characters of the body, so a short message is quoted whole. QUOTED
+# is a distinctive part of the original; ORIGINAL is the original's own text.
+#
+# Callers should point this at a message far above the reply: with the original
+# already on screen, the tap proves the quote is actionable but not that the
+# list moved. The before/after screenshots show whether it did.
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- scrollUntilVisible:
+    element:
+      text: ".*${REPLY}.*"
+    direction: DOWN
+    timeout: 15000
+- takeScreenshot: ${SHOT}-reply-with-quote
+# The quote carries the original's sender and its first words.
+- assertVisible: "${SENDER}: .*${QUOTED}.*"
+- tapOn: "${SENDER}: .*${QUOTED}.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- extendedWaitUntil:
+    visible: ".*${ORIGINAL}.*"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-jumped-to-original

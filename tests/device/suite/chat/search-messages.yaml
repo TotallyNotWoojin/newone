@@ -1,30 +1,29 @@
 appId: com.totallynotwoojin.newone
 ---
-# Search tab → type QUERY → results arrive as you type (consumers have no
-# Search button and no filter chips) → a Messages result ("Open <title>")
-# appears under the MESSAGES section.
+# v3.3 (backlog 30): the Search tab is gone — the one field on Chats finds
+# people, chats and the messages inside them. Type QUERY and the Messages
+# section appears under the field, with a row carrying the matched words.
 - launchApp
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 30000
-- tapOn: "Search"
+- runFlow:
+    when:
+      notVisible: "Search chats, people and messages"
+    commands:
+      - tapOn: "Chats"
 - extendedWaitUntil:
-    visible: "Search people and messages"
-    timeout: 15000
-- tapOn: "Search people and messages"
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+# The Search tab and its route no longer exist.
+- assertNotVisible: "Search people and messages"
+- tapOn:
+    id: "chat-search-field"
 - inputText: ${QUERY}
 - extendedWaitUntil:
-    visible: ".*Open .*"
+    visible: "Messages"
     timeout: 30000
-# The result is already on screen (waited for above); scrolling for 100%
-# visibility fails when the row sits under the tab bar. Dismiss the keyboard
-# with a short drag instead of hideKeyboard (flaky while a callout is up).
-- swipe:
-    start: "50%, 55%"
-    end: "50%, 65%"
-    duration: 300
-- waitForAnimationToEnd:
-    timeout: 1500
-- assertVisible: "(?i).*messages.*"
-- assertVisible: ".*${QUERY}.*"
+- extendedWaitUntil:
+    visible: ".*${QUERY}.*"
+    timeout: 20000
 - takeScreenshot: ${SHOT}-results

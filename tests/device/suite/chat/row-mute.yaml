@@ -1,0 +1,41 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 47b): mute from the chat row, then unmute from the same place.
+# The muted row draws a crossed-out bell rather than a word, so the proof the
+# mute took is that the row now offers "Unmute"; the server row is checked by
+# the area.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- runFlow:
+    when:
+      notVisible: ".*${PEER}.*"
+    commands:
+      - tapOn: "Chats"
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Mute"
+    timeout: 15000
+- tapOn: "Mute"
+- extendedWaitUntil:
+    notVisible: "Mute"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ${SHOT}-muted
+- longPressOn: ".*${PEER}.*"
+- extendedWaitUntil:
+    visible: "Unmute"
+    timeout: 20000
+- takeScreenshot: ${SHOT}-unmute-offered
+- tapOn: "Unmute"
+- extendedWaitUntil:
+    notVisible: "Unmute"
+    timeout: 15000
+- takeScreenshot: ${SHOT}-unmuted

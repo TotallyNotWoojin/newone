@@ -1,0 +1,98 @@
+appId: com.totallynotwoojin.newone
+---
+# v3.3 (backlog 23): Settings → Appearance switches System / Light / Dark and
+# the app repaints before the sheet closes. Every state is photographed — the
+# look is the owner's to judge, not something to assert — and the setting is
+# left back on System.
+- launchApp
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: ${SHOT}-settings-before
+- tapOn:
+    id: "setting-appearance"
+- extendedWaitUntil:
+    visible: "Appearance: System"
+    timeout: 15000
+- assertVisible: "Appearance: Light"
+- assertVisible: "Appearance: Dark"
+- takeScreenshot: ${SHOT}-appearance-options
+- tapOn: "Appearance: Light"
+- extendedWaitUntil:
+    notVisible: "Appearance: Dark"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-light-settings
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-light-chats
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "setting-appearance"
+- extendedWaitUntil:
+    visible: "Appearance: Dark"
+    timeout: 15000
+- tapOn: "Appearance: Dark"
+- extendedWaitUntil:
+    notVisible: "Appearance: Light"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-dark-settings
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-dark-chats
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Appearance"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "setting-appearance"
+- extendedWaitUntil:
+    visible: "Appearance: System"
+    timeout: 15000
+- tapOn: "Appearance: System"
+- extendedWaitUntil:
+    notVisible: "Appearance: Dark"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-system-settings
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-system-chats

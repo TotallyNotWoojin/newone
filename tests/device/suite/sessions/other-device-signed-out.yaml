@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.newone
 # The revoked device must fall back to the sign-in screen: first on its
 # next action, at the latest after a relaunch.
 - tapOn:
-    text: "People"
+    text: "Contacts"
     optional: true
 - extendedWaitUntil:
     visible: "Create account"

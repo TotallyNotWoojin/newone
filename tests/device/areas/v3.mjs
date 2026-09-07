@@ -127,12 +127,12 @@ export async function run(ctx) {
 
   // 3. Invite anyone: A messages B straight from the People search with no
   //    connection between them (contact_connections has no accepted row).
-  await ctx.step({ id: 'v3-03a-search', title: 'A finds B by @username on the People tab (strangers, no connection)', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a "Message" button (no Connect)', screen: 'people' });
+  await ctx.step({ id: 'v3-03a-search', title: 'A finds B by @username through Contacts → "Add a friend" (strangers, no connection)', device: devA, flow: 'people/search-user.yaml', env: { USERNAME: B.username, NAME: B.displayName, EXPECT_BUTTON: 'Message' }, expected: 'B row with a "Message" button (no Connect)', screen: 'contacts → Add a friend' });
   const hola = 'hola desde A';
   const opened = await ctx.step({
     id: 'v3-03-message-anyone', title: 'A taps Message with no prior connection: the chat opens; A sends "hola desde A"', device: devA,
-    flow: 'people/message-from-result.yaml', env: { TEXT: hola },
-    expected: 'Conversation opens at once; the text renders as sent; server: public.conversations direct row between A and B, no accepted contact_connections row', screen: 'people → conversation',
+    flow: 'people/message-from-result.yaml', env: { NAME: B.displayName, TEXT: hola },
+    expected: 'Conversation opens at once; the text renders as sent; server: public.conversations direct row between A and B, no accepted contact_connections row', screen: 'contacts → conversation',
     serverTruth: async () => {
       const conversation = await server.waitFor(() => server.directConversation(A.userId, B.userId), (row) => Boolean(row), { timeoutMs: 20_000 });
       const message = conversation.row ? await server.waitFor(() => server.messageByBody(conversation.row.id, hola), (row) => Boolean(row), { timeoutMs: 20_000 }) : { ok: false };
@@ -229,6 +229,32 @@ export async function run(ctx) {
     timeoutMs: 400_000,
   });
   await ctx.observe(devA, { id: 'v3-07b-after-summary', title: 'Conversation after the Summary sheet closes', screen: 'conversation' });
+
+  // 7b. Appearance (backlog 23): System / Light / Dark, photographed in each
+  //     so the owner can look at the app rather than read an assertion.
+  await ctx.step({
+    id: 'v3-10-appearance', title: 'Settings → Appearance switches System / Light / Dark (a screenshot of each for the owner)', device: devA,
+    flow: 'v3/appearance.yaml',
+    expected: 'The Appearance row opens "Appearance: System / Light / Dark"; picking one repaints the app before the sheet closes; Settings and Chats are photographed light, dark and back on System',
+    screen: 'settings → General',
+  });
+  // 7c. Show my translations (backlog 33): A's own Spanish bubble carries the
+  //     Korean B reads. v3-05a already waited for that translation to finish.
+  await ctx.step({
+    id: 'v3-11a-own-translations-on', title: 'A: Settings → "Show my translations" on', device: devA,
+    flow: 'v3/toggle-switch.yaml', env: { LABEL: 'Show my translations', ID: 'setting-own-translations' },
+    expected: 'Switch on (hint "See your messages the way others read them"); back to Chats',
+    screen: 'settings → Chats group',
+  });
+  await openA();
+  await ctx.step({
+    id: 'v3-11-own-translation-bubble', title: 'A\'s own Spanish bubble now carries the Korean B reads, under the original', device: devA,
+    flow: 'v3/own-translation-bubble.yaml', env: { TEXT: spanishKey, HIT: '월요', TIMEOUT: '90000' },
+    expected: 'The Spanish stays and the Korean sits under it in the same slim two-line form; no "Show original" control, because nothing was collapsed; server: the ko translation is completed',
+    screen: 'conversation',
+    serverTruth: async () => { const w = await server.waitFor(() => server.messageByBody(convId, spanishKey), (r) => (r?.translations ?? '').includes('ko=completed'), { timeoutMs: 60_000 }); return { ok: w.ok, detail: w.row?.translations }; },
+    timeoutMs: 240_000,
+  });
 
   // 8. Composer bottom inset: iOS is INFO-only here; the screenshots of the
   //    enter-key steps show the composer with the keyboard up.
