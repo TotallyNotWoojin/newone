@@ -118,10 +118,9 @@ test('repositories and workspace expose all targets and fail closed on malformed
   assert.doesNotMatch(files.workspace, /putOutbox[\s\S]{0,240}group-report/);
 });
 
-test('group and person UI require explicit consent and explain the exact disclosure in every locale', () => {
-  assert.match(files.pane, /workspace\.reportGroup/);
-  assert.match(files.pane, /disabled=\{!groupReportConsent\}/);
-  assert.match(files.pane, /moderationTargetReportConsentNotice\(locale, 'group'\)/);
+// The person report survived the rewrite with its consent sheet, and all the
+// disclosure copy is still shipped in three locales.
+test('person UI requires explicit consent and explains the exact disclosure in every locale', () => {
   assert.match(files.people, /workspace\.reportMember/);
   assert.match(files.people, /disabled=\{!managePerson \|\| !reportConsent\}/);
   assert.match(files.people, /moderationMemberSafetyRouteNotice\(locale\)/);
@@ -130,6 +129,35 @@ test('group and person UI require explicit consent and explain the exact disclos
   assert.match(files.copy, /No se comparten estado de cuenta, perfil, conversaciones ni mensajes/);
   assert.equal((files.catalog.match(/'chat\.reportGroup':/g) ?? []).length, 3);
   assert.equal((files.catalog.match(/'people\.reportPrivately':/g) ?? []).length, 3);
+});
+
+// KNOWN APP DEFECT -- deliberately left failing (see the report for evidence).
+//
+// Two of the three private-report entry points were dropped as collateral in
+// 3e56060 (2026-09-05, "Conversation screen: compact bubbles, inverted
+// timeline, inline media, composer insets and Enter-to-send"), which rewrote
+// conversation-pane.tsx (2554 lines changed) under a one-line message that
+// mentions no feature removal. Nothing else about the feature was removed:
+//   - contracts.ts still declares reportMessage/reportGroup with their
+//     consentToShare / contextBefore / contextAfter / noticeVersion fields
+//   - bff-command-repository.ts still implements both and posts to
+//     /v2/messages/:id/report and /v2/conversations/:id/report
+//   - routes.ts still serves 'message.report' and 'conversation.report'
+//   - workspace.tsx still exposes reportMessage and reportGroup, with the
+//     disclosure plumbing intact
+//   - the catalog still carries chat.reportGroup and chat.reportGroupDescription
+//     in all three locales
+//   - the admin moderation console still consumes message and group cases
+// but no UI in the client calls workspace.reportMessage or workspace.reportGroup
+// any more. Reporting a *person* survived in people.tsx with its full consent
+// sheet; reporting a *message* or a *group* cannot be started at all.
+//
+// These assertions are left exactly as they were. They are not stale: the
+// property they defend still matters, and the app is what is wrong.
+test('group UI requires explicit consent and explains the exact disclosure', () => {
+  assert.match(files.pane, /workspace\.reportGroup/);
+  assert.match(files.pane, /disabled=\{!groupReportConsent\}/);
+  assert.match(files.pane, /moderationTargetReportConsentNotice\(locale, 'group'\)/);
 });
 
 test('member safety route survives ordinary-contact loss without exposing current account status', () => {

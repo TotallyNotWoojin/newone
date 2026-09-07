@@ -252,21 +252,49 @@ test('assignment and closure receipts cannot claim reporter identity or notifica
   }), /invalid moderation transition receipt/);
 });
 
-test('report UI requires versioned explicit consent for independently selected bounded context', () => {
+// The report contract and its copy are intact and stay green, which is what
+// makes the UI failure below a defect rather than a removed feature.
+test('report contract carries versioned explicit consent for a bounded context', () => {
   assert.match(files.contracts, /consentToShare: true/);
   assert.match(files.contracts, /contextBefore: 0 \| 1 \| 2/);
   assert.match(files.contracts, /noticeVersion: 'moderation-report-v2'/);
   assert.match(files.contracts, /reportGroup\(input:/);
   assert.match(files.contracts, /reportMember\(input:/);
   assert.match(files.transport, /consentToShare: input\.consentToShare/);
+  assert.match(files.copy, /Reporter identity is protected from the reported person/);
+  assert.match(files.copy, /Account status, profile fields, conversations, and messages are not shared/);
+});
+
+// KNOWN APP DEFECT -- deliberately left failing (see the report for evidence).
+//
+// Two of the three private-report entry points were dropped as collateral in
+// 3e56060 (2026-09-05, "Conversation screen: compact bubbles, inverted
+// timeline, inline media, composer insets and Enter-to-send"), which rewrote
+// conversation-pane.tsx (2554 lines changed) under a one-line message that
+// mentions no feature removal. Nothing else about the feature was removed:
+//   - contracts.ts still declares reportMessage/reportGroup with their
+//     consentToShare / contextBefore / contextAfter / noticeVersion fields
+//   - bff-command-repository.ts still implements both and posts to
+//     /v2/messages/:id/report and /v2/conversations/:id/report
+//   - routes.ts still serves 'message.report' and 'conversation.report'
+//   - workspace.tsx still exposes reportMessage and reportGroup, with the
+//     disclosure plumbing intact
+//   - the catalog still carries chat.reportGroup and chat.reportGroupDescription
+//     in all three locales
+//   - the admin moderation console still consumes message and group cases
+// but no UI in the client calls workspace.reportMessage or workspace.reportGroup
+// any more. Reporting a *person* survived in people.tsx with its full consent
+// sheet; reporting a *message* or a *group* cannot be started at all.
+//
+// These assertions are left exactly as they were. They are not stale: the
+// property they defend still matters, and the app is what is wrong.
+test('report UI requires versioned explicit consent for independently selected bounded context', () => {
   assert.match(files.pane, /accessibilityRole="checkbox"/);
   assert.match(files.pane, /disabled=\{!reportConsent\}/);
   assert.match(files.pane, /setReportConsent\(false\)/);
   assert.match(files.pane, /moderationReportConsentNotice\(locale, contextBefore, contextAfter\)/);
   assert.match(files.pane, /moderationTargetReportConsentNotice\(locale, 'group'\)/);
   assert.match(files.pane, /workspace\.reportGroup/);
-  assert.match(files.copy, /Reporter identity is protected from the reported person/);
-  assert.match(files.copy, /Account status, profile fields, conversations, and messages are not shared/);
 });
 
 test('admin console is AAL2 gated, responsive, localized, realtime reconciled, and non-ambient', () => {

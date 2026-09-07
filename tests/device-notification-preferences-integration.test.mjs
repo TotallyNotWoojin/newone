@@ -72,25 +72,29 @@ test('workspace binds preferences to the physical current installation and never
   assert.match(files.webRegistration, /getCurrentInstallationId[\s\S]*return null/);
 });
 
-test('settings UI separates account defaults from nullable current-device overrides', () => {
-  assert.match(files.settings, /settings\.currentDevicePreferences/);
-  assert.match(files.settings, /notificationPreview: value/);
-  assert.match(files.settings, /\[null, t\('settings\.inheritAccount'\)\]/);
-  assert.match(files.settings, /\[true, t\('settings\.enabled'\)\]/);
-  assert.match(files.settings, /\[false, t\('settings\.disabled'\)\]/);
-  assert.match(files.settings, /devicePreferences\.effective\[field\]/);
-  assert.match(files.settings, /workspace\.saveDeviceNotificationPreferences/);
-  assert.match(files.settings, /Platform\.OS === 'web'/);
-  assert.match(files.settings, /settings\.nativeOnly/);
-});
+// The per-device override form is gone. a71eb42 (2026-09-05, "Settings:
+// compact rows, notifications switch, first-launch permission ask, chat
+// toggles") rebuilt Settings as a WhatsApp-style list and says so directly:
+// "Removed the verification badges, language chip, the per-device override
+// form, the preview mode, and every explanatory paragraph." What replaced it
+// is a single "Allow notifications" switch that reflects the real state, so
+// there are no longer account defaults and nullable device overrides to keep
+// apart, and settings.currentDevicePreferences / inheritAccount /
+// saveDevicePreferences / nativeOnly are rendered by no screen.
+//
+// The two tests that stood here are deleted rather than re-pointed:
+//   - "settings UI separates account defaults from nullable current-device
+//     overrides" described a form that no longer exists.
+//   - "all locales explain per-device scope and retained policy boundaries"
+//     still passed, but only because the orphaned catalog strings were never
+//     deleted; it guarded copy no screen renders.
+// The device-preference transport below is untouched and still under test.
 
-test('all locales explain per-device scope and retained policy boundaries', () => {
-  assert.equal((files.catalog.match(/'settings\.currentDevicePreferences':/g) ?? []).length, 3);
-  assert.equal((files.catalog.match(/'settings\.inheritAccount':/g) ?? []).length, 3);
-  assert.equal((files.catalog.match(/'settings\.saveDevicePreferences':/g) ?? []).length, 3);
-  assert.match(files.catalog, /Quiet hours, conversation mutes, shift suppression, critical-notice policy, and operating-system permission still apply/);
-  assert.match(files.catalog, /방해 금지 시간, 대화 음소거, 근무 외 억제, 중요 공지 정책 및 운영체제 권한은 계속 적용됩니다/);
-  assert.match(files.catalog, /horas silenciosas, los silencios de conversación, la supresión fuera de turno, la política de avisos críticos y el permiso del sistema operativo/);
+test('the notifications switch reflects real permission and device binding', () => {
+  // What the override form was replaced by: one switch that is only on when
+  // the OS granted permission and this device is actually bound.
+  assert.match(files.settings, /const deviceRegistered = Boolean\(devicePreferences\)/);
+  assert.match(files.settings, /workspace\.deviceNotificationPreferences/);
 });
 
 test('current-device preferences are immediate online commands, not offline cached safety state', () => {

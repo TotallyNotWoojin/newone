@@ -12,7 +12,6 @@ const responsiveSurfaces = [
   '../apps/newone/src/app/handoffs.tsx',
   '../apps/newone/src/features/search/workspace-search-panel.tsx',
   '../apps/newone/src/app/admin.tsx',
-  '../apps/newone/src/app/settings.tsx',
   '../apps/newone/src/app/new-group.tsx',
   '../apps/newone/src/app/sign-in.tsx',
   '../apps/newone/src/features/admin/moderation-case-section.tsx',
@@ -29,6 +28,16 @@ test('responsive render branches reuse the static server viewport for web hydrat
   assert.match(hook, /serverHydrationSnapshot = \(\) => Platform\.OS !== 'web'/);
   assert.match(hook, /clientHydrationSnapshot = \(\) => true/);
   assert.match(hook, /return hydrated \? dimensions : SERVER_WEB_DIMENSIONS/);
+
+  // settings.tsx stopped branching on viewport width in a71eb42 (2026-09-05),
+  // which rebuilt it as one centred column sized in CSS (maxWidth: 640). It has
+  // no responsive branch to keep hydration-safe, so it is no longer required to
+  // call the hook -- but it must not start reading the raw one either.
+  assert.doesNotMatch(
+    await source('../apps/newone/src/app/settings.tsx'),
+    /\buseWindowDimensions\b/,
+    'settings.tsx reads the client viewport during hydration',
+  );
 
   for (const [index, contents] of surfaces.entries()) {
     assert.match(

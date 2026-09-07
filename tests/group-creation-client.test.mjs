@@ -14,6 +14,8 @@ const candidateReceipt = {
   candidates: [{
     userId,
     displayName: 'Luis Ortega',
+    // Consumer @handles are part of the authorization-scoped identity now.
+    username: null,
     avatarPath: null,
     jobTitle: 'Contract operator',
     membershipRole: 'member',

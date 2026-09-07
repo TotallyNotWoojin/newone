@@ -225,8 +225,15 @@ test('repository uses exact routed endpoints and bounded online-only transport',
     '/reject',
     '/execute',
   ]) assert.ok(repository.includes(endpoint), `missing ${endpoint}`);
-  assert.match(repository, /credentials: Platform\.OS === 'web' \? 'include' : 'omit'/);
-  assert.match(repository, /getWebCsrfToken\(\)/);
+  // The web/native transport split moved behind usesCookieSession() (which is
+  // Platform.OS === 'web' && the transport is not bearer), so web can be pinned
+  // to bearer without cookies leaking onto it. The property is unchanged: one
+  // decision drives credentials, CSRF, and the token requirement together.
+  assert.match(repository, /const cookieSession = usesCookieSession\(\)/);
+  assert.match(repository, /credentials: cookieSession \? 'include' : 'omit'/);
+  assert.match(repository, /const csrfToken = cookieSession \? getWebCsrfToken\(\) : null/);
+  assert.match(repository, /if \(cookieSession && !csrfToken\)/);
+  assert.match(repository, /if \(!cookieSession && !accessToken\)/);
   assert.match(repository, /nativeEdgeRequestHeaders\(accessToken \?\? undefined\)/);
   assert.match(repository, /'Idempotency-Key'/);
   assert.match(repository, /MAX_RESPONSE_BYTES = 65_536/);
