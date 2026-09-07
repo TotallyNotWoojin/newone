@@ -21,7 +21,7 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
-export type NavigationKey = 'chats' | 'search' | 'updates' | 'handoffs' | 'people' | 'admin';
+export type NavigationKey = 'chats' | 'updates' | 'handoffs' | 'people' | 'admin';
 
 const navItems: {
   key: NavigationKey;
@@ -43,13 +43,6 @@ const navItems: {
     icon: 'megaphone-outline',
     iconActive: 'megaphone',
     href: '/updates',
-  },
-  {
-    key: 'search',
-    labelKey: 'nav.search',
-    icon: 'search-outline',
-    iconActive: 'search',
-    href: './search',
   },
   {
     key: 'handoffs',
@@ -75,9 +68,10 @@ const navItems: {
 ];
 
 /**
- * Consumers in the personal realm see only Chats, Search, and People here;
- * updates and handoffs remain workspace-organization surfaces, and admin
- * stays gated on server-granted capabilities.
+ * Search has no tab of its own: the one field on Chats does that job, so a
+ * consumer's bar is Chats · Contacts · Settings. Updates and handoffs remain
+ * workspace-organization surfaces, and admin stays gated on server-granted
+ * capabilities.
  */
 function visibleNavItems(personalRealm: boolean, canOpenAdmin: boolean) {
   return navItems.filter((item) => {

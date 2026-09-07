@@ -17,7 +17,7 @@ const paths = {
   scaffold: 'apps/newone/src/components/navigation/app-scaffold.tsx',
   layout: 'apps/newone/src/app/_layout.tsx',
   updates: 'apps/newone/src/app/updates.tsx',
-  search: 'apps/newone/src/app/search.tsx',
+  search: 'apps/newone/src/features/search/workspace-search-panel.tsx',
   handoffs: 'apps/newone/src/app/handoffs.tsx',
   catalog: 'apps/newone/src/i18n/catalog.ts',
   dynamicSection: 'apps/newone/src/features/admin/dynamic-group-section.tsx',

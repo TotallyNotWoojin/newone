@@ -84,6 +84,35 @@ jest.mock('@/features/chat/conversation-list', () => {
             accessibilityRole="button"
             onPress={props.onCompose}
           />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open message hit"
+            accessibilityRole="button"
+            onPress={() => props.onOpenSuggestion({
+              kind: 'message',
+              key: 'message:message-secondary',
+              conversationId: 'conversation-secondary',
+              messageId: 'message-secondary',
+              title: 'Secondary operations',
+              subtitle: 'hit',
+            })}
+          />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open chat hit"
+            accessibilityRole="button"
+            onPress={() => props.onOpenSuggestion({
+              kind: 'conversation',
+              key: 'conversation:conversation-secondary',
+              conversationId: 'conversation-secondary',
+              title: 'Secondary operations',
+              subtitle: '',
+              group: true,
+            })}
+          />
+          <ReactNative.Pressable
+            accessibilityLabel="controlled open filters"
+            accessibilityRole="button"
+            onPress={props.onOpenAdvancedSearch}
+          />
         </ReactNative.View>
       );
     },
@@ -114,6 +143,22 @@ jest.mock('@/features/chat/conversation-pane', () => {
         </ReactNative.View>
       );
     },
+  };
+});
+
+jest.mock('@/features/search/workspace-search-panel', () => {
+  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
+  return {
+    WorkspaceSearchPanel: (props: Record<string, any>) => (
+      <ReactNative.View testID="controlled-search-panel">
+        <ReactNative.Text>{`controlled-filters:${props.initialQuery}`}</ReactNative.Text>
+        <ReactNative.Pressable
+          accessibilityLabel="controlled close filters"
+          accessibilityRole="button"
+          onPress={props.onClose}
+        />
+      </ReactNative.View>
+    ),
   };
 });
 
@@ -154,6 +199,8 @@ function baseWorkspace(overrides: Record<string, unknown> = {}) {
     },
     inboxFilter: 'all',
     inboxSearch: '',
+    people: [],
+    searchUsers: jest.fn(async (..._mockArgs: unknown[]) => [] as unknown[]),
     discoverableConversations: [{ id: 'conversation-discoverable' }],
     selectConversation: jest.fn(),
     setInboxFilter: jest.fn(),
@@ -262,6 +309,55 @@ describe('chats index route', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('./new-group');
 
     await view.unmount();
+  });
+
+  test('opens a chat and an exact message from the one search field on Chats', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open chat hit' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary' },
+    });
+
+    mockRouter.push.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open message hit' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-secondary', messageId: 'message-secondary' },
+    });
+
+    await view.unmount();
+  });
+
+  test('keeps a chat selected in place when a desktop search hit is a whole conversation', async () => {
+    mockWidth = 1500;
+    const view = await render(<ChatsScreen />);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open chat hit' }));
+    expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
+    expect(mockRouter.push).not.toHaveBeenCalled();
+
+    await view.unmount();
+  });
+
+  test('the workplace filter panel opens from the field and closes again; consumers never get it', async () => {
+    mockWidth = 390;
+    const view = await render(<ChatsScreen />);
+    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeInstanceOf(Function);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled open filters' }));
+    expect(screen.getByText('controlled-filters:')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled close filters' }));
+    expect(screen.queryByTestId('controlled-search-panel')).toBeNull();
+    await view.unmount();
+
+    mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
+    const consumerView = await render(<ChatsScreen />);
+    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeUndefined();
+    await consumerView.unmount();
   });
 
   test('replaces the workspace subtitle with the consumer handle in the personal realm', async () => {

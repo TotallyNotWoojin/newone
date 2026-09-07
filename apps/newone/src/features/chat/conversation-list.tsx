@@ -9,7 +9,16 @@ import {
 } from 'react-native';
 
 import type { Conversation, DiscoverableConversation, InboxFilter } from '@/domain/types';
-import { Avatar, Chip, IconButton, SearchField, StatusBadge } from '@/components/ui/primitives';
+import { Avatar, Chip, IconButton, StatusBadge } from '@/components/ui/primitives';
+import { ChatSearchField } from '@/features/search/chat-search-field';
+import {
+  addPersonToSearch,
+  conversationMatchesSearch,
+  parseSearch,
+  removeChipFromSearch,
+  type SearchPersonRef,
+  type SearchSuggestion,
+} from '@/features/search/chat-search';
 import { colors, radii, spacing, type } from '@/theme/tokens';
 import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
@@ -17,20 +26,17 @@ import { useWorkspace } from '@/state/workspace';
 
 const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements'];
 
-function filterConversations(
+export function filterConversations(
   conversations: Conversation[],
   filter: InboxFilter,
   search: string,
+  people: readonly SearchPersonRef[] = [],
+  messageConversationIds?: ReadonlySet<string>,
 ) {
-  const query = search.trim().toLocaleLowerCase();
+  const parsed = parseSearch(search, people);
   return conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
-    const matchesQuery =
-      !query ||
-      conversation.title.toLocaleLowerCase().includes(query) ||
-      conversation.lastMessage.toLocaleLowerCase().includes(query) ||
-      conversation.subtitle.toLocaleLowerCase().includes(query);
-    if (!matchesQuery) return false;
+    if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) return false;
     if (filter === 'unread') return conversation.unreadCount > 0;
     if (filter === 'direct') return conversation.kind === 'direct';
     if (filter === 'groups') {
@@ -55,6 +61,11 @@ export function ConversationList({
   discoverableConversations = [],
   onRequestJoin,
   onCancelJoin,
+  people = [],
+  suggestions = [],
+  searchLoading = false,
+  onOpenSuggestion,
+  onOpenAdvancedSearch,
 }: {
   conversations: Conversation[];
   selectedId?: string;
@@ -69,10 +80,23 @@ export function ConversationList({
   discoverableConversations?: DiscoverableConversation[];
   onRequestJoin?: (conversationId: string) => Promise<boolean>;
   onCancelJoin?: (request: NonNullable<DiscoverableConversation['myJoinRequest']>) => Promise<boolean>;
+  /** Everybody a typed or tapped name can resolve to. */
+  people?: readonly SearchPersonRef[];
+  suggestions?: readonly SearchSuggestion[];
+  searchLoading?: boolean;
+  onOpenSuggestion?: (suggestion: SearchSuggestion) => void;
+  onOpenAdvancedSearch?: () => void;
 }) {
+  const parsedSearch = useMemo(() => parseSearch(search, people), [people, search]);
+  const messageConversationIds = useMemo(
+    () => new Set(suggestions
+      .filter((item) => item.kind === 'message')
+      .map((item) => item.conversationId)),
+    [suggestions],
+  );
   const visible = useMemo(
-    () => filterConversations(conversations, filter, search),
-    [conversations, filter, search],
+    () => filterConversations(conversations, filter, search, people, messageConversationIds),
+    [conversations, filter, messageConversationIds, people, search],
   );
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
@@ -116,10 +140,32 @@ export function ConversationList({
       ) : null}
 
       <View style={[styles.searchWrap, !desktop && styles.searchWrapMobile]}>
-        <SearchField
-          value={search}
+        <ChatSearchField
+          chips={parsedSearch.chips}
+          loading={searchLoading}
           onChangeText={onSearchChange}
-          placeholder={t('chat.search')}
+          onRemoveChip={(index) => onSearchChange(removeChipFromSearch(search, index))}
+          onSelectSuggestion={(suggestion) => {
+            // A person becomes a chip so the next name can follow; a chat or a
+            // message is somewhere to go.
+            if (suggestion.kind === 'person') {
+              onSearchChange(addPersonToSearch(search, suggestion.title));
+              return;
+            }
+            onOpenSuggestion?.(suggestion);
+          }}
+          suggestions={[...suggestions]}
+          trailing={onOpenAdvancedSearch ? (
+            <Pressable
+              accessibilityLabel={t('search.moreFilters')}
+              accessibilityRole="button"
+              hitSlop={6}
+              onPress={onOpenAdvancedSearch}
+              style={({ pressed }) => [styles.moreFilters, pressed && styles.rowPressed]}>
+              <Ionicons color={colors.mintDark} name="options-outline" size={17} />
+            </Pressable>
+          ) : null}
+          value={search}
         />
       </View>
 
@@ -299,6 +345,13 @@ function ConversationRow({
 }
 
 const styles = StyleSheet.create({
+  moreFilters: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+  },
   discoverySection: {
     gap: spacing.xs,
     paddingBottom: spacing.md,

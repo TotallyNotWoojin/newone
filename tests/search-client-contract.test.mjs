@@ -152,7 +152,7 @@ test('calendar filters use valid local-day boundaries and reject impossible date
 
 test('search UI exposes source, sender, conversation, language, date controls and exact-message navigation', async () => {
   const [screen, repository, conversation] = await Promise.all([
-    readFile(new URL('../apps/newone/src/app/search.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../apps/newone/src/features/search/workspace-search-panel.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../apps/newone/src/data/repositories/bff-search-repository.ts', import.meta.url), 'utf8'),
     readFile(new URL('../apps/newone/src/app/conversation/[id].tsx', import.meta.url), 'utf8'),
   ]);
