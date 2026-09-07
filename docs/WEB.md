@@ -152,3 +152,126 @@ curl -sI "http://127.0.0.1:4173/newone-legal/app/conversation/%5Bid%5D.html" | h
   `true` (see above).
 - Camera, microphone (voice notes), and file pickers depend on browser permissions;
   attachments download through short-lived signed Storage URLs.
+
+## The browser suite (Playwright)
+
+`playwright.config.mjs` serves the exported bundle at `http://127.0.0.1:4173`
+(`npm run e2e:serve` builds it first) and runs `tests/e2e`. The export is built
+with `EXPO_PUBLIC_WEB_AUTH_MODE=direct`, the mode the static host uses.
+
+```sh
+npm run e2e         # static: no backend, safe anywhere
+npm run e2e:live    # static + signed-in, against the hosted project
+```
+
+`npm run e2e` runs two projects:
+
+| Project | What it drives |
+| --- | --- |
+| `desktop` (1440×1000) | everything under `tests/e2e/*.spec.mjs` |
+| `mobile-chromium` (Pixel 7) | `auth.spec.mjs` only — the one screen a phone browser lands on |
+
+`npm run e2e:live` adds a third, `desktop-live`, which runs
+`tests/e2e/live/*.spec.mjs`. It needs the Supabase CLI logged in (the same
+credentials `tests/hosted` uses) because it creates real accounts.
+
+### What the static half covers
+
+- **Sign-in** (`auth.spec.mjs`): the two modes, the fields each asks for, that
+  there is no phone option and no workplace wording anywhere, an invalid email
+  refused before any code is sent, the three interface languages, the help link.
+- **Dark mode** (`appearance.spec.mjs`): the canvas and the `theme-color` meta
+  in both schemes, driven by the browser's `prefers-color-scheme`, and that
+  dark ink is light ink.
+- **Routes** (`routes.spec.mjs`): every protected route lands on `/sign-in`
+  signed out, `/help` is public, and a conversation deep link has no file of
+  its own (which is why GitHub Pages needs the repo-root `404.html`).
+- **Accessibility** (`accessibility.spec.mjs`): axe (WCAG 2.0/2.1 A and AA)
+  over the signed-out screens in both schemes. Serious and critical findings
+  fail; the full list is attached to the run.
+
+### What the live half covers, and how it reaches the gateway
+
+The exported build runs in `direct` mode, so the browser calls the Edge
+Functions itself and they answer a browser only from an origin in
+`NEWONE_ALLOWED_WEB_ORIGINS`. That list holds the production hosts, and a test
+run may not deploy, so a page at `127.0.0.1:4173` is refused with
+`403 origin_not_allowed`. `tests/e2e/support/live-gateway.mjs` therefore
+re-issues each Edge Function call from Node — where no CORS rule applies —
+with the production `Origin`, and hands the real answer back to the page. The
+server, the session, the data and the app code are all real; only the browser's
+own address stands in for production. Nothing is stubbed or recorded.
+
+`tests/e2e/support/live-account.mjs` builds the account graph through the same
+hosted gateway the phone apps use: three signups, two accepted contacts, a chat
+with three messages and one pinned. The browser then signs in through the real
+form with an email and a password.
+
+- **Sign-in** (`live/sign-in.spec.mjs`): the lookup, the password step, the
+  "Forgot password?" and "Use a different email" ways out, a wrong password
+  refused, a right one landing on Chats, and an unknown email offered the
+  create-account shortcut.
+- **Chats** (`live/chats.spec.mjs`): the one search field, a person tapped into
+  a chip with the comma written for the next name, a name typed with its own
+  comma making the same chip, a chip cleared in one tap; the "+" menu's two
+  rows; hover revealing a message's Reply and right-click opening the actions
+  sheet (reactions, Reply, Copy, Pin, Forward, Delete for everyone, and no
+  workplace review items); the Pinned view across chats and inside one chat;
+  Photos and files. Both of those last two assert that the view opens and that
+  the app asks `newone-read` for it, not that rows come back — see the
+  deployment note below.
+- **Groups** (`live/groups.spec.mjs`): optional name, description and photo;
+  Advanced options collapsed, opening onto posting mode and history, and
+  closing again; the three-person rule stated on the form; the picker's
+  "Your contacts" and "Search everyone" sections.
+- **Consumer guards** (`live/guards.spec.mjs`): `/updates` and `/handoffs`
+  turning a consumer back to Chats without drawing anything workplace-shaped,
+  and a navigation of Chats · Contacts · Settings.
+- **Dark mode** (`live/appearance.spec.mjs`): Chats following the browser, and
+  the Settings override (System / Light / Dark) winning over it.
+- **Accessibility** (`live/accessibility.spec.mjs`): axe over Chats with a chat
+  open, Contacts, and group creation, in both schemes.
+
+The accounts a run creates are real, and it does not delete them: their emails
+all begin with the run's `newone-e2e-…` prefix, which is what
+`tests/hosted/run.mjs --cleanup` matches (see `tests/hosted/README.md`). Run
+that, or let the pre-release database wipe take them.
+
+The live project shares one signed-in page across its tests and runs them
+serially. Every returning sign-in starts with an account lookup, and the
+gateway rate-limits those (20 per address-space per fifteen minutes), so
+signing in per test would spend that budget; a run makes three signups and two
+lookups. Back-to-back runs inside the same quarter of an hour can still be
+rate-limited — the failure is a visible `429`, not a flake.
+
+### Blocked on a deployment
+
+`/v2/pins/query` and `/v2/conversations/<id>/media/query` answer `404` on the
+hosted project. Two separate things caused that:
+
+1. The client routing table sent both to `newone-api`, which serves neither.
+   Fixed in `apps/newone/src/config/api-routing.mjs`; it affected native too.
+2. The deployed `newone-read` is the version from 2026-09-05, before the
+   pins-and-media reads landed in `supabase/functions/newone-read/handler.ts`,
+   so it still answers `404` even now the request reaches it. Deploying
+   `newone-read` (with migration `20260908050000`) is the remaining step.
+
+`live/chats.spec.mjs` therefore carries one `test.fixme` — "the Pinned view
+lists the message that was pinned" — which is the assertion to turn back on
+once that deploy has happened.
+
+### What the suite deliberately does not cover
+
+- **The cookie web gateway.** `api/[...path].mjs` signs its upstream calls with
+  `NEWONE_WEB_GATEWAY_SHARED_SECRET`, which no test run holds, so the suite
+  drives `direct` mode only. The cookie path is unchanged and untested here.
+- **A populated shared-media grid and its arrow-key stepping.** Putting a photo
+  in a chat needs a storage grant, an upload, and an asynchronous scan that has
+  to mark the file clean before the grid will show it; the suite asserts the
+  empty grid and leaves the populated one to the device suite.
+- **Realtime, push and offline.** No web push exists, and the suite makes no
+  assertions about live updates arriving in a second tab.
+- **The GitHub Pages `404.html` deep-link hand-back**, which lives in the Pages
+  repository rather than here.
+- **Anything on a phone browser beyond sign-in**; the desktop layout is what
+  this suite is for.
