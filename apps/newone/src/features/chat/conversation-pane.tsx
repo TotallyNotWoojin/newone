@@ -378,6 +378,8 @@ export function ConversationPane({
     jumpToQuoted,
     openActions,
     replyToMessage,
+    // The sheet is a new object when the palette changes, so the rows repaint.
+    styles,
     translatedOnly,
     unreadDividerLabel,
   ]);

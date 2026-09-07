@@ -71,7 +71,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
         person,
       };
     }).filter((member) => member.displayName.length > 0);
-  }, [currentUserId, memberIds, memberProfiles, memberRoles, people]);
+  }, [colors.forest, currentUserId, memberIds, memberProfiles, memberRoles, people]);
 
   if (conversation.kind === 'direct') return null;
   // A management-only view belongs to someone who manages the group without
