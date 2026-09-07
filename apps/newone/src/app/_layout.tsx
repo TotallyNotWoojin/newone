@@ -98,6 +98,7 @@ function AppShell() {
 }
 
 function ProtectedNavigator() {
+  const { colors } = useTheme();
   const auth = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -141,7 +142,13 @@ function ProtectedNavigator() {
 
   const motion = stackMotion(reduceMotion);
   const navigator = (
-    <Stack screenOptions={{ headerShown: false, ...motion.screen }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // The card behind a screen, seen during a push and around a modal.
+        contentStyle: { backgroundColor: colors.canvas },
+        ...motion.screen,
+      }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="conversation/[id]" options={motion.push} />
       <Stack.Screen name="updates" />

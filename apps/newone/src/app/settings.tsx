@@ -1089,7 +1089,7 @@ function SwitchRow({
           // (owner, Sep 6 2026); both states get real contrast.
           ios_backgroundColor={colors.switchOff}
           thumbColor={colors.white}
-          trackColor={{ false: colors.switchOff, true: colors.mintDark }}
+          trackColor={{ false: colors.switchOff, true: colors.accentStrong }}
           value={value}
         />
       )}

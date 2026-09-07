@@ -102,7 +102,7 @@ export const TEXT_PAIRS: TextPair[] = [
   { text: 'white', on: 'forestRaised', where: 'raised brand surface text' },
   { text: 'white', on: 'redStrong', where: 'unread badge and acknowledge button' },
   { text: 'white', on: 'inkStrong', where: 'discovery pill' },
-  { text: 'white', on: 'accentStrong', where: 'jump-to-latest pill' },
+  { text: 'white', on: 'accentStrong', where: 'jump-to-latest pill and the on-state switch thumb' },
   {
     text: 'white',
     on: 'mint',

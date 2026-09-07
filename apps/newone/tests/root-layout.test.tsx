@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 
 import RootLayout from '@/app/_layout';
+import { lightColors } from '@/theme/palette';
 
 const mockRouter = {
   back: jest.fn(),
@@ -206,7 +207,14 @@ describe('root application boundary', () => {
     const view = await render(<RootLayout />);
 
     expect(screen.getByTestId('controlled-workspace-provider')).toBeTruthy();
-    expect(mockStackProps?.screenOptions).toEqual({ headerShown: false, animation: 'fade', animationDuration: 150 });
+    expect(mockStackProps?.screenOptions).toEqual({
+      headerShown: false,
+      // The card behind a screen follows the palette, so a push or a modal
+      // never shows a white gutter on a dark phone.
+      contentStyle: { backgroundColor: lightColors.canvas },
+      animation: 'fade',
+      animationDuration: 150,
+    });
     expect(mockStackScreens.map(({ name }) => name)).toEqual([
       'index',
       'conversation/[id]',
