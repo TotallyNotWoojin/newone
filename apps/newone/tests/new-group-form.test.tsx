@@ -199,3 +199,42 @@ describe('the three-person rule', () => {
     ));
   });
 });
+
+describe('a group with these people already exists', () => {
+  function existingGroupWorkspace() {
+    return consumerWorkspace({
+      createGroupConversation: jest.fn(async (..._args: unknown[]) => ({
+        alreadyExists: true as const, conversationId: 'conversation-existing',
+      })),
+    });
+  }
+
+  test('nothing is created: the form says so and offers to open it', async () => {
+    mockWorkspace = existingGroupWorkspace();
+    await render(<NewGroupScreen />);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Pat Pending' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
+
+    await waitFor(() => expect(screen.getByText('group.duplicateExists')).toBeTruthy());
+    expect(mockRouter.replace).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'group.openExisting' }));
+    expect(mockRouter.replace).toHaveBeenCalledWith({
+      pathname: '/conversation/[id]',
+      params: { id: 'conversation-existing' },
+    });
+  });
+
+  test('changing who is in the group clears the notice', async () => {
+    mockWorkspace = existingGroupWorkspace();
+    await render(<NewGroupScreen />);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Ana Friend' }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.addPerson Pat Pending' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.create' }));
+    await waitFor(() => expect(screen.getByText('group.duplicateExists')).toBeTruthy());
+
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'group.removePerson Pat Pending' }));
+    expect(screen.queryByText('group.duplicateExists')).toBeNull();
+  });
+});

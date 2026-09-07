@@ -4235,6 +4235,21 @@ function publicConversationMemberCandidates(value: unknown, requestedLimit: numb
   }
 }
 
+/**
+ * The service found a group with exactly this member set instead of creating
+ * another one. Its id is the whole answer; the app offers to open it.
+ */
+function publicGroupAlreadyExists(value: unknown): JsonObject | null {
+  try {
+    const row = asObject(value);
+    if (row.alreadyExists !== true) return null;
+    onlyKeys(row, ['alreadyExists', 'conversationId']);
+    return { alreadyExists: true, conversationId: uuid(row.conversationId) };
+  } catch {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
+}
+
 function publicGroupCreationReceipt(value: unknown): JsonObject {
   try {
     const row = asObject(value);
@@ -4988,6 +5003,10 @@ export async function executeCommand(
           p_incident_classification: values.incidentClassification,
         },
       );
+      const existing = publicGroupAlreadyExists(result);
+      // Nothing was created, so this is not a 201: the app is being sent to
+      // the group it already has.
+      if (existing) return { status: 200, body: existing };
       return {
         status: 201,
         body: publicGroupCreationReceipt(result),

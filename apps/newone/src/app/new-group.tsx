@@ -106,6 +106,7 @@ export default function NewGroupScreen() {
   const [selected, setSelected] = useState<Record<string, InitialConversationRole>>({});
   const [avatar, setAvatar] = useState<SelectedAttachment | null>(null);
   const [createdConversationId, setCreatedConversationId] = useState<string | null>(null);
+  const [existingConversationId, setExistingConversationId] = useState<string | null>(null);
   const [avatarUploadFailed, setAvatarUploadFailed] = useState(false);
   const requestSequence = useRef(0);
   const wide = width >= 920;
@@ -241,7 +242,7 @@ export default function NewGroupScreen() {
   };
 
   const submit = async () => {
-    const conversationId = createdConversationId ?? await workspace.createGroupConversation({
+    const outcome = createdConversationId ?? await workspace.createGroupConversation({
       name: submittedName(),
       description,
       kind,
@@ -253,7 +254,14 @@ export default function NewGroupScreen() {
       incidentClassification: kind === 'incident' ? incidentClassification : undefined,
       members: Object.entries(selected).map(([membershipId, role]) => ({ membershipId, role })),
     });
-    if (!conversationId) return;
+    if (!outcome) return;
+    // Nothing was created: this group already holds exactly these people.
+    if (typeof outcome !== 'string') {
+      setExistingConversationId(outcome.conversationId);
+      return;
+    }
+    const conversationId = outcome;
+    setExistingConversationId(null);
     setCreatedConversationId(conversationId);
     if (avatar) {
       setAvatarUploadFailed(false);
@@ -289,6 +297,8 @@ export default function NewGroupScreen() {
   };
 
   const toggle = (candidate: GroupCreationCandidate) => {
+    // A different set of people is a different group, so the notice goes.
+    setExistingConversationId(null);
     setSelected((current) => {
       const next = { ...current };
       if (next[candidate.userId]) delete next[candidate.userId];
@@ -651,6 +661,16 @@ export default function NewGroupScreen() {
               <Text numberOfLines={1} style={styles.advancedSummary}>{advancedSummary}</Text>
             )}
           </View>
+          {existingConversationId ? (
+            <View style={styles.duplicate}>
+              <Text style={styles.duplicateText}>{t('group.duplicateExists')}</Text>
+              <PrimaryButton
+                label={t('group.openExisting')}
+                onPress={() => finish(existingConversationId)}
+                tone="light"
+              />
+            </View>
+          ) : null}
           <ActionError message={workspace.actionError} />
         </View>
 
@@ -822,6 +842,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   advancedSummary: { color: colors.inkSubtle, fontSize: 11 },
+  duplicate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    backgroundColor: colors.mintSoft,
+  },
+  duplicateText: { flex: 1, color: colors.mintDark, fontSize: 12, lineHeight: 16 },
   advancedBody: { gap: spacing.md, paddingTop: spacing.xs },
   label: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

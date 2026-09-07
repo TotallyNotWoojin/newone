@@ -141,6 +141,12 @@ import {
 } from '@/device/push-registration'; // eslint-disable-line import/no-unresolved
 import { useAuth } from '@/state/auth';
 
+/** Group creation found the group instead of making one. */
+export interface ExistingGroupOutcome {
+  alreadyExists: true;
+  conversationId: string;
+}
+
 interface WorkspaceState {
   organizationId: string;
   organizationName: string;
@@ -283,7 +289,9 @@ interface WorkspaceState {
     incidentSeverity?: 'low' | 'medium' | 'high' | 'critical';
     incidentClassification?: string;
     members: { membershipId: string; role: 'owner' | 'admin' | 'member' }[];
-  }) => Promise<string | null>;
+    // The created conversation id, or the group that already holds exactly
+    // these people, or null when nothing happened.
+  }) => Promise<string | ExistingGroupOutcome | null>;
   uploadConversationAvatar: (
     conversationId: string,
     selected: SelectedAttachment,
@@ -2610,6 +2618,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           incidentClassification: input.kind === 'incident' ? incidentClassification : null,
           idempotencyKey: createClientId(),
         });
+        // The service refused to make a second group with the same people and
+        // handed back the one that exists; nothing local changes.
+        if ('alreadyExists' in created) {
+          setConnectivity('online');
+          return { alreadyExists: true, conversationId: created.conversationId } as const;
+        }
         const memberRoles = Object.fromEntries([
           [snapshot.currentUser.id, 'owner' as const],
           ...input.members.map((entry) => [entry.membershipId, entry.role] as const),
