@@ -571,6 +571,20 @@ function parseTranslation(message: JsonRecord, targetLanguage: LanguageCode) {
   return translations.find((item) => item.targetLanguage === targetLanguage);
 }
 
+/**
+ * On your own message, the row aimed at whoever reads it — a language that is
+ * not the one this phone reads in, which is why parseTranslation misses it.
+ * The server sends every translation of a message you can see, so this is a
+ * different pick from the same list, not an extra fetch. A finished one wins;
+ * otherwise the first row stands in so its state is known.
+ */
+function parseOutgoingTranslation(message: JsonRecord, readingLanguage: LanguageCode) {
+  const outgoing = values(message.translations)
+    .map(translationFromDto)
+    .filter((item) => item.targetLanguage !== readingLanguage);
+  return outgoing.find((item) => item.status === 'completed') ?? outgoing[0];
+}
+
 function attachmentFrom(value: unknown): Message['attachment'] {
   const attachment = objectValue(value);
   if (!Object.keys(attachment).length) return undefined;
@@ -741,6 +755,7 @@ function messageFromDto(
     targetLanguage: selectedTranslation?.targetLanguage,
     translationState,
     translation: selectedTranslation,
+    outgoingTranslation: isOwn ? parseOutgoingTranslation(row, messageLanguage) : undefined,
     languageDetection: detection,
     createdAt,
     sentAt: dateTimeLabel(createdAt),
