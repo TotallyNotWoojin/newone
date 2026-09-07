@@ -1243,6 +1243,7 @@ const MessageBubble = memo(function MessageBubble({
         {showSender ? <Text style={styles.senderName}>{message.senderName}</Text> : null}
         <SwipeToReply
           enabled={swipeReplyAvailable(message)}
+          onOpenActions={() => onOpenActions(message)}
           onReply={() => onReply(message)}
           own={message.isOwn}>
         <Pressable

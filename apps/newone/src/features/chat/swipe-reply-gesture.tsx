@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ReactNode } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { desktopMessageProps } from '@/features/chat/desktop-message-actions';
 import { replyHapticTick } from '@/features/chat/reply-haptics';
 import {
   swipeReplyArrowOpacity,
@@ -12,6 +13,7 @@ import {
   swipeReplyTranslation,
   swipeReplyTriggered,
 } from '@/features/chat/swipe-to-reply';
+import { useI18n } from '@/i18n/provider';
 import { colors, spacing } from '@/theme/tokens';
 
 const SNAP = { duration: 160 };
@@ -32,12 +34,16 @@ export function SwipeToReply({
   enabled,
   own,
   onReply,
+  onOpenActions,
 }: {
   children: ReactNode;
   enabled: boolean;
   own: boolean;
   onReply: () => void;
+  onOpenActions: () => void;
 }) {
+  const { t } = useI18n();
+  const [hovered, setHovered] = useState(false);
   const translateX = useSharedValue(0);
   const ticked = useSharedValue(false);
 
@@ -72,9 +78,28 @@ export function SwipeToReply({
     opacity: swipeReplyArrowOpacity(translateX.value),
   }));
 
-  // A mouse has no swipe. On web the row carries its own hover and right-click
-  // affordances (see MessageBubble), so the gesture stands aside here.
-  if (Platform.OS === 'web') return <>{children}</>;
+  // A mouse has neither gesture, so on the web build hovering the row shows its
+  // Reply where the swipe's arrow would have appeared, and right-clicking opens
+  // the sheet a long press opens on a phone.
+  if (Platform.OS === 'web') {
+    return (
+      <View
+        style={styles.row}
+        {...desktopMessageProps({ onHoverChange: setHovered, onContextMenu: onOpenActions })}>
+        {enabled && hovered ? (
+          <Pressable
+            accessibilityLabel={t('chat.reply')}
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={onReply}
+            style={[styles.arrow, own && styles.arrowOwn]}>
+            <Ionicons color={colors.inkSubtle} name="arrow-undo-outline" size={16} />
+          </Pressable>
+        ) : null}
+        {children}
+      </View>
+    );
+  }
 
   return (
     <GestureDetector gesture={pan}>

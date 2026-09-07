@@ -28,7 +28,9 @@ export function LinkPreviewCard({ url }: { url: string }) {
   // snapshot, and one card must ask about its address once, not once per
   // message that arrives in the chat while it is on screen.
   const loadRef = useRef(workspace.loadLinkPreview);
-  loadRef.current = workspace.loadLinkPreview;
+  useEffect(() => {
+    loadRef.current = workspace.loadLinkPreview;
+  }, [workspace.loadLinkPreview]);
 
   useEffect(() => {
     let live = true;

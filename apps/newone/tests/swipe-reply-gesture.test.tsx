@@ -7,6 +7,10 @@ import type { PanGesture } from 'react-native-gesture-handler';
 import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
 import { swipeReplyThresholdPx } from '@/features/chat/swipe-to-reply';
 
+jest.mock('@/i18n/provider', () => ({
+  useI18n: () => ({ locale: 'en', t: (key: string) => key }),
+}));
+
 const bubble = (
   <Text accessibilityLabel="bubble">Lock the north gate at 18:00.</Text>
 );
@@ -14,7 +18,7 @@ const bubble = (
 test('a swipe past the threshold replies to the message', async () => {
   const onReply = jest.fn<() => void>();
   await render(
-    <SwipeToReply enabled own={false} onReply={onReply}>
+    <SwipeToReply enabled own={false} onReply={onReply} onOpenActions={jest.fn<() => void>()}>
       {bubble}
     </SwipeToReply>,
   );
@@ -32,7 +36,7 @@ test('a swipe past the threshold replies to the message', async () => {
 test('a swipe released short of the threshold replies to nothing', async () => {
   const onReply = jest.fn<() => void>();
   await render(
-    <SwipeToReply enabled own onReply={onReply}>
+    <SwipeToReply enabled own onReply={onReply} onOpenActions={jest.fn<() => void>()}>
       {bubble}
     </SwipeToReply>,
   );
@@ -50,7 +54,7 @@ test('a swipe released short of the threshold replies to nothing', async () => {
 test('a message that cannot be replied to still renders, gesture and all', async () => {
   const onReply = jest.fn<() => void>();
   await render(
-    <SwipeToReply enabled={false} own={false} onReply={onReply}>
+    <SwipeToReply enabled={false} own={false} onReply={onReply} onOpenActions={jest.fn<() => void>()}>
       {bubble}
     </SwipeToReply>,
   );
