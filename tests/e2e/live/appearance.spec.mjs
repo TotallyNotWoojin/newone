@@ -27,7 +27,7 @@ test('the Settings override wins over the browser, and System hands it back', as
 
   const choose = async (option) => {
     await chats.getByTestId('setting-appearance').click();
-    await chats.getByRole('button', { name: option, exact: true }).click();
+    await chats.getByRole('button', { name: `Appearance: ${option}`, exact: true }).click();
   };
 
   // A light browser, told to be dark.

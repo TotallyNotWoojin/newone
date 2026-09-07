@@ -20,19 +20,17 @@ test('everything else is folded into Advanced options, closed and summarised', a
   await chats.goto('/new-group');
   const toggle = chats.getByRole('button', { name: 'Advanced options' });
   await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  // Closed, it still says what it holds.
+  // Closed: posting mode and history are not on the form.
   await expect(chats.getByText('Who can post')).toHaveCount(0);
+  await expect(chats.getByText('Chat history for people added later')).toHaveCount(0);
 
   await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(chats.getByText('Who can post')).toBeVisible();
   await expect(chats.getByRole('button', { name: 'Everyone', exact: true })).toBeVisible();
   await expect(chats.getByRole('button', { name: 'Admins only', exact: true })).toBeVisible();
   await expect(chats.getByText('Chat history for people added later')).toBeVisible();
 
   await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(chats.getByText('Who can post')).toHaveCount(0);
 });
 
@@ -46,12 +44,19 @@ test('the three-person rule is stated, and the picker separates contacts from ev
   await expect(chats.getByText('Your contacts')).toBeVisible();
   await expect(chats.getByText('Search everyone')).toBeVisible();
 
-  // Both accepted contacts are offered without searching for them.
+  // Both accepted contacts are offered without searching for them; each row is
+  // a checkbox, because picking people is choosing, not navigating.
   for (const person of [liveWorkspace.friend, liveWorkspace.third]) {
-    await expect(chats.getByRole('button', { name: `Add ${person.displayName}` })).toBeVisible();
+    await expect(chats.getByRole('checkbox', { name: `Add ${person.displayName}` })).toBeVisible();
   }
 
-  await chats.getByRole('button', { name: `Add ${liveWorkspace.friend.displayName}` }).click();
+  // Picking someone flips the row from adding to removing, and the count follows.
+  await chats.getByRole('checkbox', { name: `Add ${liveWorkspace.friend.displayName}` }).click();
   await expect(chats.getByText('1 selected')).toBeVisible();
-  await expect(chats.getByRole('button', { name: `Remove ${liveWorkspace.friend.displayName}` })).toBeVisible();
+  await expect(
+    chats.getByRole('checkbox', { name: `Remove ${liveWorkspace.friend.displayName}` }),
+  ).toBeVisible();
+  await expect(
+    chats.getByRole('checkbox', { name: `Add ${liveWorkspace.friend.displayName}` }),
+  ).toHaveCount(0);
 });

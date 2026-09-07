@@ -45,7 +45,7 @@ export async function installGatewayProxy(context, { projectUrl, pageOrigin }) {
           'access-control-max-age': '600',
         },
         body: '',
-      });
+      }).catch(() => {});
       return;
     }
 
@@ -61,7 +61,10 @@ export async function installGatewayProxy(context, { projectUrl, pageOrigin }) {
         timeout: 30_000,
       });
     } catch {
-      await route.abort('failed');
+      // A navigation can cancel the request while it is in flight, and the
+      // route is then already handled; letting that throw would fail a test
+      // for something the app never saw.
+      await route.abort('failed').catch(() => {});
       return;
     }
     const forwarded = {};
@@ -75,7 +78,7 @@ export async function installGatewayProxy(context, { projectUrl, pageOrigin }) {
       status: upstream.status(),
       headers: forwarded,
       body: await upstream.body(),
-    });
+    }).catch(() => {});
   });
 
   return async () => {

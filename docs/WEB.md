@@ -217,7 +217,9 @@ form with an email and a password.
   rows; hover revealing a message's Reply and right-click opening the actions
   sheet (reactions, Reply, Copy, Pin, Forward, Delete for everyone, and no
   workplace review items); the Pinned view across chats and inside one chat;
-  Photos and files.
+  Photos and files. Both of those last two assert that the view opens and that
+  the app asks `newone-read` for it, not that rows come back — see the
+  deployment note below.
 - **Groups** (`live/groups.spec.mjs`): optional name, description and photo;
   Advanced options collapsed, opening onto posting mode and history, and
   closing again; the three-person rule stated on the form; the picker's
@@ -230,6 +232,11 @@ form with an email and a password.
 - **Accessibility** (`live/accessibility.spec.mjs`): axe over Chats with a chat
   open, Contacts, and group creation, in both schemes.
 
+The accounts a run creates are real, and it does not delete them: their emails
+all begin with the run's `newone-e2e-…` prefix, which is what
+`tests/hosted/run.mjs --cleanup` matches (see `tests/hosted/README.md`). Run
+that, or let the pre-release database wipe take them.
+
 The live project shares one signed-in page across its tests and runs them
 serially. Every returning sign-in starts with an account lookup, and the
 gateway rate-limits those (20 per address-space per fifteen minutes), so
@@ -237,14 +244,31 @@ signing in per test would spend that budget; a run makes three signups and two
 lookups. Back-to-back runs inside the same quarter of an hour can still be
 rate-limited — the failure is a visible `429`, not a flake.
 
+### Blocked on a deployment
+
+`/v2/pins/query` and `/v2/conversations/<id>/media/query` answer `404` on the
+hosted project. Two separate things caused that:
+
+1. The client routing table sent both to `newone-api`, which serves neither.
+   Fixed in `apps/newone/src/config/api-routing.mjs`; it affected native too.
+2. The deployed `newone-read` is the version from 2026-09-05, before the
+   pins-and-media reads landed in `supabase/functions/newone-read/handler.ts`,
+   so it still answers `404` even now the request reaches it. Deploying
+   `newone-read` (with migration `20260908050000`) is the remaining step.
+
+`live/chats.spec.mjs` therefore carries one `test.fixme` — "the Pinned view
+lists the message that was pinned" — which is the assertion to turn back on
+once that deploy has happened.
+
 ### What the suite deliberately does not cover
 
 - **The cookie web gateway.** `api/[...path].mjs` signs its upstream calls with
   `NEWONE_WEB_GATEWAY_SHARED_SECRET`, which no test run holds, so the suite
   drives `direct` mode only. The cookie path is unchanged and untested here.
 - **A populated shared-media grid and its arrow-key stepping.** Putting a photo
-  in a chat needs a storage grant, an upload and a scan pass; the suite asserts
-  the empty grid and leaves the populated one to the device suite.
+  in a chat needs a storage grant, an upload, and an asynchronous scan that has
+  to mark the file clean before the grid will show it; the suite asserts the
+  empty grid and leaves the populated one to the device suite.
 - **Realtime, push and offline.** No web push exists, and the suite makes no
   assertions about live updates arriving in a second tab.
 - **The GitHub Pages `404.html` deep-link hand-back**, which lives in the Pages

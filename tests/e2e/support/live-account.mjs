@@ -44,6 +44,10 @@ function expectStatus(response, expected, what) {
  *    group of three is possible
  *  - a direct chat with three messages, one of them pinned
  */
+// A rate-limited signup or lookup makes tests/hosted's `fail()` exit the
+// process: Playwright reports it as "worker process exited unexpectedly" with
+// the gateway's own `FAIL: ... (429)` line just above it. Wait out the
+// fifteen-minute window rather than rerunning immediately.
 export async function createLiveWorkspace() {
   const supabaseAccessToken = loadAccessToken();
   const keys = projectKeys(supabaseAccessToken);
@@ -92,6 +96,7 @@ export async function createLiveWorkspace() {
   });
   expectStatus(pin, 200, 'pinning a message');
 
+  // signupUser names an account `Smoke <label>`.
   return {
     runId,
     projectUrl: PROJECT_URL,
