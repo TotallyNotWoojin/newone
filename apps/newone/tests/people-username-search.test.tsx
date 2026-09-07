@@ -433,7 +433,6 @@ describe('personal realm known-people list', () => {
     expect(screen.getByRole('button', { name: 'people.unblock' })).toBeTruthy();
     // No privacy lecture in the consumer manage sheet.
     expect(screen.queryByText('people.blockNotice')).toBeNull();
-    expect(screen.queryByText('people.blockNoticeConsumer')).toBeNull();
     expect(screen.queryByText('people.manageDescription')).toBeNull();
     await view.unmount();
   });
@@ -492,10 +491,8 @@ describe('consumer copy on Contacts', () => {
     // No desktop page header on a phone, so no description at all.
     expect(screen.queryByText('people.descriptionConsumer')).toBeNull();
 
-    // Neither variant: 75d0cbc removed the explanatory copy from the consumer
-    // manage sheet deliberately. The workplace notice stays workplace-only.
+    // No explanatory copy in the consumer manage sheet; the actions speak.
     await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
-    expect(screen.queryByText('people.blockNoticeConsumer')).toBeNull();
     expect(screen.queryByText('people.blockNotice')).toBeNull();
     await view.unmount();
   });

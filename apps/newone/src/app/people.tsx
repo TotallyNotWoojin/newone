@@ -461,11 +461,6 @@ export default function PeopleScreen() {
           onPress={() => setFavoriteContact((current) => !current)}
           tone={favoriteContact ? 'dark' : 'light'}
         />
-        {/* people.blockNoticeConsumer stays unrendered on purpose. 75d0cbc
-            ("no explanatory copy") stripped it from the consumer manage sheet
-            and left an assertion saying so; the cleanliness audit read that as
-            the same defect as the header above, but it is a decision. Deleting
-            the key is the owner's call, not this change's. */}
         {personalRealm ? null : (
           <View style={styles.privacyNote}>
             <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />

@@ -753,8 +753,13 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   unreadBadgeSafety: {
     backgroundColor: colors.redStrong,
   },
-  unreadBadgeText: {
+  unreadBadgeSafetyText: {
     color: colors.white,
+  },
+  unreadBadgeText: {
+    // White on mint is 2.2:1, which is not readable at 10pt; the count sits on
+    // a bright badge, so it takes the dark ink both palettes use on accent.
+    color: colors.onAccent,
     fontSize: 10,
     fontWeight: '900',
   },

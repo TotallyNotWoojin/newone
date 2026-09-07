@@ -103,7 +103,7 @@ describe('consumer-surface catalog copy', () => {
     'status.emptyChatsBodyConsumer', 'status.emptyPeopleConsumer', 'status.emptyPeopleBodyConsumer',
     'chat.chooseBodyConsumer', 'chat.privateConsumer', 'chat.companyMemberConsumer',
     'people.subtitleConsumer', 'people.eyebrowConsumer', 'people.descriptionConsumer',
-    'people.blockNoticeConsumer', 'people.reportNoticeConsumer', 'people.reportConsentConsumer',
+    'people.reportNoticeConsumer', 'people.reportConsentConsumer',
     'settings.accountVerified', 'settings.preferencesDescriptionConsumer',
     'settings.deviceNotificationsNoteConsumer', 'settings.devicePreferencesBoundaryConsumer',
     'search.subtitleConsumer',

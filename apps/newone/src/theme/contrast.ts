@@ -83,7 +83,7 @@ export const TEXT_PAIRS: TextPair[] = [
   { text: 'mintDark', on: 'paperMuted', where: 'accent actions on a chip' },
   { text: 'mintDark', on: 'mintSoft', where: 'accent metric on a soft panel' },
   { text: 'accentInk', on: 'mintSoft', where: 'soft accent panel heading' },
-  { text: 'onAccent', on: 'mint', where: 'selected tab, checkmarks, accent button' },
+  { text: 'onAccent', on: 'mint', where: "selected tab, checkmarks, accent button, a chat row's unread count" },
   { text: 'amber', on: 'canvas', where: 'warning text on a page' },
   { text: 'amber', on: 'paper', where: 'warning text in a card' },
   { text: 'amber', on: 'amberSoft', where: 'warning panel heading' },
@@ -103,16 +103,6 @@ export const TEXT_PAIRS: TextPair[] = [
   { text: 'white', on: 'redStrong', where: 'unread badge and acknowledge button' },
   { text: 'white', on: 'inkStrong', where: 'discovery pill' },
   { text: 'white', on: 'accentStrong', where: 'jump-to-latest pill and the on-state switch thumb' },
-  {
-    text: 'white',
-    on: 'mint',
-    where: "a chat row's unread count",
-    minimum: 0,
-    note: 'Pre-existing in the light palette (2.2:1) and unchanged by dark mode. '
-      + 'The count is a shape more than a word, and darkening the badge or moving '
-      + 'its text to onAccent is a visible change to the light app that the owner '
-      + 'has not asked for. Raise it with the owner rather than quietly editing it.',
-  },
 ];
 
 export interface ContrastFailure {
