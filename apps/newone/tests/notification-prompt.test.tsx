@@ -38,7 +38,7 @@ jest.mock('@/state/workspace', () => ({
   useWorkspace: () => mockWorkspace,
 }));
 
-const STORAGE_KEY = 'preferences.device.v1';
+const STORAGE_KEY = 'preferences.device.v2';
 
 function storedPromptedAt(): string | null {
   const raw = mockStore[STORAGE_KEY];

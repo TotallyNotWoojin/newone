@@ -159,7 +159,7 @@ describe('the theme provider', () => {
       ['light', 'light', lightColors],
     ] as [typeof mockSystemScheme, ThemePreference, typeof lightColors][]) {
       mockSystemScheme = systemScheme;
-      mockStorage.set('preferences.device.v1', JSON.stringify({ theme: preference }));
+      mockStorage.set('preferences.device.v2', JSON.stringify({ theme: preference }));
       const view = await renderProbe();
       expect(backgroundOf('probe-surface')).toBe(expected.canvas);
       await view.unmount();
@@ -187,7 +187,7 @@ describe('the theme provider', () => {
   test('the choice is written to the device store and comes back on the next launch', async () => {
     const first = await renderProbe();
     await fireEvent.press(screen.getByTestId('choose-dark'));
-    expect(JSON.parse(mockStorage.get('preferences.device.v1') ?? '{}')).toMatchObject({ theme: 'dark' });
+    expect(JSON.parse(mockStorage.get('preferences.device.v2') ?? '{}')).toMatchObject({ theme: 'dark' });
     await first.unmount();
 
     // A fresh launch on a light phone still opens dark.
@@ -208,7 +208,7 @@ describe('the theme provider', () => {
     expect(backgroundOf('probe-surface')).toBe(darkColors.canvas);
     await following.unmount();
 
-    mockStorage.set('preferences.device.v1', JSON.stringify({ theme: 'light' }));
+    mockStorage.set('preferences.device.v2', JSON.stringify({ theme: 'light' }));
     mockSystemScheme = 'dark';
     const overridden = await renderProbe();
     expect(backgroundOf('probe-surface')).toBe(lightColors.canvas);

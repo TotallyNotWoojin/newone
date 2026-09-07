@@ -31,7 +31,11 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   theme: 'system',
 };
 
-const STORAGE_KEY = 'preferences.device.v1';
+// v3.3 starts everyone from the documented defaults. These live on the device,
+// so a phone would otherwise carry a switch someone flipped months ago into a
+// release where every account is new — "show only translations" in particular
+// is off by default and had stayed on for whoever had once tried it.
+const STORAGE_KEY = 'preferences.device.v2';
 
 interface DevicePreferencesValue {
   preferences: DevicePreferences;
