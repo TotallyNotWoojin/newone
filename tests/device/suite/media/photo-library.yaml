@@ -102,6 +102,9 @@ appId: com.totallynotwoojin.newone
     notVisible: "(Send securely|Send)"
     timeout: 8000
     optional: true
+# The guard races itself: the button is checked, the first tap's send finishes,
+# and the sheet closes before this one lands (media-01, run-2026-09-08T09-51-54).
+# A button that has already gone is the outcome this is waiting for.
 - runFlow:
     when:
       visible:
@@ -111,6 +114,7 @@ appId: com.totallynotwoojin.newone
           timeout: 2000
       - tapOn:
           id: "attachment-send"
+          optional: true
 - extendedWaitUntil:
     notVisible: "(Send securely|Send)"
     timeout: 60000
