@@ -84,6 +84,7 @@ export function Avatar({
 export function IconButton({
   name,
   label,
+  accessibilityLabel,
   onPress,
   size = 40,
   tone = 'neutral',
@@ -91,6 +92,9 @@ export function IconButton({
 }: {
   name: IconName;
   label: string;
+  /** Says which one, where a screen would otherwise repeat the same label
+   * down a list — one "Manage" per person. */
+  accessibilityLabel?: string;
   onPress?: () => void;
   size?: number;
   tone?: 'neutral' | 'inverse' | 'accent' | 'danger';
@@ -109,7 +113,7 @@ export function IconButton({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       disabled={isDisabled}
       hitSlop={6}
       onPress={onPress}

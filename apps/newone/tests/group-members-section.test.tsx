@@ -82,14 +82,14 @@ describe('group members section', () => {
     expect(screen.getByRole('button', { name: 'group.memberActions Ana Friend' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'group.memberActions Jordan Lee' })).toBeNull();
     // The actions stay closed until asked for.
-    expect(screen.queryByRole('button', { name: 'group.memberMessage' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'group.memberMessage Jordan Lee' })).toBeNull();
   });
 
   test('a member row offers message, add as friend, mute, block and removal', async () => {
     await render(<GroupMembersSection conversation={group()} />);
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Sam Stranger' }));
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMessage' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMessage Sam Stranger' }));
     await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation)
       .toHaveBeenCalledWith('user-sam'));
     expect(mockRouter.replace).toHaveBeenCalledWith({
@@ -97,34 +97,36 @@ describe('group members section', () => {
       params: { id: 'conversation-direct' },
     });
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberAddFriend' }));
+    // Message leaves for the one-to-one chat, so the sheet closes behind it.
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Sam Stranger' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberAddFriend Sam Stranger' }));
     expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-sam');
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMute' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMute Sam Stranger' }));
     expect(mockWorkspace.setPersonMuted).toHaveBeenCalledWith('user-sam', true);
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberBlock' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberBlock Sam Stranger' }));
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-sam', true);
 
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberRemove' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberRemove Sam Stranger' }));
     await waitFor(() => expect(mockWorkspace.removeConversationMember)
       .toHaveBeenCalledWith('conversation-group', 'user-sam'));
     // Removing closes the row it was opened from.
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'group.memberMute' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'group.memberMute Sam Stranger' })).toBeNull());
   });
 
   test('an already connected member is not offered a friend request', async () => {
     await render(<GroupMembersSection conversation={group()} />);
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Ana Friend' }));
-    expect(screen.queryByRole('button', { name: 'group.memberAddFriend' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'group.memberMute' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'group.memberAddFriend Ana Friend' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'group.memberMute Ana Friend' })).toBeTruthy();
   });
 
   test('a plain member cannot remove anyone', async () => {
     await render(<GroupMembersSection conversation={group({ myRole: 'member' })} />);
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Ana Friend' }));
-    expect(screen.queryByRole('button', { name: 'group.memberRemove' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'group.memberBlock' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'group.memberRemove Ana Friend' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'group.memberBlock Ana Friend' })).toBeTruthy();
   });
 
   test('mute and block read back from the row, and reverse', async () => {
@@ -137,9 +139,9 @@ describe('group members section', () => {
     })} />);
     expect(screen.getByText('@ana_friend · group.memberMuted · group.memberBlocked')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Ana Friend' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberUnmute' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberUnmute Ana Friend' }));
     expect(mockWorkspace.setPersonMuted).toHaveBeenCalledWith('user-ana', false);
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberUnblock' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberUnblock Ana Friend' }));
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-ana', false);
   });
 
@@ -154,7 +156,7 @@ describe('group members section', () => {
       <GroupMembersSection conversation={group()} onOpenConversation={onOpenConversation} />,
     );
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Ana Friend' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMessage' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberMessage Ana Friend' }));
     await waitFor(() => expect(onOpenConversation).toHaveBeenCalledWith('conversation-direct'));
     expect(mockRouter.replace).not.toHaveBeenCalled();
   });

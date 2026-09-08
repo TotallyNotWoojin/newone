@@ -124,8 +124,14 @@ test('history paging rejects stale cursors and the UI preserves position without
   assert.match(pane, /\binverted\b/);
   assert.match(pane, /maintainVisibleContentPosition=\{\{ minIndexForVisible: 0/);
   // Arriving messages still only pull the view down when the reader is already
-  // at the bottom, or when the message is their own.
-  assert.match(pane, /if \(tail\?\.isOwn\) \{[\s\S]{0,200}scrollToOffset\(\{ offset: 0/);
+  // at the bottom, or when the message is their own. v3.4: both cases scroll
+  // explicitly — the platform's own autoscroll gave up whenever anything else
+  // changed height, and the newest message ended up behind the composer.
+  assert.match(pane, /if \(tail\?\.isOwn\) \{[\s\S]{0,600}scrollToOffset\(\{ offset: 0, animated: false \}\)/);
+  assert.match(
+    pane,
+    /if \(nearBottomRef\.current\) \{[\s\S]{0,600}if \(!tail\?\.isOwn\) listRef\.current\?\.scrollToOffset\(\{ offset: 0, animated: true \}\)/,
+  );
   assert.match(pane, /if \(nearBottomRef\.current\) \{/);
   assert.match(
     pane,

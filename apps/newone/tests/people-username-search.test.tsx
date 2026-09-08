@@ -293,13 +293,14 @@ describe('adding a friend from Contacts', () => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
     expect(screen.getByText('Ana Friend')).toBeTruthy();
-    expect(screen.queryByText('Sam Available')).toBeNull();
+    expect(screen.queryByText('Coach')).toBeNull();
 
-    // Handles and saved aliases match too.
+    // Handles and nicknames match too — and from v3.4 the nickname is also
+    // what the row is called, since that is the point of setting one.
     await fireEvent.changeText(contacts, 'coach');
-    expect(screen.getByText('Sam Available')).toBeTruthy();
+    expect(screen.getByText('Coach')).toBeTruthy();
     await fireEvent.changeText(contacts, 'sam_avail');
-    expect(screen.getByText('Sam Available')).toBeTruthy();
+    expect(screen.getByText('Coach')).toBeTruthy();
 
     await fireEvent.changeText(contacts, 'nobody at all');
     expect(screen.getByText('people.noContactMatch')).toBeTruthy();
@@ -345,7 +346,7 @@ describe('adding a friend from Contacts', () => {
     // the badge instead, and the manage control leads to Unblock.
     expect(screen.queryByRole('button', { name: 'people.message' })).toBeNull();
     expect(screen.getAllByText('people.blocked').length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
+    await fireEvent.press(screen.getAllByLabelText(/^people\.manage /)[0]!);
     expect(screen.getByText('people.manageTitle · Sam Stranger')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'people.unblock' }));
     await waitFor(() => expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-stranger', false));
@@ -365,8 +366,8 @@ describe('adding a friend from Contacts', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'people.connect' }));
     await waitFor(() => expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-avail'));
     expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
-    expect(screen.getAllByLabelText('people.manage').length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
+    expect(screen.getAllByLabelText(/^people\.manage /).length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getAllByLabelText(/^people\.manage /)[0]!);
     expect(screen.getByText('people.manageDescription')).toBeTruthy();
     expect(screen.getByText('people.blockNotice')).toBeTruthy();
     await view.unmount();
@@ -428,7 +429,9 @@ describe('personal realm known-people list', () => {
       expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith('user-incoming'));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
 
-    await fireEvent.press(screen.getAllByLabelText('people.manage')[3]!);
+    // v3.4: each manage control names its person, and saved contacts sort
+    // first, so a position in the list is no longer the way to find one.
+    await fireEvent.press(screen.getByLabelText('people.manage Bailey Blocked'));
     expect(screen.getByText('people.manageTitle · Bailey Blocked')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'people.unblock' })).toBeTruthy();
     // No privacy lecture in the consumer manage sheet.
@@ -492,7 +495,7 @@ describe('consumer copy on Contacts', () => {
     expect(screen.queryByText('people.descriptionConsumer')).toBeNull();
 
     // No explanatory copy in the consumer manage sheet; the actions speak.
-    await fireEvent.press(screen.getAllByLabelText('people.manage')[0]!);
+    await fireEvent.press(screen.getAllByLabelText(/^people\.manage /)[0]!);
     expect(screen.queryByText('people.blockNotice')).toBeNull();
     await view.unmount();
   });

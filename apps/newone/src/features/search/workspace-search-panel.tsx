@@ -135,9 +135,20 @@ export function WorkspaceSearchPanel({
   );
   const managementOnlyConversationIdsRef = useRef(managementOnlyConversationIds);
   const conversationAuthorizationSignatureRef = useRef(conversationAuthorizationSignature);
+  // A one-to-one chat with somebody the People section already lists is the
+  // same row twice; the person's own row opens that chat anyway (v3.4).
+  const peopleResultIds = new Set(peopleResults.map((person) => person.userId));
+  const duplicateDirectIds = new Set(
+    workspace.conversations
+      .filter((conversation) => conversation.kind === 'direct'
+        && conversation.directParticipantId
+        && peopleResultIds.has(conversation.directParticipantId))
+      .map((conversation) => conversation.id),
+  );
   const visibleResults = resultsAuthorizationSignature === conversationAuthorizationSignature
     ? results.filter((result) => (
-        !result.conversationId || !managementOnlyConversationIds.has(result.conversationId)
+        (!result.conversationId || !managementOnlyConversationIds.has(result.conversationId))
+        && !(personalRealm && result.type === 'conversations' && duplicateDirectIds.has(result.id))
       ))
     : [];
 
@@ -242,7 +253,13 @@ export function WorkspaceSearchPanel({
         senderMembershipId: selectedSenderId,
         dateFrom,
         dateTo,
-        matchSources: selectedSource === 'all' ? null : [selectedSource],
+        // Searching "echo" should find messages with "echo" in them, not every
+        // message an account called Echo ever sent — and the sender match also
+        // put the sender's name in the result's own snippet, so the rows read
+        // as a name twice over (owner, Sep 8 2026).
+        matchSources: selectedSource === 'all'
+          ? (personalRealm ? ['original', 'translation', 'attachment_filename'] : null)
+          : [selectedSource],
         conversationId: selectedConversationId,
         language: selectedLanguage === 'all' ? null : selectedLanguage,
       });
@@ -638,8 +655,19 @@ export function WorkspaceSearchPanel({
                 </View>
                 <View style={styles.resultCopy}>
                   {personalRealm ? null : <Text style={styles.resultType}>{typeLabels[result.type]}</Text>}
-                  <Text style={styles.resultTitle}>{result.title}</Text>
-                  {result.snippet ? <Text numberOfLines={2} style={styles.resultSnippet}>{result.snippet}</Text> : null}
+                  {/* A message result leads with what was said; the name of
+                      whoever said it is the second line, not the first. */}
+                  {personalRealm && result.type === 'messages' && result.snippet ? (
+                    <>
+                      <Text numberOfLines={2} style={styles.resultTitle}>{result.snippet}</Text>
+                      <Text numberOfLines={1} style={styles.resultSnippet}>{result.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.resultTitle}>{result.title}</Text>
+                      {result.snippet ? <Text numberOfLines={2} style={styles.resultSnippet}>{result.snippet}</Text> : null}
+                    </>
+                  )}
                   <View style={styles.resultMetadata}>
                     {personalRealm ? null : (
                       <Text style={styles.resultMatch}>

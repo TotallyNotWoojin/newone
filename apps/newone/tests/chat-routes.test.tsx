@@ -481,8 +481,10 @@ describe('chats index route', () => {
     expect(screen.getByText('chat.deleteChatTitle')).toBeTruthy();
     expect(screen.getByText('chat.deleteChatBody')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'chat.deleteChat' }));
+    // v3.4: being done with a chat hides it; archiving only moves it aside,
+    // and the two used to write the same flag.
     expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
-      'conversation-primary', { isArchived: true },
+      'conversation-primary', { isHidden: true },
     );
 
     await view.unmount();

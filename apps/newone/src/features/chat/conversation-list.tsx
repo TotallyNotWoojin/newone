@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import type { Conversation, DiscoverableConversation, InboxFilter } from '@/domain/types';
 import type { MessageKey } from '@/i18n/catalog';
@@ -33,6 +34,9 @@ const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announceme
 
 /** A row is dragged this far before its actions stay open. */
 const REVEAL_DISTANCE = 56;
+/** One action's target: a full-height column, not a 34px circle on the time. */
+const ACTION_WIDTH = 54;
+const SNAP = { duration: 160 };
 
 export type ConversationRowActionKey =
   | 'markUnread'
@@ -458,6 +462,9 @@ function ConversationRow({
   const workspace = useWorkspace();
   const official = conversation.kind === 'announcement';
   const [hovered, setHovered] = useState(false);
+  // The actions are only in the tree while they can be seen: closed, they are
+  // not something a screen reader should walk past on every row.
+  const [dragging, setDragging] = useState(false);
   const rowRef = useRef<View>(null);
   const openActions = useCallback(() => onToggleActions?.(true), [onToggleActions]);
   const actionable = Boolean(onAction);
@@ -479,21 +486,47 @@ function ConversationRow({
     return attachContextMenu(rowRef.current, openActions);
   }, [actionable, openActions]);
 
-  // A short drag opens the same actions; released early it simply snaps back.
+  // The actions used to appear all at once, on top of the time, as small
+  // circles. Now the row slides under the finger and uncovers them, so nothing
+  // is hidden and each one is a full-height column (owner, Sep 8 2026).
+  const panelWidth = actions.length * ACTION_WIDTH;
+  const dragX = useSharedValue(0);
+  const openOffset = useSharedValue(0);
+  useEffect(() => {
+    openOffset.value = withTiming(showActions ? -panelWidth : 0, SNAP);
+  }, [openOffset, panelWidth, showActions]);
+  const rowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: openOffset.value + dragX.value }],
+  }));
+  const panelStyle = useAnimatedStyle(() => {
+    const revealed = Math.min(1, Math.abs(openOffset.value + dragX.value) / Math.max(1, panelWidth));
+    return { opacity: revealed };
+  });
   const swipe = useMemo(
     () => Gesture.Pan()
       .activeOffsetX([-12, 12])
       .failOffsetY([-8, 8])
+      .onBegin(() => setDragging(true))
+      .onFinalize(() => setDragging(false))
+      .onUpdate((event) => {
+        // Only ever between closed and fully open, so a row cannot be dragged
+        // off its own list.
+        const base = showActions ? -panelWidth : 0;
+        dragX.value = Math.max(-panelWidth - base, Math.min(-base, event.translationX));
+      })
       .onEnd((event) => {
-        if (event.translationX <= -REVEAL_DISTANCE) onToggleActions?.(true);
-        else if (event.translationX >= REVEAL_DISTANCE) onToggleActions?.(false);
+        const settled = (showActions ? -panelWidth : 0) + dragX.value;
+        dragX.value = withTiming(0, SNAP);
+        if (settled <= -REVEAL_DISTANCE || event.velocityX < -600) onToggleActions?.(true);
+        else onToggleActions?.(false);
       })
       .runOnJS(true),
-    [onToggleActions],
+    [dragX, onToggleActions, panelWidth, showActions],
   );
 
   const row = (
     <View accessible={false} ref={rowRef} style={styles.rowShell}>
+      <Animated.View style={[styles.rowSlide, rowStyle]}>
       <Pressable
         accessibilityLabel={`${conversation.title}: ${previewLine}`}
         accessibilityRole="button"
@@ -561,11 +594,13 @@ function ConversationRow({
           </View>
         </View>
       </Pressable>
-      {showActions ? (
-        <View
+      </Animated.View>
+      {actionable && (showActions || dragging) ? (
+        <Animated.View
           accessibilityLabel={t('chat.rowActions')}
           accessible={false}
-          style={styles.rowActions}>
+          pointerEvents={showActions ? 'auto' : 'none'}
+          style={[styles.rowActions, { width: panelWidth }, panelStyle]}>
           {actions.map((action) => (
             <Pressable
               accessibilityLabel={t(action.labelKey)}
@@ -578,16 +613,21 @@ function ConversationRow({
               style={({ pressed }) => [
                 styles.rowAction,
                 action.destructive && styles.rowActionDestructive,
-                pressed && styles.rowPressed,
+                pressed && styles.rowActionPressed,
               ]}>
               <Ionicons
-                color={action.destructive ? colors.red : colors.mintDark}
+                color={action.destructive ? colors.white : colors.ink}
                 name={action.icon}
-                size={17}
+                size={19}
               />
+              <Text
+                numberOfLines={1}
+                style={[styles.rowActionLabel, action.destructive && styles.rowActionLabelDestructive]}>
+                {t(action.labelKey)}
+              </Text>
             </Pressable>
           ))}
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -609,28 +649,28 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   rowShell: {
     position: 'relative',
   },
+  rowSlide: { backgroundColor: colors.paper },
   rowActions: {
     position: 'absolute',
-    right: spacing.sm,
+    right: 0,
     top: 0,
     bottom: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    alignItems: 'stretch',
   },
   rowAction: {
-    width: 34,
-    height: 34,
+    width: ACTION_WIDTH,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.pill,
-    backgroundColor: colors.paper,
-    borderWidth: 1,
-    borderColor: colors.line,
+    gap: 2,
+    backgroundColor: colors.paperMuted,
   },
+  rowActionPressed: { opacity: 0.7 },
   rowActionDestructive: {
-    borderColor: colors.red,
+    backgroundColor: colors.red,
   },
+  rowActionLabel: { color: colors.inkSubtle, fontSize: 9, fontWeight: '700' },
+  rowActionLabelDestructive: { color: colors.white },
   jumpToLatest: {
     position: 'absolute',
     right: spacing.md,

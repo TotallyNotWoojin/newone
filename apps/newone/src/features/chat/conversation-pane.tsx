@@ -2507,6 +2507,18 @@ function ConversationControlsModal({
   const [controlReason, setControlReason] = useState('');
   const [joinRequests, setJoinRequests] = useState<import('@/domain/types').ConversationJoinRequest[]>([]);
   const [decisionReason, setDecisionReason] = useState('');
+  // One place that writes the controls, so a chip that applies itself and the
+  // workplace's Save button cannot drift apart.
+  const saveControls = (nextPostingMode: 'all_members' | 'admins_only') => {
+    void workspace.updateConversationControls(conversation.id, {
+      postingMode: nextPostingMode,
+      joinPolicy,
+      visibility,
+      // The service keeps a reason on every controls change; a consumer is
+      // never asked for one, so the app records where it came from.
+      reason: personalRealm ? 'Changed in the app' : controlReason,
+    });
+  };
   const scopedMemberProfiles = new Map(
     (conversation.memberProfiles ?? []).map((profile) => [profile.id, profile]),
   );
@@ -2772,14 +2784,22 @@ function ConversationControlsModal({
       ) : null}
       {conversation.canManageConversation && conversation.kind !== 'direct' ? (
         <View style={styles.modalSection}>
-          <FormField label={t('chat.name')} onChangeText={onChangeName} value={name} />
-          <FormField label={t('chat.description')} multiline onChangeText={onChangeDescription} value={description} />
-          <PrimaryButton
-            disabled={name.trim().length < 2}
-            label={t('chat.saveConversation')}
-            loading={busy === 'conversation-update'}
-            onPress={onSave}
-            tone="dark"
+          {/* A change applies when it is made. The owner asked for the Save
+              buttons to go (Sep 8 2026): a name typed and a sheet closed used
+              to lose the name to a button nobody pressed. A name still has to
+              be two characters, so an empty field simply saves nothing. */}
+          <FormField
+            label={t('chat.name')}
+            onBlur={() => { if (name.trim().length >= 2) onSave(); }}
+            onChangeText={onChangeName}
+            value={name}
+          />
+          <FormField
+            label={t('chat.description')}
+            multiline
+            onBlur={() => { if (name.trim().length >= 2) onSave(); }}
+            onChangeText={onChangeDescription}
+            value={description}
           />
         </View>
       ) : null}
@@ -2795,8 +2815,18 @@ function ConversationControlsModal({
           )}
           <Text style={styles.modalLabel}>{t('chat.whoCanPost')}</Text>
           <View style={styles.modalRow}>
-            <Chip label={t('chat.allMembers')} onPress={() => setPostingMode('all_members')} selected={postingMode === 'all_members'} />
-            <Chip label={t('chat.adminsOnly')} onPress={() => setPostingMode('admins_only')} selected={postingMode === 'admins_only'} />
+            {/* Tapping a choice is the change. A workplace still records a
+                reason, so there the Save button below stays. */}
+            <Chip
+              label={t('chat.allMembers')}
+              onPress={() => { setPostingMode('all_members'); if (personalRealm) saveControls('all_members'); }}
+              selected={postingMode === 'all_members'}
+            />
+            <Chip
+              label={t('chat.adminsOnly')}
+              onPress={() => { setPostingMode('admins_only'); if (personalRealm) saveControls('admins_only'); }}
+              selected={postingMode === 'admins_only'}
+            />
           </View>
           {personalRealm ? null : (
             <>
@@ -2811,20 +2841,15 @@ function ConversationControlsModal({
           {personalRealm ? null : (
             <FormField label={t('chat.changeReason')} multiline onChangeText={setControlReason} placeholder={t('chat.changeReasonPlaceholder')} value={controlReason} />
           )}
-          <PrimaryButton
-            disabled={!personalRealm && controlReason.trim().length < 3}
-            label={t('chat.saveAccessControls')}
-            loading={busy === 'conversation-controls'}
-            onPress={() => void workspace.updateConversationControls(conversation.id, {
-              postingMode,
-              joinPolicy,
-              visibility,
-              // The service keeps a reason on every controls change; a consumer is
-              // never asked for one, so the app records where it came from.
-              reason: personalRealm ? 'Changed in the app' : controlReason,
-            })}
-            tone="dark"
-          />
+          {personalRealm ? null : (
+            <PrimaryButton
+              disabled={controlReason.trim().length < 3}
+              label={t('chat.saveAccessControls')}
+              loading={busy === 'conversation-controls'}
+              onPress={() => saveControls(postingMode)}
+              tone="dark"
+            />
+          )}
           {personalRealm ? null : (
           <>
           <PrimaryButton

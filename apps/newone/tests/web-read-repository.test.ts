@@ -859,10 +859,13 @@ describe('authoritative web read repository', () => {
       canManageConversation: true,
       historyPolicy: 'all',
     });
+    // v3.4: a nickname is what this reader calls them, so it names the thread;
+    // and the pair follows the reading language ("Translate to", es-MX here),
+    // which matches the counterpart's Spanish, so there is no pair to show.
     expect(workspace.conversations[1]).toMatchObject({
       id: directConversationId,
-      title: 'Ana Torres',
-      translationPair: 'EN ↔ ES',
+      title: 'Ana T',
+      translationPair: undefined,
     });
     expect(workspace.messages[conversationId]).toHaveLength(3);
     expect(workspace.messages[conversationId]![0]).toMatchObject({

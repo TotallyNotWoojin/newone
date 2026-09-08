@@ -455,7 +455,7 @@ export default function PeopleScreen() {
       <ActionModal
         description={personalRealm ? undefined : t('people.manageDescription')}
         onClose={() => setManagePersonId('')}
-        title={managePerson ? `${t('people.manageTitle')} · ${managePerson.displayName}` : t('people.manageTitle')}
+        title={managePerson ? `${t('people.manageTitle')} · ${personDisplayName(managePerson)}` : t('people.manageTitle')}
         visible={Boolean(managePerson)}>
         {/* The nickname commits when you leave the field: a person who typed
             one and closed the sheet used to lose it to a Save button they
@@ -606,7 +606,7 @@ function PersonRow({
         size={40}
       />
       <View style={styles.personRowCopy}>
-        <Text numberOfLines={1} style={styles.personRowName}>{person.displayName}</Text>
+        <Text numberOfLines={1} style={styles.personRowName}>{personDisplayName(person)}</Text>
         {person.username ? (
           <Text numberOfLines={1} style={styles.personRowHandle}>{`@${person.username}`}</Text>
         ) : null}
@@ -624,7 +624,12 @@ function PersonRow({
         </>
       )}
       {onManage ? (
-        <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
+        <IconButton
+          accessibilityLabel={`${t('people.manage')} ${personDisplayName(person)}`}
+          label={t('people.manage')}
+          name="ellipsis-horizontal"
+          onPress={onManage}
+        />
       ) : null}
     </View>
   );
@@ -656,7 +661,12 @@ function PersonCard({
   const connected = person.connectionState === 'connected';
   const pending = person.connectionState === 'pending';
   const manageButton = (
-    <IconButton label={t('people.manage')} name="ellipsis-horizontal" onPress={onManage} />
+    <IconButton
+      accessibilityLabel={`${t('people.manage')} ${personDisplayName(person)}`}
+      label={t('people.manage')}
+      name="ellipsis-horizontal"
+      onPress={onManage}
+    />
   );
   return (
     <View style={[styles.personCard, !desktop && styles.personCardMobile, shadow]}>
@@ -693,7 +703,13 @@ function PersonCard({
       ) : null}
       <View style={styles.personActions}>
         {person.blockedByMe ? (
-          <PrimaryButton icon="options-outline" label={t('people.manage')} onPress={onManage} tone="light" />
+          <PrimaryButton
+            accessibilityLabel={`${t('people.manage')} ${personDisplayName(person)}`}
+            icon="options-outline"
+            label={t('people.manage')}
+            onPress={onManage}
+            tone="light"
+          />
         ) : connected ? (
           <>
             <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} />

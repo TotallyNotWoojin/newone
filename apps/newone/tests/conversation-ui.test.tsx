@@ -585,7 +585,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         systemEvent: { eventType: 'conversation.created', targetUserId: null },
         attachment: undefined,
       },
-      translatedMessage(),
+      translatedMessage({ isOwn: false }),
       incomingMessage(),
     ];
     await render(<ConversationPane conversation={conversation()} messages={messages} onSend={onSend} mobile />);
@@ -622,7 +622,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
   test('runs translation correction, message actions, and reply composition through the real pane', async () => {
     const onSend = jest.fn(async () => undefined);
-    const message = translatedMessage();
+    const message = translatedMessage({ isOwn: false });
     await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={onSend} />);
 
     // The bubble is just the two texts; language details sit one long-press away.
@@ -960,7 +960,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Controlled Operations');
     await fireEvent.changeText(screen.getByLabelText('chat.description'), 'Scoped operations coordination.');
-    await fireEvent.press(screen.getByLabelText('chat.saveConversation'));
+    // v3.4: the record saves itself when the field is left; the Save button is gone.
+    await fireEvent(screen.getByLabelText('chat.description'), 'blur');
     await fireEvent.press(screen.getByLabelText('chat.adminsOnly'));
     await fireEvent.press(screen.getByLabelText('chat.inviteOnly'));
     await fireEvent.changeText(screen.getByLabelText('chat.changeReason'), 'Restrict posting during audit.');
@@ -1472,7 +1473,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.adminRole · Scoped Member'));
     await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Scoped Management');
     await fireEvent.changeText(screen.getByLabelText('chat.description'), 'Scoped profile management only.');
-    await fireEvent.press(screen.getByLabelText('chat.saveConversation'));
+    await fireEvent(screen.getByLabelText('chat.description'), 'blur');
     await fireEvent.press(screen.getByLabelText('chat.unitVisible'));
     await fireEvent.changeText(screen.getByLabelText('chat.changeReason'), 'Keep the unit scope.');
     await fireEvent.press(screen.getByLabelText('chat.saveAccessControls'));
@@ -2032,7 +2033,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
     await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Saved Operations');
     await fireEvent.changeText(screen.getByLabelText('chat.description'), '   ');
-    await fireEvent.press(screen.getByLabelText('chat.saveConversation'));
+    await fireEvent(screen.getByLabelText('chat.description'), 'blur');
     await waitFor(() => expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(current.id, {
       name: 'Saved Operations', description: null,
     }));
@@ -2690,7 +2691,9 @@ describe('group member management', () => {
 describe('compact timeline, translated-only mode, and composer behaviour', () => {
   test('shows only the translation when the device prefers it and reveals the original per message', async () => {
     mockPreferences.translatedOnly = true;
-    const translated = translatedMessage();
+    // Collapsing to the translation is about reading somebody else's message;
+    // your own is governed by "Show my translations" alone (v3.4).
+    const translated = translatedMessage({ isOwn: false });
     const untranslated = incomingMessage({ attachment: undefined });
     await render(<ConversationPane conversation={conversation()} messages={[translated, untranslated]} onSend={noopSend} />);
     expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
@@ -2787,7 +2790,10 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     mockPreferences.translatedOnly = true;
     mockPreferences.showOwnTranslations = true;
     // An own message that also carries a translation into this reader's own
-    // language: the collapsed form would hide the original it is meant to show.
+    // language. From v3.4 that incoming row is ignored on your own message —
+    // it is what put a translation under your own bubble with the setting off
+    // — so your own bubble shows your words and, because the setting is on
+    // here, the outgoing translation the other side reads.
     const own = translatedMessage({ outgoingTranslation: outgoingTranslation() });
     const incoming = incomingMessage({
       attachment: undefined,
@@ -2805,7 +2811,8 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     });
     await render(<ConversationPane conversation={conversation()} messages={[own, incoming]} onSend={noopSend} />);
     expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
-    expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
+    expect(screen.getByText('18시에 북문을 잠그세요.')).toBeTruthy();
+    expect(screen.queryByText('Cierre la puerta norte a las 18:00.')).toBeNull();
     expect(screen.getByText('The valve needs a check.')).toBeTruthy();
     expect(screen.queryByText('La válvula necesita revisión.')).toBeNull();
     // Only the incoming bubble offers to reveal an original.

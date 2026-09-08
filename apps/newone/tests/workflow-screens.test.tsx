@@ -185,7 +185,8 @@ describe('people workflow screen', () => {
     expect(screen.getByText('status.emptyPeople')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('common.clearSearch'));
     await fireEvent.press(screen.getByRole('button', { name: 'people.online' }));
-    expect(screen.getByText('Ana Connected')).toBeTruthy();
+    // v3.4: a nickname is what the row is called.
+    expect(screen.getByText('Line lead')).toBeTruthy();
     expect(screen.queryByText('Avery Available')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'people.connections' }));
     await fireEvent.press(screen.getByRole('button', { name: 'people.mySite' }));
@@ -212,12 +213,14 @@ describe('people workflow screen', () => {
     expect(mockWorkspace.removeConnection).toHaveBeenCalledWith('user-outgoing');
     expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-available');
 
-    await fireEvent.press(screen.getAllByRole('button', { name: 'people.manage' })[0]!);
-    expect(screen.getByText('people.manageTitle · Ana Connected')).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('people.alias'), '  New alias  ');
-    await fireEvent.press(screen.getByRole('button', { name: 'people.favoriteContact' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'people.saveContact' }));
-    expect(mockWorkspace.saveContact).toHaveBeenCalledWith('user-connected', '  New alias  ', false);
+    // v3.4: one star that toggles where it stands, and the nickname commits
+    // when the field is left rather than waiting for a Save button.
+    await fireEvent.press(screen.getAllByRole('button', { name: /^people\.manage / })[0]!);
+    expect(screen.getByText('people.manageTitle · Line lead')).toBeTruthy();
+    const alias = screen.getByLabelText('people.alias');
+    await fireEvent.changeText(alias, '  New alias  ');
+    await fireEvent(alias, 'blur');
+    expect(mockWorkspace.saveContact).toHaveBeenCalledWith('user-connected', 'New alias', false);
     await fireEvent.press(screen.getByRole('button', { name: 'people.removeSaved' }));
     await fireEvent.press(screen.getByRole('button', { name: 'people.block' }));
     expect(mockWorkspace.removeSavedContact).toHaveBeenCalledWith('user-connected');
@@ -235,7 +238,7 @@ describe('people workflow screen', () => {
       'Repeated threats in the shift channel.',
       { consentToShare: true, noticeVersion: 'moderation-report-v2' },
     ));
-    expect(screen.queryByText('people.manageTitle · Ana Connected')).toBeNull();
+    expect(screen.queryByText('people.manageTitle · Line lead')).toBeNull();
 
     await view.unmount();
   });
@@ -281,6 +284,7 @@ describe('people workflow screen', () => {
       openOrCreateDirectConversation: successfulAction(null),
       removeConnection: successfulAction(),
       saveContact: successfulAction(false),
+      removeSavedContact: successfulAction(false),
       setPersonBlocked: successfulAction(),
       reportMember: successfulAction(false),
     });
@@ -295,14 +299,16 @@ describe('people workflow screen', () => {
       pathname: '/conversation/[id]',
     }));
 
-    const manageButtons = screen.getAllByRole('button', { name: 'people.manage' });
+    const manageButtons = screen.getAllByRole('button', { name: /^people\.manage / });
     await fireEvent.press(manageButtons[0]!);
     expect(screen.getByLabelText('people.alias').props.value).toBe('');
-    await fireEvent.press(screen.getByRole('button', { name: 'people.saveContact' }));
-    expect(mockWorkspace.saveContact).toHaveBeenCalledWith('user-saved', '', false);
+    // v3.4: one star. Saved already, so it offers to unsave, and a failing
+    // command leaves the sheet exactly as it was.
+    await fireEvent.press(screen.getByRole('button', { name: 'people.removeSaved' }));
+    expect(mockWorkspace.removeSavedContact).toHaveBeenCalledWith('user-saved');
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
 
-    await fireEvent.press(screen.getAllByRole('button', { name: 'people.manage' })[1]!);
+    await fireEvent.press(screen.getAllByRole('button', { name: /^people\.manage / })[1]!);
     await fireEvent.press(screen.getByRole('button', { name: 'people.unblock' }));
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-blocked-managed', false);
     const consent = screen.getByRole('checkbox');
