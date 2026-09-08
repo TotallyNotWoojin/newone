@@ -1,25 +1,29 @@
 appId: com.totallynotwoojin.newone
 ---
+# v3.4: the group's picture, name and description live behind "Edit group
+# details", and each field commits when it is left — there is no Save button.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "Save conversation"
+      text: "Edit group details"
     direction: DOWN
+    visibilityPercentage: 100
     timeout: 20000
+- tapOn: "Edit group details"
+- extendedWaitUntil:
+    visible: "Name"
+    timeout: 10000
 - tapOn:
     text: "Name"
     index: 1
 - eraseText: 80
 - inputText: ${NAME}
-# The keyboard covers the Description field after typing the name; the tap then
-# lands on the keys and the description is appended to the name (chat-33,
-# run-2026-09-04T15-47-18). Hide it first, and again before Save.
-# A drag sometimes leaves the keyboard up and the next tap lands on the keys
-# (chat-33, run-2026-09-06T10-34-23: nothing saved). Tap the "Name"
-# caption instead; hideKeyboard is the fallback.
+# Tapping the caption leaves the field, which is what saves it. The keyboard
+# otherwise covers what comes next and the tap lands on the keys (chat-33,
+# run-2026-09-04T15-47-18).
 - tapOn:
     text: "Name"
     index: 0
@@ -44,9 +48,6 @@ appId: com.totallynotwoojin.newone
     text: "Description"
     index: 1
 - inputText: ${DESCRIPTION}
-# A drag sometimes leaves the keyboard up and the next tap lands on the keys
-# (chat-33, run-2026-09-06T10-34-23: nothing saved). Tap the "Description"
-# caption instead; hideKeyboard is the fallback.
 - tapOn:
     text: "Description"
     index: 0
@@ -61,21 +62,7 @@ appId: com.totallynotwoojin.newone
           optional: true
       - waitForAnimationToEnd:
           timeout: 1500
-- scrollUntilVisible:
-    element:
-      text: "Save conversation"
-    direction: DOWN
-    timeout: 15000
-- tapOn: "Save conversation"
-- extendedWaitUntil:
-    notVisible: "Conversation controls"
-    timeout: 8000
-    optional: true
-- runFlow:
-    when:
-      visible: "Conversation controls"
-    commands:
-      - tapOn: "Save conversation"
+- tapOn: "Close dialog"
 - extendedWaitUntil:
     notVisible: "Conversation controls"
     timeout: 20000

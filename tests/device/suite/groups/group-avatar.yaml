@@ -4,6 +4,14 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# v3.4: the group's picture lives behind "Edit group details".
+- scrollUntilVisible:
+    element:
+      text: "Edit group details"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
+- tapOn: "Edit group details"
 - scrollUntilVisible:
     element:
       text: "Choose group photo"

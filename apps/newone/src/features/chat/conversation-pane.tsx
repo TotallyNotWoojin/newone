@@ -80,6 +80,7 @@ import {
 import { GroupMembersSection } from '@/features/chat/group-members-section';
 import { useI18n } from '@/i18n/provider';
 import { useDevicePreferences } from '@/state/device-preferences';
+import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
 import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
@@ -2507,6 +2508,13 @@ function ConversationControlsModal({
   const [controlReason, setControlReason] = useState('');
   const [joinRequests, setJoinRequests] = useState<import('@/domain/types').ConversationJoinRequest[]>([]);
   const [decisionReason, setDecisionReason] = useState('');
+  // The two long forms in this sheet — what the group is, and how it is run —
+  // are one line each until somebody asks for them.
+  const directAvatarUrl = useProfileAvatar(
+    conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null,
+  );
+  const [editingGroup, setEditingGroup] = useState(false);
+  const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   // One place that writes the controls, so a chip that applies itself and the
   // workplace's Save button cannot drift apart.
   const saveControls = (nextPostingMode: 'all_members' | 'admins_only') => {
@@ -2627,6 +2635,28 @@ function ConversationControlsModal({
       onClose={onClose}
       title={t('chat.controlsTitle')}
       visible={visible}>
+      {/* The sheet opens on who or what it is about, not on a form (v3.4). */}
+      {personalRealm && !conversation.managementOnly ? (
+        <View style={styles.sheetIdentity}>
+          <Avatar
+            color={conversation.avatarColor}
+            imageUri={conversation.kind === 'direct'
+              ? directAvatarUrl
+              : workspace.conversationAvatarUrls[conversation.id]}
+            initials={conversation.initials}
+            presence={conversation.kind === 'direct' ? conversation.presence : undefined}
+            size={52}
+          />
+          <View style={styles.sheetIdentityCopy}>
+            <Text numberOfLines={1} style={styles.sheetIdentityTitle}>{conversation.title}</Text>
+            <Text numberOfLines={1} style={styles.sheetIdentityMeta}>
+              {conversation.kind === 'direct'
+                ? conversation.subtitle
+                : `${conversation.participantCount ?? members.length} ${t('chat.currentMembers')}`}
+            </Text>
+          </View>
+        </View>
+      ) : null}
       {!conversation.managementOnly ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon={conversation.favorite ? 'star' : 'star-outline'} label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')} onPress={onToggleFavorite} tone="light" />
@@ -2713,23 +2743,23 @@ function ConversationControlsModal({
             : translationPreference.automaticHint}
         </Text>
       </View> : null}
-      {!conversation.managementOnly && conversation.kind !== 'direct' && conversation.historyDisclosure ? (
-        <View style={styles.historyDisclosure}>
-          <Ionicons name="time-outline" color={colors.mintDark} size={17} />
-          <View style={styles.historyDisclosureCopy}>
-            <Text style={styles.historyDisclosureTitle}>{t('chat.historyAccess')}</Text>
-            <Text style={styles.historyDisclosureText}>
-              {t(conversation.historyDisclosure.labelKey)}
-              {conversation.historyDisclosure.visibleFrom
-                ? ` · ${new Date(conversation.historyDisclosure.visibleFrom).toLocaleString()}`
-                : ''}
-            </Text>
-          </View>
-        </View>
-      ) : null}
       {/* A group's picture, name and description are one thing: what the
-          group is. They were three sections apart (v3.4). */}
-      {conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
+          group is, and it is not what most people open this sheet for — so it
+          is one line until somebody asks for it (v3.4). */}
+      {personalRealm && conversation.kind !== 'direct' && conversation.canManage ? (
+        <Pressable
+          accessibilityLabel={t('chat.editGroupDetails')}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: editingGroup }}
+          aria-expanded={editingGroup}
+          onPress={() => setEditingGroup((open) => !open)}
+          style={({ pressed }) => [styles.disclosureRow, pressed && styles.pressed]}>
+          <Text style={styles.disclosureLabel}>{t('chat.editGroupDetails')}</Text>
+          <Ionicons color={colors.inkSubtle} name={editingGroup ? 'chevron-up' : 'chevron-down'} size={16} />
+        </Pressable>
+      ) : null}
+      {(!personalRealm || editingGroup)
+        && conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('group.avatarTitle')}</Text>
           <Text style={styles.modalNote}>{t('group.avatarRequirements')}</Text>
@@ -2784,7 +2814,8 @@ function ConversationControlsModal({
           </View>
         </View>
       ) : null}
-      {conversation.canManageConversation && conversation.kind !== 'direct' ? (
+      {(!personalRealm || editingGroup)
+        && conversation.canManageConversation && conversation.kind !== 'direct' ? (
         <View style={styles.modalSection}>
           {/* A change applies when it is made. The owner asked for the Save
               buttons to go (Sep 8 2026): a name typed and a sheet closed used
@@ -2805,10 +2836,39 @@ function ConversationControlsModal({
           />
         </View>
       ) : null}
-      {conversation.canManageConversation
+      {personalRealm && ['group', 'team'].includes(conversation.kind)
+        && conversation.canManageConversation && !conversation.policyManaged ? (
+        <Pressable
+          accessibilityLabel={t('chat.groupSettings')}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: groupSettingsOpen }}
+          aria-expanded={groupSettingsOpen}
+          onPress={() => setGroupSettingsOpen((open) => !open)}
+          style={({ pressed }) => [styles.disclosureRow, pressed && styles.pressed]}>
+          <Text style={styles.disclosureLabel}>{t('chat.groupSettings')}</Text>
+          <Ionicons color={colors.inkSubtle} name={groupSettingsOpen ? 'chevron-up' : 'chevron-down'} size={16} />
+        </Pressable>
+      ) : null}
+      {(!personalRealm || groupSettingsOpen)
+        && conversation.canManageConversation
         && !conversation.policyManaged
         && ['group', 'team'].includes(conversation.kind) ? (
         <View style={styles.modalSection}>
+      {!conversation.managementOnly && conversation.kind !== 'direct' && conversation.historyDisclosure ? (
+        <View style={styles.historyDisclosure}>
+          <Ionicons name="time-outline" color={colors.mintDark} size={17} />
+          <View style={styles.historyDisclosureCopy}>
+            <Text style={styles.historyDisclosureTitle}>{t('chat.historyAccess')}</Text>
+            <Text style={styles.historyDisclosureText}>
+              {t(conversation.historyDisclosure.labelKey)}
+              {conversation.historyDisclosure.visibleFrom
+                ? ` · ${new Date(conversation.historyDisclosure.visibleFrom).toLocaleString()}`
+                : ''}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
           {personalRealm ? null : (
             <>
               <Text style={styles.modalLabel}>{t('chat.accessControls')}</Text>
@@ -3720,6 +3780,18 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.line,
   },
   emojiText: { fontSize: 22 },
+  sheetIdentity: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sheetIdentityCopy: { flex: 1, minWidth: 0 },
+  sheetIdentityTitle: { color: colors.ink, fontFamily: type.display, fontSize: 17, fontWeight: '900' },
+  sheetIdentityMeta: { color: colors.inkSubtle, fontSize: 12 },
+  disclosureRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  disclosureLabel: { color: colors.ink, fontSize: 14, fontWeight: '700' },
   memberControlRow: {
     minHeight: 52,
     flexDirection: 'row',
