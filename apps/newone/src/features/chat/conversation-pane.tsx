@@ -2632,7 +2632,18 @@ function ConversationControlsModal({
         : conversation.kind === 'direct'
           ? t('chat.privateDirect')
           : `${conversation.participantCount ?? members.length} ${t('chat.currentMembers')}`}
-      onClose={onClose}
+      onClose={() => {
+        // Closing the sheet is also leaving the field. Without this a name
+        // typed and the sheet closed went nowhere, which is exactly what the
+        // Save button used to be for (v3.4).
+        if (conversation.canManageConversation
+          && conversation.kind !== 'direct'
+          && name.trim().length >= 2
+          && (name !== (conversation.title ?? '') || description !== (conversation.description ?? ''))) {
+          onSave();
+        }
+        onClose();
+      }}
       title={t('chat.controlsTitle')}
       visible={visible}>
       {/* The sheet opens on who or what it is about, not on a form (v3.4). */}

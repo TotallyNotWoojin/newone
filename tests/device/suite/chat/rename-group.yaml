@@ -21,15 +21,9 @@ appId: com.totallynotwoojin.newone
     index: 1
 - eraseText: 80
 - inputText: ${NAME}
-# Tapping the caption leaves the field, which is what saves it. The keyboard
-# otherwise covers what comes next and the tap lands on the keys (chat-33,
-# run-2026-09-04T15-47-18).
-- tapOn:
-    text: "Name"
-    index: 0
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
+# The keyboard covers what comes next, and tapping the caption to dismiss it
+# sometimes lands outside the sheet and closes it (chat-33,
+# run-2026-09-08T14-51-26). Put it away directly instead.
 # The form sits under the header from v3.4, so the description can be behind
 # the keyboard rather than below the fold, and the predictive-bar check does
 # not always see a keyboard that is up (chat-33, run-2026-09-08T14-51-26).
@@ -47,12 +41,6 @@ appId: com.totallynotwoojin.newone
     text: "Description"
     index: 1
 - inputText: ${DESCRIPTION}
-- tapOn:
-    text: "Description"
-    index: 0
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
 - hideKeyboard:
     optional: true
 - waitForAnimationToEnd:
