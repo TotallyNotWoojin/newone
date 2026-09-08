@@ -144,6 +144,11 @@ Chats.
     snapping back when a message is sent; and a full audit of which
     notifications actually fire.
 
+76. **Rerun what failed, not the area around it** (owner, Sep 8 2026 — the first thing after v3.4). The runner filters by area and nothing finer, so one bad step costs the whole area: 91 steps for chat, 38 for groups, and three fresh signups each time. Today that turned a one-line flow fix into two full passes, and a groups run died on a signup form that had nothing to do with what was being tested. Three parts, in order of what they save:
+    - **Reuse the accounts.** Every run mints new ones, and setup is both the slowest and the flakiest part of an area. Write the accounts a run created into its artifact directory, and let `--reuse-accounts <run-dir>` sign in instead of signing up. Passwords are already known to the harness.
+    - **Select steps.** `--steps groups-05,groups-14b` runs those and nothing else, on top of reused accounts. Steps that build state other steps need (a group, a friendship) declare it, so selecting one pulls in what it depends on rather than silently running against a half-built world.
+    - **Rerun a report.** `--from-failures <run-dir>` reads report.json and reruns exactly the steps that failed, which is what almost every rerun today actually wanted.
+
 ## Dropped
 
 34. ~~Bridging WhatsApp / iMessage / SMS into Newone~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).
