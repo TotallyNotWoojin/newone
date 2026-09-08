@@ -640,7 +640,13 @@ function ConversationRow({
           <View style={styles.sectionDividerLine} />
         </View>
       ) : null}
-      {actionable ? <GestureDetector gesture={swipe}>{row}</GestureDetector> : row}
+      {/* No swipe on the web: there is nothing to swipe with, and the pan
+          handler begins on press, which swallowed the click that opens a chat
+          (live browser suite, Sep 8 2026). A mouse gets the same actions from
+          hover and right-click. */}
+      {actionable && Platform.OS !== 'web'
+        ? <GestureDetector gesture={swipe}>{row}</GestureDetector>
+        : row}
     </>
   );
 }
