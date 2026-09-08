@@ -2552,7 +2552,7 @@ describe('group member management', () => {
   // role chips, a remove icon, a change reason, a join-request console — is the
   // workplace product, so these exercise it there and the consumer rule is
   // asserted separately.
-  test('a consumer group shows none of the workplace roster', async () => {
+  test('a consumer group is not asked to justify a change, and reviews no join requests', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     const group = conversation({
       organizationId: PERSONAL_REALM_ORGANIZATION_ID,
@@ -2566,8 +2566,9 @@ describe('group member management', () => {
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
     expect(screen.queryByLabelText('chat.changeReason')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewJoinRequests')).toBeNull();
-    expect(screen.queryByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeNull();
-    // Adding people is not part of the roster and stays.
+    // The roster itself stays: it carries roles, ownership transfer and the
+    // group photo, and taking it away took those with it. Consolidating it with
+    // the people section is a design change, not a release-day edit.
     expect(screen.getByText('chat.addMember')).toBeTruthy();
   });
 

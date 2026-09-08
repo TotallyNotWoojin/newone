@@ -2856,7 +2856,7 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-      {conversation.kind !== 'direct' && !personalRealm ? (
+      {conversation.kind !== 'direct' ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.members')}</Text>
           {conversation.policyManaged ? (
