@@ -1,5 +1,13 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { KeyboardAvoidingView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 // React Native's KeyboardAvoidingView pads by (its own bottom edge, measured
 // relative to its PARENT) minus the keyboard's top edge (measured on SCREEN).
@@ -36,6 +44,16 @@ export function KeyboardAvoidingScreen({ children, extraOffset = 0, style }: Pro
       setWindowTop((previous) => (previous === next ? previous : next));
     });
   }, []);
+  // A layout event is not the only thing that moves this view down the window:
+  // a header that grows, a tab bar that hides, a rotation. When the measurement
+  // is stale the padding is wrong by exactly that much, and the composer sits
+  // under the keyboard (owner, Sep 8 2026). Measuring again as the keyboard
+  // arrives costs nothing and is the moment the number is used.
+  useEffect(() => {
+    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const subscription = Keyboard.addListener(event, onLayout);
+    return () => subscription.remove();
+  }, [onLayout]);
   return (
     <View collapsable={false} onLayout={onLayout} ref={ref} style={style}>
       <KeyboardAvoidingView

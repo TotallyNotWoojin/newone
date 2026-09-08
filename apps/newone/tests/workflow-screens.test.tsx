@@ -226,6 +226,8 @@ describe('people workflow screen', () => {
     expect(mockWorkspace.removeSavedContact).toHaveBeenCalledWith('user-connected');
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-connected', true);
 
+    // v3.4: reporting is one quiet line in the manage sheet that opens its own.
+    await fireEvent.press(screen.getByRole('button', { name: 'people.reportPrivately' }));
     await fireEvent.press(screen.getByRole('button', { name: 'chat.reportThreat' }));
     await fireEvent.changeText(screen.getByLabelText('chat.reportDetails'), 'Repeated threats in the shift channel.');
     const consent = screen.getByRole('checkbox');
@@ -311,6 +313,7 @@ describe('people workflow screen', () => {
     await fireEvent.press(screen.getAllByRole('button', { name: /^people\.manage / })[1]!);
     await fireEvent.press(screen.getByRole('button', { name: 'people.unblock' }));
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-blocked-managed', false);
+    await fireEvent.press(screen.getByRole('button', { name: 'people.reportPrivately' }));
     const consent = screen.getByRole('checkbox');
     await fireEvent(consent, 'pressIn');
     await fireEvent.press(consent);

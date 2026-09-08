@@ -69,6 +69,7 @@ export default function PeopleScreen() {
   // outright (run-2026-09-04T20-41-40), and a decline cannot be undone.
   const [decliningPersonId, setDecliningPersonId] = useState('');
   const [contactAlias, setContactAlias] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
   const [reportCategory, setReportCategory] = useState<
     'harassment' | 'threat' | 'spam' | 'privacy' | 'misinformation' | 'other'
   >('other');
@@ -213,6 +214,7 @@ export default function PeopleScreen() {
   const openManage = (person: Person) => {
     workspace.clearActionError();
     setContactAlias(person.contactAlias ?? '');
+    setReportOpen(false);
     setReportCategory('other');
     setReportDetails('');
     setReportConsent(false);
@@ -498,78 +500,91 @@ export default function PeopleScreen() {
           onPress={() => managePerson && void workspace.setPersonBlocked(managePerson.id, !managePerson.blockedByMe)}
           tone={managePerson?.blockedByMe ? 'light' : 'danger'}
         />
-        <View style={styles.reportSection}>
+        <Pressable
+          accessibilityLabel={t('people.reportPrivately')}
+          accessibilityRole="button"
+          onPress={() => setReportOpen(true)}
+          style={({ pressed }) => [styles.reportLink, pressed && styles.reportLinkPressed]}>
+          <Text style={styles.reportLinkText}>{t('people.reportPrivately')}</Text>
+        </Pressable>
+      </ActionModal>
+      <ActionModal
+        onClose={() => setReportOpen(false)}
+        title={managePerson ? `${t('people.reportPrivately')} · ${personDisplayName(managePerson)}` : t('people.reportPrivately')}
+        visible={reportOpen && Boolean(managePerson)}>
           <Text style={styles.reportTitle}>{t('people.reportPrivately')}</Text>
-          <Text style={styles.reportNote}>{t('people.reportDescription')}</Text>
-          <View style={styles.reportCategories}>
-            {(['harassment', 'threat', 'spam', 'privacy', 'misinformation', 'other'] as const)
-              .map((category) => (
-                <Chip
-                  key={`member-report-${category}`}
-                  label={reportCategoryLabels[category]}
-                  onPress={() => {
-                    setReportCategory(category);
-                    setReportConsent(false);
-                  }}
-                  selected={reportCategory === category}
-                />
-              ))}
-          </View>
-          <FormField
-            label={t('chat.reportDetails')}
-            multiline
-            onChangeText={(value) => {
-              setReportDetails(value);
-              setReportConsent(false);
-            }}
-            value={reportDetails}
-          />
-          <View style={styles.reportDisclosure}>
-            {personalRealm ? (
-              <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
-            ) : (
-              <>
-                <Text style={styles.reportDisclosureText}>
-                  {moderationTargetReportConsentNotice(locale, 'member')}
-                </Text>
-                <Text style={styles.reportRouteText}>
-                  {moderationMemberSafetyRouteNotice(locale)}
-                </Text>
-              </>
-            )}
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: reportConsent }}
-              onPress={() => setReportConsent((value) => !value)}
-              style={({ pressed }) => [
-                styles.reportConsent,
-                reportConsent && styles.reportConsentChecked,
-                pressed && styles.reportConsentPressed,
-              ]}>
-              <Ionicons
-                name={reportConsent ? 'checkbox' : 'square-outline'}
-                color={reportConsent ? colors.mintDark : colors.inkSubtle}
-                size={22}
+        <Text style={styles.reportNote}>{t('people.reportDescription')}</Text>
+        <View style={styles.reportCategories}>
+          {(['harassment', 'threat', 'spam', 'privacy', 'misinformation', 'other'] as const)
+            .map((category) => (
+              <Chip
+                key={`member-report-${category}`}
+                label={reportCategoryLabels[category]}
+                onPress={() => {
+                  setReportCategory(category);
+                  setReportConsent(false);
+                }}
+                selected={reportCategory === category}
               />
-              <Text style={styles.reportConsentText}>{personalRealm ? t('people.reportConsentConsumer') : safetyCopy.reportConsentLabel}</Text>
-            </Pressable>
-          </View>
-          <PrimaryButton
-            disabled={!managePerson || !reportConsent}
-            icon="flag-outline"
-            label={t('chat.submitReport')}
-            loading={workspace.actionBusy === 'member-report'}
-            onPress={async () => {
-              if (managePerson && await workspace.reportMember(
-                managePerson.membershipId ?? managePerson.id,
-                reportCategory,
-                reportDetails,
-                { consentToShare: true, noticeVersion: 'moderation-report-v2' },
-              )) setManagePersonId('');
-            }}
-            tone="danger"
-          />
+            ))}
         </View>
+        <FormField
+          label={t('chat.reportDetails')}
+          multiline
+          onChangeText={(value) => {
+            setReportDetails(value);
+            setReportConsent(false);
+          }}
+          value={reportDetails}
+        />
+        <View style={styles.reportDisclosure}>
+          {personalRealm ? (
+            <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
+          ) : (
+            <>
+              <Text style={styles.reportDisclosureText}>
+                {moderationTargetReportConsentNotice(locale, 'member')}
+              </Text>
+              <Text style={styles.reportRouteText}>
+                {moderationMemberSafetyRouteNotice(locale)}
+              </Text>
+            </>
+          )}
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: reportConsent }}
+            onPress={() => setReportConsent((value) => !value)}
+            style={({ pressed }) => [
+              styles.reportConsent,
+              reportConsent && styles.reportConsentChecked,
+              pressed && styles.reportConsentPressed,
+            ]}>
+            <Ionicons
+              name={reportConsent ? 'checkbox' : 'square-outline'}
+              color={reportConsent ? colors.mintDark : colors.inkSubtle}
+              size={22}
+            />
+            <Text style={styles.reportConsentText}>{personalRealm ? t('people.reportConsentConsumer') : safetyCopy.reportConsentLabel}</Text>
+          </Pressable>
+        </View>
+        <PrimaryButton
+          disabled={!managePerson || !reportConsent}
+          icon="flag-outline"
+          label={t('chat.submitReport')}
+          loading={workspace.actionBusy === 'member-report'}
+          onPress={async () => {
+            if (managePerson && await workspace.reportMember(
+              managePerson.membershipId ?? managePerson.id,
+              reportCategory,
+              reportDetails,
+              { consentToShare: true, noticeVersion: 'moderation-report-v2' },
+            )) {
+              setReportOpen(false);
+              setManagePersonId('');
+            }
+          }}
+          tone="danger"
+        />
       </ActionModal>
     </AppScaffold>
   );
@@ -925,6 +940,9 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   connectButton: {
     flex: 1,
   },
+  reportLink: { paddingVertical: spacing.sm, alignItems: 'center' },
+  reportLinkPressed: { opacity: 0.6 },
+  reportLinkText: { color: colors.inkSubtle, fontSize: 12, textDecorationLine: 'underline' },
   reportSection: {
     gap: spacing.sm,
     paddingTop: spacing.md,

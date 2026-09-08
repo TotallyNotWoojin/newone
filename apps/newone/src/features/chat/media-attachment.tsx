@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { isPersonalRealm } from '@/constants/personal-realm';
@@ -45,7 +45,12 @@ function useAttachmentSource(message: Message) {
   useEffect(() => {
     if (uri) setShown(uri);
   }, [uri]);
-  return { uri: uri ?? shown, ready };
+  // A signed URL that has lapsed loads nothing and looks like a broken photo.
+  // Asking again is the whole recovery: the workspace hands out a fresh grant.
+  const retry = useCallback(() => {
+    if (ready) void loadPreview?.(message);
+  }, [loadPreview, message, ready]);
+  return { uri: uri ?? shown, ready, retry };
 }
 
 /**
@@ -68,7 +73,7 @@ export function ImageAttachment({
   const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const attachment = message.attachment;
-  const { uri, ready } = useAttachmentSource(message);
+  const { uri, ready, retry } = useAttachmentSource(message);
   // The natural size arrives with the same request that paints the photo
   // (onLoad), so the frame settles on the true aspect ratio without a second
   // fetch; until then the default 4:3 frame holds the place.
@@ -93,6 +98,7 @@ export function ImageAttachment({
             style={styles.fill}>
             <Image
               accessibilityIgnoresInvertColors
+              onError={retry}
               onLoad={(event) => {
                 const source = event.nativeEvent?.source;
                 if (source && source.width > 0 && source.height > 0) setRatio(source.width / source.height);

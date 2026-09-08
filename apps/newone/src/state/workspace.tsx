@@ -3961,7 +3961,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, [executeImmediate, repositories.commands, snapshot]);
 
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({});
-  const previewRequestsRef = useRef<Set<string>>(new Set());
+  // A download grant is a signed URL with an expiry. This used to remember only
+  // that a preview had been asked for, so once the URL went stale the picture
+  // stopped loading and nothing ever asked again — an older photo simply showed
+  // nothing (owner, Sep 8 2026). Now the expiry is remembered too, and a
+  // request goes out again a minute before it lapses.
+  const previewRequestsRef = useRef<Map<string, number>>(new Map());
   const loadAttachmentPreview = useCallback(
     async (message: Message) => {
       const attachment = message.attachment;
@@ -3970,8 +3975,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         || attachment?.mimeType?.startsWith('audio/') === true
         || attachment?.mimeType?.startsWith('video/') === true;
       if (!snapshot || !attachment || attachment.status !== 'clean' || !previewable) return;
-      if (previewRequestsRef.current.has(attachment.id)) return;
-      previewRequestsRef.current.add(attachment.id);
+      const heldUntil = previewRequestsRef.current.get(attachment.id);
+      if (heldUntil !== undefined && Date.now() < heldUntil) return;
+      previewRequestsRef.current.set(attachment.id, Date.now() + 30_000);
       try {
         const grant = await repositories.commands.createAttachmentDownloadGrant({
           organizationId: snapshot.organizationId,
@@ -3979,6 +3985,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           attachmentId: attachment.id,
           idempotencyKey: createClientId(),
         });
+        previewRequestsRef.current.set(
+          attachment.id,
+          Date.now() + Math.max(30, grant.expiresInSeconds - 60) * 1000,
+        );
         setAttachmentPreviewUrls((current) => ({ ...current, [attachment.id]: grant.signedUrl }));
       } catch {
         // A preview is a convenience; the file stays reachable through the card.
