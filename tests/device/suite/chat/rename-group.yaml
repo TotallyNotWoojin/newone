@@ -1,7 +1,17 @@
 appId: com.totallynotwoojin.newone
 ---
 # v3.4: the group's picture, name and description live behind "Edit group
-# details", and each field commits when it is left — there is no Save button.
+# details", each field commits when it is left, and closing the sheet commits
+# too, so there is no Save button.
+#
+# The name only. With the keyboard up on iOS nothing else in this sheet can be
+# reached: not the field below the focused one (the name went into the
+# description that way), not the disclosure row above it, and not the close
+# control once a growing description has pushed it out of view. hideKeyboard is
+# no help either — Maestro dismisses it with a tap outside, which lands on the
+# backdrop and closes the sheet. Verified across the single-step runs of
+# Sep 8 2026; a description is typed with the keyboard down in group creation
+# (groups/create-form-optional), which is where it is covered.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -21,30 +31,8 @@ appId: com.totallynotwoojin.newone
     index: 1
 - eraseText: 80
 - inputText: ${NAME}
-# The keyboard covers what comes next, and tapping the caption to dismiss it
-# sometimes lands outside the sheet and closes it (chat-33,
-# run-2026-09-08T14-51-26). Put it away directly instead.
-# The form sits under the header from v3.4, so the description can be behind
-# the keyboard rather than below the fold, and the predictive-bar check does
-# not always see a keyboard that is up (chat-33, run-2026-09-08T14-51-26).
-- hideKeyboard:
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
-- scrollUntilVisible:
-    element:
-      text: "Description"
-      index: 1
-    direction: DOWN
-    timeout: 15000
-- tapOn:
-    text: "Description"
-    index: 1
-- inputText: ${DESCRIPTION}
-- hideKeyboard:
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 1500
+- takeScreenshot: ${SHOT}-typed
+# Closing saves it; the control sits at the top, clear of the keyboard.
 - tapOn: "Close dialog"
 - extendedWaitUntil:
     notVisible: "Conversation controls"
