@@ -7,7 +7,7 @@ import { expect, test } from '../support/live-fixtures.mjs';
 test.describe.configure({ mode: 'serial' });
 
 async function openTheFriendChat(page, liveWorkspace) {
-  await page.getByRole('button', { name: liveWorkspace.friend.displayName, exact: true }).click();
+  await page.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
   const pane = page.getByTestId('keyboard-avoiding-screen');
   await expect(pane.getByText(liveWorkspace.hoverBody)).toBeVisible();
   return pane;

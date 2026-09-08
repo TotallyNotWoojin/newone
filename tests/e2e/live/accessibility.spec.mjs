@@ -8,7 +8,7 @@ test.describe.configure({ mode: 'serial' });
 for (const scheme of ['light', 'dark']) {
   test(`Chats, with a chat open, in ${scheme}`, async ({ chats, liveWorkspace }, testInfo) => {
     await chats.emulateMedia({ colorScheme: scheme });
-    await chats.getByRole('button', { name: liveWorkspace.friend.displayName, exact: true }).click();
+    await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
     await expect(
       chats.getByTestId('keyboard-avoiding-screen').getByText(liveWorkspace.hoverBody),
     ).toBeVisible();
