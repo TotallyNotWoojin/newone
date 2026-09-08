@@ -30,14 +30,13 @@ appId: com.totallynotwoojin.newone
     optional: true
 - waitForAnimationToEnd:
     timeout: 1500
-- runFlow:
-    when:
-      visible: "(.*(Typing Predictions|Dictate).*|space)"
-    commands:
-      - hideKeyboard:
-          optional: true
-      - waitForAnimationToEnd:
-          timeout: 1500
+# The form sits under the header from v3.4, so the description can be behind
+# the keyboard rather than below the fold, and the predictive-bar check does
+# not always see a keyboard that is up (chat-33, run-2026-09-08T14-51-26).
+- hideKeyboard:
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
 - scrollUntilVisible:
     element:
       text: "Description"
@@ -54,14 +53,10 @@ appId: com.totallynotwoojin.newone
     optional: true
 - waitForAnimationToEnd:
     timeout: 1500
-- runFlow:
-    when:
-      visible: "(.*(Typing Predictions|Dictate).*|space)"
-    commands:
-      - hideKeyboard:
-          optional: true
-      - waitForAnimationToEnd:
-          timeout: 1500
+- hideKeyboard:
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1500
 - tapOn: "Close dialog"
 - extendedWaitUntil:
     notVisible: "Conversation controls"
