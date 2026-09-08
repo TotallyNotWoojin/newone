@@ -4393,7 +4393,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         repositories.commands.updateConversationMemberRole({
           organizationId: snapshot.organizationId,
           conversationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           expectedRole,
           newRole,
           idempotencyKey: createClientId(),
@@ -5159,7 +5159,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const result = await executeImmediate('connection-respond', () =>
         repositories.commands.respondConnection({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           decision,
           idempotencyKey: createClientId(),
         }),
@@ -5260,7 +5260,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const result = await executeImmediate('contact-save', () =>
         repositories.commands.saveContact({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           alias: alias.trim() || null,
           isFavorite,
           idempotencyKey: createClientId(),
@@ -5288,7 +5288,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const result = await executeImmediate('contact-remove', () =>
         repositories.commands.removeSavedContact({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           idempotencyKey: createClientId(),
         }),
       );
@@ -5310,11 +5310,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const setPersonBlocked = useCallback(
     async (personId: string, blocked: boolean) => {
       const person = snapshot?.people.find((item) => item.id === personId);
-      if (!snapshot || !person || person.id === snapshot.currentUser.id) return false;
+      // A group member is not always in the directory this phone has loaded;
+      // acting on them from inside the group must still work.
+      if (!snapshot || personId === snapshot.currentUser.id) return false;
       const result = await executeImmediate(blocked ? 'person-block' : 'person-unblock', () =>
         repositories.commands.setPersonBlocked({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           blocked,
           idempotencyKey: createClientId(),
         }),
@@ -5331,11 +5333,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const setPersonMuted = useCallback(
     async (personId: string, muted: boolean) => {
       const person = snapshot?.people.find((item) => item.id === personId);
-      if (!snapshot || !person || person.id === snapshot.currentUser.id) return false;
+      // A group member is not always in the directory this phone has loaded;
+      // acting on them from inside the group must still work.
+      if (!snapshot || personId === snapshot.currentUser.id) return false;
       const result = await executeImmediate(muted ? 'person-mute' : 'person-unmute', () =>
         repositories.commands.setPersonMuted({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           muted,
           idempotencyKey: createClientId(),
         }),
@@ -5529,7 +5533,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const result = await executeImmediate('member-suspend', () =>
         repositories.commands.suspendMember({
           organizationId: snapshot.organizationId,
-          membershipId: person.membershipId ?? person.id,
+          membershipId: person?.membershipId ?? personId,
           reason: reason.trim(),
           idempotencyKey: createClientId(),
         }),

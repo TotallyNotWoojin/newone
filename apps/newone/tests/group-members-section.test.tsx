@@ -159,3 +159,4 @@ describe('group members section', () => {
     expect(mockRouter.replace).not.toHaveBeenCalled();
   });
 });
+
