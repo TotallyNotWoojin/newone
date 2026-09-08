@@ -2783,19 +2783,25 @@ function ConversationControlsModal({
               </View>
             </>
           )}
-          <FormField label={t('chat.changeReason')} multiline onChangeText={setControlReason} placeholder={t('chat.changeReasonPlaceholder')} value={controlReason} />
+          {personalRealm ? null : (
+            <FormField label={t('chat.changeReason')} multiline onChangeText={setControlReason} placeholder={t('chat.changeReasonPlaceholder')} value={controlReason} />
+          )}
           <PrimaryButton
-            disabled={controlReason.trim().length < 3}
+            disabled={!personalRealm && controlReason.trim().length < 3}
             label={t('chat.saveAccessControls')}
             loading={busy === 'conversation-controls'}
             onPress={() => void workspace.updateConversationControls(conversation.id, {
               postingMode,
               joinPolicy,
               visibility,
-              reason: controlReason,
+              // The service keeps a reason on every controls change; a consumer is
+              // never asked for one, so the app records where it came from.
+              reason: personalRealm ? 'Changed in the app' : controlReason,
             })}
             tone="dark"
           />
+          {personalRealm ? null : (
+          <>
           <PrimaryButton
             label={t('chat.reviewJoinRequests')}
             onPress={() => void workspace.loadConversationJoinRequests(conversation.id).then(setJoinRequests)}
@@ -2830,6 +2836,8 @@ function ConversationControlsModal({
               ))}
             </>
           ) : null}
+          </>
+          )}
         </View>
       ) : null}
       {conversation.canManage && conversation.kind === 'incident' && !conversation.isReadOnly ? (
@@ -2848,7 +2856,7 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-      {conversation.kind !== 'direct' ? (
+      {conversation.kind !== 'direct' && !personalRealm ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.members')}</Text>
           {conversation.policyManaged ? (

@@ -2546,7 +2546,31 @@ describe('personal realm message actions', () => {
   });
 });
 
-describe('personal realm group member management', () => {
+describe('group member management', () => {
+  // The consumer group's people live in GroupMembersSection (its own tests):
+  // plain rows with message, add, mute, block and remove. The roster below —
+  // role chips, a remove icon, a change reason, a join-request console — is the
+  // workplace product, so these exercise it there and the consumer rule is
+  // asserted separately.
+  test('a consumer group shows none of the workplace roster', async () => {
+    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    const group = conversation({
+      organizationId: PERSONAL_REALM_ORGANIZATION_ID,
+      kind: 'group',
+      memberIds: [self.id, colleague.id, candidate.id],
+      myRole: 'owner',
+      canManage: true,
+      memberRoles: { [self.id]: 'owner', [colleague.id]: 'member', [candidate.id]: 'member' },
+    });
+    await render(<ConversationPane conversation={group} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    expect(screen.queryByLabelText('chat.changeReason')).toBeNull();
+    expect(screen.queryByLabelText('chat.reviewJoinRequests')).toBeNull();
+    expect(screen.queryByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeNull();
+    // Adding people is not part of the roster and stays.
+    expect(screen.getByText('chat.addMember')).toBeTruthy();
+  });
+
   function personalGroup(overrides: Record<string, unknown> = {}) {
     return conversation({
       organizationId: PERSONAL_REALM_ORGANIZATION_ID,
@@ -2557,8 +2581,9 @@ describe('personal realm group member management', () => {
   }
 
   test('lets the owner promote, demote, and remove other members but never touch their own row', async () => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.organizationId = 'workplace-organization';
     const owner = personalGroup({
+      organizationId: 'workplace-organization',
       myRole: 'owner',
       canManage: true,
       canManageConversation: true,
@@ -2593,8 +2618,9 @@ describe('personal realm group member management', () => {
   });
 
   test('lets an admin remove plain members but never touch the owner, other admins, or their own row', async () => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+    mockWorkspace.organizationId = 'workplace-organization';
     const admin = personalGroup({
+      organizationId: 'workplace-organization',
       myRole: 'admin',
       canManage: false,
       canManageConversation: true,

@@ -4,14 +4,21 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# v3.3: a consumer group's people live in their own section — open that
+# person's options and remove them there. The workplace roster, with its role
+# chips and remove icon, is not drawn for a consumer any more.
 - scrollUntilVisible:
     element:
-      text: "Remove ${NAME}"
+      text: "Options for ${NAME}"
     direction: DOWN
     timeout: 30000
-- tapOn: "Remove ${NAME}"
+- tapOn: "Options for ${NAME}"
 - extendedWaitUntil:
-    notVisible: "Remove ${NAME}"
+    visible: "Remove from group"
+    timeout: 10000
+- tapOn: "Remove from group"
+- extendedWaitUntil:
+    notVisible: "Options for ${NAME}"
     timeout: 20000
 - takeScreenshot: ${SHOT}-removed
 - tapOn: "Close dialog"
