@@ -684,6 +684,8 @@ export interface CommandRepository {
     isFavorite?: boolean;
     isPinned?: boolean;
     isArchived?: boolean;
+    /** "I deleted this chat for myself" — distinct from archiving it. */
+    isHidden?: boolean;
     notificationLevel?: 'all' | 'mentions' | 'none';
     mutedUntil?: string | null;
     translationMode?: 'automatic' | 'off';

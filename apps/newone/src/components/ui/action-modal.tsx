@@ -103,6 +103,7 @@ export function ActionModal({
 export function FormField({
   label,
   value,
+  onBlur,
   onChangeText,
   placeholder,
   testID,
@@ -111,6 +112,8 @@ export function FormField({
 }: {
   label: string;
   value: string;
+  /** Where a field saves itself, rather than waiting for a Save button. */
+  onBlur?: () => void;
   onChangeText: (value: string) => void;
   placeholder?: string;
   /** Stable identifier for UI drivers. */
@@ -129,6 +132,7 @@ export function FormField({
         accessibilityLabel={label}
         keyboardType={keyboardType}
         multiline={multiline}
+        onBlur={onBlur}
         onChangeText={onChangeText}
         placeholder={placeholder}
         testID={testID}

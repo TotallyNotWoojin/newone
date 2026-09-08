@@ -1523,6 +1523,7 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         'isFavorite',
         'isPinned',
         'isArchived',
+        'isHidden',
         'notificationLevel',
         'mutedUntil',
         'translationMode',
@@ -1530,7 +1531,11 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       const patch: JsonObject = {};
       if ('isFavorite' in body) patch.is_favorite = bool(body.isFavorite);
       if ('isPinned' in body) patch.is_pinned = bool(body.isPinned);
-      if ('isArchived' in body) patch.is_hidden = bool(body.isArchived);
+      // Archiving moves a chat somewhere quieter; hiding is "I deleted this
+      // one for myself". Until v3.4 both wrote is_hidden, so archiving a chat
+      // took it out of the snapshot and there was no archive to open.
+      if ('isArchived' in body) patch.is_archived = bool(body.isArchived);
+      if ('isHidden' in body) patch.is_hidden = bool(body.isHidden);
       if ('notificationLevel' in body) {
         patch.notification_level = oneOf(
           body.notificationLevel,
@@ -4762,11 +4767,13 @@ function publicProfile(value: unknown, expectedUserId: string): JsonObject {
 
 function publicConversationPreference(value: unknown): unknown {
   const row = asObject(value);
-  const { isHidden, ...rest } = row;
+  const { isHidden, isArchived, ...rest } = row;
   if (typeof isHidden !== 'boolean') {
     throw new ApiError(503, 'dependency_unavailable', undefined, 5);
   }
-  return { ...rest, isArchived: isHidden };
+  // isArchived is its own flag from v3.4. A worker that predates the migration
+  // sends only isHidden, and the old meaning stands in until it is deployed.
+  return { ...rest, isArchived: typeof isArchived === 'boolean' ? isArchived : isHidden };
 }
 
 function publicSessions(value: unknown): unknown {

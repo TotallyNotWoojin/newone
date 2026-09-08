@@ -97,6 +97,53 @@ Ship together. The database is wiped right before release, as it was for v3.2.
 
 63. **A member's actions can open below the fold** (found Sep 7 2026 by the groups device run). Tapping "Options for <name>" on the last rows of "People in this group" expands Message / Add as friend / Mute / Block / Remove from group underneath the sheet's bottom edge; the sheet scrolls, so a person can reach them, but nothing brings them into view. It cost three device steps, whose taps landed on the backdrop and dismissed the sheet (the flows now scroll first). Worth scrolling the expanded row into view when it opens, the way a disclosure normally does.
 
+## v3.4 — the owner's Sep 7 2026 pass over the app
+
+Decisions taken with the owner in the same message: reporting stays but shrinks
+to the smallest footprint that satisfies App Review; saved contacts, favorites
+and nicknames collapse into one toggle that actually does something; archived
+chats leave the list and live behind a single "Archived" row at the top of
+Chats.
+
+64. **Own messages translate in a group with the setting off.** The bubble
+    shows a translation whenever a row targets the reader's own language
+    (conversation-pane.tsx, `translation`/`hasTranslation`), which never happens
+    in a one-to-one chat and does happen in a group where another member reads
+    the language you read. Only the "Show my translations" line is gated;
+    this path is not gated on the message being your own at all.
+65. **An image is "No messages yet" on Chats.** The row preview is the message
+    body, and an attachment has none, so it falls through to the empty-chat
+    text. Should read Photo / Video / the file name, and the same string should
+    reach the accessibility label.
+66. **Nicknames are write-only.** Stored, searchable in Contacts, displayed
+    nowhere. Show the nickname wherever the person's name appears: the chat
+    header, the Chats row, the contact row, the group member row.
+67. **Saved and favorite collapse into one.** One star that toggles on the same
+    button, saved people sorted to the top of Contacts. The separate "Remove
+    saved contact" action and the favorite flag go.
+68. **Archiving hides nothing.** `filterConversations` never excludes an
+    archived chat and there is no archive view. Archived chats leave the list
+    and gather behind one "Archived" row at the top of Chats with a count;
+    swiping there unarchives.
+69. **The swipe actions on a chat row are abrupt, cover the timestamp and are
+    hard to hit.** They should track the finger rather than appear at once,
+    stay clear of the time, and give each action a full-height target.
+70. **Conversation controls save themselves.** "Save changes" and "Save
+    conversation" go; a change applies when it is made.
+71. **One menu per member.** The role chips and the member actions sheet are two
+    menus for the same person in the same screen; merge them.
+72. **Conversation controls are a mess.** Redesign for the two cases that exist:
+    a one-to-one chat (a person, a few switches) and a group (people, the
+    group's own settings, the dangerous things last).
+73. **Reporting shrinks.** Keep one quiet path so the App Review requirement is
+    met; it leaves the message and group sheets entirely.
+74. **"The original is always preserved" and its neighbours.** Three keys plus
+    the correction blurb, in all three languages.
+75. **Unconfirmed, to diagnose:** the composer landing under the keyboard;
+    uploaded images sometimes not loading; the list appearing to scroll and then
+    snapping back when a message is sent; and a full audit of which
+    notifications actually fire.
+
 ## Dropped
 
 34. ~~Bridging WhatsApp / iMessage / SMS into Newone~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).

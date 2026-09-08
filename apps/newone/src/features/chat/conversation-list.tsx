@@ -40,6 +40,7 @@ export type ConversationRowActionKey =
   | 'mute'
   | 'unmute'
   | 'archive'
+  | 'unarchive'
   | 'delete'
   | 'leave';
 
@@ -60,6 +61,7 @@ export function conversationRowActions(conversation: {
   kind?: string;
   unreadCount?: number;
   muted?: boolean;
+  archivedByMe?: boolean;
 }): ConversationRowAction[] {
   const group = conversation.kind !== 'direct';
   return [
@@ -69,7 +71,9 @@ export function conversationRowActions(conversation: {
     conversation.muted
       ? { key: 'unmute', labelKey: 'chat.unmute', icon: 'notifications-outline', destructive: false }
       : { key: 'mute', labelKey: 'chat.mute', icon: 'notifications-off-outline', destructive: false },
-    { key: 'archive', labelKey: 'chat.archive', icon: 'archive-outline', destructive: false },
+    conversation.archivedByMe
+      ? { key: 'unarchive', labelKey: 'chat.unarchive', icon: 'arrow-undo-outline', destructive: false }
+      : { key: 'archive', labelKey: 'chat.archive', icon: 'archive-outline', destructive: false },
     group
       ? { key: 'leave', labelKey: 'chat.leaveGroup', icon: 'exit-outline', destructive: true }
       : { key: 'delete', labelKey: 'chat.deleteChat', icon: 'trash-outline', destructive: true },
@@ -92,6 +96,28 @@ export function attachContextMenu(node: unknown, open: () => void) {
   return () => target.removeEventListener?.('contextmenu', handler);
 }
 
+/**
+ * What the row says when the newest message is a photo or a file and carries
+ * no caption. Its own name if it has one worth reading, otherwise the kind —
+ * anything but "No messages yet", which is what the row used to claim (v3.4).
+ */
+export function attachmentPreviewLine(
+  conversation: Pick<Conversation, 'lastMessageAttachment'>,
+  t: (key: 'chat.previewPhoto' | 'chat.previewVideo' | 'chat.previewVoice' | 'chat.previewFile') => string,
+): string {
+  const attachment = conversation.lastMessageAttachment;
+  if (!attachment) return '';
+  const kindLabel = t(attachment.kind === 'image'
+    ? 'chat.previewPhoto'
+    : attachment.kind === 'video'
+      ? 'chat.previewVideo'
+      : attachment.kind === 'audio'
+        ? 'chat.previewVoice'
+        : 'chat.previewFile');
+  const name = attachment.fileName?.trim();
+  return name && attachment.kind === 'file' ? name : kindLabel;
+}
+
 export function filterConversations(
   conversations: Conversation[],
   filter: InboxFilter,
@@ -107,7 +133,16 @@ export function filterConversations(
   const markedUnread = new Set(markedUnreadIds);
   return conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
+    // An archived chat is out of the way until you go looking for it, which is
+    // the whole point of archiving; before v3.4 it stayed in the list and the
+    // flag only removed it from the phone entirely.
+    if (filter === 'archived') {
+      if (!conversation.archivedByMe) return false;
+    } else if (conversation.archivedByMe) {
+      return false;
+    }
     if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) return false;
+    if (filter === 'archived') return true;
     if (filter === 'unread') return conversation.unreadCount > 0 || markedUnread.has(conversation.id);
     if (filter === 'direct') return conversation.kind === 'direct';
     if (filter === 'groups') {
@@ -182,6 +217,9 @@ export function ConversationList({
     () => filterConversations(conversations, filter, search, people, messageConversationIds, markedUnreadIds),
     [conversations, filter, markedUnreadIds, messageConversationIds, people, search],
   );
+  const archivedCount = conversations.filter(
+    (conversation) => conversation.archivedByMe && !conversation.managementOnly,
+  ).length;
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
       conversations.filter((conversation) => conversation.managementOnly).map((conversation) => conversation.id),
@@ -206,6 +244,8 @@ export function ConversationList({
     groups: t('chat.filterGroups'),
     announcements: t('chat.filterOfficial'),
     favorites: t('chat.filterFavorites'),
+    // Never a chip: the archive is reached from its own row.
+    archived: t('chat.archivedRow'),
   };
 
   return (
@@ -291,6 +331,32 @@ export function ConversationList({
         scrollEventThrottle={64}
         showsVerticalScrollIndicator={false}
         testID="conversation-list">
+        {/* Archived chats gather behind one row rather than sitting in the
+            list, and that row is also the only way back to them (v3.4). */}
+        {filter === 'archived' ? (
+          <Pressable
+            accessibilityLabel={t('chat.back')}
+            accessibilityRole="button"
+            onPress={() => onFilterChange('all')}
+            style={({ pressed }) => [styles.archiveRow, pressed && styles.rowPressed]}>
+            <Ionicons color={colors.mintDark} name="chevron-back" size={18} />
+            <Text style={styles.archiveRowText}>{t('chat.archivedRow')}</Text>
+          </Pressable>
+        ) : archivedCount && !search.trim() ? (
+          <Pressable
+            accessibilityLabel={`${t('chat.archivedRow')}: ${archivedCount}`}
+            accessibilityRole="button"
+            onPress={() => onFilterChange('archived')}
+            style={({ pressed }) => [styles.archiveRow, pressed && styles.rowPressed]}>
+            <Ionicons color={colors.inkSubtle} name="archive-outline" size={18} />
+            <Text style={styles.archiveRowText}>{t('chat.archivedRow')}</Text>
+            <Text style={styles.archiveRowCount}>{archivedCount}</Text>
+            <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
+          </Pressable>
+        ) : null}
+        {filter === 'archived' && !visible.length ? (
+          <Text style={styles.archiveEmpty}>{t('chat.archivedEmpty')}</Text>
+        ) : null}
         {visibleDiscoverableConversations.length ? (
           <View style={styles.discoverySection}>
             <View style={styles.sectionDivider}>
@@ -401,6 +467,7 @@ function ConversationRow({
   // line as well as the name — otherwise the newest message, which is the whole
   // point of the row, is read out by nobody and seen by no test driver.
   const previewLine = conversation.lastMessage
+    || attachmentPreviewLine(conversation, t)
     || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet');
   const actions = useMemo(
     () => conversationRowActions({ ...conversation, unreadCount }),
@@ -581,6 +648,24 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.pill,
+  },
+  archiveRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  archiveRowText: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: '700' },
+  archiveRowCount: { color: colors.inkSubtle, fontSize: 13, fontWeight: '700' },
+  archiveEmpty: {
+    color: colors.inkSubtle,
+    fontSize: 13,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    textAlign: 'center',
   },
   discoverySection: {
     gap: spacing.xs,

@@ -353,6 +353,9 @@ export interface Conversation {
   subtitle: string;
   participantCount?: number;
   lastMessage: string;
+  /** Set when the newest message is a photo, video, voice note or file and
+   * carries no caption of its own. */
+  lastMessageAttachment?: { kind: 'image' | 'video' | 'audio' | 'file'; fileName: string | null };
   /** Who wrote the preview message; own texts need no translation. */
   lastMessageSenderId?: string;
   /** The preview already shows the viewer's translation. */
@@ -371,6 +374,8 @@ export interface Conversation {
   priority?: MessagePriority;
   description?: string;
   archived?: boolean;
+  /** This reader put the chat in their own archive. */
+  archivedByMe?: boolean;
   myRole?: 'owner' | 'admin' | 'member';
   canManage?: boolean;
   canManageConversation?: boolean;
@@ -740,7 +745,7 @@ export interface AuditExportReceipt {
   payload: string;
 }
 
-export type InboxFilter = 'all' | 'unread' | 'direct' | 'groups' | 'announcements' | 'favorites';
+export type InboxFilter = 'all' | 'unread' | 'direct' | 'groups' | 'announcements' | 'favorites' | 'archived';
 
 export type ResourceStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type ConnectivityState = 'online' | 'offline' | 'unknown';

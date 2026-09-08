@@ -37,6 +37,7 @@ import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing, type } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { personDisplayName } from '@/domain/person-name';
 import { useI18n } from '@/i18n/provider';
 import {
   moderationCopy,
@@ -68,7 +69,6 @@ export default function PeopleScreen() {
   // outright (run-2026-09-04T20-41-40), and a decline cannot be undone.
   const [decliningPersonId, setDecliningPersonId] = useState('');
   const [contactAlias, setContactAlias] = useState('');
-  const [favoriteContact, setFavoriteContact] = useState(false);
   const [reportCategory, setReportCategory] = useState<
     'harassment' | 'threat' | 'spam' | 'privacy' | 'misinformation' | 'other'
   >('other');
@@ -172,12 +172,21 @@ export default function PeopleScreen() {
   );
   const contactMatches = useMemo(() => {
     const query = contactQuery.trim().toLocaleLowerCase();
-    if (!query) return consumerPeople;
-    return consumerPeople.filter((person) => (
-      person.displayName.toLocaleLowerCase().includes(query)
-      || (person.username ?? '').toLocaleLowerCase().includes(query)
-      || (person.contactAlias ?? '').toLocaleLowerCase().includes(query)
-    ));
+    const matches = query
+      ? consumerPeople.filter((person) => (
+        person.displayName.toLocaleLowerCase().includes(query)
+        || (person.username ?? '').toLocaleLowerCase().includes(query)
+        || (person.contactAlias ?? '').toLocaleLowerCase().includes(query)
+      ))
+      : consumerPeople;
+    // Saving somebody is now the one thing the star does, so it has to be
+    // visible in the list: saved people come first, then everyone else.
+    return [...matches].sort((left, right) => {
+      if (Boolean(left.savedContact) !== Boolean(right.savedContact)) {
+        return left.savedContact ? -1 : 1;
+      }
+      return personDisplayName(left).localeCompare(personDisplayName(right));
+    });
   }, [consumerPeople, contactQuery]);
 
   const openConversation = (conversationId: string) => {
@@ -204,7 +213,6 @@ export default function PeopleScreen() {
   const openManage = (person: Person) => {
     workspace.clearActionError();
     setContactAlias(person.contactAlias ?? '');
-    setFavoriteContact(person.favoriteContact === true);
     setReportCategory('other');
     setReportDetails('');
     setReportConsent(false);
@@ -449,17 +457,32 @@ export default function PeopleScreen() {
         onClose={() => setManagePersonId('')}
         title={managePerson ? `${t('people.manageTitle')} · ${managePerson.displayName}` : t('people.manageTitle')}
         visible={Boolean(managePerson)}>
+        {/* The nickname commits when you leave the field: a person who typed
+            one and closed the sheet used to lose it to a Save button they
+            never pressed. Typing one saves the contact, which is what setting
+            a private name for somebody means. */}
         <FormField
           label={t('people.alias')}
+          onBlur={() => {
+            if (!managePerson) return;
+            const next = contactAlias.trim();
+            if (next === (managePerson.contactAlias ?? '')) return;
+            void workspace.saveContact(managePerson.id, next, false);
+          }}
           onChangeText={setContactAlias}
           placeholder={t('people.aliasPlaceholder')}
           value={contactAlias}
         />
         <PrimaryButton
-          icon={favoriteContact ? 'star' : 'star-outline'}
-          label={t('people.favoriteContact')}
-          onPress={() => setFavoriteContact((current) => !current)}
-          tone={favoriteContact ? 'dark' : 'light'}
+          icon={managePerson?.savedContact ? 'star' : 'star-outline'}
+          label={t(managePerson?.savedContact ? 'people.removeSaved' : 'people.saveContact')}
+          loading={workspace.actionBusy === 'contact-save' || workspace.actionBusy === 'contact-remove'}
+          onPress={() => {
+            if (!managePerson) return;
+            if (managePerson.savedContact) void workspace.removeSavedContact(managePerson.id);
+            else void workspace.saveContact(managePerson.id, contactAlias, false);
+          }}
+          tone={managePerson?.savedContact ? 'dark' : 'light'}
         />
         {personalRealm ? null : (
           <View style={styles.privacyNote}>
@@ -468,26 +491,6 @@ export default function PeopleScreen() {
           </View>
         )}
         <ActionError message={workspace.actionError} />
-        <PrimaryButton
-          icon="bookmark-outline"
-          label={t('people.saveContact')}
-          loading={workspace.actionBusy === 'contact-save'}
-          onPress={async () => {
-            if (managePerson && await workspace.saveContact(managePerson.id, contactAlias, favoriteContact)) {
-              setContactAlias(contactAlias.trim());
-            }
-          }}
-          tone="dark"
-        />
-        {managePerson?.savedContact ? (
-          <PrimaryButton
-            icon="bookmark"
-            label={t('people.removeSaved')}
-            loading={workspace.actionBusy === 'contact-remove'}
-            onPress={() => managePerson && void workspace.removeSavedContact(managePerson.id)}
-            tone="light"
-          />
-        ) : null}
         <PrimaryButton
           icon={managePerson?.blockedByMe ? 'shield-checkmark-outline' : 'ban-outline'}
           label={managePerson?.blockedByMe ? t('people.unblock') : t('people.block')}
@@ -667,14 +670,14 @@ function PersonCard({
         />
         <View style={styles.personStatus}>
           {person.blockedByMe ? <StatusBadge icon="ban-outline" label={t('people.blocked')} tone="danger" /> : null}
-          {person.favoriteContact ? <StatusBadge icon="star" label={t('people.favorite')} tone="warning" /> : person.savedContact ? <StatusBadge icon="bookmark" label={t('people.saved')} tone="success" /> : null}
+          {person.savedContact ? <StatusBadge icon="star" label={t('people.saved')} tone="warning" /> : null}
           <StatusBadge
             label={person.preferredLanguage === 'ko' ? '한국어' : person.preferredLanguage === 'es' ? 'Español' : 'English'}
             tone={person.preferredLanguage === 'ko' ? 'purple' : 'warning'}
           />
         </View>
       </View>
-      <Text style={styles.personName}>{person.displayName}</Text>
+      <Text style={styles.personName}>{personDisplayName(person)}</Text>
       <Text style={styles.personRole}>{person.roleLabel}</Text>
       {person.site ? (
         <View style={styles.personMetaRow}>

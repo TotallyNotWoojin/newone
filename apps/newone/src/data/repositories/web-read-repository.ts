@@ -44,6 +44,7 @@ import { usesCookieSession } from '@/lib/session-transport';
 import { getWebCsrfToken } from '@/lib/web-auth';
 import { parseWorkspaceCapabilities } from '@/data/repositories/capability-dto.mjs';
 import { stripSummarySourceTokens } from '@/data/summary-text';
+import { personDisplayName } from '@/domain/person-name';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { catalogs } from '@/i18n/catalog';
 
@@ -652,6 +653,22 @@ function sharedMediaItemFromDto(row: JsonRecord): SharedMediaItem {
   };
 }
 
+/** The newest message's attachment, for the Chats row's preview line. */
+function attachmentPreview(value: unknown): Conversation['lastMessageAttachment'] {
+  const attachment = objectValue(value);
+  const fileName = optionalString(attachment.fileName);
+  const mimeType = optionalString(attachment.mimeType);
+  if (!fileName && !mimeType) return undefined;
+  const kind = mimeType?.startsWith('image/')
+    ? 'image'
+    : mimeType?.startsWith('video/')
+      ? 'video'
+      : mimeType?.startsWith('audio/')
+        ? 'audio'
+        : 'file';
+  return { kind, fileName: fileName ?? null };
+}
+
 function messageFromDto(
   row: JsonRecord,
   current: Person,
@@ -798,7 +815,15 @@ function reactionSummary(reactions: JsonRecord[], currentUserId: string): Messag
   return [...grouped.values()];
 }
 
-function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<string, Person>): Conversation {
+function conversationFromDto(
+  row: JsonRecord,
+  current: Person,
+  peopleById: Map<string, Person>,
+  /** What this phone reads in — the "Translate to" setting, which is not
+   * always the profile's own language. The pair chip claimed EN ↔ KO to a
+   * reader whose messages arrive in Korean (defect, Sep 8 2026). */
+  readingLanguage: LanguageCode = current.preferredLanguage,
+): Conversation {
   const id = requiredString(row.conversationId ?? row.id, 'conversation');
   const kind = conversationKind(row.kind);
   const directId = optionalString(row.directCounterpartUserId);
@@ -842,14 +867,15 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
   const mutedUntil = activeMutedUntil(preferences.mutedUntil);
   const translationMode = preferences.translationMode === 'off' ? 'off' : 'automatic';
   const memberRole = String(row.memberRole ?? members.find((member) => member.userId === current.id)?.role ?? 'member');
+  // A nickname is what this reader calls them, so it names the thread too.
   const title = kind === 'direct'
-    ? direct?.displayName ?? 'Direct message'
+    ? (direct ? personDisplayName(direct) : undefined) ?? 'Direct message'
     : optionalString(row.name) ?? 'Company conversation';
   return {
     id,
     directParticipantId: directId ?? undefined,
     title,
-    initials: kind === 'direct' ? direct?.initials ?? 'DM' : initials(title),
+    initials: kind === 'direct' ? (direct?.contactAlias?.trim() ? initials(title) : direct?.initials ?? 'DM') : initials(title),
     avatarColor: direct?.avatarColor ?? stableColor(id),
     avatarPath: kind === 'direct' ? null : optionalString(row.avatarPath),
     kind,
@@ -863,6 +889,9 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     participantCount: memberCount,
     // Empty until something is sent; the list renders the localized fallback.
     lastMessage: optionalString(preview.body) ?? '',
+    // A photo or a file with no caption has no body: the row names the kind
+    // instead of claiming the chat is empty (v3.4).
+    lastMessageAttachment: attachmentPreview(preview.attachment),
     // The server preview layer swaps in the viewer's translation once it
     // exists and says so; own texts never need one.
     lastMessageSenderId: optionalString(preview.senderUserId) ?? undefined,
@@ -877,11 +906,14 @@ function conversationFromDto(row: JsonRecord, current: Person, peopleById: Map<s
     mutedUntil,
     translationMode,
     presence: direct?.presence,
-    translationPair: direct && direct.preferredLanguage !== current.preferredLanguage
-      ? `${current.preferredLanguage.toUpperCase()} ↔ ${direct.preferredLanguage.toUpperCase()}`
+    translationPair: direct && direct.preferredLanguage !== readingLanguage
+      ? `${readingLanguage.toUpperCase()} ↔ ${direct.preferredLanguage.toUpperCase()}`
       : undefined,
     description: optionalString(row.description) ?? undefined,
     archived: row.isArchived === true,
+    // Archiving is this reader's own choice about their own list; the
+    // conversation-level flag above belongs to a workplace administrator.
+    archivedByMe: preferences.isArchived === true,
     myRole: memberRole === 'owner' || memberRole === 'admin' ? memberRole : 'member',
     canManage: row.canManage === true,
     canManageConversation: row.canManageConversation === true,
@@ -1437,7 +1469,7 @@ export class WebReadRepository implements ReadRepository {
       : supportedLanguage(preferences.messageLanguage, 'message display language');
     this.identity = { current: currentUser, peopleById, messageLanguage };
     const conversations = values(payload.conversations).map((row) => {
-      const conversation = conversationFromDto(row, currentUser, peopleById);
+      const conversation = conversationFromDto(row, currentUser, peopleById, messageLanguage);
       conversation.organizationId = organizationId;
       return conversation;
     });

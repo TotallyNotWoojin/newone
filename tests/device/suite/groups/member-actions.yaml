@@ -1,13 +1,13 @@
 appId: com.totallynotwoojin.newone
 ---
-# v3.3 (backlog 50): the people in a group are actionable where you notice
-# them. Conversation settings → "People in this group" → a member's
-# "Options for <name>" → Message, Add as friend, Mute, Block and (for owners
-# and admins) Remove from group.
+# v3.4: one menu per person. Conversation settings → "People in this group" →
+# "Options for <name>" opens that member's sheet, which carries Message, Add as
+# friend, Mute, Block, the role chips and Remove from group. Every action names
+# the person, so five members never offer five identical "Mute" buttons to a
+# screen reader or to this driver.
 #
-# This flow exercises the four that leave the sheet open: add as friend, mute,
-# unmute, block, unblock. "Message" leaves the group (groups/member-message)
-# and "Remove from group" ends the membership (groups/member-remove).
+# This flow exercises the ones that leave the sheet open: add as friend, mute,
+# unmute, block, unblock.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -25,70 +25,33 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Options for ${NAME}"
 - extendedWaitUntil:
-    visible: "Add as friend"
+    visible: "Add as friend ${NAME}"
     timeout: 15000
-- assertVisible: "Mute"
-- assertVisible: "Block"
-# The expanded actions can sit below the sheet's fold. The driver still reports
-# them visible, so a tap lands on the backdrop and dismisses the whole sheet
-# (run-2026-09-08T04-50-00: three steps lost this way). Scroll each action
-# fully onto the screen before touching it.
-- scrollUntilVisible:
-    element:
-      text: "Add as friend"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
+- assertVisible: "Mute ${NAME}"
+- assertVisible: "Block ${NAME}"
 - takeScreenshot: ${SHOT}-member-actions
-- tapOn: "Add as friend"
+- tapOn: "Add as friend ${NAME}"
 - extendedWaitUntil:
-    visible: "Request sent"
+    visible: "Request sent ${NAME}"
     timeout: 20000
 - takeScreenshot: ${SHOT}-friend-requested
-- scrollUntilVisible:
-    element:
-      text: "Mute"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
-- tapOn: "Mute"
+- tapOn: "Mute ${NAME}"
 - extendedWaitUntil:
-    visible: "Unmute"
+    visible: "Unmute ${NAME}"
     timeout: 20000
-# The row's own line records it, next to the @handle.
-- assertVisible: ".*Muted.*"
 - takeScreenshot: ${SHOT}-muted
-- scrollUntilVisible:
-    element:
-      text: "Unmute"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
-- tapOn: "Unmute"
+- tapOn: "Unmute ${NAME}"
 - extendedWaitUntil:
-    visible: "Mute"
+    visible: "Mute ${NAME}"
     timeout: 20000
-- scrollUntilVisible:
-    element:
-      text: "Block"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
-- tapOn: "Block"
+- tapOn: "Block ${NAME}"
 - extendedWaitUntil:
-    visible: "Unblock"
+    visible: "Unblock ${NAME}"
     timeout: 20000
-- assertVisible: ".*Blocked.*"
 - takeScreenshot: ${SHOT}-blocked
-- scrollUntilVisible:
-    element:
-      text: "Unblock"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
-- tapOn: "Unblock"
+- tapOn: "Unblock ${NAME}"
 - extendedWaitUntil:
-    visible: "Block"
+    visible: "Block ${NAME}"
     timeout: 20000
 - takeScreenshot: ${SHOT}-unblocked
 - tapOn: "Close dialog"

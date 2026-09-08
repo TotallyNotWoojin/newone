@@ -1,39 +1,33 @@
 appId: com.totallynotwoojin.newone
 ---
-# A plain member opens the controls: no role chips for anyone (including
-# self), no Remove buttons, no "Add people" section ("Add to group" button).
-# v3.3 (backlog 50): the member's own "People in this group" section still
-# offers Message / Add as friend / Mute / Block, but never "Remove from group"
-# — that is for owners and admins.
+# A plain member opens the controls: no "Add people" section, and the member
+# sheet offers Message / Add as friend / Mute / Block but never the role chips
+# and never "Remove from group" — those belong to owners and admins.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
 - scrollUntilVisible:
     element:
-      text: "People"
-    direction: DOWN
-    timeout: 30000
-- takeScreenshot: ${SHOT}-people-as-member
-- assertNotVisible: "Owner · ${SELF}"
-- assertNotVisible: "Admin · ${SELF}"
-- assertNotVisible: "Member · ${SELF}"
-- assertNotVisible: "Remove ${OTHER}"
-- assertNotVisible: "Add to group"
-- scrollUntilVisible:
-    element:
       text: "People in this group"
     direction: DOWN
     timeout: 30000
+- takeScreenshot: ${SHOT}-people-as-member
+- assertNotVisible: "Add to group"
 - tapOn: "Options for ${OTHER}"
 - extendedWaitUntil:
-    visible: "Add as friend"
+    visible: "Add as friend ${OTHER}"
     timeout: 15000
-- assertVisible: "Mute"
-- assertVisible: "Block"
-- assertNotVisible: "Remove from group"
+- assertVisible: "Mute ${OTHER}"
+- assertVisible: "Block ${OTHER}"
+- assertNotVisible: "Remove from group ${OTHER}"
+- assertNotVisible: "Owner · ${OTHER}"
+- assertNotVisible: "Member · ${OTHER}"
 - takeScreenshot: ${SHOT}-member-actions-as-member
-- tapOn: "Options for ${OTHER}"
+- tapOn: "Close dialog"
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 15000
 # "Report this group privately" was removed with the Sep 2026 chat stream; the
 # sheet ends with Leave this group (members) or Archive conversation (managers).
 - scrollUntilVisible:

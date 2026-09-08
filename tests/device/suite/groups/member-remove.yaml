@@ -1,8 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# v3.3 (backlog 50): an owner or admin removes somebody from the member row
-# itself. The row goes, and the thread records it the way any removal is
-# recorded ("… was removed from the group.").
+# v3.3 (backlog 50), v3.4: an owner or admin removes somebody from that
+# person's own sheet. The row goes, and the thread records it the way any
+# removal is recorded ("… was removed from the group.").
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -14,20 +14,10 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Options for ${NAME}"
 - extendedWaitUntil:
-    visible: "Remove from group"
+    visible: "Remove from group ${NAME}"
     timeout: 15000
-# The expanded actions can sit below the sheet's fold. The driver still reports
-# them visible, so a tap lands on the backdrop and dismisses the whole sheet
-# (run-2026-09-08T04-50-00: three steps lost this way). Scroll each action
-# fully onto the screen before touching it.
-- scrollUntilVisible:
-    element:
-      text: "Remove from group"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
 - takeScreenshot: ${SHOT}-before-remove
-- tapOn: "Remove from group"
+- tapOn: "Remove from group ${NAME}"
 - extendedWaitUntil:
     notVisible: "Options for ${NAME}"
     timeout: 30000

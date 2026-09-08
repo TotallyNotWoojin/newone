@@ -1591,6 +1591,7 @@ export class BffCommandRepository implements CommandRepository {
         ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
         ...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
         ...(input.isArchived !== undefined ? { isArchived: input.isArchived } : {}),
+        ...(input.isHidden !== undefined ? { isHidden: input.isHidden } : {}),
         ...(input.notificationLevel !== undefined ? { notificationLevel: input.notificationLevel } : {}),
         ...(input.mutedUntil !== undefined ? { mutedUntil: input.mutedUntil } : {}),
         ...(input.translationMode !== undefined ? { translationMode: input.translationMode } : {}),

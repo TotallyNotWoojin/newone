@@ -255,6 +255,7 @@ export function StatusBadge({
 
 export function PrimaryButton({
   label,
+  accessibilityLabel,
   onPress,
   icon,
   disabled,
@@ -264,6 +265,9 @@ export function PrimaryButton({
   testID,
 }: {
   label: string;
+  /** When several buttons share a word — five "Mute"s, one per person — this
+   * says which one, for a screen reader and for a driver alike. */
+  accessibilityLabel?: string;
   onPress?: () => void;
   icon?: IconName;
   disabled?: boolean;
@@ -284,7 +288,7 @@ export function PrimaryButton({
   return (
     <Pressable
       testID={testID}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
       disabled={isDisabled}

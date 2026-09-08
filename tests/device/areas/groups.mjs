@@ -159,7 +159,7 @@ export async function run(ctx) {
   await openGroup(devA, 'A');
 
   await ctx.step({
-    id: 'groups-15-remove-member', title: 'A removes C', device: devA, flow: 'groups/remove-member.yaml', env: { NAME: C.displayName },
+    id: 'groups-15-remove-member', title: 'A removes C', device: devA, flow: 'groups/member-remove.yaml', env: { NAME: C.displayName },
     expected: 'System row "… was removed from the group."; server C not active', screen: 'group → Conversation controls',
     serverTruth: async () => { const w = await server.waitFor(() => server.members(gid), (rows) => { const c = rows.find((r) => r.user_id === C.userId); return !c || c.status !== 'active'; }, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row?.find?.((r) => r.user_id === C.userId) ?? 'row gone' }; },
   });

@@ -394,7 +394,7 @@ interface WorkspaceState {
   ) => Promise<boolean>;
   updateConversationPreferences: (
     conversationId: string,
-    patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+    patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
   ) => Promise<boolean>;
   updateProfile: (
     input: { displayName: string; statusMessage?: string | null },
@@ -4058,7 +4058,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const updateConversationPreferences = useCallback(
     async (
       conversationId: string,
-      patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+      patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
     ) => {
       if (!snapshot) return false;
       const result = await executeImmediate('conversation-preferences', () =>
@@ -4091,7 +4091,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             ...conversation,
             ...(patch.isFavorite !== undefined ? { favorite: patch.isFavorite } : {}),
             ...(patch.isPinned !== undefined ? { pinned: patch.isPinned } : {}),
-            ...(patch.isArchived !== undefined ? { archived: patch.isArchived } : {}),
+            ...(patch.isArchived !== undefined ? { archivedByMe: patch.isArchived } : {}),
             notificationLevel,
             mutedUntil,
             ...(patch.translationMode !== undefined ? { translationMode: patch.translationMode } : {}),
@@ -5658,8 +5658,17 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     );
     if (!result) return false;
     setOrganizationPreferences(result);
+    // Every chat's language pair, and which translation each bubble shows, are
+    // computed from the reading language when the snapshot is built. Changing
+    // it in Settings left the old pair on every chat header until something
+    // else happened to refresh (defect, Sep 8 2026).
+    const languageMoved = (patch.messageLanguage !== undefined
+      && patch.messageLanguage !== organizationPreferences?.messageLanguage)
+      || (patch.uiLanguage !== undefined
+        && patch.uiLanguage !== organizationPreferences?.uiLanguage);
+    if (languageMoved) await refresh();
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, organizationPreferences, refresh, repositories.commands, snapshot]);
 
   const updateOrganizationPolicy = useCallback(async (policy: OrganizationPolicyUpdate) => {
     if (!snapshot || snapshot.currentMembershipRole !== 'owner') return false;

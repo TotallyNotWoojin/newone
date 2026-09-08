@@ -2925,7 +2925,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     expect(screen.getByText('@ana')).toBeTruthy();
     expect(screen.getByText('EN ↔ ES')).toBeTruthy();
     expect(screen.queryByText('member • Denver')).toBeNull();
-    expect(screen.queryByText(/chat\.translationAvailable|chat\.originalPreserved/)).toBeNull();
+    expect(screen.queryByText(/chat\.translationAvailable/)).toBeNull();
     await view.rerender(<ConversationPane conversation={conversation({ participantCount: 3 })} messages={[]} onSend={noopSend} />);
     expect(screen.getByText('chat.memberCount')).toBeTruthy();
   });

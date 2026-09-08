@@ -157,8 +157,10 @@ export default function ChatsScreen() {
         : { notificationLevel: 'all', mutedUntil: null });
       return;
     }
-    if (action === 'archive') {
-      void workspace.updateConversationPreferences(conversation.id, { isArchived: true });
+    if (action === 'archive' || action === 'unarchive') {
+      void workspace.updateConversationPreferences(conversation.id, {
+        isArchived: action === 'archive',
+      });
       return;
     }
     // Leaving a group and being done with a one-to-one chat are different
@@ -176,7 +178,10 @@ export default function ChatsScreen() {
     setDeparting(null);
     setMarkedUnread(id, false);
     if (group) void workspace.leaveConversation(id);
-    else void workspace.updateConversationPreferences(id, { isArchived: true });
+    // Being done with a one-to-one chat hides it for this person only. That is
+    // a different flag from archiving, which merely moves it out of the way
+    // (v3.4): before, both wrote the same one and neither could be undone.
+    else void workspace.updateConversationPreferences(id, { isHidden: true });
   };
 
   const listProps = {

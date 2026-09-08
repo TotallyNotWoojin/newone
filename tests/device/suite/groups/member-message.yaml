@@ -1,9 +1,8 @@
 appId: com.totallynotwoojin.newone
 ---
-# v3.3 (backlog 50): "Message" on a group member opens the one-to-one chat with
-# them. The button is taken from that member's own row; the post-conditions
-# (the composer, the header naming NAME and the group gone) say where the tap
-# actually landed if it ever picks up the composer's own "Message" label.
+# v3.3 (backlog 50), v3.4: "Message" in a member's sheet opens the one-to-one
+# chat with them. The action names the person, so it can never be confused with
+# the composer's own "Write a message…" placeholder.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
@@ -15,12 +14,10 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Options for ${NAME}"
 - extendedWaitUntil:
-    visible: "Add as friend"
+    visible: "Add as friend ${NAME}"
     timeout: 15000
 - takeScreenshot: ${SHOT}-member-actions
-- tapOn:
-    text: "Message"
-    below: "Options for ${NAME}"
+- tapOn: "Message ${NAME}"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 30000

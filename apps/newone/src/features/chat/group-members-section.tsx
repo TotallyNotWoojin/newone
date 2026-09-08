@@ -3,8 +3,10 @@ import { isPersonalRealm } from '@/constants/personal-realm';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Avatar, IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
+import { ActionModal } from '@/components/ui/action-modal';
+import { Avatar, Chip, IconButton, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import type { Conversation, Person } from '@/domain/types';
+import { personDisplayName } from '@/domain/person-name';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
@@ -59,7 +61,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
     return (memberIds ?? []).map((userId) => {
       const person = byId.get(userId) ?? null;
       const profile = memberProfiles?.find((entry) => entry.id === userId) ?? null;
-      const displayName = person?.displayName ?? profile?.displayName ?? '';
+      const displayName = person ? personDisplayName(person) : profile?.displayName ?? '';
       return {
         userId,
         displayName,
@@ -91,10 +93,8 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
       {members.length === 0 ? (
         <Text style={styles.empty}>{t('group.membersEmpty')}</Text>
       ) : members.map((member) => {
-        const open = openMemberId === member.userId;
         const muted = member.person?.mutedByMe === true;
         const blocked = member.person?.blockedByMe === true;
-        const connectionState = member.person?.connectionState;
         return (
           <View key={member.userId} style={styles.row}>
             <View style={styles.rowMain}>
@@ -122,57 +122,118 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
               {member.isSelf ? null : (
                 <IconButton
                   label={`${t('group.memberActions')} ${member.displayName}`}
-                  name={open ? 'chevron-up' : 'ellipsis-horizontal'}
-                  onPress={() => setOpenMemberId(open ? null : member.userId)}
+                  name="ellipsis-horizontal"
+                  onPress={() => setOpenMemberId(member.userId)}
                   size={32}
                 />
               )}
             </View>
-            {open ? (
-              <View style={styles.actions}>
-                <PrimaryButton
-                  label={t('group.memberMessage')}
-                  onPress={async () => {
-                    const conversationId = await workspace.openOrCreateDirectConversation(member.userId);
-                    if (conversationId) openConversation(conversationId);
-                  }}
-                  tone="light"
-                />
-                {connectionState === 'connected' || connectionState === 'self' ? null : (
-                  <PrimaryButton
-                    disabled={connectionState === 'pending'}
-                    label={t(connectionState === 'pending' ? 'group.memberRequested' : 'group.memberAddFriend')}
-                    onPress={() => void workspace.updateConnection(member.userId)}
-                    tone="light"
-                  />
-                )}
-                <PrimaryButton
-                  label={t(muted ? 'group.memberUnmute' : 'group.memberMute')}
-                  onPress={() => void workspace.setPersonMuted(member.userId, !muted)}
-                  tone="light"
-                />
-                <PrimaryButton
-                  label={t(blocked ? 'group.memberUnblock' : 'group.memberBlock')}
-                  onPress={() => void workspace.setPersonBlocked(member.userId, !blocked)}
-                  tone={blocked ? 'light' : 'danger'}
-                />
-                {canManage ? (
-                  <PrimaryButton
-                    label={t('group.memberRemove')}
-                    onPress={async () => {
-                      if (await workspace.removeConversationMember(conversation.id, member.userId)) {
-                        setOpenMemberId(null);
-                      }
-                    }}
-                    tone="danger"
-                  />
-                ) : null}
-              </View>
-            ) : null}
           </View>
         );
       })}
+      <MemberSheet
+        canManage={canManage}
+        conversation={conversation}
+        member={members.find((item) => item.userId === openMemberId) ?? null}
+        onClose={() => setOpenMemberId(null)}
+        onOpenConversation={openConversation}
+      />
     </View>
+  );
+}
+
+/**
+ * Everything you can do about one person in a group, in one sheet: message
+ * them, add them, mute them, block them, change their role and remove them.
+ * Until v3.4 the roles lived in one list and the rest in another, and the
+ * second one was drawn inside a scrolling sheet where the buttons could fall
+ * below the fold and take the sheet down with them when tapped.
+ */
+function MemberSheet({
+  canManage,
+  conversation,
+  member,
+  onClose,
+  onOpenConversation,
+}: {
+  canManage: boolean;
+  conversation: Conversation;
+  member: GroupMember | null;
+  onClose: () => void;
+  onOpenConversation: (conversationId: string) => void;
+}) {
+  const styles = useThemedStyles(buildStyles);
+  const { t } = useI18n();
+  const workspace = useWorkspace();
+  if (!member) return null;
+  const muted = member.person?.mutedByMe === true;
+  const blocked = member.person?.blockedByMe === true;
+  const connectionState = member.person?.connectionState;
+  const roles: Array<'owner' | 'admin' | 'member'> = ['owner', 'admin', 'member'];
+  return (
+    <ActionModal
+      onClose={onClose}
+      title={member.displayName}
+      visible>
+      {member.username ? <Text style={styles.sheetHandle}>@{member.username}</Text> : null}
+      <PrimaryButton
+        accessibilityLabel={`${t('group.memberMessage')} ${member.displayName}`}
+        label={t('group.memberMessage')}
+        onPress={async () => {
+          const conversationId = await workspace.openOrCreateDirectConversation(member.userId);
+          onClose();
+          if (conversationId) onOpenConversation(conversationId);
+        }}
+        tone="light"
+      />
+      {connectionState === 'connected' || connectionState === 'self' ? null : (
+        <PrimaryButton
+          disabled={connectionState === 'pending'}
+          accessibilityLabel={`${t(connectionState === 'pending' ? 'group.memberRequested' : 'group.memberAddFriend')} ${member.displayName}`}
+          label={t(connectionState === 'pending' ? 'group.memberRequested' : 'group.memberAddFriend')}
+          onPress={() => void workspace.updateConnection(member.userId)}
+          tone="light"
+        />
+      )}
+      <PrimaryButton
+        accessibilityLabel={`${t(muted ? 'group.memberUnmute' : 'group.memberMute')} ${member.displayName}`}
+        label={t(muted ? 'group.memberUnmute' : 'group.memberMute')}
+        onPress={() => void workspace.setPersonMuted(member.userId, !muted)}
+        tone="light"
+      />
+      <PrimaryButton
+        accessibilityLabel={`${t(blocked ? 'group.memberUnblock' : 'group.memberBlock')} ${member.displayName}`}
+        label={t(blocked ? 'group.memberUnblock' : 'group.memberBlock')}
+        onPress={() => void workspace.setPersonBlocked(member.userId, !blocked)}
+        tone={blocked ? 'light' : 'danger'}
+      />
+      {canManage && !conversation.policyManaged ? (
+        <>
+          <Text style={styles.sheetLabel}>{t('group.memberRoleLabel')}</Text>
+          <View style={styles.sheetRoles}>
+            {roles.map((role) => (
+              <Chip
+                accessibilityLabel={`${t(`chat.${role}Role`)} · ${member.displayName}`}
+                key={role}
+                label={t(`chat.${role}Role`)}
+                onPress={member.role === role ? undefined : () => void workspace.updateConversationMemberRole(
+                  conversation.id, member.userId, member.role, role,
+                )}
+                selected={member.role === role}
+              />
+            ))}
+          </View>
+          <PrimaryButton
+            accessibilityLabel={`${t('group.memberRemove')} ${member.displayName}`}
+            label={t('group.memberRemove')}
+            onPress={async () => {
+              if (await workspace.removeConversationMember(conversation.id, member.userId)) onClose();
+            }}
+            tone="danger"
+          />
+        </>
+      ) : null}
+    </ActionModal>
   );
 }
 
@@ -193,6 +254,9 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   rowTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   name: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '800' },
   meta: { color: colors.inkSubtle, fontSize: 11 },
+  sheetHandle: { color: colors.inkSubtle, fontSize: 12 },
+  sheetLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
+  sheetRoles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

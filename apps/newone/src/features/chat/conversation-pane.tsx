@@ -210,9 +210,17 @@ export function ConversationPane({
     if (tailKey && tailKey !== previousTailRef.current) {
       if (tail?.isOwn) {
         nearBottomRef.current = true;
-        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+        // Not animated: sending replaces the optimistic row with the server
+        // row a moment later, and two animated jumps in a row read as the
+        // list scrolling away and coming back (defect, Sep 7 2026).
+        listRef.current?.scrollToOffset({ offset: 0, animated: false });
       }
       if (nearBottomRef.current) {
+        // An arriving message has to bring the thread down with it. The
+        // inverted list's own autoscroll gives up as soon as anything else
+        // changes height — the unread divider, a translation line landing —
+        // and the newest message then sat behind the composer.
+        if (!tail?.isOwn) listRef.current?.scrollToOffset({ offset: 0, animated: true });
         if (conversationId) void markConversationRead(conversationId);
       } else {
         setNewMessageCount((count) => count + appendedMessageCount(messages, previousTailRef.current));
@@ -387,9 +395,20 @@ export function ConversationPane({
     unreadDividerLabel,
   ]);
 
+  // A phone hides the tab bar on this screen and the chat header belongs to a
+  // conversation, so an empty pane would leave no way back at all: archiving a
+  // chat takes it out of the snapshot, and opening that person again lands
+  // exactly here (defect, Sep 7 2026).
+  const backOnlyHeader = mobile && onBack ? (
+    <View style={[styles.header, styles.headerMobile]}>
+      <IconButton name="chevron-back" label={t('chat.back')} onPress={onBack} size={36} />
+    </View>
+  ) : null;
+
   if (!currentUserId) {
     return (
       <View style={styles.emptyPane}>
+        {backOnlyHeader}
         <EmptyState
           body={t('status.oneMoment')}
           icon="hourglass-outline"
@@ -402,6 +421,7 @@ export function ConversationPane({
   if (!conversation) {
     return (
       <View style={styles.emptyPane}>
+        {backOnlyHeader}
         <EmptyState
           body={t(isPersonalRealm(workspace.organizationId) ? 'chat.chooseBodyConsumer' : 'chat.chooseBody')}
           icon="chatbubbles-outline"
@@ -1110,7 +1130,12 @@ const MessageBubble = memo(function MessageBubble({
     [message.deleted, message.originalText, message.systemEvent],
   );
   const translationEnabled = translationConversation?.translationMode !== 'off';
-  const translation = translationEnabled ? message.translation : undefined;
+  // Never on your own message. The incoming line is the row aimed at whoever
+  // reads this phone's language, which in a group can be another member, so
+  // your own bubble grew a translation nobody asked for while "Show my
+  // translations" was off (defect, Sep 7 2026). Your own message is covered by
+  // ownTranslation below, and only when that setting is on.
+  const translation = translationEnabled && !message.isOwn ? message.translation : undefined;
   const visibleTranslationState = translationEnabled ? message.translationState : 'not_requested';
   const hasTranslation = Boolean(message.translatedText && translation?.status === 'completed');
   // A reader can ask for (or retry) a translation when there is none to show:
@@ -2856,7 +2881,11 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-      {conversation.kind !== 'direct' ? (
+      {/* One menu per person. A consumer's roster is GroupMembersSection, whose
+          sheet carries the role chips and Remove as well; this list is the
+          workplace one, where the security notes and the delegation rules
+          belong. Two lists for the same people was the mess (v3.4). */}
+      {conversation.kind !== 'direct' && !personalRealm ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.members')}</Text>
           {conversation.policyManaged ? (
