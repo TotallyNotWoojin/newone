@@ -27,9 +27,9 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     id: "setting-appearance"
 - extendedWaitUntil:
-    visible: "Dark"
+    visible: "Appearance: Dark"
     timeout: 10000
-- tapOn: "Dark"
+- tapOn: "Appearance: Dark"
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: ${SHOT}-dark-settings
@@ -75,9 +75,9 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     id: "setting-appearance"
 - extendedWaitUntil:
-    visible: "System"
+    visible: "Appearance: System"
     timeout: 10000
-- tapOn: "System"
+- tapOn: "Appearance: System"
 - waitForAnimationToEnd:
     timeout: 1500
 - tapOn: "Close settings"
