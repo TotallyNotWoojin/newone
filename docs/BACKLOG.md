@@ -149,6 +149,8 @@ Chats.
     - **Select steps.** `--steps groups-05,groups-14b` runs those and nothing else, on top of reused accounts. Steps that build state other steps need (a group, a friendship) declare it, so selecting one pulls in what it depends on rather than silently running against a half-built world.
     - **Rerun a report.** `--from-failures <run-dir>` reads report.json and reruns exactly the steps that failed, which is what almost every rerun today actually wanted.
 
+77. **Redo signing up and signing in** (owner, Sep 8 2026 — v3.5, after 76). Same fields and the same security; what changes is how it looks and how it feels to use. It should follow the design language the rest of the app now has — the same surfaces, spacing, type and controls — and be slimmer and more compact: the owner should not have to scroll to create an account. Both screens, all three languages, and the device flows that drive them.
+
 ## Dropped
 
 34. ~~Bridging WhatsApp / iMessage / SMS into Newone~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).
