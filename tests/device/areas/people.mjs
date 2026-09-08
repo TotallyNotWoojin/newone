@@ -177,7 +177,7 @@ export async function run(ctx) {
   await ctx.observe(devA, { id: 'people-14b-blocked-send-screen', title: 'Exact composer state after the blocked send', screen: 'conversation' });
   await ctx.step({
     id: 'people-15-unblock', title: 'B unblocks A', device: devB,
-    flow: 'people/unblock.yaml', expected: '"Blocked" badge gone, Message button back; server member_blocks row removed', screen: 'contacts → Contact and privacy',
+    flow: 'people/unblock.yaml', env: { NAME: A.displayName }, expected: '"Blocked" badge gone, Message button back; server member_blocks row removed', screen: 'contacts → Contact and privacy',
     serverTruth: async () => {
       const wait = await server.waitFor(() => server.block(B.userId, A.userId), (row) => Number(row?.blocks) === 0, { timeoutMs: 20_000 });
       return { ok: wait.ok, detail: wait.row };

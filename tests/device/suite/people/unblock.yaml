@@ -17,7 +17,7 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Blocked"
     timeout: 30000
-- tapOn: "Manage contact and privacy"
+- tapOn: ".*Manage contact and privacy ${NAME}.*"
 - extendedWaitUntil:
     visible: "Unblock this person"
     timeout: 15000
