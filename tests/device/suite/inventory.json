@@ -1912,16 +1912,6 @@
           "sourceLine": 2751
         },
         {
-          "id": "pane.controls-save",
-          "label": "Save conversation",
-          "catalogKey": "chat.saveConversation",
-          "kind": "button",
-          "gating": "conversation.canManageConversation && conversation.kind !== 'direct'; disabled name.trim() < 2",
-          "consumerIosReachable": "conditional",
-          "note": "workspace.updateConversation({name, description})",
-          "sourceLine": 2754
-        },
-        {
           "id": "pane.controls-posting-all",
           "label": "Everyone",
           "catalogKey": "chat.allMembers",
@@ -6385,15 +6375,6 @@
       ],
       "consumerIosReachable": "conditional",
       "gating": "conversation.canManageConversation && !conversation.policyManaged && kind in ['group','team']"
-    },
-    {
-      "key": "chat.saveConversation",
-      "en": "Save conversation",
-      "usedIn": [
-        "features/chat/conversation-pane.tsx:2754"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && conversation.kind !== 'direct'"
     },
     {
       "key": "chat.saveCorrection",
