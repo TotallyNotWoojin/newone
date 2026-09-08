@@ -2637,61 +2637,6 @@ function ConversationControlsModal({
           ) : null}
         </View>
       ) : null}
-      {conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
-        <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('group.avatarTitle')}</Text>
-          <Text style={styles.modalNote}>{t('group.avatarRequirements')}</Text>
-          <View style={styles.conversationAvatarControls}>
-            {selectedConversationAvatar || workspace.conversationAvatarUrls[conversation.id] ? (
-              <Image
-                accessibilityLabel={t('group.avatarSelected')}
-                resizeMode="cover"
-                source={{
-                  uri: selectedConversationAvatar?.uri
-                    ?? workspace.conversationAvatarUrls[conversation.id],
-                }}
-                style={styles.conversationAvatarPreview}
-              />
-            ) : (
-              <Avatar
-                color={conversation.avatarColor}
-                initials={conversation.initials}
-                size={72}
-              />
-            )}
-            <View style={styles.conversationAvatarActions}>
-              <PrimaryButton
-                label={conversation.avatarPath || selectedConversationAvatar
-                  ? t('group.changeAvatar')
-                  : t('group.chooseAvatar')}
-                onPress={() => void chooseConversationAvatar()}
-                tone="light"
-              />
-              {selectedConversationAvatar ? (
-                <PrimaryButton
-                  label={t('group.saveAvatar')}
-                  loading={busy === 'conversation-avatar-upload'}
-                  onPress={() => void workspace.uploadConversationAvatar(
-                    conversation.id,
-                    selectedConversationAvatar,
-                  ).then((done) => {
-                    if (done) setSelectedConversationAvatar(null);
-                  })}
-                  tone="dark"
-                />
-              ) : null}
-              {conversation.avatarPath && !selectedConversationAvatar ? (
-                <PrimaryButton
-                  label={t('group.removeAvatar')}
-                  loading={busy === 'conversation-avatar-remove'}
-                  onPress={() => void workspace.removeConversationAvatar(conversation.id)}
-                  tone="danger"
-                />
-              ) : null}
-            </View>
-          </View>
-        </View>
-      ) : null}
       {!conversation.managementOnly ? <View style={styles.modalSection}>
         <Text style={styles.modalLabel}>{notification.title}</Text>
         <Text style={styles.modalNote}>{notification.description}</Text>
@@ -2779,6 +2724,63 @@ function ConversationControlsModal({
                 ? ` · ${new Date(conversation.historyDisclosure.visibleFrom).toLocaleString()}`
                 : ''}
             </Text>
+          </View>
+        </View>
+      ) : null}
+      {/* A group's picture, name and description are one thing: what the
+          group is. They were three sections apart (v3.4). */}
+      {conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
+        <View style={styles.modalSection}>
+          <Text style={styles.modalLabel}>{t('group.avatarTitle')}</Text>
+          <Text style={styles.modalNote}>{t('group.avatarRequirements')}</Text>
+          <View style={styles.conversationAvatarControls}>
+            {selectedConversationAvatar || workspace.conversationAvatarUrls[conversation.id] ? (
+              <Image
+                accessibilityLabel={t('group.avatarSelected')}
+                resizeMode="cover"
+                source={{
+                  uri: selectedConversationAvatar?.uri
+                    ?? workspace.conversationAvatarUrls[conversation.id],
+                }}
+                style={styles.conversationAvatarPreview}
+              />
+            ) : (
+              <Avatar
+                color={conversation.avatarColor}
+                initials={conversation.initials}
+                size={72}
+              />
+            )}
+            <View style={styles.conversationAvatarActions}>
+              <PrimaryButton
+                label={conversation.avatarPath || selectedConversationAvatar
+                  ? t('group.changeAvatar')
+                  : t('group.chooseAvatar')}
+                onPress={() => void chooseConversationAvatar()}
+                tone="light"
+              />
+              {selectedConversationAvatar ? (
+                <PrimaryButton
+                  label={t('group.saveAvatar')}
+                  loading={busy === 'conversation-avatar-upload'}
+                  onPress={() => void workspace.uploadConversationAvatar(
+                    conversation.id,
+                    selectedConversationAvatar,
+                  ).then((done) => {
+                    if (done) setSelectedConversationAvatar(null);
+                  })}
+                  tone="dark"
+                />
+              ) : null}
+              {conversation.avatarPath && !selectedConversationAvatar ? (
+                <PrimaryButton
+                  label={t('group.removeAvatar')}
+                  loading={busy === 'conversation-avatar-remove'}
+                  onPress={() => void workspace.removeConversationAvatar(conversation.id)}
+                  tone="danger"
+                />
+              ) : null}
+            </View>
           </View>
         </View>
       ) : null}
@@ -2970,6 +2972,9 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
+      {/* Who is in the group, then how to add somebody: the two used to be
+          the other way round, with the list last (v3.4). */}
+      <GroupMembersSection conversation={conversation} />
       {conversation.canManageConversation
         && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
         && !conversation.policyManaged
@@ -3059,7 +3064,6 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-      <GroupMembersSection conversation={conversation} />
       {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{departureCopy.title}</Text>
