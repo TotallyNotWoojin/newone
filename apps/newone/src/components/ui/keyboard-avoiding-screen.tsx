@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   View,
   type StyleProp,
@@ -49,9 +48,11 @@ export function KeyboardAvoidingScreen({ children, extraOffset = 0, style }: Pro
   // is stale the padding is wrong by exactly that much, and the composer sits
   // under the keyboard (owner, Sep 8 2026). Measuring again as the keyboard
   // arrives costs nothing and is the moment the number is used.
+  // After the keyboard has settled, never during its animation: a re-render
+  // while a field is taking focus is how a tap ends up typing into nothing
+  // (translation, run-2026-09-08T10-07-31 is the suspicion, not the proof).
   useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const subscription = Keyboard.addListener(event, onLayout);
+    const subscription = Keyboard.addListener('keyboardDidShow', onLayout);
     return () => subscription.remove();
   }, [onLayout]);
   return (
