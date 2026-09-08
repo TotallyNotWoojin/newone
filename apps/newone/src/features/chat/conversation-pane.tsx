@@ -2667,82 +2667,10 @@ function ConversationControlsModal({
           ) : null}
         </View>
       ) : null}
-      {!conversation.managementOnly ? <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>{notification.title}</Text>
-        <Text style={styles.modalNote}>{notification.description}</Text>
-        <View style={styles.modalRow}>
-          {([
-            ['all', notification.all],
-            ['mentions', notification.mentions],
-            ['none', notification.none],
-          ] as [NonNullable<Conversation['notificationLevel']>, string][]).map(([level, label]) => (
-            <Chip
-              key={level}
-              label={label}
-              onPress={preferencesBusy ? undefined : () => {
-                void onUpdateNotificationSettings(level, null);
-              }}
-              selected={notificationLevel === level && !mutedUntil}
-            />
-          ))}
-        </View>
-        <Text style={styles.modalLabel}>{notification.temporary}</Text>
-        <View style={styles.modalRow}>
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.oneHour}
-            onPress={() => muteFor(60 * 60)}
-            tone="light"
-          />
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.eightHours}
-            onPress={() => muteFor(8 * 60 * 60)}
-            tone="light"
-          />
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.oneWeek}
-            onPress={() => muteFor(7 * 24 * 60 * 60)}
-            tone="light"
-          />
-        </View>
-        {mutedUntil ? (
-          <View style={styles.notificationMuteStatus}>
-            <Ionicons name="time-outline" color={colors.amber} size={16} />
-            <Text style={styles.notificationMuteText}>
-              {notification.mutedUntil} · {new Date(mutedUntil).toLocaleString()}
-            </Text>
-            <PrimaryButton
-              disabled={preferencesBusy}
-              label={notification.unmute}
-              onPress={() => void onUpdateNotificationSettings(notificationLevel, null)}
-              tone="light"
-            />
-          </View>
-        ) : null}
-      </View> : null}
-      {!conversation.managementOnly ? <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>{translationPreference.title}</Text>
-        <Text style={styles.modalNote}>{translationPreference.description}</Text>
-        <View style={styles.modalRow}>
-          <Chip
-            label={translationPreference.automatic}
-            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('automatic')}
-            selected={(conversation.translationMode ?? 'automatic') === 'automatic'}
-          />
-          <Chip
-            label={translationPreference.off}
-            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('off')}
-            selected={conversation.translationMode === 'off'}
-          />
-        </View>
-        <Text style={styles.modalNote}>
-          {conversation.translationMode === 'off'
-            ? translationPreference.offHint
-            : translationPreference.automaticHint}
-        </Text>
-      </View> : null}
+      {/* Both disclosures sit high, under the chat they belong to. Low in a
+          scrolling sheet a row can be reported visible while the modal
+          clips it, and the tap then lands on the backdrop and closes the
+          whole thing (chat-33, run-2026-09-08T12-45-43). */}
       {/* A group's picture, name and description are one thing: what the
           group is, and it is not what most people open this sheet for — so it
           is one line until somebody asks for it (v3.4). */}
@@ -2957,6 +2885,82 @@ function ConversationControlsModal({
           )}
         </View>
       ) : null}
+      {!conversation.managementOnly ? <View style={styles.modalSection}>
+        <Text style={styles.modalLabel}>{notification.title}</Text>
+        <Text style={styles.modalNote}>{notification.description}</Text>
+        <View style={styles.modalRow}>
+          {([
+            ['all', notification.all],
+            ['mentions', notification.mentions],
+            ['none', notification.none],
+          ] as [NonNullable<Conversation['notificationLevel']>, string][]).map(([level, label]) => (
+            <Chip
+              key={level}
+              label={label}
+              onPress={preferencesBusy ? undefined : () => {
+                void onUpdateNotificationSettings(level, null);
+              }}
+              selected={notificationLevel === level && !mutedUntil}
+            />
+          ))}
+        </View>
+        <Text style={styles.modalLabel}>{notification.temporary}</Text>
+        <View style={styles.modalRow}>
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.oneHour}
+            onPress={() => muteFor(60 * 60)}
+            tone="light"
+          />
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.eightHours}
+            onPress={() => muteFor(8 * 60 * 60)}
+            tone="light"
+          />
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.oneWeek}
+            onPress={() => muteFor(7 * 24 * 60 * 60)}
+            tone="light"
+          />
+        </View>
+        {mutedUntil ? (
+          <View style={styles.notificationMuteStatus}>
+            <Ionicons name="time-outline" color={colors.amber} size={16} />
+            <Text style={styles.notificationMuteText}>
+              {notification.mutedUntil} · {new Date(mutedUntil).toLocaleString()}
+            </Text>
+            <PrimaryButton
+              disabled={preferencesBusy}
+              label={notification.unmute}
+              onPress={() => void onUpdateNotificationSettings(notificationLevel, null)}
+              tone="light"
+            />
+          </View>
+        ) : null}
+      </View> : null}
+      {!conversation.managementOnly ? <View style={styles.modalSection}>
+        <Text style={styles.modalLabel}>{translationPreference.title}</Text>
+        <Text style={styles.modalNote}>{translationPreference.description}</Text>
+        <View style={styles.modalRow}>
+          <Chip
+            label={translationPreference.automatic}
+            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('automatic')}
+            selected={(conversation.translationMode ?? 'automatic') === 'automatic'}
+          />
+          <Chip
+            label={translationPreference.off}
+            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('off')}
+            selected={conversation.translationMode === 'off'}
+          />
+        </View>
+        <Text style={styles.modalNote}>
+          {conversation.translationMode === 'off'
+            ? translationPreference.offHint
+            : translationPreference.automaticHint}
+        </Text>
+      </View> : null}
       {conversation.canManage && conversation.kind === 'incident' && !conversation.isReadOnly ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.closeIncident')}</Text>

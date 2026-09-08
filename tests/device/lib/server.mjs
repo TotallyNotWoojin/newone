@@ -127,7 +127,7 @@ export async function members(conversationId) {
 }
 
 export async function preferences(conversationId, userId) {
-  return await one(`select is_favorite, is_pinned, is_hidden, notification_level, muted_until, translation_mode
+  return await one(`select is_favorite, is_pinned, is_hidden, is_archived, notification_level, muted_until, translation_mode
     from public.conversation_preferences where organization_id = ${lit(ORG)} and conversation_id = ${lit(conversationId)} and user_id = ${lit(userId)}::uuid`);
 }
 
