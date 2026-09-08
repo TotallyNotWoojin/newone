@@ -55,6 +55,11 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - takeScreenshot: ${SHOT}-unblocked
 - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: "Close dialog"
+    commands:
+      - tapOn: "Close dialog"
 - extendedWaitUntil:
     visible: ".*Write a message….*"
     timeout: 20000
