@@ -601,12 +601,20 @@ function ConversationRow({
         </View>
       </Pressable>
       </Animated.View>
+      {/* A mouse gets a compact strip at the right edge; it must not cover the
+          row, or a click aimed at the chat lands on an action instead (live
+          browser suite, Sep 8 2026). A finger gets full-height columns, which
+          the row slides aside to uncover. */}
       {actionable && (showActions || dragging) ? (
         <Animated.View
           accessibilityLabel={t('chat.rowActions')}
           accessible={false}
           pointerEvents={showActions ? 'auto' : 'none'}
-          style={[styles.rowActions, { width: panelWidth }, panelStyle]}>
+          style={[
+            styles.rowActions,
+            slides ? { width: panelWidth } : styles.rowActionsOverlay,
+            panelStyle,
+          ]}>
           {actions.map((action) => (
             <Pressable
               accessibilityLabel={t(action.labelKey)}
@@ -618,19 +626,22 @@ function ConversationRow({
               }}
               style={({ pressed }) => [
                 styles.rowAction,
+                slides ? null : styles.rowActionCompact,
                 action.destructive && styles.rowActionDestructive,
                 pressed && styles.rowActionPressed,
               ]}>
               <Ionicons
                 color={action.destructive ? colors.white : colors.ink}
                 name={action.icon}
-                size={19}
+                size={slides ? 19 : 16}
               />
-              <Text
-                numberOfLines={1}
-                style={[styles.rowActionLabel, action.destructive && styles.rowActionLabelDestructive]}>
-                {t(action.labelKey)}
-              </Text>
+              {slides ? (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.rowActionLabel, action.destructive && styles.rowActionLabelDestructive]}>
+                  {t(action.labelKey)}
+                </Text>
+              ) : null}
             </Pressable>
           ))}
         </Animated.View>
@@ -676,6 +687,15 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
     backgroundColor: colors.paperMuted,
+  },
+  rowActionsOverlay: { right: spacing.sm, top: 0, bottom: 0, alignItems: 'center', gap: 4 },
+  rowActionCompact: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.pill,
+    backgroundColor: colors.paper,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   rowActionPressed: { opacity: 0.7 },
   rowActionDestructive: {
