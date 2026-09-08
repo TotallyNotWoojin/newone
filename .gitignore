@@ -62,3 +62,6 @@ next-env.d.ts
 *service-account*.json
 platinum-sorter-*.json
 *.iam.gserviceaccount*.json
+
+# iOS crash reports copied off a device while testing.
+*.ips

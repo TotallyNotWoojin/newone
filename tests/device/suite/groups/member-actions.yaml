@@ -29,12 +29,28 @@ appId: com.totallynotwoojin.newone
     timeout: 15000
 - assertVisible: "Mute"
 - assertVisible: "Block"
+# The expanded actions can sit below the sheet's fold. The driver still reports
+# them visible, so a tap lands on the backdrop and dismisses the whole sheet
+# (run-2026-09-08T04-50-00: three steps lost this way). Scroll each action
+# fully onto the screen before touching it.
+- scrollUntilVisible:
+    element:
+      text: "Add as friend"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
 - takeScreenshot: ${SHOT}-member-actions
 - tapOn: "Add as friend"
 - extendedWaitUntil:
     visible: "Request sent"
     timeout: 20000
 - takeScreenshot: ${SHOT}-friend-requested
+- scrollUntilVisible:
+    element:
+      text: "Mute"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
 - tapOn: "Mute"
 - extendedWaitUntil:
     visible: "Unmute"
@@ -42,9 +58,21 @@ appId: com.totallynotwoojin.newone
 # The row's own line records it, next to the @handle.
 - assertVisible: ".*Muted.*"
 - takeScreenshot: ${SHOT}-muted
+- scrollUntilVisible:
+    element:
+      text: "Unmute"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
 - tapOn: "Unmute"
 - extendedWaitUntil:
     visible: "Mute"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "Block"
+    direction: DOWN
+    visibilityPercentage: 100
     timeout: 20000
 - tapOn: "Block"
 - extendedWaitUntil:
@@ -52,6 +80,12 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - assertVisible: ".*Blocked.*"
 - takeScreenshot: ${SHOT}-blocked
+- scrollUntilVisible:
+    element:
+      text: "Unblock"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
 - tapOn: "Unblock"
 - extendedWaitUntil:
     visible: "Block"

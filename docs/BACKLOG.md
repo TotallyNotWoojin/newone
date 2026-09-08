@@ -95,6 +95,8 @@ Ship together. The database is wiped right before release, as it was for v3.2.
 
 40. **Testing:** unit tests for the theme, the search chips and the duplicate rule; Deno and hosted smokes for the members signature and the group minimum; device flows for the "+" menu, group creation, chip search, the own-translation toggle, the pinned views and (if built) the media grid; then a full device pass. The chat area's long-standing "pinned view unreachable" note becomes a real step. Dark mode's look is reviewed by the owner, not asserted.
 
+63. **A member's actions can open below the fold** (found Sep 7 2026 by the groups device run). Tapping "Options for <name>" on the last rows of "People in this group" expands Message / Add as friend / Mute / Block / Remove from group underneath the sheet's bottom edge; the sheet scrolls, so a person can reach them, but nothing brings them into view. It cost three device steps, whose taps landed on the backdrop and dismissed the sheet (the flows now scroll first). Worth scrolling the expanded row into view when it opens, the way a disclosure normally does.
+
 ## Dropped
 
 34. ~~Bridging WhatsApp / iMessage / SMS into Newone~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).

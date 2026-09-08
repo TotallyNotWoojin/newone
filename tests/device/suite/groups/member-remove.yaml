@@ -16,6 +16,16 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Remove from group"
     timeout: 15000
+# The expanded actions can sit below the sheet's fold. The driver still reports
+# them visible, so a tap lands on the backdrop and dismisses the whole sheet
+# (run-2026-09-08T04-50-00: three steps lost this way). Scroll each action
+# fully onto the screen before touching it.
+- scrollUntilVisible:
+    element:
+      text: "Remove from group"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
 - takeScreenshot: ${SHOT}-before-remove
 - tapOn: "Remove from group"
 - extendedWaitUntil:

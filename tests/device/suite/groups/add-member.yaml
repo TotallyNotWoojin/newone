@@ -16,9 +16,13 @@ appId: com.totallynotwoojin.newone
 - inputText: ${QUERY}
 - tapOn: "Add people"
 - tapOn: "Search people"
+# Strictly the candidate: an "or No one matched" wait passed even when the
+# picker offered nobody, and the step then tapped the roster row of the same
+# person further down the sheet and added no one at all.
 - extendedWaitUntil:
-    visible: ".*(${NAME}|No one matched that search).*"
+    visible: ".*${NAME}.*"
     timeout: 30000
+- assertNotVisible: "No one matched that search."
 - takeScreenshot: ${SHOT}-candidates
 # v3.1 (backlog 14): the candidate row carries the person's @handle under the name.
 # Optional until migration 20260907020000 ships (held behind the v3.1 client
@@ -28,9 +32,11 @@ appId: com.totallynotwoojin.newone
     timeout: 10000
     optional: true
 # Candidate rows are merged accessibility nodes (initials + name); select the
-# row below the search button so the search field itself is never the target.
+# row between the search button and "Add to group", so neither the search field
+# above it nor the group's own roster below it is ever the target.
 - tapOn:
     text: ".*${NAME}.*"
+    above: "Add to group"
     below: "Search people"
 - tapOn: "Add to group"
 - extendedWaitUntil:
