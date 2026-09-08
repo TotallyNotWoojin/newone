@@ -492,13 +492,19 @@ function ConversationRow({
   const panelWidth = actions.length * ACTION_WIDTH;
   const dragX = useSharedValue(0);
   const openOffset = useSharedValue(0);
+  // A finger uncovers the actions by moving the row; a mouse just hovers, and
+  // sliding the row out from under the cursor made the click miss the chat it
+  // was aimed at (live browser suite, Sep 8 2026). On the web the panel stays
+  // an overlay at the right edge, which is what it has always been there.
+  const slides = Platform.OS !== 'web';
   useEffect(() => {
-    openOffset.value = withTiming(showActions ? -panelWidth : 0, SNAP);
-  }, [openOffset, panelWidth, showActions]);
+    openOffset.value = withTiming(slides && showActions ? -panelWidth : 0, SNAP);
+  }, [openOffset, panelWidth, showActions, slides]);
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: openOffset.value + dragX.value }],
   }));
   const panelStyle = useAnimatedStyle(() => {
+    if (!slides) return { opacity: 1 };
     const revealed = Math.min(1, Math.abs(openOffset.value + dragX.value) / Math.max(1, panelWidth));
     return { opacity: revealed };
   });
