@@ -2746,7 +2746,12 @@ function ConversationControlsModal({
       {/* A group's picture, name and description are one thing: what the
           group is, and it is not what most people open this sheet for — so it
           is one line until somebody asks for it (v3.4). */}
-      {personalRealm && conversation.kind !== 'direct' && conversation.canManage ? (
+      {/* Either capability opens it: the photo needs canManage, the name and
+          description need canManageConversation, and a consumer group owner
+          can have the second without the first — which hid the form behind a
+          disclosure that never rendered (chat-33, run-2026-09-08T08-56-59). */}
+      {personalRealm && conversation.kind !== 'direct'
+        && (conversation.canManage || conversation.canManageConversation) ? (
         <Pressable
           accessibilityLabel={t('chat.editGroupDetails')}
           accessibilityRole="button"

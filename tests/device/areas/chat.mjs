@@ -408,7 +408,7 @@ export async function run(ctx) {
     await ctx.step({ id: 'chat-33a-open-group', title: 'A opens the group', device: devA, flow: 'common/open-conversation.yaml', env: { PEER: groupName }, expected: 'composer', screen: 'chats' });
     const renamed = `${groupName} renamed`;
     await ctx.step({
-      id: 'chat-33-rename-group', title: 'Rename group + description (Save conversation)', device: devA, flow: 'chat/rename-group.yaml', env: { NAME: renamed, DESCRIPTION: `desc ${tag}` },
+      id: 'chat-33-rename-group', title: 'Rename group + description (Edit group details, saved on leaving the field)', device: devA, flow: 'chat/rename-group.yaml', env: { NAME: renamed, DESCRIPTION: `desc ${tag}` },
       expected: 'Header shows the new name; server conversations.name updated', screen: 'conversation → Conversation controls',
       serverTruth: async () => { const w = await server.waitFor(() => server.conversationRow(groupRow.id), (r) => r?.name === renamed, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
     });
@@ -503,9 +503,9 @@ export async function run(ctx) {
   await ctx.step({
     id: 'chat-43-row-archive', title: 'A archives B\'s chat from the row: it leaves the list', device: devA,
     flow: 'chat/row-archive.yaml', env: { PEER: B.displayName },
-    expected: 'The row disappears; server conversation_preferences.is_hidden true for A',
+    expected: 'The row leaves the list for the Archived row; server conversation_preferences.is_archived true for A, and is_hidden untouched (v3.4: archiving is not deleting)',
     screen: 'chats',
-    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_hidden === true, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
+    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_archived === true && r?.is_hidden === false, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
   });
   // Back to the newest: the control only exists once the list is a screenful
   // deep, which a test account with a few chats never is.
