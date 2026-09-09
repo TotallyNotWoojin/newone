@@ -23,11 +23,17 @@ BUILD_NUMBER=${1:?build number}
 UPLOAD=${2:-yes}
 PLIST=ios/Newone/Info.plist
 ORIG=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
+trap '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ORIG" "$PLIST"' EXIT
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
 
 echo "=== archive build $BUILD_NUMBER $(date +%H:%M:%S) ==="
+# The team and profile are named here because the project itself carries no
+# team: the archive fails with "requires a development team" otherwise.
 xcodebuild -workspace ios/Newone.xcworkspace -scheme Newone -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' -archivePath "$OUT/Newone.xcarchive" archive \
+  DEVELOPMENT_TEAM=XAD7U9U737 CODE_SIGN_STYLE=Manual \
+  PROVISIONING_PROFILE_SPECIFIER="Newone App Store 1788301805177" \
+  CODE_SIGN_IDENTITY="iPhone Distribution" \
   | grep -E "ARCHIVE (SUCCEEDED|FAILED)|error:" || true
 
 echo "=== export $(date +%H:%M:%S) ==="
@@ -36,8 +42,6 @@ xcodebuild -exportArchive -archivePath "$OUT/Newone.xcarchive" \
   -exportOptionsPlist "$HERE/ExportOptions.plist" -exportPath "$OUT/export" \
   | grep -E "EXPORT (SUCCEEDED|FAILED)|Exported|error:" || true
 ls -la "$OUT/export"/*.ipa
-
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ORIG" "$PLIST"
 
 if [ "$UPLOAD" = "yes" ]; then
   echo "=== upload $(date +%H:%M:%S) ==="

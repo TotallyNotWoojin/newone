@@ -16,7 +16,12 @@ while (Date.now() - started < 60 * 60 * 1000) {
       const add = await asc('POST', `/betaGroups/${group}/relationships/builds`, {
         data: [{ type: 'builds', id: build.id }],
       });
-      console.log('add to group', group.slice(0, 8), add.status);
+      // An internal group already has every build and refuses to be assigned
+      // one, which is a 422 saying exactly that — not a failure.
+      const detail = add.json?.errors?.[0]?.detail ?? '';
+      const internal = add.status === 422 && detail.includes('internal group');
+      console.log('add to group', group.slice(0, 8), add.status,
+        internal ? '(internal group: has it already)' : detail || 'ok');
     }
     console.log(`DONE build ${buildNumber} in both groups`);
     process.exit(0);

@@ -16,6 +16,10 @@ GRADLE=app/build.gradle
 ORIG=$(grep -oE 'versionCode [0-9]+' $GRADLE | head -1 | awk '{print $2}')
 trap 'sed -i "" "s/versionCode [0-9]*/versionCode $ORIG/" $GRADLE' EXIT
 sed -i '' "s/versionCode [0-9]*/versionCode $CODE/" $GRADLE
+# local.properties is not in the repository, so gradle has no SDK path unless
+# the environment carries one.
+export ANDROID_HOME=${ANDROID_HOME:-$HOME/Library/Android/sdk}
+export ANDROID_SDK_ROOT=$ANDROID_HOME
 export NEWONE_ANDROID_VERSION_CODE=$CODE
 export EXPO_PUBLIC_PUSH_ENVIRONMENT=production
 export EXPO_PUBLIC_OFFLINE_CACHE_ENABLED=false

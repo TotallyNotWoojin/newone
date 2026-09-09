@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Crear una cuenta e iniciar sesión\n\nRehicimos las dos pantallas. Los mismos campos y la misma seguridad, pero ahora caben en una sola pantalla: crear una cuenta ya no obliga a desplazarse, y se ven como el resto de la aplicación.\n\nControles de la conversación\n\nAbrir los controles de un chat o de un grupo era una lista larga con mucho desplazamiento. Ahora todo cabe en una pantalla: arriba lo que más se cambia, y el resto en filas que se abren solo cuando hacen falta.\n\nQué probar\n\n- Crea una cuenta sin desplazarte, cierra sesión y vuelve a entrar.\n- Abre los controles en un chat y en un grupo. Cambia las notificaciones y la traducción; se guardan solos.\n- Añade a alguien a un grupo y sal de un grupo.\n\nLas notificaciones de un mensaje que ya leíste se retienen, pero solo después de cinco segundos. Avísame si aún te llega una de un chat que tienes abierto.",
+  "whatsNewPlay": "Rehicimos crear una cuenta e iniciar sesión: los mismos campos y la misma seguridad, en una sola pantalla y sin desplazarse.\n\nLos controles de la conversación también caben en una pantalla: arriba lo que más se cambia, y el resto en filas que se abren solo cuando hacen falta."
+}

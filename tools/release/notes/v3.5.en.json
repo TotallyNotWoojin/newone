@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Creating an account, and signing in\n\nBoth screens were rebuilt. Same fields, same security, but they fit on one screen now — no scrolling to sign up, and the same look as the rest of the app.\n\nConversation controls\n\nOpening the controls for a chat or a group used to mean a long list and a lot of scrolling. Everything is on one screen now: the things you change most sit at the top, the rest are single rows that open only when you want them.\n\nPlease check\n\n- Create a new account without scrolling, then sign out and sign back in.\n- Open the controls on a one-to-one chat and on a group. Change the notification and translation settings; they save on their own.\n- Add someone to a group, and leave a group.\n\nNotifications for a message you have already read are held back, but only after five seconds — tell me if one still arrives for a chat you are looking at.",
+  "whatsNewPlay": "Creating an account and signing in were rebuilt: same fields, same security, one screen, no scrolling.\n\nConversation controls now fit on one screen too — what you change most at the top, everything else a single row that opens when you want it."
+}

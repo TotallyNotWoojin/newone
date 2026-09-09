@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-const root = path.resolve('apps/newone/dist');
-const deploymentConfigPath = path.resolve('vercel.json');
+// The export directory may be given: a release builds it outside the repo, and
+// resolving a fixed relative path against the caller's cwd silently verified
+// whatever stale tree happened to sit at apps/newone/dist.
+const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = process.argv[2] ? path.resolve(process.argv[2]) : path.join(repoRoot, 'apps/newone/dist');
+const deploymentConfigPath = path.join(repoRoot, 'vercel.json');
 const allowedInlineScriptHashes = new Set([
   'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8=',
 ]);
@@ -107,7 +111,9 @@ for (const file of files) {
   }
   if (
     path.basename(file) !== 'offline.html'
-    && !/<script[^>]+src=["']\/register-service-worker\.js["']/i.test(text)
+    // A hosted export carries a base path (/newone-legal/app on Pages), so the
+    // registration is not at the site root.
+    && !/<script[^>]+src=["'][^"']*\/register-service-worker\.js["']/i.test(text)
   ) {
     throw new Error(`Service-worker registration is missing from ${path.relative(root, file)}.`);
   }
