@@ -107,10 +107,10 @@ console.log('ok  read this instant: the notification still goes out —', fresh.
 
 // 2. A late push for a message that has been sitting read: what the rule is
 //    for. A message cannot be backdated — the service refuses to edit one —
-//    so this waits for the first probe to age past the minute and enqueues a
+//    so this waits for the first probe to age past the window and enqueues a
 //    second push for it, which is what a retry or a stalled worker produces.
-console.log('    waiting for the first probe to age past a minute…');
-await sleep(62_000);
+console.log('    waiting for the first probe to age past the window…');
+await sleep(7_000);
 await readCursorTo(freshId, 30);
 const [late] = await rows(`insert into private.outbox_jobs
     (organization_id, topic, dedupe_key, payload, status, available_at)
@@ -120,11 +120,15 @@ const [late] = await rows(`insert into private.outbox_jobs
     'pending', now())
   returning id`);
 if (!late) fail('could not enqueue a late push for the aged probe');
+// Wait for the attempt to settle: a row that is still pending has not been
+// through the rule yet.
 let stale = null;
-for (let attempt = 0; attempt < 60 && !stale; attempt += 1) {
+for (let attempt = 0; attempt < 60; attempt += 1) {
   [stale] = await rows(`select status, last_error_code from private.push_delivery_attempts
     where outbox_job_id = ${late.id} and user_id = '${eli.userId}'`);
-  if (!stale) await sleep(1000);
+  if (stale && stale.status !== 'pending') break;
+  stale = null;
+  await sleep(1000);
 }
 if (!stale) fail('the late push was never attempted');
 if (stale.last_error_code !== 'notifications_muted') {
