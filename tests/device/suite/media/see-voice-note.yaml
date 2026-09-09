@@ -7,7 +7,10 @@ appId: com.totallynotwoojin.newone
     visible: "Play voice message"
     timeout: 120000
 - tapOn: "Play voice message"
+# The note is two seconds long: it can finish before the driver looks, and the
+# button is back to Play by then (media-04, run-2026-09-09T07-58-21). Either
+# state proves it played — mid-playback, or a clock that has moved off zero.
 - extendedWaitUntil:
-    visible: "Pause voice message"
+    visible: "(Pause voice message|.*0:0[1-9].*)"
     timeout: 15000
 - takeScreenshot: ${SHOT}-playing
