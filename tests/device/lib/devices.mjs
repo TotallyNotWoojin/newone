@@ -142,8 +142,30 @@ export function appBuildInfo() {
     const plist = execFileSync('plutil', ['-convert', 'json', '-o', '-', `${APP_PATH}/Info.plist`], { encoding: 'utf8' });
     const info = JSON.parse(plist);
     const stat = execFileSync('stat', ['-f', '%Sm', `${APP_PATH}/main.jsbundle`], { encoding: 'utf8' }).trim();
-    return { bundleId: info.CFBundleIdentifier, version: info.CFBundleShortVersionString, build: info.CFBundleVersion, jsBundleModified: stat };
+    return {
+      bundleId: info.CFBundleIdentifier,
+      version: info.CFBundleShortVersionString,
+      build: info.CFBundleVersion,
+      jsBundleModified: stat,
+      signed: appIsSigned(),
+    };
   } catch {
     return { bundleId: APP_ID };
+  }
+}
+
+/**
+ * An unsigned build cannot reach the keychain, so every sign-up dies on
+ * ERR_KEY_CHAIN and every area blocks in setup after ten minutes of minting
+ * accounts. It is what `CODE_SIGNING_ALLOWED=NO` leaves behind, and this suite
+ * has been sent into it twice. Build without that flag: the default ad-hoc
+ * signing is what the simulator needs.
+ */
+export function appIsSigned() {
+  try {
+    execFileSync('codesign', ['-dv', APP_PATH], { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
   }
 }

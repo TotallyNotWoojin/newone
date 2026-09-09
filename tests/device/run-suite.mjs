@@ -24,7 +24,7 @@
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ensurePool, bootAndInstall, shutdown, appBuildInfo, OWNER_DEVICES, APP_ID } from './lib/devices.mjs';
+import { ensurePool, bootAndInstall, shutdown, appBuildInfo, APP_PATH, OWNER_DEVICES, APP_ID } from './lib/devices.mjs';
 import { warmDriver } from './lib/maestro.mjs';
 import { Report } from './lib/report.mjs';
 import { createAreaContext } from './lib/harness.mjs';
@@ -100,6 +100,27 @@ mkdirSync(runDir, { recursive: true });
 const report = new Report({ runId: RUN_ID, runDir, root: ROOT });
 report.meta.app = appBuildInfo();
 report.meta.pool = POOL_SIZE;
+
+// Stop before minting a single account against a build that cannot hold one.
+// An unsigned simulator build reaches no keychain, so every sign-up dies on
+// ERR_KEY_CHAIN and every area blocks in setup - ten minutes to learn it, and
+// this suite has been sent into it twice.
+if (report.meta.app.signed === false) {
+  console.error([
+    'The installed app is not signed, so it cannot use the keychain and every',
+    'sign-up will fail with ERR_KEY_CHAIN.',
+    '',
+    `  ${APP_PATH}`,
+    '',
+    'Rebuild without CODE_SIGNING_ALLOWED=NO — the simulator wants the default',
+    'ad-hoc signing:',
+    '',
+    '  xcodebuild -workspace ios/Newone.xcworkspace -scheme Newone \\',
+    '    -configuration Release -sdk iphonesimulator \\',
+    "    -destination 'generic/platform=iOS Simulator' build",
+  ].join('\n'));
+  process.exit(2);
+}
 
 for (const udid of EXPLICIT_DEVICES) {
   if (OWNER_DEVICES.has(udid)) {
