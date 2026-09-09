@@ -1035,6 +1035,35 @@ function ConversationHeader({
   );
 }
 
+/**
+ * A setting on one line: its name, its current answer, and a way into the
+ * choices. Six chips and two headings for "who notifies you" filled a screen
+ * of the sheet before this (backlog 78).
+ */
+function SettingRow({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value?: string;
+  onPress: () => void;
+}) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  return (
+    <Pressable
+      accessibilityLabel={value ? `${label}: ${value}` : label}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.settingRow, pressed && styles.pressed]}>
+      <Text numberOfLines={1} style={styles.settingRowLabel}>{label}</Text>
+      {value ? <Text numberOfLines={1} style={styles.settingRowValue}>{value}</Text> : null}
+      <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
+    </Pressable>
+  );
+}
+
 function SystemEventRow({ message }: { message: Message }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -2513,6 +2542,7 @@ function ConversationControlsModal({
   const directAvatarUrl = useProfileAvatar(
     conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null,
   );
+  const [sheetPicker, setSheetPicker] = useState<'notifications' | 'translation' | 'addPeople' | null>(null);
   const [editingGroup, setEditingGroup] = useState(false);
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   // One place that writes the controls, so a chip that applies itself and the
@@ -2644,37 +2674,24 @@ function ConversationControlsModal({
         }
         onClose();
       }}
-      title={t('chat.controlsTitle')}
+      title={personalRealm && !conversation.managementOnly
+        ? conversation.title
+        : t('chat.controlsTitle')}
       visible={visible}>
-      {/* The sheet opens on who or what it is about, not on a form (v3.4). */}
-      {personalRealm && !conversation.managementOnly ? (
-        <View style={styles.sheetIdentity}>
-          <Avatar
-            color={conversation.avatarColor}
-            imageUri={conversation.kind === 'direct'
-              ? directAvatarUrl
-              : workspace.conversationAvatarUrls[conversation.id]}
-            initials={conversation.initials}
-            presence={conversation.kind === 'direct' ? conversation.presence : undefined}
-            size={52}
-          />
-          <View style={styles.sheetIdentityCopy}>
-            <Text numberOfLines={1} style={styles.sheetIdentityTitle}>{conversation.title}</Text>
-            <Text numberOfLines={1} style={styles.sheetIdentityMeta}>
-              {conversation.kind === 'direct'
-                ? conversation.subtitle
-                : `${conversation.participantCount ?? members.length} ${t('chat.currentMembers')}`}
-            </Text>
-          </View>
-        </View>
-      ) : null}
+      {/* Four things you might want, one row of icons (backlog 78). */}
       {!conversation.managementOnly ? (
-        <View style={styles.modalRow}>
-          <PrimaryButton icon={conversation.favorite ? 'star' : 'star-outline'} label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')} onPress={onToggleFavorite} tone="light" />
-          <PrimaryButton icon="pin-outline" label={t('chat.pinnedTitle')} onPress={onOpenPinned} tone="light" />
-          <PrimaryButton icon="images-outline" label={t('chat.sharedMediaTitle')} onPress={onOpenSharedMedia} tone="light" />
+        <View style={styles.quickRow}>
+          <IconButton
+            label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
+            name={conversation.favorite ? 'star' : 'star-outline'}
+            onPress={onToggleFavorite}
+            size={44}
+            tone={conversation.favorite ? 'accent' : 'neutral'}
+          />
+          <IconButton label={t('chat.pinnedTitle')} name="pin-outline" onPress={onOpenPinned} size={44} />
+          <IconButton label={t('chat.sharedMediaTitle')} name="images-outline" onPress={onOpenSharedMedia} size={44} />
           {onOpenSummary ? (
-            <PrimaryButton icon="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} tone="light" />
+            <IconButton label={t('chat.summarize')} name="sparkles-outline" onPress={onOpenSummary} size={44} />
           ) : null}
         </View>
       ) : null}
@@ -2896,7 +2913,13 @@ function ConversationControlsModal({
           )}
         </View>
       ) : null}
-      {!conversation.managementOnly ? <View style={styles.modalSection}>
+      {/* A consumer's sheet states each setting on one row and opens the
+          choices in a sheet of their own; a workplace keeps them open, where
+          the notes beside them belong (backlog 78). */}
+      <ActionModal
+        onClose={() => setSheetPicker(null)}
+        title={notification.title}
+        visible={sheetPicker === 'notifications'}>
         <Text style={styles.modalLabel}>{notification.title}</Text>
         <Text style={styles.modalNote}>{notification.description}</Text>
         <View style={styles.modalRow}>
@@ -2950,8 +2973,11 @@ function ConversationControlsModal({
             />
           </View>
         ) : null}
-      </View> : null}
-      {!conversation.managementOnly ? <View style={styles.modalSection}>
+      </ActionModal>
+      <ActionModal
+        onClose={() => setSheetPicker(null)}
+        title={translationPreference.title}
+        visible={sheetPicker === 'translation'}>
         <Text style={styles.modalLabel}>{translationPreference.title}</Text>
         <Text style={styles.modalNote}>{translationPreference.description}</Text>
         <View style={styles.modalRow}>
@@ -2971,7 +2997,87 @@ function ConversationControlsModal({
             ? translationPreference.offHint
             : translationPreference.automaticHint}
         </Text>
-      </View> : null}
+      </ActionModal>
+      {!conversation.managementOnly && !personalRealm ? (
+        <View style={styles.modalSection}>
+        <Text style={styles.modalLabel}>{notification.title}</Text>
+        <Text style={styles.modalNote}>{notification.description}</Text>
+        <View style={styles.modalRow}>
+          {([
+            ['all', notification.all],
+            ['mentions', notification.mentions],
+            ['none', notification.none],
+          ] as [NonNullable<Conversation['notificationLevel']>, string][]).map(([level, label]) => (
+            <Chip
+              key={level}
+              label={label}
+              onPress={preferencesBusy ? undefined : () => {
+                void onUpdateNotificationSettings(level, null);
+              }}
+              selected={notificationLevel === level && !mutedUntil}
+            />
+          ))}
+        </View>
+        <Text style={styles.modalLabel}>{notification.temporary}</Text>
+        <View style={styles.modalRow}>
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.oneHour}
+            onPress={() => muteFor(60 * 60)}
+            tone="light"
+          />
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.eightHours}
+            onPress={() => muteFor(8 * 60 * 60)}
+            tone="light"
+          />
+          <PrimaryButton
+            disabled={preferencesBusy}
+            label={notification.oneWeek}
+            onPress={() => muteFor(7 * 24 * 60 * 60)}
+            tone="light"
+          />
+        </View>
+        {mutedUntil ? (
+          <View style={styles.notificationMuteStatus}>
+            <Ionicons name="time-outline" color={colors.amber} size={16} />
+            <Text style={styles.notificationMuteText}>
+              {notification.mutedUntil} · {new Date(mutedUntil).toLocaleString()}
+            </Text>
+            <PrimaryButton
+              disabled={preferencesBusy}
+              label={notification.unmute}
+              onPress={() => void onUpdateNotificationSettings(notificationLevel, null)}
+              tone="light"
+            />
+          </View>
+        ) : null}
+        </View>
+      ) : null}
+      {!conversation.managementOnly && !personalRealm ? (
+        <View style={styles.modalSection}>
+        <Text style={styles.modalLabel}>{translationPreference.title}</Text>
+        <Text style={styles.modalNote}>{translationPreference.description}</Text>
+        <View style={styles.modalRow}>
+          <Chip
+            label={translationPreference.automatic}
+            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('automatic')}
+            selected={(conversation.translationMode ?? 'automatic') === 'automatic'}
+          />
+          <Chip
+            label={translationPreference.off}
+            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('off')}
+            selected={conversation.translationMode === 'off'}
+          />
+        </View>
+        <Text style={styles.modalNote}>
+          {conversation.translationMode === 'off'
+            ? translationPreference.offHint
+            : translationPreference.automaticHint}
+        </Text>
+        </View>
+      ) : null}
       {conversation.canManage && conversation.kind === 'incident' && !conversation.isReadOnly ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.closeIncident')}</Text>
@@ -3055,13 +3161,24 @@ function ConversationControlsModal({
       {/* Who is in the group, then how to add somebody: the two used to be
           the other way round, with the list last (v3.4). */}
       <GroupMembersSection conversation={conversation} />
-      {conversation.canManageConversation
+      {/* A row, not a form standing open: the field, the role chips and the
+          button live behind it (backlog 78). */}
+      {personalRealm && conversation.canManageConversation
+        && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
+        && !conversation.policyManaged
+        && !conversation.archived
+        && !conversation.isReadOnly ? (
+        <View style={styles.settingRows}>
+          <SettingRow label={t('chat.addMember')} onPress={() => setSheetPicker('addPeople')} />
+        </View>
+      ) : null}
+      {(!personalRealm || sheetPicker === 'addPeople') && conversation.canManageConversation
         && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
         && !conversation.policyManaged
         && !conversation.archived
         && !conversation.isReadOnly ? (
         <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>
+          {personalRealm ? null : <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>}
           {personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>}
           <SearchField
             onChangeText={setCandidateQuery}
@@ -3144,6 +3261,28 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
+      {!conversation.managementOnly && personalRealm ? (
+        <View style={styles.settingRows}>
+          <SettingRow
+            label={notification.title}
+            onPress={() => setSheetPicker('notifications')}
+            value={mutedUntil
+              ? notification.mutedUntil
+              : notificationLevel === 'none'
+                ? notification.none
+                : notificationLevel === 'mentions'
+                  ? notification.mentions
+                  : notification.all}
+          />
+          <SettingRow
+            label={translationPreference.title}
+            onPress={() => setSheetPicker('translation')}
+            value={conversation.translationMode === 'off'
+              ? translationPreference.off
+              : translationPreference.automatic}
+          />
+        </View>
+      ) : null}
       {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{departureCopy.title}</Text>
@@ -3804,6 +3943,18 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetIdentityCopy: { flex: 1, minWidth: 0 },
   sheetIdentityTitle: { color: colors.ink, fontFamily: type.display, fontSize: 17, fontWeight: '900' },
   sheetIdentityMeta: { color: colors.inkSubtle, fontSize: 12 },
+  quickRow: { flexDirection: 'row', gap: spacing.xs, paddingBottom: spacing.xs },
+  settingRows: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+  settingRow: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  settingRowLabel: { flex: 1, minWidth: 0, color: colors.ink, fontSize: 14, fontWeight: '700' },
+  settingRowValue: { color: colors.inkSubtle, fontSize: 13, maxWidth: '52%' },
   disclosureRow: {
     minHeight: 48,
     flexDirection: 'row',

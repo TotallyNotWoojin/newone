@@ -98,7 +98,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
         return (
           <View key={member.userId} style={styles.row}>
             <View style={styles.rowMain}>
-              <Avatar color={member.avatarColor} initials={member.initials} size={34} />
+              <Avatar color={member.avatarColor} initials={member.initials} size={30} />
               <View style={styles.rowCopy}>
                 <View style={styles.rowTitle}>
                   <Text numberOfLines={1} style={styles.name}>
@@ -244,12 +244,12 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   title: { color: colors.ink, fontFamily: type.display, fontSize: 14, fontWeight: '900' },
   empty: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },
   row: {
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
+    gap: 2,
+    paddingVertical: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
-  rowMain: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  rowMain: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rowCopy: { flex: 1, minWidth: 0 },
   rowTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   name: { flex: 1, color: colors.ink, fontSize: 13, fontWeight: '800' },
