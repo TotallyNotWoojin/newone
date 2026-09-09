@@ -1524,6 +1524,7 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         'isPinned',
         'isArchived',
         'isHidden',
+        'manuallyUnread',
         'notificationLevel',
         'mutedUntil',
         'translationMode',
@@ -1536,6 +1537,10 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       // took it out of the snapshot and there was no archive to open.
       if ('isArchived' in body) patch.is_archived = bool(body.isArchived);
       if ('isHidden' in body) patch.is_hidden = bool(body.isHidden);
+      // Marking a chat unread is a preference like the rest, so it survives a
+      // relaunch and reaches the reader's other devices. Reading the chat
+      // takes it back, which the receipt does server-side.
+      if ('manuallyUnread' in body) patch.manually_unread = bool(body.manuallyUnread);
       if ('notificationLevel' in body) {
         patch.notification_level = oneOf(
           body.notificationLevel,

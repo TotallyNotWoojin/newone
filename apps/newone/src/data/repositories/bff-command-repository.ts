@@ -1180,6 +1180,7 @@ export class BffCommandRepository implements CommandRepository {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.isArchived !== undefined ? { isArchived: input.isArchived } : {}),
+        ...(input.manuallyUnread !== undefined ? { manuallyUnread: input.manuallyUnread } : {}),
       },
     });
   }
@@ -1591,6 +1592,7 @@ export class BffCommandRepository implements CommandRepository {
         ...(input.isFavorite !== undefined ? { isFavorite: input.isFavorite } : {}),
         ...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
         ...(input.isArchived !== undefined ? { isArchived: input.isArchived } : {}),
+        ...(input.manuallyUnread !== undefined ? { manuallyUnread: input.manuallyUnread } : {}),
         ...(input.isHidden !== undefined ? { isHidden: input.isHidden } : {}),
         ...(input.notificationLevel !== undefined ? { notificationLevel: input.notificationLevel } : {}),
         ...(input.mutedUntil !== undefined ? { mutedUntil: input.mutedUntil } : {}),

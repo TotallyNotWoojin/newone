@@ -439,11 +439,29 @@ describe('chats index route', () => {
     mockWidth = 390;
     const view = await render(<ChatsScreen />);
 
-    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markUnread' }));
-    expect(screen.getByText('controlled-unread:conversation-primary')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markRead' }));
+    // The mark is a preference on the server now, so it survives a relaunch and
+    // reaches this reader's other devices; the row reads it back from the
+    // conversation rather than from a set that lived in this screen.
     expect(screen.getByText('controlled-unread:')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markUnread' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { manuallyUnread: true },
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'controlled row markRead' }));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
+      'conversation-primary', { manuallyUnread: false },
+    );
     expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-primary');
+
+    await view.unmount();
+    mockWorkspace.conversations = mockWorkspace.conversations.map((item: { id: string }) =>
+      (item.id === 'conversation-primary' ? { ...item, manuallyUnread: true } : item));
+    const marked = await render(<ChatsScreen />);
+    expect(screen.getByText('controlled-unread:conversation-primary')).toBeTruthy();
+    await marked.unmount();
+    mockWorkspace.conversations = mockWorkspace.conversations.map((item: { id: string }) =>
+      (item.id === 'conversation-primary' ? { ...item, manuallyUnread: false } : item));
+    const again = await render(<ChatsScreen />);
 
     await fireEvent.press(screen.getByRole('button', { name: 'controlled row mute' }));
     expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
@@ -458,7 +476,7 @@ describe('chats index route', () => {
       'conversation-primary', { isArchived: true },
     );
 
-    await view.unmount();
+    await again.unmount();
   });
 
   test('leaving a group says leaving, deleting a chat says deleting, and both can be kept', async () => {

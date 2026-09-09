@@ -394,7 +394,7 @@ interface WorkspaceState {
   ) => Promise<boolean>;
   updateConversationPreferences: (
     conversationId: string,
-    patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+    patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; manuallyUnread?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
   ) => Promise<boolean>;
   updateProfile: (
     input: { displayName: string; statusMessage?: string | null },
@@ -4190,7 +4190,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const updateConversationPreferences = useCallback(
     async (
       conversationId: string,
-      patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+      patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; manuallyUnread?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
     ) => {
       if (!snapshot) return false;
       const result = await executeImmediate('conversation-preferences', () =>
@@ -4224,6 +4224,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             ...(patch.isFavorite !== undefined ? { favorite: patch.isFavorite } : {}),
             ...(patch.isPinned !== undefined ? { pinned: patch.isPinned } : {}),
             ...(patch.isArchived !== undefined ? { archivedByMe: patch.isArchived } : {}),
+            ...(patch.manuallyUnread !== undefined ? { manuallyUnread: patch.manuallyUnread } : {}),
             notificationLevel,
             mutedUntil,
             ...(patch.translationMode !== undefined ? { translationMode: patch.translationMode } : {}),

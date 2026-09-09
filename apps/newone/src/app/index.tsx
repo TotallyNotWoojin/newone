@@ -38,14 +38,6 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
-/**
- * Marking a chat unread has no home on the server: read receipts only ever
- * move forward, and there is no per-reader "unread again" flag to write. The
- * mark therefore lives on the device for as long as the app is open, which is
- * as far as this stream can honestly take it.
- */
-const markedUnread = new Set<string>();
-
 export default function ChatsScreen() {
   const styles = useThemedStyles(buildStyles);
   const router = useRouter();
@@ -71,7 +63,7 @@ export default function ChatsScreen() {
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
-  const [unreadMarks, setUnreadMarks] = useState<string[]>(() => [...markedUnread]);
+
   const [departing, setDeparting] = useState<{ id: string; title: string; group: boolean } | null>(null);
   const search = workspace.inboxSearch;
   const knownPeople = useMemo<SearchPersonRef[]>(
@@ -135,10 +127,11 @@ export default function ChatsScreen() {
     });
   };
 
+  // The mark is a preference on the server, so it survives a relaunch and
+  // reaches this reader's other devices. Opening the chat takes it back, which
+  // the read receipt does without being asked.
   const setMarkedUnread = (conversationId: string, unread: boolean) => {
-    if (unread) markedUnread.add(conversationId);
-    else markedUnread.delete(conversationId);
-    setUnreadMarks([...markedUnread]);
+    void workspace.updateConversationPreferences(conversationId, { manuallyUnread: unread });
   };
 
   const runRowAction = (action: ConversationRowActionKey, conversation: Conversation) => {
@@ -194,7 +187,9 @@ export default function ChatsScreen() {
     onRequestJoin: workspace.requestConversationJoin,
     onSearchChange: workspace.setInboxSearch,
     onSelect: openConversation,
-    markedUnreadIds: unreadMarks,
+    markedUnreadIds: workspace.conversations
+      .filter((conversation) => conversation.manuallyUnread)
+      .map((conversation) => conversation.id),
     onRowAction: runRowAction,
     onOpenPinned: () => setPinnedOpen(true),
     organizationName: workspace.organizationName,

@@ -920,6 +920,7 @@ function conversationFromDto(
     // Archiving is this reader's own choice about their own list; the
     // conversation-level flag above belongs to a workplace administrator.
     archivedByMe: preferences.isArchived === true,
+    manuallyUnread: preferences.manuallyUnread === true,
     myRole: memberRole === 'owner' || memberRole === 'admin' ? memberRole : 'member',
     canManage: row.canManage === true,
     canManageConversation: row.canManageConversation === true,

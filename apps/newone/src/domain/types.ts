@@ -378,6 +378,8 @@ export interface Conversation {
   archived?: boolean;
   /** This reader put the chat in their own archive. */
   archivedByMe?: boolean;
+  /** The reader marked this chat unread and has not opened it since. */
+  manuallyUnread?: boolean;
   myRole?: 'owner' | 'admin' | 'member';
   canManage?: boolean;
   canManageConversation?: boolean;

@@ -571,6 +571,7 @@ export interface CommandRepository {
     name?: string | null;
     description?: string | null;
     isArchived?: boolean;
+    manuallyUnread?: boolean;
     idempotencyKey: string;
   }): Promise<void>;
   updateOrganizationConversationControls(input: {
@@ -684,6 +685,7 @@ export interface CommandRepository {
     isFavorite?: boolean;
     isPinned?: boolean;
     isArchived?: boolean;
+    manuallyUnread?: boolean;
     /** "I deleted this chat for myself" — distinct from archiving it. */
     isHidden?: boolean;
     notificationLevel?: 'all' | 'mentions' | 'none';
