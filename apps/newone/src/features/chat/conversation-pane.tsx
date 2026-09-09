@@ -2674,9 +2674,11 @@ function ConversationControlsModal({
         }
         onClose();
       }}
-      title={personalRealm && !conversation.managementOnly
-        ? conversation.title
-        : t('chat.controlsTitle')}
+      // The sheet is opened from the chat you are in, whose name is already on
+      // the header above it, so the title names the sheet and the line under it
+      // says how many people. What v3.5 removed was the block that repeated the
+      // name a third time, not the title itself.
+      title={t('chat.controlsTitle')}
       visible={visible}>
       {/* Four things you might want, one row of icons (backlog 78). */}
       {!conversation.managementOnly ? (
