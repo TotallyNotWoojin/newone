@@ -936,11 +936,16 @@ describe('authoritative web read repository', () => {
     const own = workspace.messages[conversationId]![0]!;
     expect(own.isOwn).toBe(true);
     expect(own.translation?.targetLanguage).toBe('es');
-    expect(own.outgoingTranslation).toMatchObject({
-      targetLanguage: 'ko', status: 'completed', translatedText: '18시에 북문을 잠그세요.',
-    });
+    // v3.5: every language somebody else reads it in, one entry each, sorted
+    // by language. Spanish used to be dropped here because it is also this
+    // reader's own reading language — which is precisely how a Korean reader
+    // writing to a Korean speaker was shown nothing at all.
+    expect(own.outgoingTranslations).toMatchObject([
+      { targetLanguage: 'es', status: 'completed' },
+      { targetLanguage: 'ko', status: 'completed', translatedText: '18시에 북문을 잠그세요.' },
+    ]);
     // A message you received carries no such thing: it is already yours to read.
-    expect(workspace.messages[conversationId]![1]!.outgoingTranslation).toBeUndefined();
+    expect(workspace.messages[conversationId]![1]!.outgoingTranslations).toBeUndefined();
   });
 
   test('leaves your own message without an outgoing translation when nobody needed one', async () => {
@@ -949,7 +954,7 @@ describe('authoritative web read repository', () => {
     mockFetch.mockImplementationOnce(async () => response({ data: payload }));
     const repo = repository();
     const workspace = await repo.loadWorkspace(currentUserId, conversationId);
-    expect(workspace.messages[conversationId]![0]!.outgoingTranslation).toBeUndefined();
+    expect(workspace.messages[conversationId]![0]!.outgoingTranslations).toEqual([]);
   });
 
   test('an outgoing translation still queued keeps its state so the bubble can stay quiet', async () => {
@@ -962,7 +967,9 @@ describe('authoritative web read repository', () => {
     const workspace = await repo.loadWorkspace(currentUserId, conversationId);
     const own = workspace.messages[conversationId]![0]!;
     expect(own.translation).toBeUndefined();
-    expect(own.outgoingTranslation).toMatchObject({ targetLanguage: 'ko', status: 'queued', translatedText: null });
+    // Only a finished translation is worth showing, so a queued one is not
+    // carried at all now: the bubble has nothing to say until it lands.
+    expect(own.outgoingTranslations).toEqual([]);
   });
 
   test('parses alternate authoritative lifecycle states without inventing client data', async () => {

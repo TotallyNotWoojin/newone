@@ -343,7 +343,7 @@ function ownMessage(overrides: Record<string, unknown> = {}) {
     targetLanguage: undefined,
     translation: undefined,
     translationState: 'not_requested',
-    outgoingTranslation: outgoingTranslation(),
+    outgoingTranslations: [outgoingTranslation()],
     ...overrides,
   });
 }
@@ -2726,7 +2726,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
   test('an approved correction is what your own message shows, because it is what they read', async () => {
     mockPreferences.showOwnTranslations = true;
     const corrected = ownMessage({
-      outgoingTranslation: outgoingTranslation({
+      outgoingTranslations: [outgoingTranslation({
         correction: {
           id: 'correction-outgoing',
           status: 'approved',
@@ -2739,7 +2739,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
           createdAt: '2026-08-04T18:01:00.000Z',
           updatedAt: '2026-08-04T18:02:00.000Z',
         },
-      }),
+      })],
     });
     await render(<ConversationPane conversation={conversation()} messages={[corrected]} onSend={noopSend} />);
     expect(screen.getByText('18시에 북쪽 출입구를 잠그세요.')).toBeTruthy();
@@ -2749,7 +2749,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
   test('a translation still in flight adds nothing to your own bubble', async () => {
     mockPreferences.showOwnTranslations = true;
     const inFlight = ownMessage({
-      outgoingTranslation: outgoingTranslation({ status: 'queued', translatedText: null, provider: null, model: null }),
+      outgoingTranslations: [outgoingTranslation({ status: 'queued', translatedText: null, provider: null, model: null })],
     });
     await render(<ConversationPane conversation={conversation()} messages={[inFlight]} onSend={noopSend} />);
     expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
@@ -2764,7 +2764,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     await render(
       <ConversationPane
         conversation={conversation()}
-        messages={[ownMessage({ outgoingTranslation: undefined })]}
+        messages={[ownMessage({ outgoingTranslations: undefined })]}
         onSend={noopSend}
       />,
     );
@@ -2776,9 +2776,9 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
   test('a failed outgoing translation says nothing on your own bubble', async () => {
     mockPreferences.showOwnTranslations = true;
     const failed = ownMessage({
-      outgoingTranslation: outgoingTranslation({
+      outgoingTranslations: [outgoingTranslation({
         status: 'failed', translatedText: null, provider: null, model: null, failureCode: 'provider_timeout',
-      }),
+      })],
     });
     await render(<ConversationPane conversation={conversation()} messages={[failed]} onSend={noopSend} />);
     expect(screen.getByText('Lock the north gate at 18:00.')).toBeTruthy();
@@ -2794,7 +2794,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     // it is what put a translation under your own bubble with the setting off
     // — so your own bubble shows your words and, because the setting is on
     // here, the outgoing translation the other side reads.
-    const own = translatedMessage({ outgoingTranslation: outgoingTranslation() });
+    const own = translatedMessage({ outgoingTranslations: [outgoingTranslation()] });
     const incoming = incomingMessage({
       attachment: undefined,
       translatedText: 'The valve needs a check.',

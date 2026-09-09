@@ -3187,7 +3187,10 @@ function ConversationControlsModal({
           <SettingRow label={t('chat.addMember')} onPress={() => setSheetPicker('addPeople')} />
         </View>
       ) : null}
-      {(!personalRealm || sheetPicker === 'addPeople') && conversation.canManageConversation
+      {/* A sheet of its own, not a form unrolling at the bottom of this one:
+          with the keyboard up, the search button and the results it returns
+          were pushed off the screen (groups-05, run-2026-09-09T09-50-27). */}
+      {!personalRealm && conversation.canManageConversation
         && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
         && !conversation.policyManaged
         && !conversation.archived
@@ -3275,6 +3278,91 @@ function ConversationControlsModal({
           />
         </View>
       ) : null}
+      <ActionModal
+        onClose={() => setSheetPicker(null)}
+        title={t('chat.addMember')}
+        visible={personalRealm && sheetPicker === 'addPeople'}>
+          {personalRealm ? null : <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>}
+          {personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>}
+          <SearchField
+            onChangeText={setCandidateQuery}
+            onSubmitEditing={() => void loadMemberCandidates(false)}
+            placeholder={t('chat.memberSearchLabel')}
+            value={candidateQuery}
+          />
+          <PrimaryButton
+            disabled={memberCandidateLoading}
+            icon="search-outline"
+            label={t('chat.memberSearchAction')}
+            loading={memberCandidateLoading && !memberCandidateCursor}
+            onPress={() => void loadMemberCandidates(false)}
+            tone="light"
+          />
+          {candidateScopeMatches && !memberCandidateLoading && candidates.length === 0 ? (
+            <Text style={styles.modalNote}>{t('chat.memberSearchEmpty')}</Text>
+          ) : null}
+          {candidates.length ? <View style={styles.candidateList}>
+            {candidates.map((person) => (
+              <Pressable
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedCandidateId === person.userId }}
+                key={person.userId}
+                onPress={() => setCandidateId(person.userId)}
+                style={[styles.candidateRow, selectedCandidateId === person.userId && styles.candidateRowSelected]}>
+                <Avatar
+                  color={colors.blue}
+                  initials={person.displayName
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase() ?? '')
+                    .join('') || 'M'}
+                  size={34}
+                />
+                <View style={styles.candidateCopy}>
+                  <Text style={styles.candidateName}>{person.displayName}</Text>
+                  {person.username ? <Text style={styles.candidateHandle}>{`@${person.username}`}</Text> : null}
+                </View>
+                {person.roleLabel ? <Text style={styles.memberControlRole}>{person.roleLabel}</Text> : null}
+                {selectedCandidateId === person.userId ? <Ionicons name="checkmark-circle" color={colors.mintDark} size={18} /> : null}
+              </Pressable>
+            ))}
+          </View> : null}
+          {candidateScopeMatches && memberCandidateCursor ? (
+            <PrimaryButton
+              disabled={memberCandidateLoading}
+              label={t('chat.loadMoreMembers')}
+              loading={memberCandidateLoading}
+              onPress={() => void loadMemberCandidates(true)}
+              tone="light"
+            />
+          ) : null}
+          {conversation.canManage ? (
+            <View style={styles.modalRow}>
+              <Chip label={t('chat.memberRole')} onPress={() => setCandidateRole('member')} selected={candidateRole === 'member'} />
+              <Chip label={t('chat.adminRole')} onPress={() => setCandidateRole('admin')} selected={candidateRole === 'admin'} />
+            </View>
+          ) : (
+            <Text style={styles.modalNote}>{t('chat.delegatedAddsMembersOnly')}</Text>
+          )}
+          <PrimaryButton
+            disabled={!selectedCandidateId}
+            label={t('chat.addSelectedMember')}
+            loading={busy === 'conversation-add-member'}
+            onPress={async () => {
+              if (await onAddMember(
+                conversation.id,
+                selectedCandidateId,
+                conversation.canManage ? candidateRole : 'member',
+              )) {
+                setCandidateId('');
+                setMemberCandidates((current) => current.filter(
+                  (candidate) => candidate.userId !== selectedCandidateId,
+                ));
+              }
+            }}
+          />
+      </ActionModal>
 
       {!conversation.managementOnly && personalRealm ? (
         <View style={styles.settingRows}>
