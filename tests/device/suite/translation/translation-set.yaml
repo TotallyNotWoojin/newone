@@ -6,12 +6,13 @@ appId: com.totallynotwoojin.newone
     visible: "Conversation controls"
     timeout: 15000
 # v3.5: the sheet states the setting on one row and opens the choices.
-# The sheet fits without scrolling now, and scrollUntilVisible needs
-# something scrollable, so wait for the row and tap it.
+# The row announces itself as "Automatic translation: <current setting>" — one
+# label, because the Pressable merges its children on iOS — so match part of
+# it, not the whole line.
 - extendedWaitUntil:
-    visible: "Automatic translation"
+    visible: ".*Automatic translation.*"
     timeout: 20000
-- tapOn: "Automatic translation"
+- tapOn: ".*Automatic translation.*"
 - extendedWaitUntil:
     visible: "Automatic"
     timeout: 15000

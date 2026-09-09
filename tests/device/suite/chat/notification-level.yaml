@@ -7,12 +7,13 @@ appId: com.totallynotwoojin.newone
     visible: "Conversation controls"
     timeout: 15000
 # v3.5: the sheet states the setting on one row and opens the choices.
-# The sheet fits without scrolling now, and scrollUntilVisible needs
-# something scrollable, so wait for the row and tap it.
+# The row announces itself as "Conversation notifications: <current setting>" — one
+# label, because the Pressable merges its children on iOS — so match part of
+# it, not the whole line.
 - extendedWaitUntil:
-    visible: "Conversation notifications"
+    visible: ".*Conversation notifications.*"
     timeout: 20000
-- tapOn: "Conversation notifications"
+- tapOn: ".*Conversation notifications.*"
 - extendedWaitUntil:
     visible: "Muted until changed"
     timeout: 15000
