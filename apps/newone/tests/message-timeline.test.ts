@@ -40,6 +40,27 @@ describe('mergeTimelineMessages', () => {
     expect(merged.map((message) => message.serverId ?? message.clientMessageId)).toEqual(['5', '6', '10', '14', 'c1']);
   });
 
+  test('an acknowledged send keeps the id the list is drawing it under', () => {
+    // The list keys rows by id. If the server row brought its own, React would
+    // unmount the bubble and mount a new one in the middle of a send, and the
+    // timeline would re-measure under the reader - the scroll that goes
+    // somewhere else and comes back.
+    const optimistic = row(null, {
+      clientMessageId: 'c1', isOwn: true, deliveryState: 'sending',
+      createdAt: '2026-09-04T20:00:50.000Z',
+    });
+    const acknowledged = row('20', {
+      clientMessageId: 'c1', isOwn: true, deliveryState: 'sent',
+      createdAt: '2026-09-04T20:00:50.000Z',
+    });
+    const merged = merge([row('10'), optimistic], [acknowledged]);
+    expect(merged).toHaveLength(2);
+    const settled = merged.at(-1)!;
+    expect(settled.id).toBe(optimistic.id);
+    expect(settled.serverId).toBe('20');
+    expect(settled.deliveryState).toBe('sent');
+  });
+
   test('a received row newer than the tail page that the page omits is dropped', () => {
     // A deleted the newest message (11); the tail page ends at 10.
     const existing = [row('9'), row('10'), row('11', { isOwn: false })];
