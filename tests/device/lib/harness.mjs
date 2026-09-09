@@ -9,7 +9,7 @@ import { runFlow, screenTexts, findErrorTexts, screenshotsIn } from './maestro.m
 import { screenshot as simShot } from './devices.mjs';
 import { createMailbox, waitForCode, mintCode, mintingEnabled } from './mailbox.mjs';
 import * as server from './server.mjs';
-import { findAccount, rememberAccount } from './accounts.mjs';
+import { findAccount, rememberAccount } from './account-reuse.mjs';
 
 export const SUITE_DIR = new URL('../suite/', import.meta.url).pathname;
 // The password common/signup-request.yaml types for every simulated signup

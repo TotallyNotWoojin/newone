@@ -29,7 +29,7 @@ import { warmDriver } from './lib/maestro.mjs';
 import { Report } from './lib/report.mjs';
 import { createAreaContext } from './lib/harness.mjs';
 import { buildInventorySection, buildBugList } from './lib/summary.mjs';
-import { readAccounts } from './lib/accounts.mjs';
+import { readAccounts } from './lib/account-reuse.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
