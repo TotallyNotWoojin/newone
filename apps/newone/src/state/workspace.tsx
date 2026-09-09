@@ -1479,14 +1479,26 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             ...current.messages,
             [conversationId]: reconcileMessages(current.messages[conversationId] ?? [], page.items),
           },
-          cursors: { ...current.cursors, [conversationId]: page.cursor },
+          // Someone who has paged back through the history keeps their place:
+          // this always reads the newest page, and taking its cursor would
+          // walk them back through pages they already hold.
+          cursors: {
+            ...current.cursors,
+            [conversationId]: previousMessagesLoaded(current, conversationId)
+              ? current.cursors[conversationId] ?? page.cursor
+              : page.cursor,
+          },
         };
         snapshotRef.current = nextSnapshot;
         return nextSnapshot;
       });
       setMessagePagination((current) => ({
         ...current,
-        [conversationId]: { hasMore: Boolean(page.cursor), loading: false, loaded: true },
+        [conversationId]: {
+          hasMore: Boolean(snapshotRef.current?.cursors[conversationId] ?? page.cursor),
+          loading: false,
+          loaded: true,
+        },
       }));
       return true;
     } catch (pageError) {
