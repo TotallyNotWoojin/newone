@@ -262,7 +262,14 @@ export interface SharedMediaPage {
 }
 
 export interface ReadRepository {
-  loadWorkspace(userId: string, selectedConversationId?: string | null): Promise<WorkspaceSnapshot>;
+  loadWorkspace(
+    userId: string,
+    selectedConversationId?: string | null,
+    /** A reconcile that only needs the chat list asks for the shortest
+     * timeline the service allows; the open conversation's own page read is
+     * what carries its messages. */
+    options?: { timelineLimit?: number },
+  ): Promise<WorkspaceSnapshot>;
   loadMessages(input: {
     organizationId: string;
     conversationId: string;

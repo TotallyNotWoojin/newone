@@ -2047,7 +2047,8 @@ describe('authoritative workspace provider', () => {
     );
     await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
 
-    expect(mockLoadWorkspace).toHaveBeenCalledWith(userId, null);
+    // A first load wants the whole tail of whatever conversation is selected.
+    expect(mockLoadWorkspace).toHaveBeenCalledWith(userId, null, { timelineLimit: 100 });
     expect(currentWorkspace().currentUser?.id).toBe(userId);
     expect(currentWorkspace().organizationId).toBe('70000000-0000-4000-8000-000000000007');
     expect(currentWorkspace().offlineQueueAvailable).toBe(true);
@@ -2072,6 +2073,48 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().inboxFilter).toBe('unread');
     expect(currentWorkspace().inboxSearch).toBe('operations');
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
+  });
+
+  test('a message arriving does not drag the whole timeline behind it', async () => {
+    // The bootstrap carries a timeline for the conversation that is open, so a
+    // message anywhere else made it ship one nobody had asked about. The open
+    // thread reads its own page; the reconcile is left to fetch the list.
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/^ready:Controlled Company:/)).toBeTruthy());
+    const invalidate = mockRealtimeOptions?.onInvalidate as (event?: unknown) => void;
+    mockLoadWorkspace.mockClear();
+    mockLoadMessages.mockClear();
+
+    // A message in the conversation that is open: its page is read, and the
+    // reconcile asks for the shortest timeline the service allows.
+    await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
+    await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledWith(
+      expect.anything(), 'conversation-a', { timelineLimit: 1 },
+    ));
+    expect(mockLoadMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conversation-a', after: null }),
+    );
+
+    // A message somewhere else needs no timeline at all, and no page read.
+    mockLoadWorkspace.mockClear();
+    mockLoadMessages.mockClear();
+    await act(async () => { invalidate({ conversationId: conversationBId, entityType: 'message' }); });
+    await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledWith(
+      expect.anything(), 'conversation-a', { timelineLimit: 1 },
+    ));
+    expect(mockLoadMessages).not.toHaveBeenCalled();
+
+    // Anything asking for a full reconcile still gets the whole tail.
+    mockLoadWorkspace.mockClear();
+    await act(async () => { await currentWorkspace().refresh(); });
+    expect(mockLoadWorkspace).toHaveBeenCalledWith(
+      expect.anything(), 'conversation-a', { timelineLimit: 100 },
+    );
+    await view.unmount();
   });
 
   test("a reconcile does not forget who is in a group it was not asked about", async () => {
@@ -2159,7 +2202,7 @@ describe('authoritative workspace provider', () => {
     // The reconcile is asked for the conversation that was just opened, which
     // is what makes the server send that group's members.
     await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledWith(
-      expect.anything(), conversationBId,
+      expect.anything(), conversationBId, expect.anything(),
     ));
     expect(currentWorkspace().messages[conversationBId]).toHaveLength(1);
     await view.unmount();

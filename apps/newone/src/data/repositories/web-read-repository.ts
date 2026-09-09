@@ -1418,13 +1418,17 @@ export class WebReadRepository implements ReadRepository {
 
   constructor(private readonly context: RepositoryContext) {}
 
-  async loadWorkspace(_userId: string, selectedConversationId?: string | null): Promise<WorkspaceSnapshot> {
+  async loadWorkspace(
+    _userId: string,
+    selectedConversationId?: string | null,
+    options?: { timelineLimit?: number },
+  ): Promise<WorkspaceSnapshot> {
     const payload = await readRequest(this.context, '/v2/bootstrap', {
       organizationId: null,
       selectedConversationId: selectedConversationId ?? null,
       beforeMessageId: null,
       conversationLimit: 100,
-      timelineLimit: 100,
+      timelineLimit: Math.min(100, Math.max(1, options?.timelineLimit ?? 100)),
     });
     if (payload.schemaVersion !== 1) {
       throw new RepositoryError('The workspace schema is not supported by this app version.', 'client_update_required', false);

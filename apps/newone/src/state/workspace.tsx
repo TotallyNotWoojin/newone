@@ -787,6 +787,14 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const receiptProgressRef = useRef(new Map<string, 'delivered' | 'read'>());
   const loadWorkspaceOnceRef = useRef<() => Promise<void>>(async () => {});
   const reconciliationRunnerRef = useRef<ReturnType<typeof createCoalescedRunner> | null>(null);
+  // A reconcile that only needs the chat list asks for the shortest timeline
+  // the service allows: the open conversation's own page read carries its
+  // messages. Measured with 82 messages in view, the timeline is 14ms and 14KB
+  // of a 154ms, 29KB call - half the payload of every message received, on
+  // whatever connection the reader is on. Anything that asks for a full
+  // reconcile raises this, and a coalesced run then gives everyone the full
+  // one rather than the slim one they happened to queue behind.
+  const fullTimelineWantedRef = useRef(true);
   const lastRealtimeEventAtRef = useRef(0);
   const translationFollowUpRef = useRef<{ conversationId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const endAccessRef = useRef(auth.endAccess);
@@ -1155,9 +1163,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!publicRuntimeConfig.offlineCacheEnabled && cacheKey) {
         await clientStore.removeCache(cacheKey);
       }
+      const wantsFullTimeline = fullTimelineWantedRef.current;
+      fullTimelineWantedRef.current = false;
       const next = await reads.loadWorkspace(
         userId,
         selectedConversationIdRef.current || null,
+        { timelineLimit: wantsFullTimeline ? 100 : 1 },
       );
       retriedAfterRefreshRef.current = false;
       const nextEntitlement = offlineWorkspaceEntitlement(next.currentUser);
@@ -1448,6 +1459,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   }, []);
 
   const refresh = useCallback(
+    () => {
+      fullTimelineWantedRef.current = true;
+      return reconciliationRunnerRef.current?.run() ?? Promise.resolve();
+    },
+    [],
+  );
+
+  /** The chat list, without the timeline that comes with it. */
+  const refreshConversationList = useCallback(
     () => reconciliationRunnerRef.current?.run() ?? Promise.resolve(),
     [],
   );
@@ -1611,8 +1631,18 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       reconcileWorkspace();
       return;
     }
-    void refresh().then(() => followUpTranslation(conversationId, 0));
-  }, [followUpTranslation, markRealtimeEventFresh, reconcileWorkspace, refresh]);
+    // The bootstrap only ever carries a timeline for the conversation that is
+    // open, so a message arriving anywhere else made it ship one nobody asked
+    // about. The open thread takes its own page instead, and the reconcile is
+    // left to do what it is actually needed for here: the list.
+    if (conversationId === selectedConversationIdRef.current) {
+      void loadConversationTimeline(conversationId);
+    }
+    void refreshConversationList().then(() => followUpTranslation(conversationId, 0));
+  }, [
+    followUpTranslation, loadConversationTimeline, markRealtimeEventFresh,
+    reconcileWorkspace, refreshConversationList,
+  ]);
   const handleRealtimeReconcile = useCallback(() => {
     markRealtimeEventFresh();
     reconcileWorkspace();
