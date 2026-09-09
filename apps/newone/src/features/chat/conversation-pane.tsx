@@ -1262,14 +1262,20 @@ const MessageBubble = memo(function MessageBubble({
   // translation appears: a queued one would shove a line into a bubble you
   // are still looking at, and there is nothing to say about one that never
   // existed because you both read the same language.
-  const ownTranslation = showOwnTranslations && message.isOwn && translationEnabled && !message.deleted
-    ? message.outgoingTranslation
-    : undefined;
-  const ownTranslatedText = ownTranslation?.status === 'completed'
-    ? (ownTranslation.correction?.status === 'approved'
-      ? ownTranslation.correction.correctedText
-      : ownTranslation.translatedText) ?? undefined
-    : undefined;
+  // Your own message, in every language somebody else reads it in. One line
+  // each; the language is named only when there is more than one, because a
+  // one-to-one chat has nothing to disambiguate (owner, Sep 9 2026).
+  const ownTranslations = showOwnTranslations && message.isOwn && translationEnabled && !message.deleted
+    ? (message.outgoingTranslations ?? [])
+      .map((entry) => ({
+        language: entry.targetLanguage,
+        text: (entry.correction?.status === 'approved'
+          ? entry.correction.correctedText
+          : entry.translatedText) ?? undefined,
+      }))
+      .filter((entry) => Boolean(entry.text))
+    : [];
+  const ownTranslatedText = ownTranslations[0]?.text;
   // Both lines are already on screen for your own message, so the collapsed
   // form and its "Show original" tap would only contradict the setting.
   const showTranslationOnly = translatedOnly && hasTranslation
@@ -1466,9 +1472,16 @@ const MessageBubble = memo(function MessageBubble({
                 <View style={styles.translationBlock}>
                   <Text style={styles.messageText}>{message.translatedText}</Text>
                 </View>
-              ) : ownTranslatedText ? (
+              ) : ownTranslations.length ? (
                 <View style={styles.translationBlock}>
-                  <Text style={styles.messageText}>{ownTranslatedText}</Text>
+                  {ownTranslations.map((entry) => (
+                    <View key={entry.language} style={styles.ownTranslationLine}>
+                      {ownTranslations.length > 1 ? (
+                        <Text style={styles.ownTranslationTag}>{entry.language.toUpperCase()}</Text>
+                      ) : null}
+                      <Text style={styles.messageText}>{entry.text}</Text>
+                    </View>
+                  ))}
                 </View>
               ) : caption ? translationLine : null}
             </>
@@ -3945,6 +3958,14 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   sheetIdentityCopy: { flex: 1, minWidth: 0 },
   sheetIdentityTitle: { color: colors.ink, fontFamily: type.display, fontSize: 17, fontWeight: '900' },
   sheetIdentityMeta: { color: colors.inkSubtle, fontSize: 12 },
+  ownTranslationLine: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs },
+  ownTranslationTag: {
+    color: colors.inkSubtle,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    minWidth: 18,
+  },
   quickRow: { flexDirection: 'row', gap: spacing.xs, paddingBottom: spacing.xs },
   settingRows: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   settingRow: {

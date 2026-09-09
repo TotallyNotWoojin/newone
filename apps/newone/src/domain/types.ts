@@ -299,7 +299,9 @@ export interface Message {
    * their language, not yours, so `translation` above never holds it. Only
    * set for own messages; a Settings toggle decides whether it is shown.
    */
-  outgoingTranslation?: MessageTranslation;
+  /** Every language somebody else reads this message in — one entry per
+   * language, so a group with two others shows both. */
+  outgoingTranslations?: MessageTranslation[];
   languageDetection?: MessageLanguageDetection;
   createdAt?: string;
   sentAt: string;

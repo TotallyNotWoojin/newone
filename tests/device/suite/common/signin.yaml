@@ -22,21 +22,26 @@ appId: com.totallynotwoojin.newone
 - tapOn:
     text: "Not now"
     optional: true
-# Signed in as the wrong person: leave, so the sign-in below can happen.
+# Signed in as the wrong person: leave, so the sign-in below can happen. The
+# same steps common/signout.yaml uses — the control is "Settings", the row is
+# "Sign out of Newone".
 - runFlow:
     when:
       visible: "Chats"
       notVisible: "@${USERNAME}"
     commands:
-      - tapOn: "Open settings"
+      - tapOn: "Settings"
+      - extendedWaitUntil:
+          visible: "Close settings"
+          timeout: 15000
       - scrollUntilVisible:
           element:
-            text: "Sign out"
+            text: "Sign out of Newone"
           direction: DOWN
-          timeout: 20000
-      - tapOn: "Sign out"
+          timeout: 45000
+      - tapOn: "Sign out of Newone"
       - extendedWaitUntil:
-          visible: "(Returning member|Sign in|Create account)"
+          visible: "Create account"
           timeout: 30000
 # Everything below happens only when the phone is not already this person.
 - runFlow:

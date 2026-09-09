@@ -573,17 +573,23 @@ function parseTranslation(message: JsonRecord, targetLanguage: LanguageCode) {
 }
 
 /**
- * On your own message, the row aimed at whoever reads it — a language that is
- * not the one this phone reads in, which is why parseTranslation misses it.
+ * On your own message, every language somebody else reads it in.
+ *
+ * This used to skip the row aimed at this phone's own reading language, on the
+ * assumption that row was for the reader. It is not: a person whose "Translate
+ * to" is Korean, writing English to somebody who reads Korean, was shown
+ * nothing at all, because the only translation that existed was the one being
+ * discarded (owner, Sep 9 2026). What has nothing to say is a row in the
+ * language the message was already written in.
+ *
  * The server sends every translation of a message you can see, so this is a
- * different pick from the same list, not an extra fetch. A finished one wins;
- * otherwise the first row stands in so its state is known.
+ * different pick from the same list, not an extra fetch.
  */
-function parseOutgoingTranslation(message: JsonRecord, readingLanguage: LanguageCode) {
-  const outgoing = values(message.translations)
+function parseOutgoingTranslations(message: JsonRecord, sourceLanguage: string | null) {
+  return values(message.translations)
     .map(translationFromDto)
-    .filter((item) => item.targetLanguage !== readingLanguage);
-  return outgoing.find((item) => item.status === 'completed') ?? outgoing[0];
+    .filter((item) => item.status === 'completed' && item.targetLanguage !== sourceLanguage)
+    .sort((left, right) => left.targetLanguage.localeCompare(right.targetLanguage));
 }
 
 function attachmentFrom(value: unknown): Message['attachment'] {
@@ -772,7 +778,7 @@ function messageFromDto(
     targetLanguage: selectedTranslation?.targetLanguage,
     translationState,
     translation: selectedTranslation,
-    outgoingTranslation: isOwn ? parseOutgoingTranslation(row, messageLanguage) : undefined,
+    outgoingTranslations: isOwn ? parseOutgoingTranslations(row, sourceLanguage) : undefined,
     languageDetection: detection,
     createdAt,
     sentAt: dateTimeLabel(createdAt),
