@@ -1206,7 +1206,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main'));
     expect(screen.getByText('chat.unreadMessages')).toBeTruthy();
     const list = view.root!.queryAll((node) => node.props.inverted === true && typeof node.props.onScroll === 'function')[0];
-    expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0, autoscrollToTopThreshold: 80 });
+    // Only the anchor, so loading older messages does not jump. The list must
+    // not autoscroll on its own: the pane already jumps to the newest row, and
+    // the two fought whenever a row changed height under them.
+    expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 });
     // One phone screen of compact bubbles mounts with the push transition; the rest fills in small batches.
     expect(list.props.initialNumToRender).toBeLessThanOrEqual(16);
     expect(list.props.maxToRenderPerBatch).toBeLessThanOrEqual(8);
@@ -2420,9 +2423,25 @@ describe('personal realm conversation copy', () => {
     expect(screen.queryByText('chat.chooseBody')).toBeNull();
     await empty.unmount();
 
+    // A chat whose row shows a message, opened before its page has arrived,
+    // is loading - not empty. It used to claim "no messages yet" for the whole
+    // round trip, which is what made opening a chat look broken.
+    mockWorkspace.messagePagination = {};
+    const pending = await render(
+      <ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />,
+    );
+    expect(screen.getByLabelText('chat.loadingMessages')).toBeTruthy();
+    expect(screen.queryByText('chat.privateConsumer')).toBeNull();
+    await pending.unmount();
+
+    // A thread with nothing in it yet: no preview on its row, nothing unread.
+    // A chat that does have history shows a spinner instead, covered below.
     mockWorkspace.messagePagination = {};
     const fresh = await render(
-      <ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />,
+      <ConversationPane
+        conversation={conversation({ lastMessage: '', unreadCount: 0 })}
+        messages={[]}
+        onSend={noopSend} />,
     );
     expect(screen.getByText('chat.privateConsumer')).toBeTruthy();
     expect(screen.queryByText('chat.private')).toBeNull();

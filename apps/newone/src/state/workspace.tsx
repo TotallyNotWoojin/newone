@@ -200,7 +200,7 @@ interface WorkspaceState {
   selectedAiOutputReport: AiOutputErrorReportDetail | null;
   dynamicGroupPolicies: DynamicGroupPolicy[];
   dynamicGroupNextAfterPolicyId: string | null;
-  messagePagination: Record<string, { hasMore: boolean; loading: boolean }>;
+  messagePagination: Record<string, { hasMore: boolean; loading: boolean; loaded: boolean }>;
   unreadDividerIds: Record<string, string | null>;
   refresh: () => Promise<void>;
   loadOlderMessages: (conversationId: string) => Promise<boolean>;
@@ -771,7 +771,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     useState<string | null>(null);
   const [dynamicGroupOrganizationId, setDynamicGroupOrganizationId] = useState('');
   const [messagePagination, setMessagePagination] = useState<
-    Record<string, { hasMore: boolean; loading: boolean }>
+    Record<string, { hasMore: boolean; loading: boolean; loaded: boolean }>
   >({});
   const [unreadDividerIds, setUnreadDividerIds] = useState<Record<string, string | null>>({});
   const [selectedConversationId, setSelectedConversationId] = useState('');
@@ -1227,6 +1227,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         {
           hasMore: Boolean(next.cursors[conversation.id]),
           loading: current[conversation.id]?.loading ?? false,
+          // The bootstrap carries a timeline for the selected conversation
+          // only, so a cursor entry is what marks one as fetched.
+          loaded: current[conversation.id]?.loaded === true
+            || Object.prototype.hasOwnProperty.call(next.cursors, conversation.id),
         },
       ])));
       const currentSelection = selectedConversationIdRef.current;
@@ -1299,7 +1303,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             setSelectedConversationId(nextSelection);
             setMessagePagination(Object.fromEntries(cached.conversations.map((conversation: Conversation) => [
               conversation.id,
-              { hasMore: Boolean(cached.cursors[conversation.id]), loading: false },
+              {
+                hasMore: Boolean(cached.cursors[conversation.id]),
+                loading: false,
+                loaded: Object.prototype.hasOwnProperty.call(cached.cursors, conversation.id),
+              },
             ])));
             setStatus(cached.conversations.length || cached.people.length ? 'ready' : 'empty');
             setConnectivity('offline');
@@ -1426,6 +1434,79 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [],
   );
 
+  // The newest page of one conversation. Opening a chat used to wait for the
+  // whole workspace to come back, because the bootstrap carries a timeline for
+  // the selected conversation only and nothing else fetches one: a chat you
+  // had not opened yet showed its empty state until a full reconcile landed.
+  // Sending waited on the same reconcile before the row settled.
+  const loadConversationTimeline = useCallback(async (conversationId: string) => {
+    const initial = snapshotRef.current;
+    if (!initial || !conversationId || !repositories.reads) return false;
+    const conversation = initial.conversations.find((item) => item.id === conversationId);
+    if (conversation?.managementOnly) return false;
+    if (loadingOlderRef.current.has(conversationId)) return false;
+    loadingOlderRef.current.add(conversationId);
+    setMessagePagination((current) => ({
+      ...current,
+      [conversationId]: {
+        hasMore: current[conversationId]?.hasMore ?? false,
+        loading: true,
+        loaded: current[conversationId]?.loaded === true,
+      },
+    }));
+    try {
+      const page = await repositories.reads.loadMessages({
+        organizationId: initial.organizationId,
+        conversationId,
+        userId: initial.currentUser.id,
+        after: null,
+      });
+      // Merged into whatever state has become current rather than into the
+      // snapshot captured before the request: opening a chat that was just
+      // created runs alongside the insert that put it in the list, and a
+      // captured copy would drop it again.
+      setSnapshot((current) => {
+        if (
+          !current
+          || current.organizationId !== initial.organizationId
+          || current.currentUser.id !== initial.currentUser.id
+        ) return current;
+        // A page is the server's complete view of the ids it spans, so it also
+        // retires rows deleted or hidden since the last look.
+        const nextSnapshot: WorkspaceSnapshot = {
+          ...current,
+          messages: {
+            ...current.messages,
+            [conversationId]: reconcileMessages(current.messages[conversationId] ?? [], page.items),
+          },
+          cursors: { ...current.cursors, [conversationId]: page.cursor },
+        };
+        snapshotRef.current = nextSnapshot;
+        return nextSnapshot;
+      });
+      setMessagePagination((current) => ({
+        ...current,
+        [conversationId]: { hasMore: Boolean(page.cursor), loading: false, loaded: true },
+      }));
+      return true;
+    } catch (pageError) {
+      // A chat that cannot load its page is not a failed action: the reconcile
+      // that follows is the one that reports trouble.
+      if (isOfflineError(pageError)) setConnectivity('offline');
+      return false;
+    } finally {
+      loadingOlderRef.current.delete(conversationId);
+      setMessagePagination((current) => ({
+        ...current,
+        [conversationId]: {
+          hasMore: current[conversationId]?.hasMore ?? false,
+          loading: false,
+          loaded: current[conversationId]?.loaded === true,
+        },
+      }));
+    }
+  }, [repositories.reads]);
+
   useEffect(() => {
     const timeout = setTimeout(() => void refresh(), 0);
     return () => clearTimeout(timeout);
@@ -1445,8 +1526,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   // mergeMessages() already reconciles by clientMessageId/serverId, so a
   // plain refresh is safe here.
   const reconcileConversationAfterSend = useCallback((conversationId: string) => {
-    if (conversationId && conversationId === selectedConversationIdRef.current) void refresh();
-  }, [refresh]);
+    if (conversationId && conversationId === selectedConversationIdRef.current) {
+      void loadConversationTimeline(conversationId);
+    }
+  }, [loadConversationTimeline]);
 
   const handleAccessEnded = useCallback(() => {
     void endAccessRef.current();
@@ -1931,7 +2014,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     loadingOlderRef.current.add(conversationId);
     setMessagePagination((current) => ({
       ...current,
-      [conversationId]: { hasMore: true, loading: true },
+      [conversationId]: { hasMore: true, loading: true, loaded: true },
     }));
     try {
       const page = await repositories.reads.loadMessages({
@@ -1959,7 +2042,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setSnapshot(nextSnapshot);
       setMessagePagination((current) => ({
         ...current,
-        [conversationId]: { hasMore: Boolean(page.cursor), loading: false },
+        [conversationId]: { hasMore: Boolean(page.cursor), loading: false, loaded: true },
       }));
       if (latest.currentUser.membershipType !== 'guest') {
         await clientStore.putCache(
@@ -1979,6 +2062,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         [conversationId]: {
           hasMore: current[conversationId]?.hasMore ?? false,
           loading: false,
+          loaded: current[conversationId]?.loaded === true,
         },
       }));
     }
@@ -2436,8 +2520,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const selectConversation = useCallback((conversationId: string) => {
     selectedConversationIdRef.current = conversationId;
     setSelectedConversationId(conversationId);
-    void refresh();
-  }, [refresh]);
+    // The messages come straight from the conversation's own page. The
+    // workspace still reconciles on its own cadence; the thread no longer
+    // waits for it.
+    void loadConversationTimeline(conversationId);
+  }, [loadConversationTimeline]);
 
   const openOrCreateDirectConversation = useCallback(
     async (

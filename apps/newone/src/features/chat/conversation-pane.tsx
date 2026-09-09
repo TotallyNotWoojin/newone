@@ -145,7 +145,8 @@ export function ConversationPane({
   const firstPageRequestedRef = useRef<string | null>(null);
   const scrollRetryRef = useRef<string | null>(null);
   const conversationId = conversation?.id ?? '';
-  const pagination = workspace.messagePagination[conversationId] ?? { hasMore: false, loading: false };
+  const pagination = workspace.messagePagination[conversationId]
+    ?? { hasMore: false, loading: false, loaded: false };
   const unreadDividerId = conversation
     ? workspace.unreadDividerIds[conversation.id]
       ?? firstUnreadMessageId(
@@ -164,7 +165,16 @@ export function ConversationPane({
   );
   // Nothing loaded while the server still holds history: show a spinner, never
   // an empty list that fills in and jumps (owner report, Z Flip).
-  const awaitingFirstPage = messages.length === 0 && (pagination.loading || pagination.hasMore);
+  // A chat whose page has not come back yet is loading, not empty: the
+  // bootstrap carries a timeline for one conversation, so every other chat
+  // opened on "no messages yet" until its own page arrived. A chat whose row
+  // shows no message at all really is empty, and says so without a spinner.
+  const conversationHasHistory = Boolean(conversation?.lastMessage)
+    || Boolean(conversation?.lastMessageAttachment)
+    || (conversation?.unreadCount ?? 0) > 0;
+  const awaitingFirstPage = messages.length === 0
+    && (pagination.loading || pagination.hasMore
+      || (!pagination.loaded && conversationHasHistory));
   const { typingPeers, notifyTyping, notifyStopped } = useConversationTyping({
     enabled: Boolean(conversationId) && Boolean(currentUserId) && conversation?.managementOnly !== true,
     organizationId: workspace.organizationId,
@@ -643,7 +653,7 @@ export function ConversationPane({
                 </Text>
               </Pressable>
             ) : null}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             maxToRenderPerBatch={8}
             onEndReached={loadOlder}
             onEndReachedThreshold={0.6}

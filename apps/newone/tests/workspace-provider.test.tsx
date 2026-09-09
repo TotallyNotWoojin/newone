@@ -2074,6 +2074,52 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
   });
 
+  test('opening a chat reads that conversation\'s page, not the whole workspace', async () => {
+    // The bootstrap carries a timeline for the selected conversation only, so
+    // opening any other chat used to wait for a full reconcile before a single
+    // message appeared - and showed the empty state while it waited.
+    mockLoadMessages.mockImplementation(async () => ({
+      items: [{
+        id: 'message-page',
+        conversationId: conversationBId,
+        senderId: otherUserId,
+        senderName: 'Connected Employee',
+        senderInitials: 'CO',
+        senderColor: '#654321',
+        originalText: 'Already here',
+        sourceLanguage: 'en' as const,
+        translationState: 'not_requested' as const,
+        sentAt: '08:00',
+        isOwn: false,
+        deliveryState: 'delivered' as const,
+        priority: 'normal' as const,
+      }],
+      cursor: 'cursor-older',
+    }));
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    mockLoadWorkspace.mockClear();
+    mockLoadMessages.mockClear();
+
+    await act(async () => {
+      currentWorkspace().selectConversation(conversationBId);
+    });
+    await waitFor(() => expect(mockLoadMessages).toHaveBeenCalledTimes(1));
+    expect(mockLoadMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: conversationBId, after: null }),
+    );
+    expect(mockLoadWorkspace).not.toHaveBeenCalled();
+    await waitFor(() => expect(
+      currentWorkspace().messagePagination[conversationBId],
+    ).toEqual({ hasMore: true, loading: false, loaded: true }));
+    expect(currentWorkspace().messages[conversationBId]).toHaveLength(1);
+    await view.unmount();
+  });
+
   test('opens an existing direct conversation but rejects unauthorized targets', async () => {
     const snapshot = workspaceSnapshot();
     snapshot.conversations.push({
@@ -2151,6 +2197,9 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().messagePagination['conversation-a']).toEqual({
       hasMore: false,
       loading: false,
+      // This conversation's timeline has been fetched, which is what tells the
+      // pane to show an empty thread rather than a spinner.
+      loaded: true,
     });
   });
 
@@ -4357,18 +4406,28 @@ describe('reconciliation safety net', () => {
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
     mockLoadWorkspace.mockClear();
 
+    // A send settles against the conversation's own page, not the whole
+    // workspace: the bootstrap costs several times a page read and rebuilds
+    // every thread, which is what made sending feel slow.
+    mockLoadMessages.mockClear();
     await act(async () => {
       await currentWorkspace().sendMessage('conversation-a', 'Reconcile the open thread');
     });
-    await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockLoadMessages).toHaveBeenCalledTimes(1));
+    expect(mockLoadMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conversation-a', after: null }),
+    );
+    expect(mockLoadWorkspace).not.toHaveBeenCalled();
 
     mockLoadWorkspace.mockClear();
+    mockLoadMessages.mockClear();
     await act(async () => {
       await currentWorkspace().sendMessage(conversationBId, 'Do not reconcile a background thread');
     });
     // The conversation that was actually sent to is not the open one, so no
     // extra reconcile fires — nothing to wait for, the skip is synchronous.
     expect(mockLoadWorkspace).not.toHaveBeenCalled();
+    expect(mockLoadMessages).not.toHaveBeenCalled();
     await view.unmount();
   });
 

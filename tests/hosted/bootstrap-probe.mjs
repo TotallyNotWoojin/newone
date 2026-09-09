@@ -31,5 +31,12 @@ console.log('bootstrap status:', response.status);
 if (response.status !== 200) fail('bootstrap failed — this is the post-signup bounce', JSON.stringify(payload).slice(0, 600));
 const data = payload?.data ?? payload;
 console.log('schemaVersion:', data?.schemaVersion, '| org:', data?.organization?.id === PERSONAL_REALM_ID ? 'personal realm' : data?.organization?.id);
-import('node:fs').then(fs => fs.writeFileSync('/private/tmp/claude-501/-Users-woojin-Documents-newone/540fa611-10e8-4d48-9df5-1b77a4d33fc4/scratchpad/bootstrap-payload.json', JSON.stringify(payload, null, 1)));
+// The payload is kept only when somewhere to keep it is named: this pointed at
+// a session scratchpad that stopped existing, and the probe then failed after
+// the check it exists to make had already passed.
+if (process.env.NEWONE_PROBE_OUT) {
+  const fs = await import('node:fs');
+  fs.writeFileSync(`${process.env.NEWONE_PROBE_OUT}/bootstrap-payload.json`, JSON.stringify(payload, null, 1));
+  console.log('payload written to', process.env.NEWONE_PROBE_OUT);
+}
 console.log('PASS: first-screen bootstrap loads for a fresh consumer');
