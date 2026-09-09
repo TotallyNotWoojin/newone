@@ -7,6 +7,8 @@ import type { AuthenticatedActor } from '../_shared/clients.ts';
 import { ApiError } from '../_shared/errors.ts';
 import {
   fetchLinkPreview,
+  fetchPreviewImage,
+  MAX_PREVIEW_IMAGE_BYTES,
   MAX_PREVIEW_BYTES,
   normalizePreviewUrl,
   parseLinkPreview,
@@ -246,4 +248,91 @@ Deno.test('a cached address is answered from the cache without fetching anything
     'The north gate is closed',
   );
   assertEquals((result.body as Record<string, unknown>).siteName, 'Example Daily');
+});
+
+const imageResponse = (body: Uint8Array, type: string, extra: HeadersInit = {}) =>
+  new Response(body.buffer as ArrayBuffer, {
+    status: 200,
+    headers: { 'content-type': type, ...extra },
+  });
+
+Deno.test('a thumbnail is fetched here, so the phone never reaches the site', async () => {
+  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const image = await fetchPreviewImage(
+    'https://example.com/a.png',
+    () => Promise.resolve(imageResponse(bytes, 'image/png')),
+  );
+  assertEquals(image?.mime, 'image/png');
+  assertEquals(image?.extension, 'png');
+  assertEquals(image?.bytes.length, bytes.length);
+});
+
+Deno.test('the type is taken from what arrived, not from what was claimed', async () => {
+  // A .png address serving HTML is not a thumbnail.
+  const html = new TextEncoder().encode('<!doctype html><script>alert(1)</script>');
+  assertEquals(
+    await fetchPreviewImage(
+      'https://example.com/a.png',
+      () => Promise.resolve(imageResponse(html, 'text/html')),
+    ),
+    null,
+  );
+  // Nor is an image type we do not serve.
+  assertEquals(
+    await fetchPreviewImage(
+      'https://example.com/a.svg',
+      () => Promise.resolve(imageResponse(new Uint8Array([1]), 'image/svg+xml')),
+    ),
+    null,
+  );
+});
+
+Deno.test('a thumbnail cannot be a private address, directly or by redirect', async () => {
+  assertEquals(await fetchPreviewImage('https://127.0.0.1/a.png', () => {
+    throw new Error('the fetch must never happen');
+  }), null);
+  assertEquals(await fetchPreviewImage('http://example.com/a.png', () => {
+    throw new Error('plain http must never be fetched');
+  }), null);
+
+  let hops = 0;
+  const redirected = await fetchPreviewImage('https://example.com/a.png', () => {
+    hops += 1;
+    return Promise.resolve(new Response(null, {
+      status: 302,
+      headers: { location: 'https://169.254.169.254/latest/meta-data' },
+    }));
+  });
+  assertEquals(redirected, null);
+  assertEquals(hops, 1);
+});
+
+Deno.test('a thumbnail the reader would pay for is no thumbnail', async () => {
+  // Declared too large: refused before a byte is read.
+  assertEquals(
+    await fetchPreviewImage('https://example.com/a.png', () =>
+      Promise.resolve(imageResponse(new Uint8Array([1]), 'image/png', {
+        'content-length': String(MAX_PREVIEW_IMAGE_BYTES + 1),
+      }))),
+    null,
+  );
+  // Lying about its size does not help: what arrived is measured too.
+  assertEquals(
+    await fetchPreviewImage('https://example.com/a.png', () =>
+      Promise.resolve(imageResponse(new Uint8Array(MAX_PREVIEW_IMAGE_BYTES + 1), 'image/png'))),
+    null,
+  );
+  // And an empty body is not an image.
+  assertEquals(
+    await fetchPreviewImage('https://example.com/a.png', () =>
+      Promise.resolve(imageResponse(new Uint8Array(0), 'image/png'))),
+    null,
+  );
+});
+
+Deno.test('a hostile thumbnail never fails the reader', async () => {
+  assertEquals(
+    await fetchPreviewImage('https://example.com/a.png', () => Promise.reject(new Error('gone'))),
+    null,
+  );
 });

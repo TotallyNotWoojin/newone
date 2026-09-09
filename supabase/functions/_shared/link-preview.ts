@@ -140,6 +140,80 @@ export function parseLinkPreview(html: string, url: string): LinkPreview {
   };
 }
 
+export const MAX_PREVIEW_IMAGE_BYTES = 1_500_000;
+export const PREVIEW_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+export interface PreviewImage {
+  bytes: Uint8Array;
+  mime: string;
+  extension: string;
+}
+
+/**
+ * The page's own thumbnail, fetched here so the phone never has to.
+ *
+ * Same rules as the page itself and for the same reason: https only, never a
+ * private address, every redirect re-checked, a timeout, and a size the reader
+ * cannot be made to pay for. The type is taken from what arrived rather than
+ * from what the address claimed, and anything that is not one of three plain
+ * image types is simply no thumbnail. Never throws: a hostile or broken image
+ * leaves the preview exactly as it was without one.
+ */
+export async function fetchPreviewImage(
+  imageUrl: string,
+  fetcher: PreviewFetcher = fetch,
+): Promise<PreviewImage | null> {
+  let current: string;
+  try {
+    current = normalizePreviewUrl(imageUrl);
+  } catch {
+    return null;
+  }
+  for (let hop = 0; hop <= MAX_PREVIEW_REDIRECTS; hop += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PREVIEW_TIMEOUT_MS);
+    try {
+      const response = await fetcher(current, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'NewoneLinkPreview/1.0',
+          Accept: 'image/jpeg,image/png,image/webp',
+        },
+      });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) return null;
+        try {
+          current = normalizePreviewUrl(new URL(location, current).toString());
+        } catch {
+          return null;
+        }
+        continue;
+      }
+      if (!response.ok) return null;
+      const mime = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
+      const extension = PREVIEW_IMAGE_TYPES[mime];
+      if (!extension) return null;
+      const declared = Number.parseInt(response.headers.get('content-length') ?? '', 10);
+      if (Number.isFinite(declared) && declared > MAX_PREVIEW_IMAGE_BYTES) return null;
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength === 0 || buffer.byteLength > MAX_PREVIEW_IMAGE_BYTES) return null;
+      return { bytes: new Uint8Array(buffer), mime, extension };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return null;
+}
+
 export interface PreviewFetcher {
   (url: string, init: RequestInit): Promise<Response>;
 }

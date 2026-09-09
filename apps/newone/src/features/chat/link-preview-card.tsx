@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { LinkPreviewMetadata } from '@/data/repositories/contracts';
 import { previewSiteLabel } from '@/features/chat/link-preview';
@@ -18,8 +18,11 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
  * than one from every phone that scrolls past it — and nobody's address goes to
  * whoever they were sent a link to until they choose to open it.
  *
- * The page's own thumbnail is deliberately not drawn: loading it would be the
- * phone fetching a third-party address, which is the thing this avoids.
+ * The page's own thumbnail is drawn from our copy of it, never from the site:
+ * the gateway fetched it once alongside the page and keeps it in a private
+ * bucket, and what arrives here is a short-lived signed link to that. A page
+ * that offers no thumbnail, or one we would not serve, is a card without a
+ * picture rather than a card that reaches out for one.
  */
 export function LinkPreviewCard({ url }: { url: string }) {
   const { colors } = useTheme();
@@ -27,6 +30,9 @@ export function LinkPreviewCard({ url }: { url: string }) {
   const workspace = useWorkspace();
   const { t } = useI18n();
   const [preview, setPreview] = useState<LinkPreviewMetadata | null>(null);
+  // A signed link that has expired, or a stored copy that will not decode,
+  // leaves a card with its words rather than a broken picture in a chat.
+  const [imageBroken, setImageBroken] = useState(false);
   // Read through a ref: the loader's identity moves with the workspace
   // snapshot, and one card must ask about its address once, not once per
   // message that arrives in the chat while it is on screen.
@@ -55,6 +61,16 @@ export function LinkPreviewCard({ url }: { url: string }) {
       accessibilityRole="link"
       onPress={() => void Linking.openURL(preview.url)}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      {preview.imageUrl && !imageBroken ? (
+        <Image
+          accessibilityIgnoresInvertColors
+          // The picture repeats the title beside it, so it is decoration.
+          accessibilityRole="none"
+          onError={() => setImageBroken(true)}
+          source={{ uri: preview.imageUrl }}
+          style={styles.thumbnail}
+        />
+      ) : null}
       <View style={styles.copy}>
         <Text numberOfLines={2} style={styles.title}>{preview.title}</Text>
         {site ? <Text numberOfLines={1} style={styles.site}>{site}</Text> : null}
@@ -76,6 +92,12 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 6,
   },
   copy: { flex: 1, minWidth: 0 },
+  thumbnail: {
+    backgroundColor: colors.tintFaint,
+    borderRadius: radii.xs,
+    height: 40,
+    width: 40,
+  },
   title: { color: colors.ink, fontSize: 13, fontWeight: '600', lineHeight: 18 },
   site: { color: colors.inkMuted, fontSize: 11, marginTop: 1 },
   pressed: { opacity: 0.72 },

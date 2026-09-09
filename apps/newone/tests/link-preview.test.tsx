@@ -1,6 +1,6 @@
 import { describe, expect, jest, test } from '@jest/globals';
 import { Linking } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { LinkPreviewMetadata } from '@/data/repositories/contracts';
 import {
@@ -90,16 +90,27 @@ describe('the card under the message', () => {
       url: 'https://example.com/story',
       title: 'The north gate is closed',
       siteName: 'Example Daily',
-      imageUrl: 'https://example.com/thumb.jpg',
+      // What arrives is a signed link to our own copy: the gateway fetched the
+      // thumbnail alongside the page, so the site is never told who is reading.
+      imageUrl: 'https://storage.example/link-preview-images/abc.png?token=x',
       status: 'ready',
     }));
-    await render(<LinkPreviewCard url="https://example.com/story" />);
+    const view = await render(<LinkPreviewCard url="https://example.com/story" />);
 
     await waitFor(() => expect(screen.getByText('The north gate is closed')).toBeTruthy());
     expect(screen.getByText('Example Daily')).toBeTruthy();
-    // The page's own thumbnail is never drawn: that would be the phone
-    // fetching a third-party address, which is the thing this avoids.
-    expect(screen.queryByLabelText('https://example.com/thumb.jpg')).toBeNull();
+    const thumbnails = () => view.root!.queryAll(
+      (node) => typeof node.props?.source?.uri === 'string',
+    );
+    const image = thumbnails()[0];
+    expect(image?.props.source).toEqual({
+      uri: 'https://storage.example/link-preview-images/abc.png?token=x',
+    });
+
+    // A signed link that has expired leaves the words, not a broken picture.
+    await act(async () => { image?.props.onError?.(); });
+    expect(thumbnails()).toHaveLength(0);
+    expect(screen.getByText('The north gate is closed')).toBeTruthy();
 
     fireEvent.press(screen.getByLabelText('The north gate is closed · Example Daily'));
     expect(openURL).toHaveBeenCalledWith('https://example.com/story');

@@ -6,7 +6,28 @@ import {
   verifyConversationMemberCandidateCursor,
 } from '../_shared/cursors.ts';
 import { isSingleEmoji } from '../_shared/emoji.ts';
-import { fetchLinkPreview, normalizePreviewUrl } from '../_shared/link-preview.ts';
+import { fetchLinkPreview, fetchPreviewImage, normalizePreviewUrl } from '../_shared/link-preview.ts';
+
+/**
+ * Swap our stored thumbnail path for a short-lived signed link, and never send
+ * the remote address on: the phone must not be the thing that fetches it.
+ */
+async function withSignedPreviewImage(
+  actor: AuthenticatedActor,
+  row: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { image_path: imagePath, image_url: _remote, ...rest } = row;
+  if (typeof imagePath !== 'string' || !imagePath) return { ...rest, image_url: null };
+  const { data } = await actor.adminClient.storage
+    .from(LINK_PREVIEW_IMAGE_BUCKET)
+    .createSignedUrl(imagePath, LINK_PREVIEW_IMAGE_SECONDS);
+  // One unsigned thumbnail is a preview without a picture, never a failure.
+  return { ...rest, image_url: data?.signedUrl ?? null };
+}
+
+/** Our own copy of a page's thumbnail: private, and served signed. */
+const LINK_PREVIEW_IMAGE_BUCKET = 'link-preview-images';
+const LINK_PREVIEW_IMAGE_SECONDS = 60 * 60;
 import { ApiError } from '../_shared/errors.ts';
 import { expoPushToken } from '../_shared/expo-push.ts';
 import { asRpcClient, invokeRpc } from '../_shared/rpc.ts';
@@ -5937,22 +5958,44 @@ export async function executeCommand(
         'bff_link_preview_lookup',
         args,
       );
-      if (cached.cached === true) return { status: 200, body: toPublicJson(cached) };
+      if (cached.cached === true) {
+        return { status: 200, body: toPublicJson(await withSignedPreviewImage(actor, cached)) };
+      }
       // A miss: fetch the page once, on this side, and keep what it said. A
       // page that is slow, gone or not a page at all is simply unavailable —
       // one bad link in a chat must never fail the reader's request.
       const preview = await fetchLinkPreview(url);
+      // The thumbnail is fetched here too, on the same terms, and kept in a
+      // private bucket. The reader is handed a signed link to our copy, so the
+      // site never learns who was sent the link. A thumbnail that is hostile,
+      // enormous or not an image simply does not exist: the preview keeps its
+      // title and site name either way.
+      let imagePath: string | null = null;
+      if (preview.imageUrl) {
+        const image = await fetchPreviewImage(preview.imageUrl);
+        if (image) {
+          const candidate = `${digest}.${image.extension}`;
+          const stored = await actor.adminClient.storage
+            .from(LINK_PREVIEW_IMAGE_BUCKET)
+            .upload(candidate, image.bytes, { contentType: image.mime, upsert: true });
+          if (!stored.error) imagePath = candidate;
+        }
+      }
       return {
         status: 200,
         body: toPublicJson(
-          await invokeRpc(client, 'bff_link_preview_record', {
-            ...args,
-            p_url: preview.url,
-            p_title: preview.title,
-            p_site_name: preview.siteName,
-            p_image_url: preview.imageUrl,
-            p_status: preview.status,
-          }),
+          await withSignedPreviewImage(
+            actor,
+            await invokeRpc<Record<string, unknown>>(client, 'bff_link_preview_record', {
+              ...args,
+              p_url: preview.url,
+              p_title: preview.title,
+              p_site_name: preview.siteName,
+              p_image_url: preview.imageUrl,
+              p_status: preview.status,
+              p_image_path: imagePath,
+            }),
+          ),
         ),
       };
     }
