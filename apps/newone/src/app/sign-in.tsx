@@ -562,8 +562,10 @@ export default function SignInScreen() {
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>{subtitle}</Text>
 
+          {/* The three chips say what they are; the caption was a word taking
+              a row's width on a phone (owner, Sep 8 2026). */}
           <View style={styles.languageRow}>
-            <Text style={styles.languageLabel}>{t('auth.languageLabel')}</Text>
+            {wide ? <Text style={styles.languageLabel}>{t('auth.languageLabel')}</Text> : null}
             {UI_LANGUAGES.map((language) => (
               <Chip
                 key={language.code}

@@ -284,7 +284,9 @@ describe('sign-in and account recovery screen', () => {
 
   test('switches the interface language before authentication and submits signup in the chosen language', async () => {
     const view = await render(<SignInScreen />);
-    expect(screen.getByText('auth.languageLabel')).toBeTruthy();
+    // v3.5: the caption is desktop only — on a phone the three chips say what
+    // they are, and the word was taking a row's width.
+    expect(screen.queryByText('auth.languageLabel')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'auth.languageSpanish' }));
     expect(mockSetLocale).toHaveBeenCalledWith('es');
 
