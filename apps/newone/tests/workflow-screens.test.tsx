@@ -220,10 +220,13 @@ describe('people workflow screen', () => {
     const alias = screen.getByLabelText('people.alias');
     await fireEvent.changeText(alias, '  New alias  ');
     await fireEvent(alias, 'blur');
-    expect(mockWorkspace.saveContact).toHaveBeenCalledWith('user-connected', 'New alias', false);
+    // v3.5: a nickname is separate from favouriting, and saving one keeps
+    // whatever the favourite state already was.
+    expect(mockWorkspace.saveContact).toHaveBeenCalledWith('user-connected', 'New alias', true);
+    // The star toggles favourite and keeps the nickname (v3.5).
     await fireEvent.press(screen.getByRole('button', { name: 'people.removeSaved' }));
+    expect(mockWorkspace.saveContact).toHaveBeenLastCalledWith('user-connected', 'New alias', false);
     await fireEvent.press(screen.getByRole('button', { name: 'people.block' }));
-    expect(mockWorkspace.removeSavedContact).toHaveBeenCalledWith('user-connected');
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-connected', true);
 
     // v3.4: reporting is one quiet line in the manage sheet that opens its own.
@@ -291,7 +294,8 @@ describe('people workflow screen', () => {
       reportMember: successfulAction(false),
     });
     const view = await render(<PeopleScreen />);
-    expect(screen.getByText('people.saved')).toBeTruthy();
+    // The badge marks a favourite; this fixture is saved but not favourited.
+    expect(screen.queryByText('people.saved')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'people.mySite' }));
     expect(screen.getByText('status.emptyPeople')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'people.everyone' }));
@@ -306,8 +310,9 @@ describe('people workflow screen', () => {
     expect(screen.getByLabelText('people.alias').props.value).toBe('');
     // v3.4: one star. Saved already, so it offers to unsave, and a failing
     // command leaves the sheet exactly as it was.
-    await fireEvent.press(screen.getByRole('button', { name: 'people.removeSaved' }));
-    expect(mockWorkspace.removeSavedContact).toHaveBeenCalledWith('user-saved');
+    // Not a favourite, so the star offers to make them one.
+    await fireEvent.press(screen.getByRole('button', { name: 'people.saveContact' }));
+    expect(mockWorkspace.saveContact).toHaveBeenLastCalledWith('user-saved', '', true);
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
 
     await fireEvent.press(screen.getAllByRole('button', { name: /^people\.manage / })[1]!);

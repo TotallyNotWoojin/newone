@@ -183,8 +183,8 @@ export default function PeopleScreen() {
     // Saving somebody is now the one thing the star does, so it has to be
     // visible in the list: saved people come first, then everyone else.
     return [...matches].sort((left, right) => {
-      if (Boolean(left.savedContact) !== Boolean(right.savedContact)) {
-        return left.savedContact ? -1 : 1;
+      if (Boolean(left.favoriteContact) !== Boolean(right.favoriteContact)) {
+        return left.favoriteContact ? -1 : 1;
       }
       return personDisplayName(left).localeCompare(personDisplayName(right));
     });
@@ -469,22 +469,26 @@ export default function PeopleScreen() {
             if (!managePerson) return;
             const next = contactAlias.trim();
             if (next === (managePerson.contactAlias ?? '')) return;
-            void workspace.saveContact(managePerson.id, next, false);
+            void workspace.saveContact(managePerson.id, next, managePerson.favoriteContact === true);
           }}
           onChangeText={setContactAlias}
           placeholder={t('people.aliasPlaceholder')}
           value={contactAlias}
         />
         <PrimaryButton
-          icon={managePerson?.savedContact ? 'star' : 'star-outline'}
-          label={t(managePerson?.savedContact ? 'people.removeSaved' : 'people.saveContact')}
+          icon={managePerson?.favoriteContact ? 'star' : 'star-outline'}
+          label={t(managePerson?.favoriteContact ? 'people.removeSaved' : 'people.saveContact')}
           loading={workspace.actionBusy === 'contact-save' || workspace.actionBusy === 'contact-remove'}
           onPress={() => {
             if (!managePerson) return;
-            if (managePerson.savedContact) void workspace.removeSavedContact(managePerson.id);
-            else void workspace.saveContact(managePerson.id, contactAlias, false);
+            // Favouriting keeps whatever you call them; the two are separate.
+            void workspace.saveContact(
+              managePerson.id,
+              contactAlias.trim(),
+              !managePerson.favoriteContact,
+            );
           }}
-          tone={managePerson?.savedContact ? 'dark' : 'light'}
+          tone={managePerson?.favoriteContact ? 'dark' : 'light'}
         />
         {personalRealm ? null : (
           <View style={styles.privacyNote}>
@@ -695,7 +699,7 @@ function PersonCard({
         />
         <View style={styles.personStatus}>
           {person.blockedByMe ? <StatusBadge icon="ban-outline" label={t('people.blocked')} tone="danger" /> : null}
-          {person.savedContact ? <StatusBadge icon="star" label={t('people.saved')} tone="warning" /> : null}
+          {person.favoriteContact ? <StatusBadge icon="star" label={t('people.saved')} tone="warning" /> : null}
           <StatusBadge
             label={person.preferredLanguage === 'ko' ? '한국어' : person.preferredLanguage === 'es' ? 'Español' : 'English'}
             tone={person.preferredLanguage === 'ko' ? 'purple' : 'warning'}

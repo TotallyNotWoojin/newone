@@ -563,6 +563,11 @@ function ConversationRow({
               {conversation.pinned ? (
                 <Ionicons name="pin" size={12} color={colors.inkSubtle} />
               ) : null}
+              {/* A favourite says so, on a chat as on a person (owner, Sep 8
+                  2026). Favourites already sort above the rest. */}
+              {conversation.favorite ? (
+                <Ionicons name="star" size={12} color={colors.amber} />
+              ) : null}
             </View>
             <Text
               style={[

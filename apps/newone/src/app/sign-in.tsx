@@ -534,19 +534,28 @@ export default function SignInScreen() {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-        <View style={[styles.brandColumn, wide ? styles.brandColumnWide : styles.fullWidth]}>
-          <View style={styles.logoMark}>
-            <View style={styles.logoStem} />
-            <View style={styles.logoDot} />
+        {/* The statement and the trust list are for a desktop, where there is
+            room beside the form. On a phone they pushed the form off the
+            bottom, so the brand is one line and the form starts at the top
+            (owner, Sep 8 2026). */}
+        <View style={[
+          wide ? styles.brandColumn : styles.brandRow,
+          wide ? styles.brandColumnWide : styles.fullWidth,
+        ]}>
+          <View style={wide ? styles.logoMark : styles.logoMarkCompact}>
+            <View style={wide ? styles.logoStem : styles.logoStemCompact} />
+            <View style={wide ? styles.logoDot : styles.logoDotCompact} />
           </View>
-          <Text style={styles.brand}>newone</Text>
-          <Text style={styles.brandStatement}>
-            {t('auth.statement')}
-          </Text>
-          <View style={styles.trustList}>
-            <TrustItem icon="language-outline" text={t('auth.trustLanguages')} />
-            <TrustItem icon="people-outline" text={t('auth.trustMessages')} />
-          </View>
+          <Text style={wide ? styles.brand : styles.brandCompact}>newone</Text>
+          {wide ? (
+            <>
+              <Text style={styles.brandStatement}>{t('auth.statement')}</Text>
+              <View style={styles.trustList}>
+                <TrustItem icon="language-outline" text={t('auth.trustLanguages')} />
+                <TrustItem icon="people-outline" text={t('auth.trustMessages')} />
+              </View>
+            </>
+          ) : null}
         </View>
 
         <View style={[styles.card, wide ? styles.cardWide : styles.fullWidth, shadow]}>
@@ -857,9 +866,9 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   scrollContentWide: {
     flexDirection: 'row',
@@ -906,6 +915,42 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 7,
     backgroundColor: colors.white,
   },
+  // A phone's brand: one line, so the form starts near the top.
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  logoMarkCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: colors.mint,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  logoStemCompact: {
+    position: 'absolute',
+    width: 8,
+    height: 22,
+    left: 9,
+    top: 6,
+    borderRadius: 4,
+    backgroundColor: colors.forest,
+    transform: [{ rotate: '-18deg' }],
+  },
+  logoDotCompact: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    right: 6,
+    top: 6,
+    borderRadius: 4,
+    backgroundColor: colors.white,
+  },
+  brandCompact: {
+    color: colors.white,
+    fontFamily: type.display,
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.9,
+  },
   brand: {
     color: colors.white,
     fontFamily: type.display,
@@ -951,7 +996,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     maxWidth: 460,
     flexShrink: 1,
-    padding: spacing.xl,
+    padding: spacing.lg,
     borderRadius: radii.xl,
     backgroundColor: colors.paper,
   },
@@ -962,26 +1007,26 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   title: {
     color: colors.ink,
     fontFamily: type.display,
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 21,
+    lineHeight: 26,
     fontWeight: '900',
     letterSpacing: -0.7,
   },
   subtitle: {
     color: colors.inkMuted,
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
+    lineHeight: 17,
+    marginTop: 2,
+    marginBottom: spacing.md,
   },
   modeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
-  passwordField: { marginTop: spacing.md },
+  passwordField: { marginTop: spacing.sm },
   languageRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   languageLabel: {
     color: colors.inkSubtle,
@@ -990,8 +1035,8 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  enrollmentFields: { gap: spacing.xs, marginBottom: spacing.md },
-  signupFields: { gap: spacing.xs, marginTop: spacing.md },
+  enrollmentFields: { gap: spacing.xs, marginBottom: spacing.sm },
+  signupFields: { gap: spacing.xs, marginTop: spacing.sm },
   helperText: {
     color: colors.inkSubtle,
     fontSize: 10,
@@ -1002,10 +1047,10 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.ink,
     fontSize: 11,
     fontWeight: '900',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   inputWrap: {
-    minHeight: 50,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -1065,12 +1110,12 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '700',
   },
   secondaryLink: {
-    minHeight: 44,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   secondaryLinkText: {
     color: colors.mintDark,
