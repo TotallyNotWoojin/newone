@@ -9,6 +9,18 @@
 //   node tests/device/run-suite.mjs --pool 2         # smaller pool (waves adapt)
 //   node tests/device/run-suite.mjs --devices <udid,udid,udid>   # explicit sims
 //   node tests/device/run-suite.mjs --keep           # leave sims booted afterwards
+//
+// Reruns without paying for an area (backlog 76):
+//   --reuse-accounts <run-dir>   sign the people that run made back in
+//   --steps id,id                run only those steps (setup always runs)
+//   --from-failures <run-dir>    run exactly what failed in that run
+//
+// Reuse is the big saving: minting three people through the sign-up UI is the
+// slowest part of an area and the flakiest. Selection is narrower than it
+// looks — a step that needs what an earlier step made (a photo to remove, a
+// group to rename) fails on its own, because only the accounts come back, not
+// the state. Use it for steps that stand up by themselves, and read a failure
+// as "this step needs something earlier" rather than as a defect.
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -17,6 +29,7 @@ import { warmDriver } from './lib/maestro.mjs';
 import { Report } from './lib/report.mjs';
 import { createAreaContext } from './lib/harness.mjs';
 import { buildInventorySection, buildBugList } from './lib/summary.mjs';
+import { readAccounts } from './lib/accounts.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..');
@@ -31,6 +44,29 @@ const AREA_FILTER = option('areas', '')?.split(',').filter(Boolean) ?? [];
 const POOL_SIZE = Number(option('pool', '3'));
 const EXPLICIT_DEVICES = option('devices', '')?.split(',').filter(Boolean) ?? [];
 const KEEP = flag('keep');
+const REUSE_FROM = option('reuse-accounts', '');
+const FROM_FAILURES = option('from-failures', '');
+const STEP_OPTION = option('steps', '')?.split(',').map((id) => id.trim()).filter(Boolean) ?? [];
+
+function failedStepsIn(runDir) {
+  const path = join(ROOT, runDir, 'report.json');
+  const direct = existsSync(path) ? path : join(runDir, 'report.json');
+  if (!existsSync(direct)) throw new Error(`no report.json under ${runDir}`);
+  const report = JSON.parse(readFileSync(direct, 'utf8'));
+  const rows = Array.isArray(report) ? report : report.actions ?? [];
+  return rows.filter((row) => row.status === 'FAIL').map((row) => row.id);
+}
+
+const STEP_IDS = FROM_FAILURES ? failedStepsIn(FROM_FAILURES) : STEP_OPTION;
+const STEP_FILTER = STEP_IDS.length ? new Set(STEP_IDS) : null;
+// Reusing what a run made is implied by rerunning that run's failures: the
+// point is not to sign three people up again to reach one step.
+const REUSE_DIR = REUSE_FROM || FROM_FAILURES;
+const REUSE = REUSE_DIR ? readAccounts(existsSync(join(ROOT, REUSE_DIR)) ? join(ROOT, REUSE_DIR) : REUSE_DIR) : null;
+if (STEP_FILTER) console.log(`[suite] running ${STEP_IDS.length} step(s): ${STEP_IDS.join(', ')}`);
+if (REUSE && Object.keys(REUSE).length) {
+  console.log(`[suite] reusing ${Object.keys(REUSE).length} account(s) from ${REUSE_DIR}`);
+}
 const RUN_ID = option('run', `run-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`);
 
 // Waves keep at most POOL_SIZE simulators busy; each area declares how many
@@ -126,7 +162,7 @@ for (const [waveIndex, wave] of RUN_WAVES.entries()) {
       const module = areaModules[id];
       const devices = pool.slice(cursor, cursor + module.meta.devices);
       cursor += module.meta.devices;
-      const ctx = createAreaContext({ area: id, devices, report, runDir });
+      const ctx = createAreaContext({ area: id, devices, report, runDir, reuse: REUSE, stepFilter: STEP_FILTER });
       const started = Date.now();
       report.log(id, `starting on ${devices.join(', ')}`);
       return module.run(ctx)

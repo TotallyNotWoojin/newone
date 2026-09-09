@@ -1,0 +1,104 @@
+appId: com.totallynotwoojin.newone
+---
+# Somebody this suite already made comes back (backlog 76). Env: EMAIL,
+# USERNAME, PASSWORD.
+#
+# The iOS keychain survives clearState, so the phone is often still signed in
+# as this very person — then there is nothing to do but dismiss the
+# first-launch card. Signed in as somebody else, or signed out, it signs them
+# in through the screens a person uses.
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(Chats|Returning member|Sign in|Create account)"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "Not now"
+    optional: true
+# Signed in as the wrong person: leave, so the sign-in below can happen.
+- runFlow:
+    when:
+      visible: "Chats"
+      notVisible: "@${USERNAME}"
+    commands:
+      - tapOn: "Open settings"
+      - scrollUntilVisible:
+          element:
+            text: "Sign out"
+          direction: DOWN
+          timeout: 20000
+      - tapOn: "Sign out"
+      - extendedWaitUntil:
+          visible: "(Returning member|Sign in|Create account)"
+          timeout: 30000
+# Everything below happens only when the phone is not already this person.
+- runFlow:
+    when:
+      notVisible: "@${USERNAME}"
+    commands:
+      - tapOn:
+          text: "English"
+          optional: true
+      - tapOn:
+          text: "(Returning member|Sign in)"
+          index: 0
+      - scrollUntilVisible:
+          element:
+            id: "sign-in-destination"
+          direction: DOWN
+          timeout: 15000
+      - tapOn:
+          id: "sign-in-destination"
+      - tapOn:
+          text: "Clear text"
+          optional: true
+      - eraseText: 120
+      - inputText: ${EMAIL}
+      - tapOn:
+          text: "Email address"
+          index: 0
+          optional: true
+      - assertVisible: "${EMAIL}"
+      - takeScreenshot: ${SHOT}-signin-email
+      - scrollUntilVisible:
+          element:
+            text: "(Continue securely|Continue)"
+          direction: DOWN
+          timeout: 15000
+      - tapOn: "(Continue securely|Continue)"
+      - extendedWaitUntil:
+          visible:
+            id: "password"
+          timeout: 30000
+      - tapOn:
+          id: "password"
+      - eraseText: 60
+      - inputText: ${PASSWORD}
+      - tapOn:
+          text: "Password"
+          index: 0
+          optional: true
+      - scrollUntilVisible:
+          element:
+            text: "Sign in"
+          direction: DOWN
+          timeout: 15000
+      - tapOn: "Sign in"
+      - extendedWaitUntil:
+          visible: "Chats"
+          timeout: 45000
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Not now"
+          optional: true
+- assertVisible: "Chats"
+- assertVisible: "@${USERNAME}"
+- takeScreenshot: ${SHOT}-signed-in

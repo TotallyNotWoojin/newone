@@ -9,13 +9,14 @@ import { runFlow, screenTexts, findErrorTexts, screenshotsIn } from './maestro.m
 import { screenshot as simShot } from './devices.mjs';
 import { createMailbox, waitForCode, mintCode, mintingEnabled } from './mailbox.mjs';
 import * as server from './server.mjs';
+import { findAccount, rememberAccount } from './accounts.mjs';
 
 export const SUITE_DIR = new URL('../suite/', import.meta.url).pathname;
 // The password common/signup-request.yaml types for every simulated signup
 // (v3.2: every account is created with one); areas sign back in with it.
 export const SIGNUP_PASSWORD = 'Newone-test-2026';
 
-export function createAreaContext({ area, devices, report, runDir }) {
+export function createAreaContext({ area, devices, report, runDir, reuse = null, stepFilter = null }) {
   const areaDir = join(runDir, area);
   mkdirSync(areaDir, { recursive: true });
   const log = (message) => report.log(area, message);
@@ -31,6 +32,11 @@ export function createAreaContext({ area, devices, report, runDir }) {
   // async function returning { ok, detail }; it is always evaluated so the
   // report shows server state even when the UI failed.
   async function step({ id, title, device, flow, env = {}, expected, screen, steps, serverTruth, timeoutMs = 300_000, optional = false, latencyFrom }) {
+    // Selected steps only (backlog 76). Setup steps always run: they are how
+    // the accounts and the state the selected step needs come to exist.
+    if (stepFilter && !stepFilter.has(id) && !id.startsWith('setup-')) {
+      return { ok: true, uiOk: true, serverResult: null, entry: null, durationMs: 0, stdout: '', skipped: true };
+    }
     const flowPath = join(SUITE_DIR, flow);
     const shotPrefix = `${id}`;
     const started = Date.now();
@@ -140,6 +146,25 @@ export function createAreaContext({ area, devices, report, runDir }) {
   // real disposable inbox. Reported as setup actions so a broken signup is
   // visible in the area that depended on it.
   async function signup(device, { label, displayName, language = 'en' }) {
+    // Somebody this suite already made: sign them back in rather than making
+    // another (backlog 76). Their password is the one every simulated signup
+    // sets, so the returning sign-in is the same one a person uses.
+    const saved = findAccount(reuse, area, label);
+    if (saved) {
+      const account = { ...saved, mailbox: null, device, signedIn: false };
+      log(`reuse ${label}: ${saved.email} @${saved.username} on ${device}`);
+      const signedIn = await step({
+        id: `setup-${label}-signin`,
+        title: `Setup: ${saved.displayName} is on this phone`,
+        device,
+        flow: 'common/signin.yaml',
+        env: { EMAIL: saved.email, USERNAME: saved.username, PASSWORD: SIGNUP_PASSWORD },
+        expected: `Chats, signed in as @${saved.username}`,
+        screen: 'sign-in',
+      });
+      account.signedIn = signedIn.uiOk;
+      return account;
+    }
     const mailbox = await createMailbox();
     const username = `sim_${label}_${randomBytes(3).toString('hex')}`.toLowerCase();
     const account = { label, email: mailbox.email, username, displayName, language, mailbox, userId: null, device };
@@ -182,6 +207,7 @@ export function createAreaContext({ area, devices, report, runDir }) {
       account.userId = row?.user_id ?? null;
     }
     account.signedIn = verify.uiOk;
+    if (account.userId) rememberAccount(runDir, area, account);
     if (language !== 'en' && verify.uiOk) {
       await step({
         id: `setup-${label}-ui-english`,
