@@ -8,11 +8,10 @@ appId: com.totallynotwoojin.newone
     visible: "Conversation controls"
     timeout: 15000
 # v3.5: the sheet states the setting on one row and opens the choices.
-- scrollUntilVisible:
-    element:
-      text: "Automatic translation"
-    direction: DOWN
-    visibilityPercentage: 100
+# The sheet fits without scrolling now, and scrollUntilVisible needs
+# something scrollable, so wait for the row and tap it.
+- extendedWaitUntil:
+    visible: "Automatic translation"
     timeout: 20000
 - tapOn: "Automatic translation"
 - extendedWaitUntil:
