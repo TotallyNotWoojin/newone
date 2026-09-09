@@ -1282,6 +1282,19 @@ describe('authoritative web read repository', () => {
     });
   });
 
+  test('a group the server did not send members for still knows who is in it', async () => {
+    // Full member objects come for the selected conversation and for directs;
+    // every conversation carries member_ids. Without them the Chats search
+    // could not tell that a group holds the two people someone named.
+    const payload = bootstrapPayload();
+    payload.conversations[0].members = [];
+    (payload.conversations[0] as Record<string, unknown>).memberIds = [currentUserId, colleagueId];
+    mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+    const workspace = await repository().loadWorkspace(currentUserId, conversationId);
+    const conversation = workspace.conversations.find((item) => item.id === conversationId);
+    expect(conversation?.memberIds).toEqual([currentUserId, colleagueId]);
+  });
+
   test('rejects unauthenticated, network, HTTP, unsupported schema, and unstable cursor responses', async () => {
     mockSession = null;
     await expect(repository().loadWorkspace(currentUserId)).rejects.toMatchObject({

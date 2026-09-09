@@ -926,7 +926,12 @@ function conversationFromDto(
     canManageDynamicGroup: row.canManageDynamicGroup === true,
     policyManaged: row.policyManaged === true,
     managementOnly: row.managementOnly === true,
-    memberIds: members.map((member) => String(member.userId)).filter(Boolean),
+    // The full member objects come for the selected conversation and directs;
+    // member_ids come for every conversation, and are what tells the Chats
+    // search that a group holds the two people someone named.
+    memberIds: members.length
+      ? members.map((member) => String(member.userId)).filter(Boolean)
+      : stringArray(row.memberIds),
     memberRoles: Object.fromEntries(members.map((member) => [String(member.userId),
       member.role === 'owner' || member.role === 'admin' ? member.role : 'member'])),
     memberProfiles: row.managementOnly === true ? memberProfiles : undefined,
