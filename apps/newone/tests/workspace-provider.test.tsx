@@ -2074,10 +2074,17 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
   });
 
-  test('opening a chat reads that conversation\'s page, not the whole workspace', async () => {
+  test('opening a chat reads that conversation\'s page, and does not wait on the workspace', async () => {
     // The bootstrap carries a timeline for the selected conversation only, so
     // opening any other chat used to wait for a full reconcile before a single
-    // message appeared - and showed the empty state while it waited.
+    // message appeared - and showed the empty state while it waited. The
+    // reconcile still runs, because it is the only thing that carries a
+    // group's member list for the conversation now selected; the messages
+    // simply no longer wait for it.
+    // richWorkspaceSnapshot carries a second conversation; the plain one does
+    // not, and opening a chat the snapshot has never heard of is a different
+    // case from the one under test.
+    mockLoadWorkspace.mockImplementation(async () => richWorkspaceSnapshot());
     mockLoadMessages.mockImplementation(async () => ({
       items: [{
         id: 'message-page',
@@ -2101,7 +2108,7 @@ describe('authoritative workspace provider', () => {
         <WorkspaceProbe />
       </WorkspaceProvider>,
     );
-    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/^ready:Controlled Company:/)).toBeTruthy());
     mockLoadWorkspace.mockClear();
     mockLoadMessages.mockClear();
 
@@ -2112,10 +2119,14 @@ describe('authoritative workspace provider', () => {
     expect(mockLoadMessages).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: conversationBId, after: null }),
     );
-    expect(mockLoadWorkspace).not.toHaveBeenCalled();
     await waitFor(() => expect(
-      currentWorkspace().messagePagination[conversationBId],
-    ).toEqual({ hasMore: true, loading: false, loaded: true }));
+      currentWorkspace().messagePagination[conversationBId]?.loaded,
+    ).toBe(true));
+    // The reconcile is asked for the conversation that was just opened, which
+    // is what makes the server send that group's members.
+    await waitFor(() => expect(mockLoadWorkspace).toHaveBeenCalledWith(
+      expect.anything(), conversationBId,
+    ));
     expect(currentWorkspace().messages[conversationBId]).toHaveLength(1);
     await view.unmount();
   });

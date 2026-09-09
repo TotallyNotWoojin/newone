@@ -2532,11 +2532,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const selectConversation = useCallback((conversationId: string) => {
     selectedConversationIdRef.current = conversationId;
     setSelectedConversationId(conversationId);
-    // The messages come straight from the conversation's own page. The
-    // workspace still reconciles on its own cadence; the thread no longer
-    // waits for it.
+    // Two reads, and the thread waits only for the first. The page carries the
+    // messages, which is what the reader is looking at.
     void loadConversationTimeline(conversationId);
-  }, [loadConversationTimeline]);
+    // The bootstrap carries what only it knows about the conversation now
+    // selected - a group's member list among it, which the server sends for
+    // the selected conversation and no other. Dropping this left the roster
+    // behind whatever the last reconcile happened to have selected, and the
+    // Chats search stopped finding a group by the people in it.
+    void refresh();
+  }, [loadConversationTimeline, refresh]);
 
   const openOrCreateDirectConversation = useCallback(
     async (
