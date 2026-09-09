@@ -22,7 +22,14 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - tapOn: "Name or @username"
 - inputText: ${QUERY}
-- tapOn: "Add people"
+# "Add people" used to be the section's caption, and tapping it put the
+# keyboard away. In v3.5 it is the row that opens this form, so tapping it
+# closes what was just filled in — scroll to the search button instead.
+- scrollUntilVisible:
+    element:
+      text: "Search people"
+    direction: DOWN
+    timeout: 15000
 - tapOn: "Search people"
 # Strictly the candidate: an "or No one matched" wait passed even when the
 # picker offered nobody, and the step then tapped the roster row of the same
