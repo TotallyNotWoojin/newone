@@ -7,6 +7,14 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# v3.5: "Add people" is a row that opens the form, not a form standing open.
+- scrollUntilVisible:
+    element:
+      text: "Add people"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 30000
+- tapOn: "Add people"
 - scrollUntilVisible:
     element:
       text: "Name or @username"

@@ -7,11 +7,17 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# v3.5: the sheet states the setting on one row and opens the choices.
 - scrollUntilVisible:
     element:
       text: "Automatic translation"
     direction: DOWN
+    visibilityPercentage: 100
     timeout: 20000
+- tapOn: "Automatic translation"
+- extendedWaitUntil:
+    visible: "Automatic"
+    timeout: 15000
 - tapOn: "Off"
 - extendedWaitUntil:
     visible: ".*see messages as they were written.*"
@@ -23,3 +29,8 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - takeScreenshot: ${SHOT}-automatic
 - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: "Close dialog"
+    commands:
+      - tapOn: "Close dialog"

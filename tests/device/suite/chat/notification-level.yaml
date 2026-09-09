@@ -6,11 +6,17 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# v3.5: the sheet states the setting on one row and opens the choices.
 - scrollUntilVisible:
     element:
       text: "Conversation notifications"
     direction: DOWN
+    visibilityPercentage: 100
     timeout: 20000
+- tapOn: "Conversation notifications"
+- extendedWaitUntil:
+    visible: "Muted until changed"
+    timeout: 15000
 - tapOn: "Muted until changed"
 - takeScreenshot: ${SHOT}-muted
 - tapOn: "1 hour"
@@ -24,4 +30,10 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
 - tapOn: "All activity"
 - takeScreenshot: ${SHOT}-all-activity
+# Two sheets now: the picker, then the controls behind it.
 - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: "Close dialog"
+    commands:
+      - tapOn: "Close dialog"
