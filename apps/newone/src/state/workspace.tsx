@@ -1194,6 +1194,24 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
               : previousMessages,
           ];
         }));
+        // The server sends a conversation's roster for the selected one and no
+        // other, so a bootstrap taken while a different chat is open would
+        // otherwise forget who is in a group - and searching the Chats list by
+        // two people stopped finding the group holding them both. Keep what is
+        // already known; the selected conversation still brings the truth.
+        const previousConversations = new Map(
+          previousSnapshot.conversations.map((conversation) => [conversation.id, conversation]),
+        );
+        next.conversations = next.conversations.map((conversation) => {
+          if (conversation.memberIds?.length) return conversation;
+          const previous = previousConversations.get(conversation.id);
+          if (!previous?.memberIds?.length) return conversation;
+          return {
+            ...conversation,
+            memberIds: previous.memberIds,
+            memberRoles: previous.memberRoles,
+          };
+        });
         next.cursors = { ...previousSnapshot.cursors, ...next.cursors };
         for (const conversation of next.conversations) {
           if (conversation.managementOnly) next.cursors[conversation.id] = null;

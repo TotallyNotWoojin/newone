@@ -2074,6 +2074,40 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
   });
 
+  test("a reconcile does not forget who is in a group it was not asked about", async () => {
+    // The server sends a roster for the selected conversation only. A reconcile
+    // taken while another chat is open used to empty every other group's member
+    // list, and the Chats search by two people then found nothing.
+    const withRoster = richWorkspaceSnapshot();
+    const group = withRoster.conversations.find((c) => c.id === conversationBId)!;
+    group.memberIds = [userId, otherUserId];
+    group.memberRoles = { [userId]: 'owner', [otherUserId]: 'member' };
+    mockLoadWorkspace.mockImplementation(async () => withRoster);
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(
+      currentWorkspace().conversations.find((c) => c.id === conversationBId)?.memberIds,
+    ).toEqual([userId, otherUserId]));
+
+    // The next reconcile answers about a different conversation, so this group
+    // comes back with no members at all.
+    mockLoadWorkspace.mockImplementation(async () => {
+      const snapshot = richWorkspaceSnapshot();
+      const same = snapshot.conversations.find((c) => c.id === conversationBId)!;
+      same.memberIds = [];
+      same.memberRoles = {};
+      return snapshot;
+    });
+    await act(async () => { await currentWorkspace().refresh(); });
+    expect(
+      currentWorkspace().conversations.find((c) => c.id === conversationBId)?.memberIds,
+    ).toEqual([userId, otherUserId]);
+    await view.unmount();
+  });
+
   test('opening a chat reads that conversation\'s page, and does not wait on the workspace', async () => {
     // The bootstrap carries a timeline for the selected conversation only, so
     // opening any other chat used to wait for a full reconcile before a single
