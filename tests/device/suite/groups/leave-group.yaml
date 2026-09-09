@@ -6,11 +6,21 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
+# Scroll to the checkbox itself, not the heading above it: the heading fits on
+# screen while the box below is still under the fold, and the tap then lands on
+# the backdrop and closes the sheet (groups-18, run-2026-09-09T13-04-43).
 - scrollUntilVisible:
     element:
       text: "Leave this group"
     direction: DOWN
     timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "I understand"
+    direction: DOWN
+    visibilityPercentage: 100
+    timeout: 20000
+    optional: true
 - takeScreenshot: ${SHOT}-leave-section
 - tapOn: "I understand"
 # Ticking the box reveals the button below it. A group's sheet still scrolls
