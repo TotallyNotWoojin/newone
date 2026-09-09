@@ -5,6 +5,7 @@ import { quickReactionEmojis, normalizeReactionEmoji } from '@/features/chat/mes
 import { useI18n } from '@/i18n/provider';
 import { radii, spacing } from '@/theme/tokens';
 import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { a11yState } from '@/lib/a11y-state';
 
 /**
  * The six reactions in one compact row, plus a "+" for anything else.
@@ -65,7 +66,7 @@ export function ReactionRow({
         <Pressable
           accessibilityLabel={t('chat.reactMore')}
           accessibilityRole="button"
-          accessibilityState={{ expanded: pickerOpen }}
+          {...a11yState({ expanded: pickerOpen })}
           disabled={disabled}
           onPress={() => {
             setRejected(false);

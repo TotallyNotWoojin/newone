@@ -45,6 +45,7 @@ import {
   moderationTargetReportConsentNotice,
 } from '@/features/admin/moderation-copy';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
+import { a11yState } from '@/lib/a11y-state';
 
 type PeopleFilter = 'all' | 'connected' | 'online' | 'my_site' | 'pending';
 
@@ -556,7 +557,7 @@ export default function PeopleScreen() {
           )}
           <Pressable
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: reportConsent }}
+            {...a11yState({ checked: reportConsent })}
             onPress={() => setReportConsent((value) => !value)}
             style={({ pressed }) => [
               styles.reportConsent,

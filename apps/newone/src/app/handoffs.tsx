@@ -29,6 +29,7 @@ import { radii, shadow, spacing, type } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useI18n } from '@/i18n/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
+import { a11yState } from '@/lib/a11y-state';
 
 function HandoffsWorkplaceScreen() {
   const { colors } = useTheme();
@@ -270,7 +271,7 @@ function HandoffsWorkplaceScreen() {
                 return (
                   <Pressable
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: selected }}
+                    {...a11yState({ checked: selected })}
                     key={messageId}
                     onPress={() => toggleSource(messageId)}
                     style={[styles.sourceRow, selected && styles.sourceRowSelected]}>
@@ -431,7 +432,7 @@ function HandoffsWorkplaceScreen() {
                     <Pressable
                       accessibilityLabel={`${copy.sourceId} ${messageId}`}
                       accessibilityRole="checkbox"
-                      accessibilityState={{ checked: selected }}
+                      {...a11yState({ checked: selected })}
                       key={messageId}
                       onPress={() => toggleCorrectionSource(messageId)}
                       style={[styles.sourceRow, selected && styles.sourceRowSelected]}>

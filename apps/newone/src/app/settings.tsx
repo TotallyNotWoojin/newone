@@ -43,6 +43,7 @@ import { useDevicePreferences } from '@/state/device-preferences';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
 import { THEME_PREFERENCES, type ThemePreference, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { a11yState } from '@/lib/a11y-state';
 
 interface MfaFactor {
   id: string;
@@ -1053,7 +1054,7 @@ function Row({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      {...a11yState({ disabled })}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
@@ -1090,7 +1091,7 @@ function SwitchRow({
         <Switch
           accessibilityLabel={label}
           testID={testID}
-          accessibilityState={{ disabled }}
+          {...a11yState({ disabled })}
           disabled={disabled}
           onValueChange={onValueChange}
           // The default off track is near-invisible on the card background
@@ -1123,7 +1124,7 @@ function RowAction({
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={{ disabled: loading }}
+      {...a11yState({ disabled: loading })}
       disabled={loading}
       hitSlop={8}
       onPress={onPress}
@@ -1156,7 +1157,7 @@ function OptionList<T extends string | null>({
         <Pressable
           accessibilityLabel={`${title}: ${label}`}
           accessibilityRole="button"
-          accessibilityState={{ selected: selected === value }}
+          {...a11yState({ selected: selected === value })}
           key={value ?? 'auto'}
           onPress={() => onSelect(value)}
           style={({ pressed }) => [styles.option, pressed && styles.pressed]}>

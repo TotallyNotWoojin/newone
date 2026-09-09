@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Velocidad\n\nAbrir un chat esperaba a que se recargara la aplicación entera antes de mostrar un solo mensaje. Ahora pide ese chat y nada más, y la recarga que va detrás hace la cuarta parte del trabajo. Enviar se resuelve igual.\n\nTu lista de chats\n\nUn chat con un mensaje nuevo sube al principio, debajo de los favoritos. Antes se ordenaba por algo que no cambiaba al llegar un mensaje, así que una conversación de hace una hora podía quedar por debajo de otra que nadie tocaba desde hacía días.\n\nTambién corregido\n\n- Enviar en un grupo ya no desplaza la conversación y la devuelve.\n- Buscar en tus chats por dos personas encuentra el grupo que las tiene a las dos. Antes solo funcionaba por casualidad.\n- Un chat con historial ya no dice «Aún no hay mensajes» mientras carga.\n\nQué probar\n\n- Abre varios chats, sobre todo alguno que lleves tiempo sin abrir.\n- Envía en un grupo y mira la conversación.\n- Pide que te escriban y mira cómo se reordena la lista.\n- Busca en tus chats dos personas que compartan un grupo.",
+  "whatsNewPlay": "Abrir un chat ya no espera a que se recargue la aplicación entera, y enviar se resuelve igual.\n\nUn chat con un mensaje nuevo sube al principio, debajo de los favoritos: antes se ordenaba por algo que no cambiaba al llegar un mensaje.\n\nAdemás: enviar en un grupo ya no desplaza la conversación y la devuelve, y buscar por dos personas encuentra el grupo que las tiene a las dos."
+}

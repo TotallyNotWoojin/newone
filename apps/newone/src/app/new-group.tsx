@@ -27,6 +27,7 @@ import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing, type } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
+import { a11yState } from '@/lib/a11y-state';
 
 type GroupKind = 'group' | 'team' | 'shift' | 'incident';
 type PostingMode = 'all_members' | 'admins_only';
@@ -344,7 +345,7 @@ export default function NewGroupScreen() {
         <Pressable
           accessibilityLabel={`${role ? t('group.removePerson') : t('group.addPerson')} ${candidate.displayName}`}
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: Boolean(role) }}
+          {...a11yState({ checked: Boolean(role) })}
           onPress={() => toggle(candidate)}
           style={styles.personMain}>
           <View style={[styles.check, role && styles.checkSelected]}>
@@ -516,7 +517,7 @@ export default function NewGroupScreen() {
             <Pressable
               accessibilityLabel={t('group.advancedOptions')}
               accessibilityRole="button"
-              accessibilityState={{ expanded: advancedOpen }}
+              {...a11yState({ expanded: advancedOpen })}
               onPress={() => setAdvancedOpen((current) => !current)}
               style={styles.advancedToggle}>
               <Text style={styles.label}>{t('group.advancedOptions')}</Text>

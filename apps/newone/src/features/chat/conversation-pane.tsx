@@ -84,6 +84,7 @@ import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
 import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { a11yState } from '@/lib/a11y-state';
 
 const rowKey = (row: TimelineRow) => row.key;
 
@@ -1309,7 +1310,7 @@ const MessageBubble = memo(function MessageBubble({
         <Pressable
           accessibilityLabel={t(originalOpen ? 'chat.hideOriginal' : 'chat.showOriginal')}
           accessibilityRole="button"
-          accessibilityState={{ expanded: originalOpen }}
+          {...a11yState({ expanded: originalOpen })}
           hitSlop={6}
           onPress={() => setOriginalOpen((value) => !value)}
           style={({ pressed }) => [styles.metaAction, pressed && styles.pressed]}>
@@ -1342,7 +1343,7 @@ const MessageBubble = memo(function MessageBubble({
           <Pressable
             accessibilityLabel={t('chat.retryTranslation')}
             accessibilityRole="button"
-            accessibilityState={{ disabled: retryBlocked }}
+            {...a11yState({ disabled: retryBlocked })}
             disabled={retryBlocked}
             hitSlop={6}
             onPress={requestTranslationGated}
@@ -1358,7 +1359,7 @@ const MessageBubble = memo(function MessageBubble({
     <Pressable
       accessibilityLabel={t('chat.requestTranslation')}
       accessibilityRole="button"
-      accessibilityState={{ disabled: retryBlocked }}
+      {...a11yState({ disabled: retryBlocked })}
       disabled={retryBlocked}
       hitSlop={6}
       onPress={requestTranslationGated}

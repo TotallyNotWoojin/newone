@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Speed\n\nOpening a chat was waiting on the whole app to reload before it would show a single message. It now asks for that chat and nothing else, and the reload behind it does about a quarter of the work it used to. Sending settles the same way.\n\nYour chat list\n\nA chat with a new message moves to the top where it belongs, under any favourites. It was sorted by something that never changed when a message arrived, so a conversation from an hour ago could sit below one nobody had touched in days.\n\nAlso fixed\n\n- Sending in a group no longer scrolls somewhere else and comes back.\n- Searching your chats by two people finds the group holding them both. This only worked by luck before.\n- A chat with history no longer says \"No messages yet\" while it loads.\n\nPlease check\n\n- Open a few chats, especially ones you have not opened in a while.\n- Send in a group and watch the thread.\n- Have someone message you and watch the chat list reorder.\n- Search your chats for two people who share a group.",
+  "whatsNewPlay": "Opening a chat no longer waits for the whole app to reload, and sending settles the same way.\n\nA chat with a new message moves to the top, under your favourites - it used to be sorted by something that never changed when a message arrived.\n\nAlso: sending in a group no longer scrolls away and back, searching by two people finds the group holding both, and a chat with history no longer says \"No messages yet\" while it loads."
+}
