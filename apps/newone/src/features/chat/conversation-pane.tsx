@@ -2555,7 +2555,7 @@ function ConversationControlsModal({
   const directAvatarUrl = useProfileAvatar(
     conversation.kind === 'direct' ? conversation.directParticipantId ?? null : null,
   );
-  const [sheetPicker, setSheetPicker] = useState<'notifications' | 'translation' | 'addPeople' | null>(null);
+  const [sheetPicker, setSheetPicker] = useState<'notifications' | 'translation' | 'addPeople' | 'leave' | null>(null);
   const [editingGroup, setEditingGroup] = useState(false);
   const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
   // One place that writes the controls, so a chip that applies itself and the
@@ -3386,7 +3386,16 @@ function ConversationControlsModal({
           />
         </View>
       ) : null}
-      {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
+      {/* Leaving is a row like the others, and its confirmation opens in a
+          sheet of its own. As the last section of a long sheet its checkbox
+          sat below the fold, where a tap lands on the backdrop and closes
+          everything (groups-18, three runs on Sep 9 2026). */}
+      {personalRealm && conversationDepartureSectionVisible(conversation) && conversation.departure ? (
+        <View style={styles.settingRows}>
+          <SettingRow label={departureCopy.title} onPress={() => setSheetPicker('leave')} />
+        </View>
+      ) : null}
+      {!personalRealm && conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{departureCopy.title}</Text>
           <Text style={styles.modalNote}>
@@ -3455,6 +3464,80 @@ function ConversationControlsModal({
           ) : null}
         </View>
       ) : null}
+      <ActionModal
+        onClose={() => setSheetPicker(null)}
+        title={departureCopy.title}
+        visible={personalRealm && sheetPicker === 'leave' && Boolean(conversation.departure)}>
+        {conversation.departure ? (
+          <>
+          <Text style={styles.modalLabel}>{departureCopy.title}</Text>
+          <Text style={styles.modalNote}>
+            {conversation.departure.eligible
+              ? departureCopy.disclosure
+              : `${departureCopy.unavailable} ${conversationDepartureRestrictionCopy(
+                  locale,
+                  conversation.departure.restriction,
+                )}`}
+          </Text>
+          {conversation.departure.eligible ? (
+            <>
+              {conversation.departure.requiresOwnershipTransfer ? (
+                <>
+                  <Text style={styles.modalNote}>{departureCopy.transfer}</Text>
+                  <Text style={styles.modalLabel}>{departureCopy.replacement}</Text>
+                  {replacementCandidates.length ? (
+                    <View style={styles.candidateList}>
+                      {replacementCandidates.map((person) => (
+                        <Pressable
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: replacementOwnerId === person.id }}
+                          key={person.id}
+                          onPress={() => setReplacementOwnerId(person.id)}
+                          style={[
+                            styles.candidateRow,
+                            replacementOwnerId === person.id && styles.candidateRowSelected,
+                          ]}>
+                          <Avatar color={person.avatarColor} initials={person.initials} size={34} />
+                          <Text style={styles.candidateName}>{person.displayName}</Text>
+                          {replacementOwnerId === person.id ? (
+                            <Ionicons name="checkmark-circle" color={colors.mintDark} size={18} />
+                          ) : null}
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : <Text style={styles.modalNote}>{departureCopy.noReplacement}</Text>}
+                </>
+              ) : null}
+              <Pressable
+                // A Pressable with a role hides its children from assistive tech and
+                // UI drivers; name the checkbox explicitly.
+                accessibilityLabel={departureCopy.confirmation}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: departureConfirmed }}
+                onPress={() => setDepartureConfirmed((current) => !current)}
+                style={styles.candidateRow}>
+                <Ionicons
+                  name={departureConfirmed ? 'checkbox' : 'square-outline'}
+                  color={departureConfirmed ? colors.mintDark : colors.inkMuted}
+                  size={20}
+                />
+                <Text style={styles.candidateName}>{departureCopy.confirmation}</Text>
+              </Pressable>
+              <PrimaryButton
+                disabled={!departureConfirmed || (
+                  conversation.departure.requiresOwnershipTransfer && !replacementOwnerId
+                )}
+                icon="exit-outline"
+                label={departureCopy.confirm}
+                loading={busy === 'conversation-leave'}
+                onPress={() => void onLeave(replacementOwnerId || undefined)}
+                tone="danger"
+              />
+            </>
+          ) : null}
+          </>
+        ) : null}
+      </ActionModal>
 
       {conversation.canManageConversation
         && conversation.kind !== 'direct'

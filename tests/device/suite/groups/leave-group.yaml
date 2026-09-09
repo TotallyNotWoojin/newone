@@ -6,32 +6,20 @@ appId: com.totallynotwoojin.newone
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
-# Scroll to the checkbox itself, not the heading above it: the heading fits on
-# screen while the box below is still under the fold, and the tap then lands on
-# the backdrop and closes the sheet (groups-18, run-2026-09-09T13-04-43).
+# v3.5: leaving is a row that opens its own sheet, so the acknowledgement and
+# the button are at the top of a short one rather than below the fold of a long
+# one — which is where three runs on Sep 9 2026 lost this step.
 - scrollUntilVisible:
     element:
       text: "Leave this group"
     direction: DOWN
     timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "I understand"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 20000
-    optional: true
+- tapOn: "Leave this group"
+- extendedWaitUntil:
+    visible: "I understand"
+    timeout: 15000
 - takeScreenshot: ${SHOT}-leave-section
 - tapOn: "I understand"
-# Ticking the box reveals the button below it. A group's sheet still scrolls
-# (a one-to-one one does not, which is why the scroll is optional here).
-- scrollUntilVisible:
-    element:
-      text: "Leave group"
-    direction: DOWN
-    visibilityPercentage: 100
-    timeout: 15000
-    optional: true
 - extendedWaitUntil:
     visible: "Leave group"
     timeout: 15000
