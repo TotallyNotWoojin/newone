@@ -13,13 +13,10 @@ appId: com.totallynotwoojin.newone
     timeout: 30000
 - takeScreenshot: ${SHOT}-leave-section
 - tapOn: "I understand"
-# Ticking the box reveals the button below it, and the sheet is short enough
-# now that it can sit under the fold; a tap there lands on the backdrop.
-- scrollUntilVisible:
-    element:
-      text: "Leave group"
-    direction: DOWN
-    visibilityPercentage: 100
+# Ticking the box reveals the button. The sheet fits without scrolling in
+# v3.5, and scrollUntilVisible wants something scrollable, so wait for it.
+- extendedWaitUntil:
+    visible: "Leave group"
     timeout: 15000
 - tapOn: "Leave group"
 - extendedWaitUntil:

@@ -59,7 +59,13 @@ appId: com.totallynotwoojin.newone
     timeout: 20000
     optional: true
 - takeScreenshot: ${SHOT}-added
+# Two sheets from v3.5: Add people has its own, and the controls sit behind it.
 - tapOn: "Close dialog"
+- runFlow:
+    when:
+      visible: "Close dialog"
+    commands:
+      - tapOn: "Close dialog"
 - extendedWaitUntil:
     visible: ".*was added to the group.*"
     timeout: 30000
