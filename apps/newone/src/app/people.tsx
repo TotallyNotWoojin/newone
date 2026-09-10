@@ -69,6 +69,9 @@ export default function PeopleScreen() {
   // outright (run-2026-09-04T20-41-40), and a decline cannot be undone.
   const [decliningPersonId, setDecliningPersonId] = useState('');
   const [contactAlias, setContactAlias] = useState('');
+  // Whether the nickname on screen is the one the server has, so the button
+  // can say "Saved" instead of leaving you guessing.
+  const [aliasSaved, setAliasSaved] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportCategory, setReportCategory] = useState<
     'harassment' | 'threat' | 'spam' | 'privacy' | 'misinformation' | 'other'
@@ -213,9 +216,22 @@ export default function PeopleScreen() {
     if (conversationId) openConversation(conversationId);
   };
 
+  const saveAlias = () => {
+    if (!managePerson) return;
+    const next = contactAlias.trim();
+    if (next === (managePerson.contactAlias ?? '')) {
+      setAliasSaved(true);
+      return;
+    }
+    void workspace
+      .saveContact(managePerson.id, next, managePerson.favoriteContact === true)
+      .then((ok) => setAliasSaved(ok));
+  };
+
   const openManage = (person: Person) => {
     workspace.clearActionError();
     setContactAlias(person.contactAlias ?? '');
+    setAliasSaved(false);
     setReportOpen(false);
     setReportCategory('other');
     setReportDetails('');
@@ -419,21 +435,30 @@ export default function PeopleScreen() {
         onClose={() => setManagePersonId('')}
         title={managePerson ? `${t('people.manageTitle')} · ${personDisplayName(managePerson)}` : t('people.manageTitle')}
         visible={Boolean(managePerson)}>
-        {/* The nickname commits when you leave the field: a person who typed
-            one and closed the sheet used to lose it to a Save button they
-            never pressed. Typing one saves the contact, which is what setting
-            a private name for somebody means. */}
+        {/* Three ways to commit a nickname, because the field used to have
+            only the quietest of them. Leaving the field still saves, so a
+            nickname typed and abandoned is not lost; the return key and the
+            button below say so out loud. */}
         <FormField
           label={t('people.alias')}
-          onBlur={() => {
-            if (!managePerson) return;
-            const next = contactAlias.trim();
-            if (next === (managePerson.contactAlias ?? '')) return;
-            void workspace.saveContact(managePerson.id, next, managePerson.favoriteContact === true);
+          onBlur={saveAlias}
+          onChangeText={(value) => {
+            setContactAlias(value);
+            setAliasSaved(false);
           }}
-          onChangeText={setContactAlias}
+          onSubmitEditing={saveAlias}
           placeholder={t('people.aliasPlaceholder')}
+          testID="contact-alias"
           value={contactAlias}
+        />
+        <PrimaryButton
+          disabled={!managePerson || contactAlias.trim() === (managePerson.contactAlias ?? '')}
+          icon={aliasSaved ? 'checkmark' : 'save-outline'}
+          label={aliasSaved ? t('people.aliasSaved') : t('people.saveAlias')}
+          loading={workspace.actionBusy === 'contact-save'}
+          onPress={saveAlias}
+          testID="save-alias"
+          tone="light"
         />
         <PrimaryButton
           icon={managePerson?.favoriteContact ? 'star' : 'star-outline'}
@@ -558,6 +583,7 @@ function PersonRow({
   requested?: boolean;
 }) {
   const styles = useThemedStyles(buildStyles);
+  const { colors } = useTheme();
   const personAvatarUrl = useProfileAvatar(person.id);
   const { t } = useI18n();
   return (
@@ -569,7 +595,21 @@ function PersonRow({
         size={40}
       />
       <View style={styles.personRowCopy}>
-        <Text numberOfLines={1} style={styles.personRowName}>{personDisplayName(person)}</Text>
+        <View style={styles.personRowNameLine}>
+          <Text numberOfLines={1} style={styles.personRowName}>{personDisplayName(person)}</Text>
+          {/* The same amber star the chat list uses, so a favourite reads the
+              same in both places. It lived only on PersonCard before, which
+              the contacts list does not render, so favouriting a person
+              showed nothing at all here. */}
+          {person.favoriteContact ? (
+            <Ionicons
+              accessibilityLabel={t('people.saved')}
+              color={colors.amber}
+              name="star"
+              size={12}
+            />
+          ) : null}
+        </View>
         {person.username ? (
           <Text numberOfLines={1} style={styles.personRowHandle}>{`@${person.username}`}</Text>
         ) : null}
@@ -773,6 +813,11 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   personRowCopy: {
     flex: 1,
     minWidth: 0,
+  },
+  personRowNameLine: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   personRowName: {
     color: colors.ink,

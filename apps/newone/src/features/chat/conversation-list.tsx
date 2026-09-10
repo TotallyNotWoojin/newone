@@ -34,6 +34,11 @@ const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announceme
 
 /** A row is dragged this far before its actions stay open. */
 const REVEAL_DISTANCE = 56;
+// How far back an open row has to be dragged before it closes, as a share of
+// the panel. A third is roughly what the phone's own lists ask for.
+const CLOSE_FRACTION = 1 / 3;
+// Past this, the flick decides and distance does not matter.
+const FLICK_VELOCITY = 500;
 /** One action's target: a full-height column, not a 34px circle on the time. */
 const ACTION_WIDTH = 54;
 const SNAP = { duration: 160 };
@@ -509,10 +514,19 @@ function ConversationRow({
         dragX.value = Math.max(-panelWidth - base, Math.min(-base, event.translationX));
       })
       .onEnd((event) => {
-        const settled = (showActions ? -panelWidth : 0) + dragX.value;
+        const travelled = dragX.value;
+        const settled = (showActions ? -panelWidth : 0) + travelled;
         dragX.value = withTiming(0, SNAP);
-        if (settled <= -REVEAL_DISTANCE || event.velocityX < -600) onToggleActions?.(true);
-        else onToggleActions?.(false);
+        // A flick decides on its own, in either direction. Closing had no
+        // velocity shortcut at all, so a quick swipe right snapped back open.
+        if (event.velocityX < -FLICK_VELOCITY) { onToggleActions?.(true); return; }
+        if (event.velocityX > FLICK_VELOCITY) { onToggleActions?.(false); return; }
+        // Otherwise it is distance, measured from where the row started rather
+        // than from the closed position. Closing used to be judged against the
+        // same absolute REVEAL_DISTANCE as opening, which with three actions
+        // meant dragging back two thirds of the panel before it would shut.
+        if (showActions) onToggleActions?.(travelled < panelWidth * CLOSE_FRACTION);
+        else onToggleActions?.(settled <= -REVEAL_DISTANCE);
       })
       .runOnJS(true),
     [dragX, onToggleActions, panelWidth, showActions],
@@ -551,10 +565,12 @@ function ConversationRow({
               {conversation.pinned ? (
                 <Ionicons name="pin" size={12} color={colors.inkSubtle} />
               ) : null}
-              {/* A favourite says so, on a chat as on a person (owner, Sep 8
-                  2026). Favourites already sort above the rest. */}
+              {/* Bookmarked chats carry a bookmark, not a star: the star
+                  belongs to a favourite person in Contacts, and the two were
+                  being read as the same thing (owner, Sep 10 2026). They sort
+                  above the rest either way. */}
               {conversation.favorite ? (
-                <Ionicons name="star" size={12} color={colors.amber} />
+                <Ionicons name="bookmark" size={12} color={colors.amber} />
               ) : null}
             </View>
             <Text

@@ -105,6 +105,7 @@ export function FormField({
   value,
   onBlur,
   onChangeText,
+  onSubmitEditing,
   placeholder,
   testID,
   multiline = false,
@@ -115,6 +116,8 @@ export function FormField({
   /** Where a field saves itself, rather than waiting for a Save button. */
   onBlur?: () => void;
   onChangeText: (value: string) => void;
+  /** The return key commits, beside whatever Save button the sheet offers. */
+  onSubmitEditing?: () => void;
   placeholder?: string;
   /** Stable identifier for UI drivers. */
   testID?: string;
@@ -134,6 +137,8 @@ export function FormField({
         multiline={multiline}
         onBlur={onBlur}
         onChangeText={onChangeText}
+        onSubmitEditing={onSubmitEditing}
+        returnKeyType={onSubmitEditing ? 'done' : undefined}
         placeholder={placeholder}
         testID={testID}
         placeholderTextColor={colors.inkSubtle}

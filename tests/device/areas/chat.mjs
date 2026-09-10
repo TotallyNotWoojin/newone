@@ -293,8 +293,8 @@ export async function run(ctx) {
     serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r && r.notification_level === 'all' && !r.muted_until, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
   });
   await ctx.step({
-    id: 'chat-24-favorite', title: 'Add favorite → Favorites filter → Remove favorite', device: devA, flow: 'chat/favorite.yaml', env: { PEER: B.displayName },
-    expected: 'Label flips; Favorites filter lists the chat; server is_favorite toggles', screen: 'conversation → Conversation controls',
+    id: 'chat-24-favorite', title: 'Bookmark this chat → Bookmarked filter → Remove bookmark', device: devA, flow: 'chat/favorite.yaml', env: { PEER: B.displayName },
+    expected: 'Label flips; Bookmarked filter lists the chat; server is_favorite toggles', screen: 'conversation → Conversation controls',
     serverTruth: async () => { const row = await server.preferences(convId, A.userId); return { ok: true, detail: row }; },
   });
 

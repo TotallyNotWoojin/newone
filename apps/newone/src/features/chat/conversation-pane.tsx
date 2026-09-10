@@ -2477,7 +2477,7 @@ function ConversationControlsModal({
         <View style={styles.quickRow}>
           <IconButton
             label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
-            name={conversation.favorite ? 'star' : 'star-outline'}
+            name={conversation.favorite ? 'bookmark' : 'bookmark-outline'}
             onPress={onToggleFavorite}
             size={44}
             tone={conversation.favorite ? 'accent' : 'neutral'}

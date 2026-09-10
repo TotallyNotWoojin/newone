@@ -1,25 +1,27 @@
 appId: com.totallynotwoojin.newone
 ---
-# Controls → Add favorite → label flips to Remove favorite → remove again.
+# Controls → Bookmark this chat → label flips to Remove bookmark → remove again.
+# Renamed from "favorite" on Sep 10 2026: a favourite is a person in Contacts,
+# a bookmark is a chat, and the two were reading as one thing.
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000
-- tapOn: "Add favorite"
+- tapOn: "Bookmark this chat"
 - extendedWaitUntil:
-    visible: "Remove favorite"
+    visible: "Remove bookmark"
     timeout: 20000
 - takeScreenshot: ${SHOT}-favorited
 - tapOn: "Close dialog"
-# The consumer Chats filter row has no Favorites chip (All · Unread · DMs ·
-# Groups · Official); the favorite is proven by the server row and by the
-# controls sheet offering Remove favorite (chat-24, run-2026-09-04T15-47-18).
+# The consumer Chats filter row has no Bookmarked chip (All · Unread · DMs ·
+# Groups · Official); the bookmark is proven by the server row and by the
+# controls sheet offering Remove bookmark (chat-24, run-2026-09-04T15-47-18).
 - tapOn: "Conversation settings"
 - extendedWaitUntil:
-    visible: "Remove favorite"
+    visible: "Remove bookmark"
     timeout: 15000
-- tapOn: "Remove favorite"
+- tapOn: "Remove bookmark"
 - extendedWaitUntil:
-    visible: "Add favorite"
+    visible: "Bookmark this chat"
     timeout: 20000
 - tapOn: "Close dialog"
