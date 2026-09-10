@@ -4,13 +4,24 @@ import { expect, test } from '@playwright/test';
 // out, everything but the two public screens must land on sign-in rather than
 // render an empty app shell.
 
-const PROTECTED = ['/', '/people', '/new-group', '/settings', '/updates', '/handoffs', '/admin'];
+// /updates, /handoffs and /admin were workplace screens and were deleted on
+// Sep 10 2026. They are not unprotected now -- they do not exist, so there is
+// no file for a static host to serve and nothing to redirect.
+const PROTECTED = ['/', '/people', '/new-group', '/settings'];
+const REMOVED = ['/updates', '/handoffs', '/admin'];
 
 for (const path of PROTECTED) {
   test(`${path} sends a signed-out visitor to sign-in`, async ({ page }) => {
     await page.goto(path);
     await page.waitForURL((url) => url.pathname === '/sign-in', { timeout: 20_000 });
     await expect(page.getByText('Create your account')).toBeVisible();
+  });
+}
+
+for (const path of REMOVED) {
+  test(`${path} is gone, not merely protected`, async ({ request }) => {
+    const response = await request.get(`${path}.html`);
+    expect(response.status()).toBe(404);
   });
 }
 
