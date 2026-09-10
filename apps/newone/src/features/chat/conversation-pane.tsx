@@ -139,6 +139,9 @@ export function ConversationPane({
   // The timeline is an inverted list: offset 0 is the newest message, so the
   // thread opens at the bottom and stays there with no scroll-to-end logic.
   const nearBottomRef = useRef(true);
+  // Set while the newest message is still settling; cleared once the list has
+  // stopped changing height or the reader scrolls away themselves.
+  const followTailRef = useRef(false);
   const previousTailRef = useRef<string | null>(null);
   const previousConversationRef = useRef<string | null>(null);
   const pendingSourceRef = useRef<string | null>(null);
@@ -212,6 +215,7 @@ export function ConversationPane({
       previousTailRef.current = tailKey;
       pendingSourceRef.current = null;
       nearBottomRef.current = true;
+      followTailRef.current = false;
       setSelectedMentionUserIds([]);
       setShowMentionPicker(false);
       setNewMessageCount(0);
@@ -233,6 +237,11 @@ export function ConversationPane({
         // changes height — the unread divider, a translation line landing —
         // and the newest message then sat behind the composer.
         if (!tail?.isOwn) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+        // A bubble is measured after this runs, so a jump made now can land
+        // short of a message that is still growing — a photo, a link card, a
+        // translation line arriving under the text. Following the list means
+        // staying at the bottom until it has finished changing shape.
+        followTailRef.current = true;
         if (conversationId) void markConversationRead(conversationId);
       } else {
         setNewMessageCount((count) => count + appendedMessageCount(messages, previousTailRef.current));
@@ -248,9 +257,19 @@ export function ConversationPane({
     void loadOlderMessages(conversationId);
   }, [awaitingFirstPage, conversationId, loadOlderMessages, pagination.loading]);
 
+  // The list settles after the effect above has already jumped: a photo
+  // decodes, a link card draws, a translation line lands under the text. While
+  // following, every change of height is met by staying at the bottom.
+  const handleContentSizeChange = () => {
+    if (!followTailRef.current) return;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  };
+
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nearBottom = event.nativeEvent.contentOffset.y < 72;
     nearBottomRef.current = nearBottom;
+    // Scrolling up is the reader taking over; stop following.
+    if (!nearBottom) followTailRef.current = false;
     if (nearBottom) {
       setNewMessageCount(0);
       if (conversationId) void markConversationRead(conversationId);
@@ -264,6 +283,7 @@ export function ConversationPane({
 
   const jumpToLatest = () => {
     nearBottomRef.current = true;
+    followTailRef.current = true;
     setNewMessageCount(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
     if (conversationId) void markConversationRead(conversationId);
@@ -654,10 +674,18 @@ export function ConversationPane({
                 </Text>
               </Pressable>
             ) : null}
-            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            // No anchor. The list is inverted, so a new message arrives at row
+            // 0 - the bottom - and maintainVisibleContentPosition compensates
+            // for anything inserted before its anchor, pushing the view off the
+            // message that just arrived so the jump below has to drag it back.
+            // That is the scroll that goes somewhere else and returns. It earns
+            // nothing here either: older messages land at the end of the rows,
+            // which an inverted list draws at the top, and the bottom never
+            // moves.
             maxToRenderPerBatch={8}
             onEndReached={loadOlder}
             onEndReachedThreshold={0.6}
+            onContentSizeChange={handleContentSizeChange}
             onScroll={handleScroll}
             onScrollToIndexFailed={handleScrollToIndexFailed}
             ref={listRef}

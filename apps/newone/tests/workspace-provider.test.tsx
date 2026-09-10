@@ -2075,6 +2075,44 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().selectedConversationId).toBe('conversation-a');
   });
 
+  test('messages arriving quickly are all fetched, not just the first', async () => {
+    // The reconcile asks for a one-message timeline, so the open conversation's
+    // messages come from its own page read. That read used to refuse a second
+    // ask while the first was still out, and a group mid-conversation then lost
+    // everything after the first message until the poll came round.
+    let release: (() => void) | null = null;
+    let calls = 0;
+    mockLoadMessages.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) await new Promise<void>((resolve) => { release = resolve; });
+      return { items: [], cursor: null };
+    });
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/^ready:Controlled Company:/)).toBeTruthy());
+    const invalidate = mockRealtimeOptions?.onInvalidate as (event?: unknown) => void;
+    mockLoadMessages.mockClear();
+    calls = 0;
+
+    await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
+    await waitFor(() => expect(calls).toBe(1));
+    // Three more arrive while the first read is still out.
+    await act(async () => {
+      invalidate({ conversationId: 'conversation-a', entityType: 'message' });
+      invalidate({ conversationId: 'conversation-a', entityType: 'message' });
+      invalidate({ conversationId: 'conversation-a', entityType: 'message' });
+    });
+    expect(calls).toBe(1);
+
+    await act(async () => { release?.(); await Promise.resolve(); });
+    // The asks made while it was busy are not thrown away.
+    await waitFor(() => expect(calls).toBeGreaterThan(1));
+    await view.unmount();
+  });
+
   test('a message arriving does not drag the whole timeline behind it', async () => {
     // The bootstrap carries a timeline for the conversation that is open, so a
     // message anywhere else made it ship one nobody had asked about. The open

@@ -1206,10 +1206,18 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith('conversation-main'));
     expect(screen.getByText('chat.unreadMessages')).toBeTruthy();
     const list = view.root!.queryAll((node) => node.props.inverted === true && typeof node.props.onScroll === 'function')[0];
-    // Only the anchor, so loading older messages does not jump. The list must
-    // not autoscroll on its own: the pane already jumps to the newest row, and
-    // the two fought whenever a row changed height under them.
-    expect(list.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 });
+    // No anchor at all. The list is inverted, so a new message arrives at row
+    // 0 - the bottom - and maintainVisibleContentPosition compensates for
+    // anything inserted before its anchor, pushing the view off the message
+    // that just arrived so the pane's jump has to drag it back. That is the
+    // scroll that goes somewhere else and comes back. Older messages land at
+    // the end of the rows, which an inverted list draws at the top, so nothing
+    // needed anchoring in the first place.
+    expect(list.props.maintainVisibleContentPosition).toBeUndefined();
+    // The list is followed while the newest message is still settling, so a
+    // jump made before a photo or a translation line has been measured does
+    // not land short of it.
+    expect(typeof list.props.onContentSizeChange).toBe('function');
     // One phone screen of compact bubbles mounts with the push transition; the rest fills in small batches.
     expect(list.props.initialNumToRender).toBeLessThanOrEqual(16);
     expect(list.props.maxToRenderPerBatch).toBeLessThanOrEqual(8);

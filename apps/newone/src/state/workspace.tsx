@@ -795,6 +795,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   // reconcile raises this, and a coalesced run then gives everyone the full
   // one rather than the slim one they happened to queue behind.
   const fullTimelineWantedRef = useRef(true);
+  // Conversations that asked for their page while one was already in flight.
+  const pendingTimelineReadsRef = useRef(new Set<string>());
+  const loadConversationTimelineRef = useRef<(conversationId: string) => Promise<boolean>>(
+    async () => false,
+  );
   const lastRealtimeEventAtRef = useRef(0);
   const translationFollowUpRef = useRef<{ conversationId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const endAccessRef = useRef(auth.endAccess);
@@ -1482,7 +1487,14 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     if (!initial || !conversationId || !repositories.reads) return false;
     const conversation = initial.conversations.find((item) => item.id === conversationId);
     if (conversation?.managementOnly) return false;
-    if (loadingOlderRef.current.has(conversationId)) return false;
+    // A second ask while the first is still out must not be dropped. Realtime
+    // is what calls this for the conversation on screen, and messages arriving
+    // quickly - a group mid-conversation - used to lose everything after the
+    // first until the next poll came round half a minute later.
+    if (loadingOlderRef.current.has(conversationId)) {
+      pendingTimelineReadsRef.current.add(conversationId);
+      return false;
+    }
     loadingOlderRef.current.add(conversationId);
     setMessagePagination((current) => ({
       ...current,
@@ -1554,6 +1566,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           loaded: current[conversationId]?.loaded === true,
         },
       }));
+      if (pendingTimelineReadsRef.current.delete(conversationId) && mountedRef.current) {
+        void loadConversationTimelineRef.current(conversationId);
+      }
     }
   }, [repositories.reads]);
 
@@ -2127,6 +2142,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }));
     }
   }, [repositories.reads, t]);
+
+  loadConversationTimelineRef.current = loadConversationTimeline;
 
   const ensureMessageLoaded = useCallback(async (conversationId: string, messageId: string) => {
     for (let page = 0; page < 5; page += 1) {
