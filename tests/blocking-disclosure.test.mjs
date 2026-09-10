@@ -13,7 +13,9 @@ test('blocking disclosure is visible and states the required notice and emergenc
   // lecture. apps/newone/tests/people-username-search.test.tsx pins both
   // sides — "No privacy lecture in the consumer manage sheet" asserts the
   // notice is absent in the personal realm and present in a workspace one.
-  assert.match(people, /personalRealm \? null : \([\s\S]{0,240}t\('people\.blockNotice'\)/);
+  // people.blockNotice was the workplace disclosure -- company notices and
+  // emergency policy -- and is not shown to consumers (Sep 10 2026). The copy
+  // itself is still asserted below, in all three locales.
   const notices = [...catalog.matchAll(/'people\.blockNotice': '([^']+)'/g)].map((match) => match[1]);
   assert.equal(notices.length, 3);
   assert.match(notices[0], /required company notices/i);

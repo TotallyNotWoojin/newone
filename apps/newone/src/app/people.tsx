@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   Platform,
-  ScrollView,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -305,6 +306,10 @@ export default function PeopleScreen() {
       // Keeps the search field and its first results above the iOS keyboard;
       // taps on results must not be swallowed by keyboard dismissal.
       <KeyboardAvoidingScreen style={styles.keyboard}>
+      {/* Tapping anywhere that is not a control puts the keyboard away, the
+          same as Chats. Dragging already did; a tap did not (owner, Sep 10
+          2026). accessible={false} keeps it out of the accessibility tree. */}
+      <Pressable accessible={false} onPress={() => Keyboard.dismiss()} style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -366,6 +371,7 @@ export default function PeopleScreen() {
         
         </View>
       </ScrollView>
+      </Pressable>
       </KeyboardAvoidingScreen>
       )}
       <ActionModal
@@ -521,8 +527,7 @@ export default function PeopleScreen() {
           value={reportDetails}
         />
         <View style={styles.reportDisclosure}>
-                    <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
-        
+          <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
           <Pressable
             accessibilityRole="checkbox"
             {...a11yState({ checked: reportConsent })}

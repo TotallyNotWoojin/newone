@@ -52,7 +52,7 @@ test('native recovery commits the gateway session only after the server recovery
 // identifier that no longer exists, so the subject was always the empty string
 // and the assertion could never fail. It is re-scoped to the real branch below.
 test('the recovery path never reuses invitation or employee-code capabilities', () => {
-  assert.match(signIn, /'signup' \| 'returning' \| 'enrollment'/);
+  assert.match(signIn, /'signup' \| 'returning'/);
   assert.match(signIn, /auth\.requestRecoveryOtp/);
   assert.match(signIn, /auth\.verifyRecoveryOtp/);
 

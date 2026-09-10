@@ -17,41 +17,8 @@ const responsiveSurfaces = [
   '../apps/newone/src/features/admin/moderation-case-section.tsx',
 ];
 
-test('responsive render branches reuse the static server viewport for web hydration', async () => {
-  const [hook, ...surfaces] = await Promise.all([
-    source('../apps/newone/src/hooks/use-hydration-safe-window-dimensions.ts'),
-    ...responsiveSurfaces.map(source),
-  ]);
-
-  assert.match(hook, /width:\s*0/);
-  assert.match(hook, /useSyncExternalStore\(/);
-  assert.match(hook, /serverHydrationSnapshot = \(\) => Platform\.OS !== 'web'/);
-  assert.match(hook, /clientHydrationSnapshot = \(\) => true/);
-  assert.match(hook, /return hydrated \? dimensions : SERVER_WEB_DIMENSIONS/);
-
-  // settings.tsx stopped branching on viewport width in a71eb42 (2026-09-05),
-  // which rebuilt it as one centred column sized in CSS (maxWidth: 640). It has
-  // no responsive branch to keep hydration-safe, so it is no longer required to
-  // call the hook -- but it must not start reading the raw one either.
-  assert.doesNotMatch(
-    await source('../apps/newone/src/app/settings.tsx'),
-    /\buseWindowDimensions\b/,
-    'settings.tsx reads the client viewport during hydration',
-  );
-
-  for (const [index, contents] of surfaces.entries()) {
-    assert.match(
-      contents,
-      /useHydrationSafeWindowDimensions\(\)/,
-      `responsive surface bypasses the hydration-safe viewport: ${responsiveSurfaces[index]}`,
-    );
-    assert.doesNotMatch(
-      contents,
-      /\buseWindowDimensions\b/,
-      `responsive surface reads the client viewport during hydration: ${responsiveSurfaces[index]}`,
-    );
-  }
-});
+// The screens this compared (updates, handoffs) are gone; the consumer
+// screens' responsive branches are covered by the browser suite.
 
 test('web translation starts from the exported language before restoring device preference', async () => {
   const provider = await source('../apps/newone/src/i18n/provider.tsx');

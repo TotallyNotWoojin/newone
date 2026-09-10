@@ -2,15 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [contracts, repository, workspace, pane, admin, catalog, navigation, adminAccess] = await Promise.all([
+const [contracts, repository, workspace, pane, catalog, navigation] = await Promise.all([
   readFile(new URL('../apps/newone/src/data/repositories/contracts.ts', import.meta.url), 'utf8'),
   readFile(new URL('../apps/newone/src/data/repositories/bff-command-repository.ts', import.meta.url), 'utf8'),
   readFile(new URL('../apps/newone/src/state/workspace.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../apps/newone/src/features/chat/conversation-pane.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../apps/newone/src/features/admin/ai-quality-review-section.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../apps/newone/src/i18n/catalog.ts', import.meta.url), 'utf8'),
   readFile(new URL('../apps/newone/src/components/navigation/app-scaffold.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../apps/newone/src/features/admin/admin-access.ts', import.meta.url), 'utf8'),
 ]);
 
 test('strict repository exposes reporter and AAL2 reviewer contracts', () => {
@@ -44,16 +42,9 @@ test('chat offers separate translation and summary error reports with optional q
   assert.match(workspace, /quality-use-consent-v1/);
 });
 
-test('review console requires human attestation and preserves service-only export boundary', () => {
-  assert.match(admin, /deidentificationAttestation/);
-  assert.match(admin, /attested/);
-  assert.match(workspace, /deidentificationAttested: true/);
-  assert.match(workspace, /human-deidentification-v1/);
-  assert.match(admin, /quality\.serviceExport/);
-  assert.doesNotMatch(admin, /claimAiRegression|exportAiRegression/);
-  assert.match(adminAccess, /'language\.review'/);
-  assert.match(navigation, /canAccessAdminSurface\(workspace\.capabilities\)/);
-});
+// The AI review console was the workplace quality desk and went with it on
+// Sep 10 2026. What a consumer can still do -- report a bad translation or
+// summary, and see their own reports -- is covered by the tests around this.
 
 test('all AI quality interface strings are present in English, Korean, and Spanish', () => {
   const occurrences = [...catalog.matchAll(/'((?:chat\.report(?:Translation|Summary)Error|quality\.[^']+))':/g)]

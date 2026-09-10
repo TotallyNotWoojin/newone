@@ -44,23 +44,5 @@ test('the client disables attachment forwarding and never clones attachment capa
   assert.match(catalog, /'chat\.attachmentForwardUnavailable'/);
 });
 
-test('preservation holds have a reachable, capability-gated operator path', () => {
-  const routes = readFileSync('supabase/functions/newone-api/routes.ts', 'utf8');
-  const repository = readFileSync('apps/newone/src/data/repositories/bff-command-repository.ts', 'utf8');
-  const reads = readFileSync('apps/newone/src/data/repositories/web-read-repository.ts', 'utf8');
-  const admin = readFileSync('apps/newone/src/app/admin.tsx', 'utf8');
-  const control = readFileSync('apps/newone/src/features/admin/message-preservation-section.tsx', 'utf8');
-  const adminAccess = readFileSync('apps/newone/src/features/admin/admin-access.ts', 'utf8');
-
-  assert.match(routes, /kind: 'message\.preservation\.place'[\s\S]*requireAal2: true[\s\S]*recentAuthSeconds: 900/);
-  assert.match(routes, /kind: 'message\.preservation\.release'[\s\S]*requireAal2: true[\s\S]*recentAuthSeconds: 900/);
-  assert.match(routes, /bff_place_message_preservation_hold/);
-  assert.match(routes, /bff_release_message_preservation_hold/);
-  assert.match(repository, /placeMessagePreservationHold[\s\S]*\/v2\/admin\/messages/);
-  assert.match(repository, /releaseMessagePreservationHold[\s\S]*message-preservation-holds/);
-  assert.match(reads, /parseWorkspaceCapabilities\(payload\.capabilities\)/);
-  assert.match(adminAccess, /'message\.preservation\.manage'/);
-  assert.match(admin, /hasCapability\('message\.preservation\.manage'\)/);
-  assert.match(control, /This enforces preservation only; it is not a complete eDiscovery workflow|admin\.preservationDescription/);
-  assert.match(control, /SHA256_PATTERN/);
-});
+// The preservation-hold operator path was a workplace desk and went with it
+// on Sep 10 2026.

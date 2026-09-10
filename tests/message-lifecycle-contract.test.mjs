@@ -122,7 +122,10 @@ test('history paging rejects stale cursors and the UI preserves position without
   // platform pins the visible content instead. The property — a page of history
   // must not move what the reader is looking at — is asserted on that guarantee.
   assert.match(pane, /\binverted\b/);
-  assert.match(pane, /maintainVisibleContentPosition=\{\{ minIndexForVisible: 0/);
+  // maintainVisibleContentPosition was removed deliberately: on an inverted
+  // list it fought the pane's own scroll, which is what made a group jump
+  // away and back on every send (v3.8).
+  assert.doesNotMatch(pane, /maintainVisibleContentPosition=\{/);
   // Arriving messages still only pull the view down when the reader is already
   // at the bottom, or when the message is their own. v3.4: both cases scroll
   // explicitly — the platform's own autoscroll gave up whenever anything else

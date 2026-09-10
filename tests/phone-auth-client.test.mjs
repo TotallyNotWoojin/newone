@@ -6,7 +6,6 @@ const signIn = readFileSync('apps/newone/src/app/sign-in.tsx', 'utf8');
 const auth = readFileSync('apps/newone/src/state/auth.tsx', 'utf8');
 const webAuth = readFileSync('apps/newone/src/lib/web-auth.ts', 'utf8');
 const catalog = readFileSync('apps/newone/src/i18n/catalog.ts', 'utf8');
-const admin = readFileSync('apps/newone/src/app/admin.tsx', 'utf8');
 
 const catalogCount = (key) => (catalog.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) ?? []).length;
 
@@ -63,11 +62,5 @@ test('the removed chips left no copy behind and the email-only flow is localized
   }
 });
 
-test('administrators can issue an invitation to either an email or E.164 phone identity', () => {
-  assert.match(admin, /useState<'email' \| 'phone'>\('email'\)/);
-  assert.match(admin, /admin\.invitePhoneChannel/);
-  assert.match(admin, /destinationType: inviteDestinationType/);
-  assert.match(admin, /\^\\\+\[1-9\]\[0-9\]\{7,14\}\$/);
-  assert.doesNotMatch(admin, /destinationType: 'email'/);
-  assert.equal(catalogCount('admin.invitePhone'), 3);
-});
+// The administrator invitation screen, and issuing an invitation to a phone
+// identity, went with the workplace product on Sep 10 2026.

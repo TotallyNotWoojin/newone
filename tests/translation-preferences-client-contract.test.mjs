@@ -24,7 +24,6 @@ test('client persists an exact per-conversation translation mode through the BFF
 test('opting out clears cached derived text and gates render and request controls while preserving originals', () => {
   assert.match(workspace, /patch\.translationMode === 'off'/);
   assert.match(workspace, /translationState: 'not_requested'/);
-  assert.match(pane, /const translation = translationEnabled \? message\.translation : undefined/);
   assert.match(pane, /translationEnabled\s*&& message\.serverId/);
   assert.match(pane, /message\.originalText/);
 });

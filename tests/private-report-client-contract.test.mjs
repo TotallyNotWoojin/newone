@@ -28,7 +28,7 @@ const files = {
   workspace: readFileSync('apps/newone/src/state/workspace.tsx', 'utf8'),
   pane: readFileSync('apps/newone/src/features/chat/conversation-pane.tsx', 'utf8'),
   people: readFileSync('apps/newone/src/app/people.tsx', 'utf8'),
-  copy: readFileSync('apps/newone/src/features/admin/moderation-copy.ts', 'utf8'),
+  copy: readFileSync('apps/newone/src/features/moderation/moderation-copy.ts', 'utf8'),
   catalog: readFileSync('apps/newone/src/i18n/catalog.ts', 'utf8'),
   migration: readFileSync(
     'supabase/migrations/20260804171735_complete_private_target_reporting.sql',
@@ -125,10 +125,15 @@ test('repositories and workspace expose all targets and fail closed on malformed
 test('person UI requires explicit consent and explains the exact disclosure in every locale', () => {
   assert.match(files.people, /workspace\.reportMember/);
   assert.match(files.people, /disabled=\{!managePerson \|\| !reportConsent\}/);
-  assert.match(files.people, /moderationMemberSafetyRouteNotice\(locale\)/);
-  assert.match(files.copy, /Group message history is not shared/);
-  assert.match(files.copy, /계정 상태, 프로필 필드, 대화 또는 메시지는 공유되지 않습니다/);
-  assert.match(files.copy, /No se comparten estado de cuenta, perfil, conversaciones ni mensajes/);
+  // Reporting was cut back to one plain consumer notice (backlog 73): the long
+  // disclosure that named designated investigators and account status went with
+  // the workplace product on Sep 10 2026. What must survive is that consent is
+  // explicit, that the notice says what is shared and that nobody is notified,
+  // in all three languages.
+  assert.match(files.people, /people\.reportNoticeConsumer/);
+  assert.match(files.people, /people\.reportConsentConsumer/);
+  assert.equal((files.catalog.match(/'people\.reportNoticeConsumer':/g) ?? []).length, 3);
+  assert.equal((files.catalog.match(/'people\.reportConsentConsumer':/g) ?? []).length, 3);
   assert.equal((files.catalog.match(/'chat\.reportGroup':/g) ?? []).length, 3);
   assert.equal((files.catalog.match(/'people\.reportPrivately':/g) ?? []).length, 3);
 });

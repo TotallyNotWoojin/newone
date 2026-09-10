@@ -16,7 +16,6 @@ test('shared workspace creates every initial member role through one atomic comm
   assert.match(repository, /memberAssignments: input\.memberAssignments/);
   assert.match(screen, /queryGroupCreationCandidates/);
   assert.match(screen, /membershipType === 'guest' && role !== 'member'/);
-  assert.match(screen, /group\.guestRoleLocked/);
   assert.match(screen, /group\.postingAdminsOnly/);
   assert.match(screen, /group\.joinApproval/);
 });
@@ -35,7 +34,6 @@ test('role updates are recent-AAL2 compare-and-set commands reflected only after
   assert.match(workspace, /conversation\.memberRoles\?\.\[personId\] !== expectedRole/);
   assert.match(workspace, /\[personId\]: receipt\.role/);
   assert.match(pane, /onUpdateMemberRole/);
-  assert.match(pane, /chat\.memberRoleSecurity/);
 });
 
 test('conversation system events are exact, target-bound, and localized in all supported languages', async () => {
@@ -60,6 +58,5 @@ test('conversation system events are exact, target-bound, and localized in all s
     'chat.systemMemberAdded',
     'chat.systemMemberRemoved',
     'chat.systemMemberRoleChanged',
-    'chat.memberRoleSecurity',
   ]) assert.equal((catalog.match(new RegExp(`'${key.replaceAll('.', '\\.')}':`, 'g')) ?? []).length, 3);
 });

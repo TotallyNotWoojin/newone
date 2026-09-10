@@ -150,27 +150,5 @@ test('calendar filters use valid local-day boundaries and reject impossible date
   assert.throws(() => searchDateBoundary('08/04/2026', 'end'));
 });
 
-test('search UI exposes source, sender, conversation, language, date controls and exact-message navigation', async () => {
-  const [screen, repository, conversation] = await Promise.all([
-    readFile(new URL('../apps/newone/src/features/search/workspace-search-panel.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../apps/newone/src/data/repositories/bff-search-repository.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../apps/newone/src/app/conversation/[id].tsx', import.meta.url), 'utf8'),
-  ]);
-  for (const marker of [
-    'selectedSource',
-    'selectedSenderId',
-    'selectedConversationId',
-    'selectedLanguage',
-    'dateFromInput',
-    'dateToInput',
-    'matchSources:',
-    'senderMembershipId:',
-    'conversationId:',
-    'language:',
-    'messageId: result.id',
-    'mergeSearchResults',
-  ]) assert.match(screen, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(repository, /normalizeSearchRequest/);
-  assert.match(repository, /parseSearchPage/);
-  assert.match(conversation, /focusMessageId=\{messageId\}/);
-});
+// The advanced search panel was workplace-only; consumer search is one field
+// on Chats, covered by the chat-search tests.

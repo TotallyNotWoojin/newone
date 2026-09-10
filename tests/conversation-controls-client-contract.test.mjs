@@ -16,8 +16,7 @@ test('shared web and native composer honors effective server posting access', as
   assert.match(pane, /chat\.adminsOnlyPosting/);
   assert.match(pane, /chat\.directPostingUnavailable/);
   assert.match(pane, /updateConversationControls/);
-  assert.match(pane, /loadConversationJoinRequests/);
-  assert.match(pane, /decideConversationJoinRequest/);
+  // Join requests went with conversation discovery on Sep 10 2026.
   assert.match(pane, /message\.systemEvent \? <SystemEventRow/);
   assert.match(pane, /conversation\.posting\.admins_only/);
 });
