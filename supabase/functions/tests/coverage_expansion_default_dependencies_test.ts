@@ -478,23 +478,6 @@ Deno.test('default API, bootstrap, maintenance, receipt, and scanner dependencie
     const api = defaultApiDependencies();
     assertEquals(api.publicAppUrl, 'https://app.newone.example');
     await api.checkReadiness?.(deviceId);
-    await api.recordAuditDenial?.(
-      {
-        user: { id: actorUserId },
-        claims: { sub: actorUserId, sessionId, aal: 'aal2', issuedAt: 1, expiresAt: 9999999999 },
-        token: 'token',
-        userClient: {},
-        adminClient: {
-          rpc(name: string, args: Record<string, unknown>) {
-            assertEquals(name, 'bff_record_audit_access_denial');
-            assertEquals(args.p_organization_id, organizationId);
-            return Promise.resolve({ data: { recorded: true }, error: null });
-          },
-        },
-      } as unknown as AuthenticatedActor,
-      organizationId,
-      'audit.export',
-    );
 
     const bootstrap = defaultBootstrapDependencies();
     bootstrap.setCorrelationId?.(deviceId);

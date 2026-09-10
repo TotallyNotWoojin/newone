@@ -87,35 +87,6 @@ Deno.test('uncovered API command branches execute their exact scoped RPCs', asyn
       values: { conversationId, patch: { name: 'Coverage' } },
     },
     {
-      kind: 'organization.conversation_controls.update',
-      status: 200,
-      rpc: 'bff_update_organization_conversation_controls',
-      values: {
-        defaultJoinPolicy: 'approval_required',
-        defaultGroupMemberLimit: 50,
-        joinRequestExpiryDays: 7,
-        maxPendingJoinRequestsPerUser: 4,
-        reason: 'Coverage exercise',
-      },
-    },
-    {
-      kind: 'organization.policy.update',
-      status: 200,
-      rpc: 'bff_update_organization_policy',
-      values: {
-        messageRetentionDays: 365,
-        allowMemberDirectMessages: true,
-        dmPolicy: 'request_first',
-        requireMfaForAdmins: true,
-        shiftScheduleAuthoritative: false,
-        groupCreationPolicy: 'managers',
-        allowExternalGuests: true,
-        externalGuestMaxAccessDays: 30,
-        expectedVersion: 1,
-        reason: 'Coverage exercise',
-      },
-    },
-    {
       kind: 'conversation.controls.update',
       status: 200,
       rpc: 'bff_update_conversation_controls',
@@ -126,36 +97,6 @@ Deno.test('uncovered API command branches execute their exact scoped RPCs', asyn
         visibility: 'organization',
         reason: 'Coverage exercise',
       },
-    },
-    {
-      kind: 'conversation.join.request',
-      status: 201,
-      rpc: 'bff_request_conversation_join',
-      values: { conversationId },
-    },
-    {
-      kind: 'conversation.join.cancel',
-      status: 200,
-      rpc: 'bff_cancel_conversation_join_request',
-      values: { requestId, expectedVersion: 1 },
-    },
-    {
-      kind: 'conversation.join.decide',
-      status: 200,
-      rpc: 'bff_decide_conversation_join_request',
-      values: { requestId, expectedVersion: 1, decision: 'approved', reason: 'Approved' },
-    },
-    {
-      kind: 'conversation.discover.query',
-      status: 200,
-      rpc: 'bff_list_discoverable_conversations',
-      values: { limit: 25 },
-    },
-    {
-      kind: 'conversation.join.query',
-      status: 200,
-      rpc: 'bff_list_conversation_join_requests',
-      values: { conversationId, limit: 25 },
     },
     {
       kind: 'conversation.member.add',
@@ -185,49 +126,10 @@ Deno.test('uncovered API command branches execute their exact scoped RPCs', asyn
       },
     },
     {
-      kind: 'ai_output.error_report.review',
-      status: 200,
-      rpc: 'bff_review_ai_output_error_report',
-      values: { reportId, expectedVersion: 1, outcome: 'confirmed_error', reviewNote: 'Confirmed' },
-    },
-    {
-      kind: 'ai_output.regression.propose',
-      status: 201,
-      rpc: 'bff_propose_ai_regression_example',
-      values: {
-        reportId,
-        expectedReportVersion: 1,
-        sourceLanguage: 'en',
-        deidentifiedSourceText: 'Source text',
-        deidentifiedObservedOutput: 'Observed text',
-        deidentifiedExpectedOutput: 'Expected text',
-        deidentificationAttested: true,
-        attestationVersion: 'attestation-v1',
-      },
-    },
-    {
-      kind: 'ai_output.regression.decide',
-      status: 200,
-      rpc: 'bff_decide_ai_regression_example',
-      values: { exampleId, expectedVersion: 1, decision: 'approved', decisionNote: 'Approved' },
-    },
-    {
       kind: 'attachment.state',
       status: 200,
       rpc: 'bff_get_attachment_state',
       values: { attachmentId: requestId },
-    },
-    {
-      kind: 'member.list',
-      status: 200,
-      rpc: 'bff_list_admin_members',
-      values: { afterUserId: null, limit: 50 },
-    },
-    {
-      kind: 'member.suspend',
-      status: 200,
-      rpc: 'bff_suspend_member',
-      values: { targetUserId, reason: 'Policy violation' },
     },
   ];
 
@@ -315,43 +217,6 @@ Deno.test('uncovered route parsers accept exact DTOs and reject boundary expansi
       description: 'Description',
       isArchived: true,
     }, 'conversation.update'],
-    ['PATCH', '/v2/admin/conversation-controls', {
-      organizationId,
-      defaultJoinPolicy: 'approval_required',
-      defaultGroupMemberLimit: 50,
-      joinRequestExpiryDays: 7,
-      maxPendingJoinRequestsPerUser: 5,
-      reason: 'Policy update',
-    }, 'organization.conversation_controls.update'],
-    ['PATCH', '/v2/admin/organization-policy', {
-      organizationId,
-      messageRetentionDays: 365,
-      allowMemberDirectMessages: true,
-      dmPolicy: 'request_first',
-      requireMfaForAdmins: true,
-      shiftScheduleAuthoritative: false,
-      groupCreationPolicy: 'managers',
-      allowExternalGuests: true,
-      externalGuestMaxAccessDays: 30,
-      expectedVersion: 1,
-      reason: 'Policy update',
-    }, 'organization.policy.update'],
-    ['POST', `/v2/conversations/${conversationId}/join-requests`, {
-      organizationId,
-    }, 'conversation.join.request'],
-    ['POST', `/v2/conversation-join-requests/${requestId}/cancel`, {
-      organizationId,
-      expectedVersion: 1,
-    }, 'conversation.join.cancel'],
-    ['POST', `/v2/conversation-join-requests/${requestId}/decision`, {
-      organizationId,
-      expectedVersion: 1,
-      decision: 'rejected',
-      reason: 'Not eligible',
-    }, 'conversation.join.decide'],
-    ['POST', `/v2/conversations/${conversationId}/join-requests/query`, {
-      organizationId,
-    }, 'conversation.join.query'],
     ['POST', `/v2/conversations/${conversationId}/members`, {
       organizationId,
       membershipId: targetUserId,
@@ -360,11 +225,6 @@ Deno.test('uncovered route parsers accept exact DTOs and reject boundary expansi
       organizationId,
     }, 'conversation.member.remove'],
     ['POST', `/v2/attachments/${requestId}/state`, { organizationId }, 'attachment.state'],
-    ['POST', '/v2/admin/members/query', { organizationId }, 'member.list'],
-    ['POST', `/v2/admin/members/${targetUserId}/suspend`, {
-      organizationId,
-      reason: 'Policy violation',
-    }, 'member.suspend'],
   ];
 
   for (const [method, path, body, expectedKind] of cases) {
@@ -513,36 +373,26 @@ Deno.test('API handler covers HEAD, preflight, readiness, unmatched, and safe au
   );
   assertEquals(unmatched.status, 404);
 
-  let denialWrites = 0;
   const denial = createApiHandler(() =>
     apiDependencies({
       authorize: async (_actor, _org, policy) => {
         if (policy.requireAal2) throw new ApiError(403, 'forbidden');
       },
-      recordAuditDenial: async () => {
-        denialWrites += 1;
-        throw new Error('audit sink unavailable');
-      },
     })
   );
-  const now = Date.now();
   const response = await denial(
-    new Request('https://api.newone.example/v2/admin/audit/export', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer access-token',
-        'Content-Type': 'application/json',
-        'Idempotency-Key': 'coverage-request',
+    new Request(
+      `https://api.newone.example/v2/conversations/${conversationId}/controls`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+          'Idempotency-Key': 'coverage-request',
+        },
+        body: JSON.stringify({ organizationId, postingMode: 'admins_only', reason: 'Coverage' }),
       },
-      body: JSON.stringify({
-        organizationId,
-        reasonCode: 'incident_investigation',
-        format: 'json',
-        dateFrom: new Date(now - 60_000).toISOString(),
-        dateTo: new Date(now).toISOString(),
-      }),
-    }),
+    ),
   );
   assertEquals(response.status, 403);
-  assertEquals(denialWrites, 1);
 });

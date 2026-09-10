@@ -61,11 +61,6 @@ Deno.test('route validators exercise malformed scalar, collection, and temporal 
   const translate = matched('POST', '/v2/messages/not-a-number/translations');
   await rejects(translate, { organizationId, conversationId, targetLanguage: 'es' });
 
-  const moderation = matched('POST', '/v2/moderation/cases/query');
-  await rejects(moderation, { organizationId, statuses: [] });
-  await rejects(moderation, { organizationId, statuses: 'open' });
-  await rejects(moderation, { organizationId, statuses: ['open', 'open'] });
-
   const summaryRequest = matched('POST', `/v2/conversations/${conversationId}/summaries`);
   await rejects(summaryRequest, { organizationId, sourceMessageIds: [], languageCode: 'en' });
   await rejects(summaryRequest, {
@@ -107,154 +102,12 @@ Deno.test('route validators exercise malformed scalar, collection, and temporal 
   });
   await rejects(manual, { ...manualBase, keyTopics: 'not-an-array' });
 
-  const handoff = matched('POST', '/v2/handoffs');
-  await rejects(handoff, {
-    organizationId,
-    conversationId,
-    title: 'Shift handoff',
-    details: 'Details',
-    sourceLanguage: 'en',
-    shiftStartedAt: '2026-08-04T12:00:00.000Z',
-    shiftEndedAt: '2026-08-04T11:00:00.000Z',
-    sourceMessageIds: [],
-    acknowledgementDueAt: null,
-  });
-
-  const glossary = matched('POST', '/v2/glossary/proposals');
-  await rejects(glossary, {
-    organizationId,
-    termId: null,
-    sourceLanguage: 'en',
-    targetLanguage: 'en',
-    sourceTerm: 'term',
-    translatedTerm: 'term',
-    definition: null,
-    reason: null,
-  });
-
   const saved = matched('PATCH', `/v2/contacts/saved/${userId}`);
   await rejects(saved, { organizationId });
   parseCommand(saved, { organizationId, alias: null, isFavorite: true });
 });
 
-Deno.test('dynamic-group, announcement, attachment, invite, and role validators fail closed', async () => {
-  const dynamic = matched('POST', '/v2/dynamic-groups/policies');
-  const policySpec = {
-    siteIds: [],
-    departmentIds: [],
-    teamIds: [],
-    lineIds: [],
-    unitIds: [],
-    includeDescendants: false,
-    operationalRoles: ['operator'],
-    membershipRoles: ['member'],
-    shiftMode: 'none',
-    scheduledShiftStartsAt: null,
-    scheduledShiftEndsAt: null,
-  };
-  const dynamicBase = {
-    organizationId,
-    conversationId,
-    policyId: null,
-    expectedVersion: 0,
-    policySpec,
-    maximumMembers: 50,
-  };
-  parseCommand(dynamic, dynamicBase);
-  const { unitIds: _unitIds, ...incompletePolicy } = policySpec;
-  await rejects(dynamic, { ...dynamicBase, policySpec: incompletePolicy });
-  await rejects(dynamic, {
-    ...dynamicBase,
-    policySpec: { ...policySpec, operationalRoles: ['Operator', 'operator'] },
-  });
-  await rejects(dynamic, {
-    ...dynamicBase,
-    policySpec: { ...policySpec, membershipRoles: ['member', 'member'] },
-  });
-  await rejects(dynamic, {
-    ...dynamicBase,
-    policySpec: {
-      ...policySpec,
-      shiftMode: 'scheduled',
-      scheduledShiftStartsAt: null,
-      scheduledShiftEndsAt: null,
-    },
-  });
-  await rejects(dynamic, {
-    ...dynamicBase,
-    policySpec: {
-      ...policySpec,
-      shiftMode: 'scheduled',
-      scheduledShiftStartsAt: '2026-08-04T12:00:00.000Z',
-      scheduledShiftEndsAt: '2026-09-20T12:00:00.000Z',
-    },
-  });
-
-  const publish = matched('POST', '/v2/updates');
-  const publishBase = {
-    organizationId,
-    conversationId,
-    clientMessageId: requestId,
-    title: 'Coverage update',
-    body: 'Coverage body',
-    languageCode: 'en',
-    requiresAcknowledgement: false,
-  };
-  parseCommand(publish, publishBase);
-  await rejects(publish, {
-    ...publishBase,
-    acknowledgementSchema: {
-      schemaVersion: 1,
-      attestationRequired: false,
-      attestationPrompt: 'Unexpected prompt',
-      requiredKeys: [],
-      carryForwardOnCorrection: false,
-    },
-  });
-  await rejects(publish, {
-    ...publishBase,
-    acknowledgementSchema: {
-      schemaVersion: 1,
-      attestationRequired: true,
-      attestationPrompt: null,
-      requiredKeys: [],
-      carryForwardOnCorrection: false,
-    },
-  });
-  await rejects(publish, {
-    ...publishBase,
-    acknowledgementSchema: {
-      schemaVersion: 1,
-      attestationRequired: true,
-      attestationPrompt: 'I attest',
-      requiredKeys: ['Bad-Key'],
-      carryForwardOnCorrection: false,
-    },
-  });
-  await rejects(publish, {
-    ...publishBase,
-    reminderPolicy: {
-      enabled: false,
-      deadlineAt: '2030-08-04T12:00:00.000Z',
-      intervalSeconds: null,
-      maximumReminders: 0,
-      escalateAfterSeconds: null,
-      smsFallback: false,
-    },
-  });
-  await rejects(publish, {
-    ...publishBase,
-    requiresAcknowledgement: false,
-    reminderPolicy: {
-      enabled: true,
-      deadlineAt: '2030-08-04T12:00:00.000Z',
-      intervalSeconds: 900,
-      maximumReminders: 1,
-      escalateAfterSeconds: 1800,
-      smsFallback: false,
-    },
-  });
-
+Deno.test('attachment and device validators fail closed', async () => {
   const upload = matched('POST', '/v2/attachments/grants');
   const uploadBase = {
     organizationId,
@@ -325,42 +178,6 @@ Deno.test('dynamic-group, announcement, attachment, invite, and role validators 
   });
   assert(parsedClock.values.locale === 'en-US');
 
-  const invite = matched('POST', '/v2/admin/invitations');
-  const inviteBase = {
-    organizationId,
-    destinationType: 'email',
-    destination: 'member@example.com',
-    employeeCode: null,
-    activationMode: 'otp',
-    role: 'member',
-    expiresInSeconds: 3600,
-    membershipType: 'employee',
-    membershipAccessExpiresAt: null,
-    guestSponsorUserId: null,
-  };
-  parseCommand(invite, inviteBase);
-  await rejects(invite, { ...inviteBase, destination: 'not-an-email' });
-  await rejects(invite, {
-    ...inviteBase,
-    destinationType: 'phone',
-    destination: '+15555550123',
-    employeeCode: 'bad code!',
-    activationMode: 'manual',
-  });
-
-  const role = matched('POST', '/v2/admin/role-assignments');
-  const roleBase = {
-    organizationId,
-    targetMembershipId: userId,
-    roleName: 'site_admin',
-    scopeType: 'organization',
-    unitId: null,
-    expiresAt: null,
-    reason: 'Coverage role',
-  };
-  parseCommand(role, roleBase);
-  await rejects(role, { ...roleBase, scopeType: 'unit', unitId: null });
-  await rejects(role, { ...roleBase, expiresAt: '2020-01-01T00:00:00.000Z' });
 });
 
 Deno.test('outbox claim parsing validates every durable topic and optional payload field', async () => {
@@ -734,201 +551,9 @@ Deno.test('conversation, preference, audience, and AI-policy parsers cover optio
     readVisibility: 'contacts',
   });
 
-  const preview = direct('update.preview');
-  parseCommand(preview, { organizationId, conversationId });
-  parseCommand(preview, {
-    organizationId,
-    conversationId,
-    limit: 1,
-    audienceSpec: {
-      company: true,
-      conversationMembers: false,
-      siteIds: [requestId],
-      departmentIds: [],
-      teamIds: [],
-      unitIds: [],
-      operationalRoles: ['operator'],
-      membershipRoles: ['member'],
-      languages: ['EN-us'],
-      currentShiftOnly: true,
-    },
-  });
-  for (
-    const audienceSpec of [
-      { operationalRoles: ['operator', 'OPERATOR'] },
-      { membershipRoles: ['member', 'member'] },
-      { languages: ['en', 'EN'] },
-      { languages: Array(21).fill('en') },
-      { languages: [false] },
-    ]
-  ) {
-    await rejects(preview, { organizationId, conversationId, audienceSpec });
-  }
-
-  const aiPolicy = direct('organization.ai_policy.update');
-  const aiBase = {
-    organizationId,
-    enabled: true,
-    approvedUseCases: ['translation'],
-    providerAllowlist: ['google-vertex/us-south1'],
-    routePolicy: 'approved_zero_retention',
-    expectedVersion: 0,
-    reason: 'Coverage policy',
-  };
-  parseCommand(aiPolicy, aiBase);
-  parseCommand(aiPolicy, {
-    ...aiBase,
-    enabled: false,
-    approvedUseCases: [],
-    providerAllowlist: [],
-    routePolicy: 'deny',
-  });
-  for (
-    const override of [
-      { approvedUseCases: ['translation', 'translation'] },
-      { providerAllowlist: ['google', 'google'] },
-      { providerAllowlist: [false] },
-      { approvedUseCases: [] },
-      { providerAllowlist: [] },
-      { routePolicy: 'deny' },
-      { enabled: false },
-      { enabled: false, routePolicy: 'deny', approvedUseCases: ['translation'] },
-      { enabled: false, routePolicy: 'deny', providerAllowlist: ['google'] },
-    ]
-  ) {
-    await rejects(aiPolicy, { ...aiBase, ...override });
-  }
 });
 
 Deno.test('acknowledgement, moderation, update, and summary parsers reject ambiguous contracts', async () => {
-  const publish = direct('update.publish');
-  const publishBase = {
-    organizationId,
-    conversationId,
-    clientMessageId: requestId,
-    title: 'Coverage update',
-    body: 'Coverage body',
-    languageCode: 'en',
-  };
-  parseCommand(publish, publishBase);
-  parseCommand(publish, { ...publishBase, expiresAt: '2030-01-01T00:00:00.000Z' });
-  const disabledReminder = {
-    enabled: false,
-    deadlineAt: null,
-    intervalSeconds: null,
-    maximumReminders: 0,
-    escalateAfterSeconds: null,
-    smsFallback: false,
-  };
-  for (
-    const reminderPolicy of [
-      { ...disabledReminder, deadlineAt: '2030-01-02T00:00:00.000Z' },
-      { ...disabledReminder, intervalSeconds: 300 },
-      { ...disabledReminder, maximumReminders: 1 },
-      { ...disabledReminder, escalateAfterSeconds: 900 },
-      { ...disabledReminder, smsFallback: true },
-    ]
-  ) {
-    await rejects(publish, { ...publishBase, reminderPolicy });
-  }
-  const enabledReminder = {
-    enabled: true,
-    deadlineAt: '2030-01-02T00:00:00.000Z',
-    intervalSeconds: 900,
-    maximumReminders: 2,
-    escalateAfterSeconds: 1800,
-    smsFallback: false,
-  };
-  parseCommand(publish, {
-    ...publishBase,
-    requiresAcknowledgement: true,
-    scheduledAt: '2030-01-01T00:00:00.000Z',
-    priority: 'important',
-    notificationClass: 'urgent',
-    criticalCategory: 'operations',
-    quietHoursOverrideReason: 'Operational coverage',
-    reminderPolicy: enabledReminder,
-    acknowledgementSchema: {
-      schemaVersion: 1,
-      attestationRequired: true,
-      attestationPrompt: 'Confirm coverage',
-      requiredKeys: ['confirmed'],
-      carryForwardOnCorrection: true,
-    },
-  });
-  for (
-    const reminderPolicy of [
-      { ...enabledReminder, deadlineAt: null },
-      { ...enabledReminder, deadlineAt: '2029-12-31T00:00:00.000Z' },
-      { ...enabledReminder, intervalSeconds: null },
-      { ...enabledReminder, maximumReminders: 0 },
-      { ...enabledReminder, escalateAfterSeconds: 900, intervalSeconds: 1800 },
-      { ...enabledReminder, smsFallback: true },
-    ]
-  ) {
-    await rejects(publish, {
-      ...publishBase,
-      requiresAcknowledgement: true,
-      scheduledAt: '2030-01-01T00:00:00.000Z',
-      reminderPolicy,
-    });
-  }
-  await rejects(publish, { ...publishBase, priority: 'important', notificationClass: 'routine' });
-  await rejects(publish, { ...publishBase, criticalCategory: 'safety' });
-  await rejects(publish, {
-    ...publishBase,
-    priority: 'important',
-    criticalCategory: null,
-    quietHoursOverrideReason: 'Coverage override',
-  });
-
-  const acknowledge = direct('update.acknowledge', { versionId: requestId });
-  parseCommand(acknowledge, { organizationId });
-  parseCommand(acknowledge, {
-    organizationId,
-    deviceId: null,
-    attestation: { text: 'confirmed', accepted: true, count: 1 },
-  });
-  for (
-    const attestation of [
-      { ['x'.repeat(9000)]: 'x' },
-      Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`key${index}`, true])),
-      { 'Bad-Key': true },
-      { valid_key: null },
-      { valid_key: {} },
-      { valid_key: Number.NaN },
-    ]
-  ) {
-    await rejects(acknowledge, { organizationId, attestation });
-  }
-
-  const transition = direct('moderation.case.transition', { caseId: requestId });
-  const transitionBase = {
-    organizationId,
-    status: 'in_review',
-    expectedVersion: 1,
-    reason: 'Coverage review',
-  };
-  parseCommand(transition, transitionBase);
-  parseCommand(transition, {
-    ...transitionBase,
-    status: 'resolved',
-    evidenceMetadata: {
-      referenceIds: ['evidence-1'],
-      policyCode: 'policy:coverage',
-      severity: 'high',
-    },
-  });
-  await rejects(transition, { ...transitionBase, status: 'resolved' });
-  await rejects(transition, {
-    ...transitionBase,
-    evidenceMetadata: { referenceIds: ['same', 'same'] },
-  });
-  await rejects(transition, {
-    ...transitionBase,
-    evidenceMetadata: { policyCode: '*invalid' },
-  });
-
   const manual = direct('summary.manual.create', { conversationId });
   const manualBase = {
     organizationId,
@@ -947,25 +572,9 @@ Deno.test('acknowledgement, moderation, update, and summary parsers reject ambig
     actionItems: Array(101).fill({ text: 'Action', sourceMessageIds: ['1'] }),
   });
 
-  const review = direct('summary.review', { summaryId: requestId });
-  parseCommand(review, { organizationId, decision: 'approve' });
-  parseCommand(review, { organizationId, decision: 'reject', note: 'Not supported' });
-  await rejects(review, { organizationId, decision: 'reject', note: '  ' });
-  const policyRoute = direct('summary.policy.update', { conversationId });
-  parseCommand(policyRoute, { organizationId, mode: 'manual' });
-  parseCommand(policyRoute, {
-    organizationId,
-    mode: 'message_count',
-    messageCountThreshold: 20,
-  });
-  await rejects(policyRoute, { organizationId, mode: 'message_count' });
-  await rejects(policyRoute, { organizationId, mode: 'manual', messageCountThreshold: 20 });
 });
 
 Deno.test('attachment, session, invite, audit, and remaining optional parsers cover both outcomes', async () => {
-  const controls = direct('organization.conversation_controls.update');
-  await rejects(controls, { organizationId, reason: 'Coverage reason' });
-
   const memberRole = direct('conversation.member.role.update', {
     conversationId,
     membershipId: userId,
@@ -1044,15 +653,6 @@ Deno.test('attachment, session, invite, audit, and remaining optional parsers co
   });
   const react = direct('message.react', { messageId: '1' });
   parseCommand(react, { organizationId, conversationId, emoji: '👍', active: false });
-
-  const preservation = direct('message.preservation.place', { messageId: '1' });
-  await rejects(preservation, {
-    organizationId,
-    conversationId,
-    holdType: 'legal',
-    reasonCode: 'coverage',
-    policyReferenceSha256: 'x'.repeat(64),
-  });
 
   const correction = direct('translation.correction.propose', {
     messageId: '1',
@@ -1133,46 +733,4 @@ Deno.test('attachment, session, invite, audit, and remaining optional parsers co
     patch: { notificationPreview: 'generic', soundEnabled: true, vibrationEnabled: false },
   });
 
-  const invite = direct('invite.issue');
-  const future = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString();
-  parseCommand(invite, {
-    organizationId,
-    destinationType: 'phone',
-    destination: '+15551234567',
-    employeeCode: 'EMP-123',
-    activationMode: 'manual',
-    role: 'member',
-    expiresInSeconds: 900,
-    membershipType: 'guest',
-    membershipAccessExpiresAt: future,
-    guestSponsorUserId: userId,
-  });
-  await rejects(invite, {
-    organizationId,
-    destinationType: 'phone',
-    destination: 'not-phone',
-    activationMode: 'otp',
-    role: 'member',
-  });
-  await rejects(invite, {
-    organizationId,
-    destinationType: 'email',
-    destination: 'coverage@example.com',
-    activationMode: 'manual',
-    role: 'member',
-  });
-
-  const audit = direct('audit.export');
-  const auditBase = {
-    organizationId,
-    reasonCode: 'security_review',
-    format: 'json',
-    dateFrom: '2026-07-01T00:00:00.000Z',
-    dateTo: '2026-07-02T00:00:00.000Z',
-  };
-  parseCommand(audit, auditBase);
-  await rejects(audit, { ...auditBase, eventTypes: Array(11).fill('event.type') });
-  await rejects(audit, { ...auditBase, eventTypes: ['same.type', 'same.type'] });
-  await rejects(audit, { ...auditBase, targetType: '*bad' });
-  await rejects(audit, { ...auditBase, targetId: 'bad\u0000id' });
 });

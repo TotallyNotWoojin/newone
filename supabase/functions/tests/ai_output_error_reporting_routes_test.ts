@@ -52,57 +52,6 @@ Deno.test('AI output intake accepts one exact target and strict consent fields',
   );
 });
 
-Deno.test('AI reviewer list detail and command routes require recent AAL2', () => {
-  const queue = matchRoute('POST', '/v2/ai-output-error-reports/review/query');
-  const detail = matchRoute('POST', `/v2/ai-output-error-reports/${reportId}/query`);
-  const review = matchRoute('POST', `/v2/ai-output-error-reports/${reportId}/review`);
-  const propose = matchRoute('POST', `/v2/ai-output-error-reports/${reportId}/regression-examples`);
-  const decide = matchRoute('POST', `/v2/ai-regression-examples/${exampleId}/decision`);
-  for (const route of [queue, detail, review, propose, decide]) {
-    assert(route);
-    assertEquals(route.requireAal2, true);
-    assertEquals(route.recentAuthSeconds, 300);
-  }
-  assert(queue);
-  assert(detail);
-  assert(review);
-  assertEquals(queue.idempotencyRequired, false);
-  assertEquals(detail.idempotencyRequired, false);
-  assertEquals(
-    parseCommand(review, {
-      organizationId,
-      expectedVersion: 1,
-      outcome: 'confirmed_error',
-      reviewNote: 'The preserved output contradicts its source.',
-    }).values.reportId,
-    reportId,
-  );
-});
-
-Deno.test('AI regression proposal requires explicit attestation and changed expected output', async () => {
-  const route = matchRoute('POST', `/v2/ai-output-error-reports/${reportId}/regression-examples`);
-  assert(route);
-  const body = {
-    organizationId,
-    expectedReportVersion: 2,
-    sourceLanguage: 'ko',
-    deidentifiedSourceText: 'Deidentified source',
-    deidentifiedObservedOutput: 'Incorrect output',
-    deidentifiedExpectedOutput: 'Correct output',
-    deidentificationAttested: true,
-    attestationVersion: 'human-deidentification-v1',
-  };
-  assertEquals(parseCommand(route, body).values.deidentificationAttested, true);
-  await assertRejects(() => parseCommand(route, { ...body, deidentificationAttested: false }));
-  await assertRejects(() =>
-    parseCommand(route, {
-      ...body,
-      deidentifiedExpectedOutput: body.deidentifiedObservedOutput,
-    })
-  );
-  await assertRejects(() => parseCommand(route, { ...body, hiddenIdentifier: 'employee-7' }));
-});
-
 Deno.test('AI regression export is not exposed as a client route', () => {
   assertEquals(matchRoute('POST', '/v2/ai-regression-examples/claim'), null);
   assertEquals(matchRoute('POST', '/v2/ai-regression-examples/export'), null);
@@ -130,8 +79,6 @@ Deno.test('AI output routes map only to their scoped public BFF RPCs', async () 
   } as unknown as AuthenticatedActor;
   const cases = [
     ['/v2/ai-output-error-reports/self/query', { organizationId, limit: 5 }],
-    ['/v2/ai-output-error-reports/review/query', { organizationId, limit: 5 }],
-    [`/v2/ai-output-error-reports/${reportId}/query`, { organizationId }],
   ] as const;
   for (const [path, body] of cases) {
     const route = matchRoute('POST', path);
@@ -140,9 +87,6 @@ Deno.test('AI output routes map only to their scoped public BFF RPCs', async () 
   }
   assertEquals(calls.map((call) => call.name), [
     'bff_list_my_ai_output_error_reports',
-    'bff_list_ai_output_error_reports_for_review',
-    'bff_read_ai_output_error_report',
   ]);
-  assertEquals(calls[2]?.args.p_report_id, reportId);
   assert(!calls.some((call) => call.name.includes('claim')));
 });

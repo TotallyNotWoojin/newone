@@ -99,19 +99,9 @@ export type RouteKind =
   | 'conversation.group'
   | 'conversation.group.candidates'
   | 'conversation.member.candidates'
-  | 'conversation.incident.close'
   | 'conversation.update'
   | 'conversation.preferences.update'
-  | 'organization.conversation_controls.update'
-  | 'organization.policy.update'
-  | 'organization.ai_policy.read'
-  | 'organization.ai_policy.update'
   | 'conversation.controls.update'
-  | 'conversation.join.request'
-  | 'conversation.join.cancel'
-  | 'conversation.join.decide'
-  | 'conversation.discover.query'
-  | 'conversation.join.query'
   | 'organization.preferences.update'
   | 'conversation.member.add'
   | 'conversation.member.remove'
@@ -131,32 +121,18 @@ export type RouteKind =
   | 'message.report'
   | 'conversation.report'
   | 'member.report'
-  | 'moderation.case.query'
-  | 'moderation.case.read'
-  | 'moderation.case.assign'
-  | 'moderation.case.claim'
-  | 'moderation.case.transition'
   | 'message.translate'
   | 'message.pin'
   | 'message.receipt'
   | 'message.hide_for_me'
   | 'message.link_preview'
   | 'message.forward'
-  | 'message.preservation.place'
-  | 'message.preservation.release'
   | 'translation.correction.propose'
   | 'translation.correction.review'
   | 'summary.request'
   | 'summary.manual.create'
-  | 'summary.review'
-  | 'summary.policy.update'
   | 'ai_output.error.report'
   | 'ai_output.error_reports.self.query'
-  | 'ai_output.error_reports.review.query'
-  | 'ai_output.error_report.read'
-  | 'ai_output.error_report.review'
-  | 'ai_output.regression.propose'
-  | 'ai_output.regression.decide'
   | 'profile.update'
   | 'contact.request'
   | 'contact.message_request'
@@ -168,28 +144,9 @@ export type RouteKind =
   | 'member.unblock'
   | 'person.mute'
   | 'person.unmute'
-  | 'update.publish'
-  | 'update.preview'
-  | 'update.manage.list'
-  | 'update.non_acknowledgers.list'
-  | 'update.cancel'
-  | 'update.read'
-  | 'update.acknowledge'
-  | 'update.correct'
-  | 'handoff.create'
   | 'handoff.sign'
   | 'handoff.acknowledge'
-  | 'handoff.correct'
-  | 'action.propose'
   | 'action.confirm'
-  | 'action.transition'
-  | 'dynamic_group.list'
-  | 'dynamic_group.save'
-  | 'dynamic_group.preview'
-  | 'dynamic_group.publish'
-  | 'dynamic_group.pause'
-  | 'glossary.propose'
-  | 'glossary.review'
   | 'attachment.grant'
   | 'attachment.complete'
   | 'attachment.state'
@@ -198,15 +155,8 @@ export type RouteKind =
   | 'device.preferences.update'
   | 'device.mute.read'
   | 'device.mute.update'
-  | 'invite.issue'
   | 'session.list'
   | 'session.revoke.self'
-  | 'session.revoke.admin'
-  | 'member.list'
-  | 'member.suspend'
-  | 'role_assignment.list'
-  | 'role_assignment.grant'
-  | 'role_assignment.revoke'
   | 'audit.export';
 
 export interface MatchedRoute {
@@ -271,14 +221,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     idempotencyRequired: false,
   },
   {
-    method: 'POST',
-    kind: 'conversation.incident.close',
-    template: '/v2/conversations/:conversationId/incident/close',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
     method: 'PATCH',
     kind: 'conversation.update',
     template: '/v2/conversations/:conversationId',
@@ -298,78 +240,11 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
   },
   {
     method: 'PATCH',
-    kind: 'organization.conversation_controls.update',
-    template: '/v2/admin/conversation-controls',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'PATCH',
-    kind: 'organization.policy.update',
-    template: '/v2/admin/organization-policy',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'organization.ai_policy.read',
-    template: '/v2/admin/ai-policy/query',
-    status: 200,
-    requireAal2: true,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'PATCH',
-    kind: 'organization.ai_policy.update',
-    template: '/v2/admin/ai-policy',
-    status: 200,
-    requireAal2: true,
-  },
-  {
-    method: 'PATCH',
     kind: 'conversation.controls.update',
     template: '/v2/conversations/:conversationId/controls',
     status: 200,
     requireAal2: true,
     recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'conversation.join.request',
-    template: '/v2/conversations/:conversationId/join-requests',
-    status: 201,
-  },
-  {
-    method: 'POST',
-    kind: 'conversation.join.cancel',
-    template: '/v2/conversation-join-requests/:requestId/cancel',
-    status: 200,
-  },
-  {
-    method: 'POST',
-    kind: 'conversation.join.decide',
-    template: '/v2/conversation-join-requests/:requestId/decision',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'conversation.discover.query',
-    template: '/v2/conversations/discover/query',
-    status: 200,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'conversation.join.query',
-    template: '/v2/conversations/:conversationId/join-requests/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
   },
   {
     method: 'POST',
@@ -455,48 +330,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
   },
   {
     method: 'POST',
-    kind: 'moderation.case.query',
-    template: '/v2/moderation/cases/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'moderation.case.read',
-    template: '/v2/moderation/cases/:caseId/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'moderation.case.assign',
-    template: '/v2/moderation/cases/:caseId/assign',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'moderation.case.claim',
-    template: '/v2/moderation/cases/:caseId/claim',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'moderation.case.transition',
-    template: '/v2/moderation/cases/:caseId/transition',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
     kind: 'message.translate',
     template: '/v2/messages/:messageId/translations',
     status: 202,
@@ -529,22 +362,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
   },
   {
     method: 'POST',
-    kind: 'message.preservation.place',
-    template: '/v2/admin/messages/:messageId/preservation-holds',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'message.preservation.release',
-    template: '/v2/admin/message-preservation-holds/:holdId/release',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
     kind: 'translation.correction.propose',
     template: '/v2/messages/:messageId/translations/:targetLanguage/corrections',
     status: 201,
@@ -571,18 +388,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
   },
   {
     method: 'POST',
-    kind: 'summary.review',
-    template: '/v2/summaries/:summaryId/review',
-    status: 200,
-  },
-  {
-    method: 'PUT',
-    kind: 'summary.policy.update',
-    template: '/v2/conversations/:conversationId/summary-policy',
-    status: 200,
-  },
-  {
-    method: 'POST',
     kind: 'ai_output.error.report',
     template: '/v2/ai-output-error-reports',
     status: 201,
@@ -593,48 +398,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     template: '/v2/ai-output-error-reports/self/query',
     status: 200,
     idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'ai_output.error_reports.review.query',
-    template: '/v2/ai-output-error-reports/review/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'ai_output.error_report.read',
-    template: '/v2/ai-output-error-reports/:reportId/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'ai_output.error_report.review',
-    template: '/v2/ai-output-error-reports/:reportId/review',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'ai_output.regression.propose',
-    template: '/v2/ai-output-error-reports/:reportId/regression-examples',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'ai_output.regression.decide',
-    template: '/v2/ai-regression-examples/:exampleId/decision',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
   },
   { method: 'PATCH', kind: 'profile.update', template: '/v2/profile', status: 200 },
   { method: 'POST', kind: 'profile.avatar.grant', template: '/v2/profile/avatar/grants', status: 201 },
@@ -707,152 +470,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     template: '/v2/people/:membershipId/mute',
     status: 200,
   },
-  {
-    method: 'POST',
-    kind: 'update.publish',
-    template: '/v2/updates',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'update.preview',
-    template: '/v2/updates/audience/preview',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'update.manage.list',
-    template: '/v2/updates/manage/list',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'update.non_acknowledgers.list',
-    template: '/v2/updates/:announcementId/non-acknowledgers',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'update.cancel',
-    template: '/v2/updates/:announcementId/cancel',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'update.read',
-    template: '/v2/updates/:announcementId/read',
-    status: 200,
-  },
-  {
-    method: 'POST',
-    kind: 'update.acknowledge',
-    template: '/v2/updates/:versionId/acknowledgements',
-    status: 201,
-  },
-  {
-    method: 'POST',
-    kind: 'update.correct',
-    template: '/v2/updates/:announcementId/corrections',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  { method: 'POST', kind: 'handoff.create', template: '/v2/handoffs', status: 201 },
-  { method: 'POST', kind: 'handoff.sign', template: '/v2/handoffs/:versionId/sign', status: 200 },
-  {
-    method: 'POST',
-    kind: 'handoff.acknowledge',
-    template: '/v2/handoffs/:versionId/acknowledge',
-    status: 201,
-  },
-  {
-    method: 'POST',
-    kind: 'handoff.correct',
-    template: '/v2/handoffs/:handoffId/corrections',
-    status: 201,
-  },
-  { method: 'POST', kind: 'action.propose', template: '/v2/actions/proposals', status: 201 },
-  {
-    method: 'POST',
-    kind: 'action.confirm',
-    template: '/v2/actions/:actionId/confirm',
-    status: 200,
-  },
-  {
-    method: 'POST',
-    kind: 'action.transition',
-    template: '/v2/actions/:actionId/status',
-    status: 200,
-  },
-  {
-    method: 'POST',
-    kind: 'dynamic_group.list',
-    template: '/v2/dynamic-groups/policies/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'dynamic_group.save',
-    template: '/v2/dynamic-groups/policies',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'dynamic_group.preview',
-    template: '/v2/dynamic-groups/:policyId/preview',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'dynamic_group.publish',
-    template: '/v2/dynamic-groups/:policyId/publish',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'dynamic_group.pause',
-    template: '/v2/dynamic-groups/:policyId/pause',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'glossary.propose',
-    template: '/v2/glossary/proposals',
-    status: 201,
-  },
-  {
-    method: 'POST',
-    kind: 'glossary.review',
-    template: '/v2/glossary/versions/:versionId/review',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
   { method: 'POST', kind: 'attachment.grant', template: '/v2/attachments/grants', status: 201 },
   {
     method: 'POST',
@@ -896,14 +513,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
   },
   {
     method: 'POST',
-    kind: 'invite.issue',
-    template: '/v2/admin/invitations',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
     kind: 'session.list',
     template: '/v2/auth/sessions/list',
     status: 200,
@@ -914,65 +523,6 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     kind: 'session.revoke.self',
     template: '/v2/auth/sessions/:sessionId/revoke',
     status: 200,
-  },
-  {
-    method: 'POST',
-    kind: 'session.revoke.admin',
-    template: '/v2/admin/sessions/:sessionId/revoke',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'member.list',
-    template: '/v2/admin/members/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'member.suspend',
-    template: '/v2/admin/members/:membershipId/suspend',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 300,
-  },
-  {
-    method: 'POST',
-    kind: 'role_assignment.list',
-    template: '/v2/admin/role-assignments/query',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-    idempotencyRequired: false,
-  },
-  {
-    method: 'POST',
-    kind: 'role_assignment.grant',
-    template: '/v2/admin/role-assignments',
-    status: 201,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'role_assignment.revoke',
-    template: '/v2/admin/role-assignments/:assignmentId/revoke',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-  },
-  {
-    method: 'POST',
-    kind: 'audit.export',
-    template: '/v2/admin/audit/export',
-    status: 200,
-    requireAal2: true,
-    recentAuthSeconds: 900,
-    idempotencyRequired: false,
   },
 ];
 
@@ -1511,16 +1061,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         },
       };
     }
-    case 'conversation.incident.close': {
-      onlyKeys(body, ['organizationId', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: pathUuid(route, 'conversationId'),
-          reason: requiredString(body, 'reason', { min: 3, max: 2000 }),
-        },
-      };
-    }
     case 'conversation.update': {
       onlyKeys(body, ['organizationId', 'name', 'description', 'isArchived']);
       const patch: JsonObject = {};
@@ -1643,109 +1183,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       if (Object.keys(patch).length === 0) throw new ApiError(400, 'bad_request');
       return { organizationId: organization(body), values: { patch } };
     }
-    case 'organization.conversation_controls.update': {
-      onlyKeys(body, [
-        'organizationId',
-        'defaultJoinPolicy',
-        'defaultGroupMemberLimit',
-        'joinRequestExpiryDays',
-        'maxPendingJoinRequestsPerUser',
-        'reason',
-      ]);
-      const values: JsonObject = {
-        defaultJoinPolicy: optionalOneOf(
-          body,
-          'defaultJoinPolicy',
-          ['invite_only', 'approval_required'] as const,
-        ) ?? null,
-        defaultGroupMemberLimit: optionalInteger(body, 'defaultGroupMemberLimit', 2, 5000) ?? null,
-        joinRequestExpiryDays: optionalInteger(body, 'joinRequestExpiryDays', 1, 30) ?? null,
-        maxPendingJoinRequestsPerUser:
-          optionalInteger(body, 'maxPendingJoinRequestsPerUser', 1, 100) ?? null,
-        reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-      };
-      if (
-        values.defaultJoinPolicy === null && values.defaultGroupMemberLimit === null &&
-        values.joinRequestExpiryDays === null &&
-        values.maxPendingJoinRequestsPerUser === null
-      ) throw new ApiError(400, 'bad_request');
-      return { organizationId: organization(body), values };
-    }
-    case 'organization.policy.update': {
-      onlyKeys(body, [
-        'organizationId',
-        'messageRetentionDays',
-        'allowMemberDirectMessages',
-        'dmPolicy',
-        'requireMfaForAdmins',
-        'shiftScheduleAuthoritative',
-        'groupCreationPolicy',
-        'allowExternalGuests',
-        'externalGuestMaxAccessDays',
-        'expectedVersion',
-        'reason',
-      ]);
-      return {
-        organizationId: organization(body),
-        values: {
-          messageRetentionDays: integer(body.messageRetentionDays, 1, 3650),
-          allowMemberDirectMessages: bool(body.allowMemberDirectMessages),
-          dmPolicy: oneOf(
-            body.dmPolicy,
-            ['directory_open', 'request_first', 'scoped_unit'] as const,
-          ),
-          requireMfaForAdmins: bool(body.requireMfaForAdmins),
-          shiftScheduleAuthoritative: bool(body.shiftScheduleAuthoritative),
-          groupCreationPolicy: oneOf(
-            body.groupCreationPolicy,
-            ['members', 'managers', 'admins'] as const,
-          ),
-          allowExternalGuests: bool(body.allowExternalGuests),
-          externalGuestMaxAccessDays: integer(body.externalGuestMaxAccessDays, 1, 365),
-          expectedVersion: integer(body.expectedVersion, 1, Number.MAX_SAFE_INTEGER),
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'organization.ai_policy.read':
-      onlyKeys(body, ['organizationId']);
-      return { organizationId: organization(body), values: {} };
-    case 'organization.ai_policy.update': {
-      onlyKeys(body, [
-        'organizationId',
-        'enabled',
-        'approvedUseCases',
-        'providerAllowlist',
-        'routePolicy',
-        'expectedVersion',
-        'reason',
-      ]);
-      const enabled = bool(body.enabled);
-      const approvedUseCases = aiUseCaseArray(body.approvedUseCases);
-      const providerAllowlist = aiProviderArray(body.providerAllowlist);
-      const routePolicy = oneOf(body.routePolicy, ['deny', 'approved_zero_retention'] as const);
-      if (
-        (enabled && (
-          routePolicy !== 'approved_zero_retention' || approvedUseCases.length === 0 ||
-          providerAllowlist.length === 0
-        )) ||
-        (!enabled && (
-          routePolicy !== 'deny' || approvedUseCases.length !== 0 ||
-          providerAllowlist.length !== 0
-        ))
-      ) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          enabled,
-          approvedUseCases,
-          providerAllowlist,
-          routePolicy,
-          expectedVersion: integer(body.expectedVersion, 0, 2_147_483_646),
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
     case 'conversation.controls.update': {
       onlyKeys(body, ['organizationId', 'postingMode', 'joinPolicy', 'visibility', 'reason']);
       const values: JsonObject = {
@@ -1771,52 +1208,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         values.postingMode === null && values.joinPolicy === null && values.visibility === null
       ) throw new ApiError(400, 'bad_request');
       return { organizationId: organization(body), values };
-    }
-    case 'conversation.join.request': {
-      onlyKeys(body, ['organizationId']);
-      return {
-        organizationId: organization(body),
-        values: { conversationId: pathUuid(route, 'conversationId') },
-      };
-    }
-    case 'conversation.join.cancel': {
-      onlyKeys(body, ['organizationId', 'expectedVersion']);
-      return {
-        organizationId: organization(body),
-        values: {
-          requestId: pathUuid(route, 'requestId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2147483647),
-        },
-      };
-    }
-    case 'conversation.join.decide': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'decision', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          requestId: pathUuid(route, 'requestId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2147483647),
-          decision: oneOf(body.decision, ['approved', 'rejected'] as const),
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'conversation.discover.query': {
-      onlyKeys(body, ['organizationId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: { limit: optionalInteger(body, 'limit', 1, 100) ?? 50 },
-      };
-    }
-    case 'conversation.join.query': {
-      onlyKeys(body, ['organizationId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: pathUuid(route, 'conversationId'),
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 100,
-        },
-      };
     }
     case 'conversation.member.add': {
       onlyKeys(body, ['organizationId', 'membershipId', 'role']);
@@ -2181,87 +1572,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         },
       };
     }
-    case 'moderation.case.query': {
-      onlyKeys(body, ['organizationId', 'statuses', 'cursor', 'limit']);
-      if (!Array.isArray(body.statuses) || body.statuses.length < 1 || body.statuses.length > 5) {
-        throw new ApiError(400, 'bad_request');
-      }
-      const statuses = body.statuses.map((status) =>
-        oneOf(status, ['open', 'assigned', 'in_review', 'resolved', 'dismissed'] as const)
-      );
-      if (new Set(statuses).size !== statuses.length) throw new ApiError(400, 'bad_request');
-      let beforeUpdatedAt: string | null = null;
-      let beforeCaseId: string | null = null;
-      if (body.cursor !== undefined && body.cursor !== null) {
-        const cursor = asObject(body.cursor);
-        onlyKeys(cursor, ['beforeUpdatedAt', 'beforeCaseId']);
-        beforeUpdatedAt = isoDate(cursor.beforeUpdatedAt);
-        beforeCaseId = uuid(cursor.beforeCaseId);
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          statuses,
-          beforeUpdatedAt,
-          beforeCaseId,
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 50,
-        },
-      };
-    }
-    case 'moderation.case.read': {
-      onlyKeys(body, ['organizationId']);
-      return {
-        organizationId: organization(body),
-        values: { caseId: pathUuid(route, 'caseId') },
-      };
-    }
-    case 'moderation.case.assign': {
-      onlyKeys(body, ['organizationId', 'investigatorUserId', 'expectedVersion', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          caseId: pathUuid(route, 'caseId'),
-          investigatorUserId: requiredUuid(body, 'investigatorUserId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          reason: requiredString(body, 'reason', { min: 3, max: 1000 }),
-        },
-      };
-    }
-    case 'moderation.case.claim': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          caseId: pathUuid(route, 'caseId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          reason: requiredString(body, 'reason', { min: 3, max: 1000 }),
-        },
-      };
-    }
-    case 'moderation.case.transition': {
-      onlyKeys(body, [
-        'organizationId',
-        'status',
-        'expectedVersion',
-        'reason',
-        'evidenceMetadata',
-      ]);
-      const status = oneOf(body.status, ['in_review', 'resolved', 'dismissed'] as const);
-      const evidenceMetadata = moderationEvidenceMetadata(body.evidenceMetadata ?? {});
-      if (status !== 'in_review' && Object.keys(evidenceMetadata).length === 0) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          caseId: pathUuid(route, 'caseId'),
-          status,
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          reason: requiredString(body, 'reason', { min: 3, max: 2000 }),
-          evidenceMetadata,
-        },
-      };
-    }
     case 'message.translate': {
       onlyKeys(body, ['organizationId', 'conversationId', 'targetLanguage']);
       return {
@@ -2328,42 +1638,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           sourceMessageId: pathMessageId(route),
           targetConversationId: requiredUuid(body, 'targetConversationId'),
           clientNonce: requiredUuid(body, 'clientMessageId'),
-        },
-      };
-    }
-    case 'message.preservation.place': {
-      onlyKeys(body, [
-        'organizationId',
-        'conversationId',
-        'holdType',
-        'reasonCode',
-        'policyReferenceSha256',
-      ]);
-      const policyReferenceSha256 = requiredString(body, 'policyReferenceSha256', {
-        min: 64,
-        max: 64,
-      });
-      if (!SHA256_PATTERN.test(policyReferenceSha256)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          messageId: pathMessageId(route),
-          holdType: oneOf(body.holdType, ['legal', 'incident_preservation'] as const),
-          reasonCode: requiredString(body, 'reasonCode', { min: 3, max: 80 }),
-          policyReferenceSha256,
-        },
-      };
-    }
-    case 'message.preservation.release': {
-      onlyKeys(body, ['organizationId', 'releaseReasonCode']);
-      return {
-        organizationId: organization(body),
-        values: {
-          holdId: pathUuid(route, 'holdId'),
-          releaseReasonCode: requiredString(body, 'releaseReasonCode', { min: 3, max: 80 }),
         },
       };
     }
@@ -2460,38 +1734,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         },
       };
     }
-    case 'summary.review': {
-      onlyKeys(body, ['organizationId', 'decision', 'note']);
-      const decision = oneOf(body.decision, ['approve', 'reject'] as const);
-      const note = optionalString(body, 'note', { max: 4000, nullable: true }) ?? null;
-      if (decision === 'reject' && (!note || note.trim().length < 3)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          summaryId: pathUuid(route, 'summaryId'),
-          decision,
-          note,
-        },
-      };
-    }
-    case 'summary.policy.update': {
-      onlyKeys(body, ['organizationId', 'mode', 'messageCountThreshold']);
-      const mode = oneOf(body.mode, ['manual', 'message_count', 'shift_close'] as const);
-      const threshold = optionalInteger(body, 'messageCountThreshold', 10, 500);
-      if ((mode === 'message_count') !== (threshold !== undefined)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: pathUuid(route, 'conversationId'),
-          mode,
-          messageCountThreshold: threshold ?? null,
-        },
-      };
-    }
     case 'ai_output.error.report': {
       onlyKeys(body, [
         'organizationId',
@@ -2548,88 +1790,11 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         },
       };
     }
-    case 'ai_output.error_reports.self.query':
-    case 'ai_output.error_reports.review.query': {
+    case 'ai_output.error_reports.self.query': {
       onlyKeys(body, ['organizationId', 'limit']);
       return {
         organizationId: organization(body),
         values: { limit: optionalInteger(body, 'limit', 1, 100) ?? 50 },
-      };
-    }
-    case 'ai_output.error_report.read': {
-      onlyKeys(body, ['organizationId']);
-      return {
-        organizationId: organization(body),
-        values: { reportId: pathUuid(route, 'reportId') },
-      };
-    }
-    case 'ai_output.error_report.review': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'outcome', 'reviewNote']);
-      return {
-        organizationId: organization(body),
-        values: {
-          reportId: pathUuid(route, 'reportId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2147483647),
-          outcome: oneOf(
-            body.outcome,
-            ['confirmed_error', 'not_an_error', 'needs_context'] as const,
-          ),
-          reviewNote: requiredString(body, 'reviewNote', { min: 3, max: 4000 }),
-        },
-      };
-    }
-    case 'ai_output.regression.propose': {
-      onlyKeys(body, [
-        'organizationId',
-        'expectedReportVersion',
-        'sourceLanguage',
-        'deidentifiedSourceText',
-        'deidentifiedObservedOutput',
-        'deidentifiedExpectedOutput',
-        'deidentificationAttested',
-        'attestationVersion',
-      ]);
-      const observed = requiredString(body, 'deidentifiedObservedOutput', {
-        min: 1,
-        max: 30000,
-        trim: false,
-      });
-      const expected = requiredString(body, 'deidentifiedExpectedOutput', {
-        min: 1,
-        max: 30000,
-        trim: false,
-      });
-      if (observed === expected || bool(body.deidentificationAttested) !== true) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          reportId: pathUuid(route, 'reportId'),
-          expectedReportVersion: integer(body.expectedReportVersion, 1, 2147483647),
-          sourceLanguage: language(body.sourceLanguage),
-          deidentifiedSourceText: requiredString(body, 'deidentifiedSourceText', {
-            min: 1,
-            max: 20000,
-            trim: false,
-          }),
-          deidentifiedObservedOutput: observed,
-          deidentifiedExpectedOutput: expected,
-          deidentificationAttested: true,
-          attestationVersion: requiredString(body, 'attestationVersion', { min: 3, max: 80 }),
-        },
-      };
-    }
-    case 'ai_output.regression.decide': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'decision', 'decisionNote']);
-      return {
-        organizationId: organization(body),
-        values: {
-          exampleId: pathUuid(route, 'exampleId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2147483647),
-          decision: oneOf(body.decision, ['approved', 'rejected'] as const),
-          decisionNote: requiredString(body, 'decisionNote', { min: 3, max: 4000 }),
-        },
       };
     }
     case 'contact.request': {
@@ -2710,224 +1875,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         values: { targetUserId: pathUuid(route, 'membershipId') },
       };
     }
-    case 'update.publish': {
-      onlyKeys(body, [
-        'organizationId',
-        'conversationId',
-        'clientMessageId',
-        'title',
-        'body',
-        'languageCode',
-        'priority',
-        'requiresAcknowledgement',
-        'expiresAt',
-        'scheduledAt',
-        'acknowledgementSchema',
-        'notificationClass',
-        'reminderPolicy',
-        'criticalCategory',
-        'quietHoursOverrideReason',
-        'audienceSpec',
-      ]);
-      const scheduledAt = nullableIsoDate(body, 'scheduledAt');
-      const priority =
-        optionalOneOf(body, 'priority', ['normal', 'important', 'emergency'] as const) ??
-          'normal';
-      const expectedNotificationClass = priority === 'emergency'
-        ? 'critical'
-        : priority === 'important'
-        ? 'urgent'
-        : 'routine';
-      const requiresAcknowledgement = 'requiresAcknowledgement' in body
-        ? bool(body.requiresAcknowledgement)
-        : false;
-      const parsedAcknowledgementSchema = 'acknowledgementSchema' in body
-        ? acknowledgementSchema(body.acknowledgementSchema)
-        : {
-          schema_version: 1,
-          attestation_required: false,
-          attestation_prompt: null,
-          required_keys: [],
-          carry_forward_on_correction: false,
-        };
-      const parsedReminderPolicy = 'reminderPolicy' in body
-        ? reminderPolicy(body.reminderPolicy, scheduledAt)
-        : {
-          enabled: false,
-          deadline_at: null,
-          interval_seconds: null,
-          maximum_reminders: 0,
-          escalate_after_seconds: null,
-          sms_fallback: false,
-        };
-      if (
-        !requiresAcknowledgement && (parsedReminderPolicy.enabled === true ||
-          parsedAcknowledgementSchema.attestation_required === true)
-      ) {
-        throw new ApiError(400, 'bad_request');
-      }
-      const notificationClass = optionalOneOf(
-        body,
-        'notificationClass',
-        ['routine', 'urgent', 'critical'] as const,
-      ) ?? expectedNotificationClass;
-      const criticalCategory = body.criticalCategory === null ||
-          body.criticalCategory === undefined
-        ? null
-        : oneOf(
-          body.criticalCategory,
-          ['safety', 'security', 'operations', 'weather', 'business_continuity'] as const,
-        );
-      const quietHoursOverrideReason = optionalString(body, 'quietHoursOverrideReason', {
-        min: 3,
-        max: 500,
-        nullable: true,
-      }) ?? null;
-      if (
-        notificationClass !== expectedNotificationClass ||
-        (notificationClass === 'routine' &&
-          (criticalCategory !== null || quietHoursOverrideReason !== null)) ||
-        (notificationClass !== 'routine' &&
-          (criticalCategory === null || quietHoursOverrideReason === null))
-      ) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          clientNonce: requiredUuid(body, 'clientMessageId'),
-          title: requiredString(body, 'title', { min: 1, max: 240 }),
-          body: requiredString(body, 'body', { min: 1, max: 20000, trim: false }),
-          languageCode: language(body.languageCode),
-          priority,
-          requiresAcknowledgement,
-          expiresAt: body.expiresAt === null || body.expiresAt === undefined
-            ? null
-            : isoDate(body.expiresAt),
-          scheduledAt,
-          acknowledgementSchema: parsedAcknowledgementSchema,
-          notificationClass,
-          reminderPolicy: parsedReminderPolicy,
-          criticalCategory,
-          quietHoursOverrideReason,
-          audienceSpec: announcementAudienceSpec(
-            body.audienceSpec ?? { conversationMembers: true },
-          ),
-        },
-      };
-    }
-    case 'update.preview': {
-      onlyKeys(body, ['organizationId', 'conversationId', 'audienceSpec', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          audienceSpec: announcementAudienceSpec(
-            body.audienceSpec ?? { conversationMembers: true },
-          ),
-          limit: optionalInteger(body, 'limit', 1, 200) ?? 25,
-        },
-      };
-    }
-    case 'update.manage.list': {
-      onlyKeys(body, ['organizationId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: { limit: optionalInteger(body, 'limit', 1, 100) ?? 50 },
-      };
-    }
-    case 'update.non_acknowledgers.list': {
-      onlyKeys(body, ['organizationId', 'afterUserId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          announcementId: pathUuid(route, 'announcementId'),
-          afterUserId: optionalUuid(body, 'afterUserId', true) ?? null,
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 50,
-        },
-      };
-    }
-    case 'update.cancel': {
-      onlyKeys(body, ['organizationId', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          announcementId: pathUuid(route, 'announcementId'),
-          reason: optionalString(body, 'reason', { min: 3, max: 2000, nullable: true }) ?? null,
-        },
-      };
-    }
-    case 'update.read': {
-      onlyKeys(body, ['organizationId']);
-      return {
-        organizationId: organization(body),
-        values: { announcementId: pathUuid(route, 'announcementId') },
-      };
-    }
-    case 'update.acknowledge': {
-      onlyKeys(body, ['organizationId', 'deviceId', 'attestation']);
-      return {
-        organizationId: organization(body),
-        values: {
-          announcementVersionId: pathUuid(route, 'versionId'),
-          deviceId: optionalUuid(body, 'deviceId', true) ?? null,
-          attestation: acknowledgementAttestation(body.attestation),
-        },
-      };
-    }
-    case 'update.correct': {
-      onlyKeys(body, [
-        'organizationId',
-        'clientMessageId',
-        'title',
-        'body',
-        'priority',
-        'requiresAcknowledgement',
-        'expiresAt',
-        'reason',
-      ]);
-      return {
-        organizationId: organization(body),
-        values: {
-          announcementId: pathUuid(route, 'announcementId'),
-          clientNonce: requiredUuid(body, 'clientMessageId'),
-          title: requiredString(body, 'title', { min: 1, max: 240 }),
-          body: requiredString(body, 'body', { min: 1, max: 20000, trim: false }),
-          priority: oneOf(body.priority, ['normal', 'important', 'emergency'] as const),
-          requiresAcknowledgement: bool(body.requiresAcknowledgement),
-          expiresAt: nullableIsoDate(body, 'expiresAt'),
-          reason: requiredString(body, 'reason', { min: 3, max: 2000 }),
-        },
-      };
-    }
-    case 'handoff.create': {
-      onlyKeys(body, [
-        'organizationId',
-        'conversationId',
-        'title',
-        'details',
-        'sourceLanguage',
-        'shiftStartedAt',
-        'shiftEndedAt',
-        'sourceMessageIds',
-        'acknowledgementDueAt',
-      ]);
-      const startedAt = isoDate(body.shiftStartedAt);
-      const endedAt = isoDate(body.shiftEndedAt);
-      if (Date.parse(endedAt) <= Date.parse(startedAt)) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          title: requiredString(body, 'title', { min: 1, max: 240 }),
-          details: requiredString(body, 'details', { min: 1, max: 30000, trim: false }),
-          sourceLanguage: language(body.sourceLanguage),
-          shiftStartedAt: startedAt,
-          shiftEndedAt: endedAt,
-          sourceMessageIds: 'sourceMessageIds' in body ? messageIdArray(body.sourceMessageIds) : [],
-          acknowledgementDueAt: nullableIsoDate(body, 'acknowledgementDueAt'),
-        },
-      };
-    }
     case 'handoff.sign': {
       onlyKeys(body, ['organizationId', 'deviceId']);
       return {
@@ -2949,61 +1896,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         },
       };
     }
-    case 'handoff.correct': {
-      onlyKeys(body, [
-        'organizationId',
-        'expectedVersionId',
-        'expectedVersionNumber',
-        'title',
-        'details',
-        'sourceLanguage',
-        'shiftStartedAt',
-        'shiftEndedAt',
-        'sourceMessageIds',
-        'acknowledgementDueAt',
-        'reason',
-      ]);
-      const shiftStartedAt = isoDate(body.shiftStartedAt);
-      const shiftEndedAt = isoDate(body.shiftEndedAt);
-      if (Date.parse(shiftEndedAt) <= Date.parse(shiftStartedAt)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          handoffId: pathUuid(route, 'handoffId'),
-          expectedVersionId: requiredUuid(body, 'expectedVersionId'),
-          expectedVersionNumber: integer(body.expectedVersionNumber, 1, 2_147_483_647),
-          title: requiredString(body, 'title', { min: 1, max: 240 }),
-          details: requiredString(body, 'details', { min: 1, max: 30000, trim: false }),
-          sourceLanguage: language(body.sourceLanguage),
-          shiftStartedAt,
-          shiftEndedAt,
-          sourceMessageIds: 'sourceMessageIds' in body ? messageIdArray(body.sourceMessageIds) : [],
-          acknowledgementDueAt: nullableIsoDate(body, 'acknowledgementDueAt'),
-          reason: requiredString(body, 'reason', { min: 3, max: 2000 }),
-        },
-      };
-    }
-    case 'action.propose': {
-      onlyKeys(body, [
-        'organizationId',
-        'conversationId',
-        'sourceMessageId',
-        'title',
-        'details',
-      ]);
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          sourceMessageId: optionalMessageId(body, 'sourceMessageId'),
-          title: requiredString(body, 'title', { min: 1, max: 240 }),
-          details: optionalString(body, 'details', { max: 10000, trim: false, nullable: true }) ??
-            null,
-        },
-      };
-    }
     case 'action.confirm': {
       onlyKeys(body, ['organizationId', 'assigneeMembershipId', 'dueAt']);
       return {
@@ -3012,122 +1904,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
           actionId: pathUuid(route, 'actionId'),
           assigneeUserId: requiredUuid(body, 'assigneeMembershipId'),
           dueAt: nullableIsoDate(body, 'dueAt'),
-        },
-      };
-    }
-    case 'action.transition': {
-      onlyKeys(body, ['organizationId', 'status', 'note']);
-      return {
-        organizationId: organization(body),
-        values: {
-          actionId: pathUuid(route, 'actionId'),
-          status: oneOf(body.status, ['in_progress', 'completed', 'cancelled'] as const),
-          note: optionalString(body, 'note', { max: 4000, nullable: true }) ?? null,
-        },
-      };
-    }
-    case 'dynamic_group.list': {
-      onlyKeys(body, ['organizationId', 'afterPolicyId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          afterPolicyId: optionalUuid(body, 'afterPolicyId', true) ?? null,
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 50,
-        },
-      };
-    }
-    case 'dynamic_group.save': {
-      onlyKeys(body, [
-        'organizationId',
-        'conversationId',
-        'policyId',
-        'expectedVersion',
-        'policySpec',
-        'maximumMembers',
-      ]);
-      return {
-        organizationId: organization(body),
-        values: {
-          conversationId: requiredUuid(body, 'conversationId'),
-          policyId: optionalUuid(body, 'policyId', true) ?? null,
-          expectedVersion: integer(body.expectedVersion, 0, 2_147_483_647),
-          policySpec: dynamicGroupPolicySpec(body.policySpec),
-          maximumMembers: integer(body.maximumMembers, 1, 5000),
-        },
-      };
-    }
-    case 'dynamic_group.preview': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'sampleLimit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          policyId: pathUuid(route, 'policyId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          sampleLimit: optionalInteger(body, 'sampleLimit', 1, 200) ?? 50,
-        },
-      };
-    }
-    case 'dynamic_group.publish': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'previewFingerprint']);
-      const previewFingerprint = requiredString(body, 'previewFingerprint', { min: 64, max: 64 });
-      if (!SHA256_PATTERN.test(previewFingerprint)) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          policyId: pathUuid(route, 'policyId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          previewFingerprint,
-        },
-      };
-    }
-    case 'dynamic_group.pause': {
-      onlyKeys(body, ['organizationId', 'expectedVersion', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          policyId: pathUuid(route, 'policyId'),
-          expectedVersion: integer(body.expectedVersion, 1, 2_147_483_647),
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'glossary.propose': {
-      onlyKeys(body, [
-        'organizationId',
-        'termId',
-        'sourceLanguage',
-        'targetLanguage',
-        'sourceTerm',
-        'translatedTerm',
-        'definition',
-        'reason',
-      ]);
-      const sourceLanguage = language(body.sourceLanguage);
-      const targetLanguage = language(body.targetLanguage);
-      if (sourceLanguage === targetLanguage) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          termId: optionalUuid(body, 'termId', true) ?? null,
-          sourceLanguage,
-          targetLanguage,
-          sourceTerm: requiredString(body, 'sourceTerm', { min: 1, max: 500 }),
-          translatedTerm: requiredString(body, 'translatedTerm', { min: 1, max: 2000 }),
-          definition:
-            optionalString(body, 'definition', { max: 8000, trim: false, nullable: true }) ??
-              null,
-          reason: optionalString(body, 'reason', { min: 3, max: 2000, nullable: true }) ?? null,
-        },
-      };
-    }
-    case 'glossary.review': {
-      onlyKeys(body, ['organizationId', 'decision', 'note']);
-      return {
-        organizationId: organization(body),
-        values: {
-          termVersionId: pathUuid(route, 'versionId'),
-          decision: oneOf(body.decision, ['approved', 'rejected', 'changes_requested'] as const),
-          note: optionalString(body, 'note', { max: 4000, nullable: true }) ?? null,
         },
       };
     }
@@ -3323,221 +2099,13 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       onlyKeys(body, ['organizationId']);
       return { organizationId: organization(body), values: {} };
     }
-    case 'session.revoke.self':
-    case 'session.revoke.admin': {
+    case 'session.revoke.self': {
       onlyKeys(body, ['organizationId', 'reason']);
       return {
         organizationId: organization(body),
         values: {
           targetSessionId: pathUuid(route, 'sessionId'),
           reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'invite.issue': {
-      onlyKeys(body, [
-        'organizationId',
-        'destinationType',
-        'destination',
-        'employeeCode',
-        'activationMode',
-        'role',
-        'expiresInSeconds',
-        'membershipType',
-        'membershipAccessExpiresAt',
-        'guestSponsorUserId',
-      ]);
-      const destinationType = oneOf(body.destinationType, ['email', 'phone'] as const);
-      const destination = destinationType === 'email'
-        ? requiredString(body, 'destination', { min: 3, max: 254 }).toLowerCase()
-        : requiredString(body, 'destination', { min: 9, max: 16, trim: false });
-      if (
-        destinationType === 'email'
-          ? !EMAIL_PATTERN.test(destination)
-          : !PHONE_PATTERN.test(destination)
-      ) throw new ApiError(400, 'bad_request');
-      const employeeCode = optionalString(body, 'employeeCode', {
-        min: 3,
-        max: 64,
-        trim: false,
-        nullable: true,
-      }) ?? null;
-      if (employeeCode !== null && !EMPLOYEE_CODE_PATTERN.test(employeeCode)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      const activationMode = oneOf(body.activationMode, ['otp', 'manual'] as const);
-      if (activationMode === 'manual' && employeeCode === null) {
-        throw new ApiError(400, 'bad_request');
-      }
-      const role = oneOf(body.role, ['admin', 'manager', 'member'] as const);
-      const expiresInSeconds = optionalInteger(body, 'expiresInSeconds', 900, 2592000) ?? 604800;
-      const membershipType = optionalOneOf(
-        body,
-        'membershipType',
-        ['employee', 'contractor', 'guest'] as const,
-      ) ?? 'employee';
-      const membershipAccessExpiresAt = nullableIsoDate(body, 'membershipAccessExpiresAt');
-      const guestSponsorUserId = optionalUuid(body, 'guestSponsorUserId', true) ?? null;
-      const membershipExpiryMs = membershipAccessExpiresAt === null
-        ? null
-        : Date.parse(membershipAccessExpiresAt);
-      const earliestMembershipExpiry = Date.now() + expiresInSeconds * 1000;
-      const latestMembershipExpiry = Date.now() + 365 * 24 * 60 * 60 * 1000;
-      if (
-        (membershipType === 'employee' &&
-          (membershipAccessExpiresAt !== null || guestSponsorUserId !== null)) ||
-        (membershipType === 'contractor' &&
-          (membershipExpiryMs === null || membershipExpiryMs <= earliestMembershipExpiry ||
-            membershipExpiryMs > latestMembershipExpiry || guestSponsorUserId !== null)) ||
-        (membershipType === 'guest' &&
-          (role !== 'member' || membershipExpiryMs === null ||
-            membershipExpiryMs <= earliestMembershipExpiry ||
-            membershipExpiryMs > latestMembershipExpiry || guestSponsorUserId === null))
-      ) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          destinationType,
-          destination,
-          employeeCode,
-          activationMode,
-          role,
-          expiresInSeconds,
-          membershipType,
-          membershipAccessExpiresAt,
-          guestSponsorUserId,
-        },
-      };
-    }
-    case 'member.suspend': {
-      onlyKeys(body, ['organizationId', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          targetUserId: pathUuid(route, 'membershipId'),
-          reason: requiredString(body, 'reason', { min: 3, max: 1000 }),
-        },
-      };
-    }
-    case 'member.list': {
-      onlyKeys(body, ['organizationId', 'afterMembershipId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          afterUserId: optionalUuid(body, 'afterMembershipId', true) ?? null,
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 50,
-        },
-      };
-    }
-    case 'role_assignment.list': {
-      onlyKeys(body, ['organizationId', 'targetMembershipId', 'limit']);
-      return {
-        organizationId: organization(body),
-        values: {
-          targetUserId: requiredUuid(body, 'targetMembershipId'),
-          limit: optionalInteger(body, 'limit', 1, 100) ?? 50,
-        },
-      };
-    }
-    case 'role_assignment.grant': {
-      onlyKeys(body, [
-        'organizationId',
-        'targetMembershipId',
-        'roleName',
-        'scopeType',
-        'unitId',
-        'expiresAt',
-        'reason',
-      ]);
-      const scopeType = oneOf(body.scopeType, ['organization', 'unit'] as const);
-      const unitId = optionalUuid(body, 'unitId', true) ?? null;
-      if ((scopeType === 'organization') !== (unitId === null)) {
-        throw new ApiError(400, 'bad_request');
-      }
-      const expiresAt = nullableIsoDate(body, 'expiresAt');
-      if (expiresAt && Date.parse(expiresAt) <= Date.now()) {
-        throw new ApiError(400, 'bad_request');
-      }
-      return {
-        organizationId: organization(body),
-        values: {
-          targetUserId: requiredUuid(body, 'targetMembershipId'),
-          roleName: oneOf(
-            body.roleName,
-            [
-              'security_admin',
-              'people_admin',
-              'communications_publisher',
-              'site_admin',
-              'language_reviewer',
-              'supervisor',
-              'employee',
-              'designated_investigator',
-            ] as const,
-          ),
-          scopeType,
-          unitId,
-          expiresAt,
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'role_assignment.revoke': {
-      onlyKeys(body, ['organizationId', 'reason']);
-      return {
-        organizationId: organization(body),
-        values: {
-          assignmentId: pathUuid(route, 'assignmentId'),
-          reason: requiredString(body, 'reason', { min: 3, max: 500 }),
-        },
-      };
-    }
-    case 'audit.export': {
-      onlyKeys(body, [
-        'organizationId',
-        'reasonCode',
-        'format',
-        'dateFrom',
-        'dateTo',
-        'eventTypes',
-        'actorMembershipId',
-        'targetType',
-        'targetId',
-      ]);
-      const dateFrom = isoDate(body.dateFrom);
-      const dateTo = isoDate(body.dateTo);
-      const fromMillis = Date.parse(dateFrom);
-      const toMillis = Date.parse(dateTo);
-      const targetType = optionalString(body, 'targetType', {
-        min: 2,
-        max: 80,
-        nullable: true,
-      }) ?? null;
-      const targetId = optionalString(body, 'targetId', {
-        min: 1,
-        max: 240,
-        trim: false,
-        nullable: true,
-      }) ?? null;
-      if (
-        fromMillis > toMillis ||
-        toMillis - fromMillis > 31 * 24 * 60 * 60 * 1000 ||
-        fromMillis > Date.now() ||
-        toMillis > Date.now() + 5 * 60 * 1000 ||
-        (targetType !== null && !AUDIT_TARGET_PATTERN.test(targetType)) ||
-        (targetId !== null && /\p{Cc}/u.test(targetId))
-      ) throw new ApiError(400, 'bad_request');
-      return {
-        organizationId: organization(body),
-        values: {
-          reasonCode: oneOf(body.reasonCode, AUDIT_REASON_CODES),
-          format: oneOf(body.format, ['json', 'csv'] as const),
-          dateFrom,
-          dateTo,
-          eventTypes: auditEventTypes(body.eventTypes),
-          actorUserId: optionalUuid(body, 'actorMembershipId', true) ?? null,
-          targetType,
-          targetId,
         },
       };
     }
@@ -5159,21 +3727,6 @@ export async function executeCommand(
         },
       };
     }
-    case 'conversation.incident.close':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_close_incident',
-          {
-            p_conversation_id: values.conversationId,
-            p_reason: values.reason,
-          },
-        ),
-      };
     case 'conversation.update':
       return {
         status: 200,
@@ -5218,90 +3771,6 @@ export async function executeCommand(
           { p_patch: values.patch },
         ),
       };
-    case 'organization.conversation_controls.update':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_update_organization_conversation_controls',
-          {
-            p_default_join_policy: values.defaultJoinPolicy,
-            p_default_group_member_limit: values.defaultGroupMemberLimit,
-            p_join_request_expiry_days: values.joinRequestExpiryDays,
-            p_max_pending_join_requests_per_user: values.maxPendingJoinRequestsPerUser,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'organization.policy.update':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_update_organization_policy',
-          {
-            p_message_retention_days: values.messageRetentionDays,
-            p_allow_member_direct_messages: values.allowMemberDirectMessages,
-            p_dm_policy: values.dmPolicy,
-            p_require_mfa_for_admins: values.requireMfaForAdmins,
-            p_shift_schedule_authoritative: values.shiftScheduleAuthoritative,
-            p_group_creation_policy: values.groupCreationPolicy,
-            p_allow_external_guests: values.allowExternalGuests,
-            p_external_guest_max_access_days: values.externalGuestMaxAccessDays,
-            p_expected_version: values.expectedVersion,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'organization.ai_policy.read':
-      return {
-        status: 200,
-        body: publicOrganizationAiPolicy(
-          await invokeRpc(
-            asRpcClient(actor.adminClient),
-            'bff_get_organization_ai_policy',
-            {
-              p_actor_user_id: actor.user.id,
-              p_organization_id: org,
-              p_session_id: actor.claims.sessionId,
-            },
-          ),
-          org,
-        ),
-      };
-    case 'organization.ai_policy.update': {
-      const receipt = await businessRpc(
-        actor,
-        org,
-        idempotencyKey,
-        requestDigest,
-        'bff_set_organization_ai_policy_v2',
-        {
-          p_enabled: values.enabled,
-          p_approved_use_cases: values.approvedUseCases,
-          p_provider_allowlist: values.providerAllowlist,
-          p_route_policy: values.routePolicy,
-          p_expected_version: values.expectedVersion,
-          p_reason: values.reason,
-        },
-      );
-      return {
-        status: 200,
-        body: publicOrganizationAiPolicy(receipt, org, {
-          enabled: values.enabled as boolean,
-          approvedUseCases: values.approvedUseCases as string[],
-          providerAllowlist: values.providerAllowlist as string[],
-          routePolicy: values.routePolicy as string,
-          expectedVersion: values.expectedVersion as number,
-        }),
-      };
-    }
     case 'conversation.controls.update':
       return {
         status: 200,
@@ -5317,79 +3786,6 @@ export async function executeCommand(
             p_join_policy: values.joinPolicy,
             p_visibility: values.visibility,
             p_reason: values.reason,
-          },
-        ),
-      };
-    case 'conversation.join.request':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_request_conversation_join',
-          { p_conversation_id: values.conversationId },
-        ),
-      };
-    case 'conversation.join.cancel':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_cancel_conversation_join_request',
-          {
-            p_request_id: values.requestId,
-            p_expected_version: values.expectedVersion,
-          },
-        ),
-      };
-    case 'conversation.join.decide':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_decide_conversation_join_request',
-          {
-            p_request_id: values.requestId,
-            p_expected_version: values.expectedVersion,
-            p_decision: values.decision,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'conversation.discover.query':
-      return {
-        status: 200,
-        body: await invokeRpc(
-          asRpcClient(actor.adminClient),
-          'bff_list_discoverable_conversations',
-          {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_limit: values.limit,
-          },
-        ),
-      };
-    case 'conversation.join.query':
-      return {
-        status: 200,
-        body: await invokeRpc(
-          asRpcClient(actor.adminClient),
-          'bff_list_conversation_join_requests',
-          {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_conversation_id: values.conversationId,
-            p_limit: values.limit,
           },
         ),
       };
@@ -5830,84 +4226,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'moderation.case.query':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_query_moderation_cases', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_statuses: values.statuses,
-            p_before_updated_at: values.beforeUpdatedAt,
-            p_before_case_id: values.beforeCaseId,
-            p_limit: values.limit,
-          }),
-        ),
-      };
-    case 'moderation.case.read':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_moderation_case', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_case_id: values.caseId,
-          }),
-        ),
-      };
-    case 'moderation.case.assign':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_assign_moderation_case',
-          {
-            p_case_id: values.caseId,
-            p_investigator_user_id: values.investigatorUserId,
-            p_expected_version: values.expectedVersion,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'moderation.case.claim':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_claim_moderation_case',
-          {
-            p_case_id: values.caseId,
-            p_expected_version: values.expectedVersion,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'moderation.case.transition':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_transition_moderation_case',
-          {
-            p_case_id: values.caseId,
-            p_status: values.status,
-            p_expected_version: values.expectedVersion,
-            p_reason: values.reason,
-            p_evidence_metadata: values.evidenceMetadata,
-          },
-        ),
-      };
     case 'message.translate':
       return {
         status: 202,
@@ -6037,39 +4355,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'message.preservation.place':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_place_message_preservation_hold',
-          {
-            p_conversation_id: values.conversationId,
-            p_message_id: values.messageId,
-            p_hold_type: values.holdType,
-            p_reason_code: values.reasonCode,
-            p_policy_reference_sha256: values.policyReferenceSha256,
-          },
-        ),
-      };
-    case 'message.preservation.release':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_release_message_preservation_hold',
-          {
-            p_hold_id: values.holdId,
-            p_release_reason_code: values.releaseReasonCode,
-          },
-        ),
-      };
     case 'translation.correction.propose':
       return {
         status: 201,
@@ -6153,38 +4438,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'summary.review':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_review_conversation_summary',
-          {
-            p_summary_id: values.summaryId,
-            p_decision: values.decision,
-            p_note: values.note,
-          },
-        ),
-      };
-    case 'summary.policy.update':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_set_summary_policy',
-          {
-            p_conversation_id: values.conversationId,
-            p_mode: values.mode,
-            p_message_count_threshold: values.messageCountThreshold,
-          },
-        ),
-      };
     case 'ai_output.error.report':
       return {
         status: 201,
@@ -6216,89 +4469,6 @@ export async function executeCommand(
             p_session_id: actor.claims.sessionId,
             p_limit: values.limit,
           }),
-        ),
-      };
-    case 'ai_output.error_reports.review.query':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(
-            asRpcClient(actor.adminClient),
-            'bff_list_ai_output_error_reports_for_review',
-            {
-              p_actor_user_id: actor.user.id,
-              p_organization_id: org,
-              p_session_id: actor.claims.sessionId,
-              p_limit: values.limit,
-            },
-          ),
-        ),
-      };
-    case 'ai_output.error_report.read':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_ai_output_error_report', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_report_id: values.reportId,
-          }),
-        ),
-      };
-    case 'ai_output.error_report.review':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_review_ai_output_error_report',
-          {
-            p_report_id: values.reportId,
-            p_expected_version: values.expectedVersion,
-            p_outcome: values.outcome,
-            p_review_note: values.reviewNote,
-          },
-        ),
-      };
-    case 'ai_output.regression.propose':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_propose_ai_regression_example',
-          {
-            p_report_id: values.reportId,
-            p_expected_report_version: values.expectedReportVersion,
-            p_source_language: values.sourceLanguage,
-            p_deidentified_source_text: values.deidentifiedSourceText,
-            p_deidentified_observed_output: values.deidentifiedObservedOutput,
-            p_deidentified_expected_output: values.deidentifiedExpectedOutput,
-            p_deidentification_attested: values.deidentificationAttested,
-            p_attestation_version: values.attestationVersion,
-          },
-        ),
-      };
-    case 'ai_output.regression.decide':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_decide_ai_regression_example',
-          {
-            p_example_id: values.exampleId,
-            p_expected_version: values.expectedVersion,
-            p_decision: values.decision,
-            p_decision_note: values.decisionNote,
-          },
         ),
       };
     case 'contact.request':
@@ -6441,156 +4611,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'update.publish':
-      return {
-        status: values.scheduledAt === null ? 201 : 202,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_create_announcement',
-          {
-            p_conversation_id: values.conversationId,
-            p_client_nonce: values.clientNonce,
-            p_title: values.title,
-            p_body: values.body,
-            p_language_code: values.languageCode,
-            p_priority: values.priority,
-            p_requires_acknowledgement: values.requiresAcknowledgement,
-            p_expires_at: values.expiresAt,
-            p_scheduled_at: values.scheduledAt,
-            p_acknowledgement_schema: values.acknowledgementSchema,
-            p_notification_class: values.notificationClass,
-            p_reminder_policy: values.reminderPolicy,
-            p_critical_category: values.criticalCategory,
-            p_quiet_hours_override_reason: values.quietHoursOverrideReason,
-            p_audience_spec: values.audienceSpec,
-          },
-        ),
-      };
-    case 'update.preview':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_preview_announcement_audience', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_conversation_id: values.conversationId,
-            p_audience_spec: values.audienceSpec,
-            p_limit: values.limit,
-          }),
-        ),
-      };
-    case 'update.manage.list':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_list_managed_announcements', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_limit: values.limit,
-          }),
-        ),
-      };
-    case 'update.non_acknowledgers.list':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(
-            asRpcClient(actor.adminClient),
-            'bff_list_announcement_non_acknowledgers',
-            {
-              p_actor_user_id: actor.user.id,
-              p_organization_id: org,
-              p_session_id: actor.claims.sessionId,
-              p_announcement_id: values.announcementId,
-              p_after_user_id: values.afterUserId,
-              p_limit: values.limit,
-            },
-          ),
-        ),
-      };
-    case 'update.cancel':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_cancel_scheduled_announcement',
-          {
-            p_announcement_id: values.announcementId,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'update.read':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_mark_announcement_read',
-          { p_announcement_id: values.announcementId },
-        ),
-      };
-    case 'update.acknowledge':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_acknowledge_announcement',
-          {
-            p_announcement_version_id: values.announcementVersionId,
-            p_device_id: values.deviceId,
-            p_attestation: values.attestation,
-          },
-        ),
-      };
-    case 'update.correct':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_correct_announcement',
-          {
-            p_announcement_id: values.announcementId,
-            p_client_nonce: values.clientNonce,
-            p_title: values.title,
-            p_body: values.body,
-            p_priority: values.priority,
-            p_requires_acknowledgement: values.requiresAcknowledgement,
-            p_expires_at: values.expiresAt,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'handoff.create':
-      return {
-        status: 201,
-        body: await businessRpc(actor, org, idempotencyKey, requestDigest, 'bff_create_handoff', {
-          p_conversation_id: values.conversationId,
-          p_title: values.title,
-          p_details: values.details,
-          p_source_language: values.sourceLanguage,
-          p_shift_started_at: values.shiftStartedAt,
-          p_shift_ended_at: values.shiftEndedAt,
-          p_source_message_ids: values.sourceMessageIds,
-          p_acknowledgement_due_at: values.acknowledgementDueAt,
-        }),
-      };
     case 'handoff.sign':
       return {
         status: 200,
@@ -6615,47 +4635,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'handoff.correct':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_correct_handoff_v2',
-          {
-            p_handoff_id: values.handoffId,
-            p_expected_version_id: values.expectedVersionId,
-            p_expected_version_number: values.expectedVersionNumber,
-            p_title: values.title,
-            p_details: values.details,
-            p_source_language: values.sourceLanguage,
-            p_shift_started_at: values.shiftStartedAt,
-            p_shift_ended_at: values.shiftEndedAt,
-            p_source_message_ids: values.sourceMessageIds,
-            p_acknowledgement_due_at: values.acknowledgementDueAt,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'action.propose':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_propose_operational_action',
-          {
-            p_conversation_id: values.conversationId,
-            p_source_message_id: values.sourceMessageId,
-            p_title: values.title,
-            p_details: values.details,
-          },
-        ),
-      };
     case 'action.confirm':
       return {
         status: 200,
@@ -6669,173 +4648,6 @@ export async function executeCommand(
             p_action_id: values.actionId,
             p_assignee_user_id: values.assigneeUserId,
             p_due_at: values.dueAt,
-          },
-        ),
-      };
-    case 'action.transition':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_transition_operational_action',
-          {
-            p_action_id: values.actionId,
-            p_status: values.status,
-            p_note: values.note,
-          },
-        ),
-      };
-    case 'dynamic_group.list':
-      return {
-        status: 200,
-        body: publicDynamicGroupPolicyList(
-          await invokeRpc(
-            asRpcClient(actor.adminClient),
-            'bff_list_dynamic_group_policies',
-            {
-              p_actor_user_id: actor.user.id,
-              p_organization_id: org,
-              p_session_id: actor.claims.sessionId,
-              p_after_policy_id: values.afterPolicyId,
-              p_limit: values.limit,
-            },
-          ),
-          values.limit as number,
-        ),
-      };
-    case 'dynamic_group.save': {
-      const receipt = publicDynamicGroupSaveReceipt(
-        await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_save_dynamic_group_policy_v2',
-          {
-            p_conversation_id: values.conversationId,
-            p_policy_id: values.policyId,
-            p_expected_version: values.expectedVersion,
-            p_policy_spec: values.policySpec,
-            p_maximum_members: values.maximumMembers,
-          },
-        ),
-      );
-      if (
-        receipt.conversationId !== values.conversationId ||
-        receipt.version !==
-          (values.policyId === null ? 1 : (values.expectedVersion as number) + 1) ||
-        (values.policyId !== null && receipt.policyId !== values.policyId)
-      ) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-      return { status: values.policyId === null ? 201 : 200, body: receipt };
-    }
-    case 'dynamic_group.preview': {
-      const receipt = publicDynamicGroupPreviewReceipt(
-        await invokeRpc(asRpcClient(actor.adminClient), 'bff_preview_dynamic_group_v2', {
-          p_actor_user_id: actor.user.id,
-          p_organization_id: org,
-          p_session_id: actor.claims.sessionId,
-          p_policy_id: values.policyId,
-          p_expected_version: values.expectedVersion,
-          p_sample_limit: values.sampleLimit,
-        }),
-        values.sampleLimit as number,
-      );
-      if (
-        receipt.policyId !== values.policyId || receipt.policyVersion !== values.expectedVersion
-      ) {
-        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-      }
-      return {
-        status: 200,
-        body: receipt,
-      };
-    }
-    case 'dynamic_group.publish': {
-      const receipt = publicDynamicGroupPublishReceipt(
-        await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_publish_dynamic_group_policy',
-          {
-            p_policy_id: values.policyId,
-            p_expected_version: values.expectedVersion,
-            p_preview_fingerprint: values.previewFingerprint,
-          },
-        ),
-      );
-      if (
-        receipt.policyId !== values.policyId || receipt.policyVersion !== values.expectedVersion
-      ) {
-        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-      }
-      return {
-        status: 200,
-        body: receipt,
-      };
-    }
-    case 'dynamic_group.pause': {
-      const receipt = publicDynamicGroupPauseReceipt(
-        await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_pause_dynamic_group_policy',
-          {
-            p_policy_id: values.policyId,
-            p_expected_version: values.expectedVersion,
-            p_reason: values.reason,
-          },
-        ),
-      );
-      if (
-        receipt.policyId !== values.policyId || receipt.policyVersion !== values.expectedVersion
-      ) {
-        throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-      }
-      return {
-        status: 200,
-        body: receipt,
-      };
-    }
-    case 'glossary.propose':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_propose_glossary_term',
-          {
-            p_term_id: values.termId,
-            p_source_language: values.sourceLanguage,
-            p_target_language: values.targetLanguage,
-            p_source_term: values.sourceTerm,
-            p_translated_term: values.translatedTerm,
-            p_definition: values.definition,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'glossary.review':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_review_glossary_version',
-          {
-            p_term_version_id: values.termVersionId,
-            p_decision: values.decision,
-            p_note: values.note,
           },
         ),
       };
@@ -6947,16 +4759,6 @@ export async function executeCommand(
           },
         ),
       };
-    case 'invite.issue':
-      return {
-        status: 201,
-        body: await issueOrganizationInvite(
-          actor,
-          command,
-          idempotencyKey,
-          requestDigest,
-        ),
-      };
     case 'session.list':
       return {
         status: 200,
@@ -6969,97 +4771,12 @@ export async function executeCommand(
         ),
       };
     case 'session.revoke.self':
-    case 'session.revoke.admin':
       return {
         status: 200,
         body: await businessRpc(actor, org, idempotencyKey, requestDigest, 'bff_revoke_session', {
           p_target_session_id: values.targetSessionId,
           p_reason: values.reason,
         }),
-      };
-    case 'member.list':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_list_admin_members', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_after_user_id: values.afterUserId,
-            p_limit: values.limit,
-          }),
-        ),
-      };
-    case 'member.suspend':
-      return {
-        status: 200,
-        body: await businessRpc(actor, org, idempotencyKey, requestDigest, 'bff_suspend_member', {
-          p_target_user_id: values.targetUserId,
-          p_reason: values.reason,
-        }),
-      };
-    case 'role_assignment.list':
-      return {
-        status: 200,
-        body: toPublicJson(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_list_role_assignments', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_target_user_id: values.targetUserId,
-            p_limit: values.limit,
-          }),
-        ),
-      };
-    case 'role_assignment.grant':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_grant_role_assignment',
-          {
-            p_target_user_id: values.targetUserId,
-            p_role_name: values.roleName,
-            p_scope_type: values.scopeType,
-            p_unit_id: values.unitId,
-            p_expires_at: values.expiresAt,
-            p_reason: values.reason,
-          },
-        ),
-      };
-    case 'role_assignment.revoke':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_revoke_role_assignment',
-          { p_assignment_id: values.assignmentId, p_reason: values.reason },
-        ),
-      };
-    case 'audit.export':
-      return {
-        status: 200,
-        body: await publicAuditExport(
-          await invokeRpc(asRpcClient(actor.adminClient), 'bff_export_audit_events', {
-            p_actor_user_id: actor.user.id,
-            p_organization_id: org,
-            p_session_id: actor.claims.sessionId,
-            p_reason_code: values.reasonCode,
-            p_export_format: values.format,
-            p_date_from: values.dateFrom,
-            p_date_to: values.dateTo,
-            p_event_types: values.eventTypes,
-            p_filter_actor_user_id: values.actorUserId,
-            p_target_type: values.targetType,
-            p_target_id: values.targetId,
-          }),
-        ),
       };
   }
   throw new ApiError(500, 'internal_error');

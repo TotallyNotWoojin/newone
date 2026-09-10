@@ -78,11 +78,6 @@ export interface ApiDependencies {
     publicAppUrl?: string,
     cursorSigningKey?: string,
   ): Promise<CommandResult>;
-  recordAuditDenial?(
-    actor: AuthenticatedActor,
-    organizationId: string,
-    operation: 'audit.export',
-  ): Promise<void>;
 }
 
 export function defaultDependencies(): ApiDependencies {
@@ -105,13 +100,6 @@ export function defaultDependencies(): ApiDependencies {
     authorize: authorizeRequest,
     rateLimit: enforceRateLimit,
     execute: executeCommand,
-    async recordAuditDenial(actor, organizationId, operation) {
-      await invokeRpc(asRpcClient(actor.adminClient), 'bff_record_audit_access_denial', {
-        p_actor_user_id: actor.user.id,
-        p_organization_id: organizationId,
-        p_operation: operation,
-      });
-    },
   };
 }
 
@@ -253,13 +241,6 @@ export function createApiHandler(
           recentAuthSeconds: route.recentAuthSeconds,
         });
       } catch (error) {
-        if (route.kind === 'audit.export' && dependencies.recordAuditDenial) {
-          try {
-            await dependencies.recordAuditDenial(actor, command.organizationId, 'audit.export');
-          } catch {
-            // Preserve the original denial and do not disclose audit write state.
-          }
-        }
         throw error;
       }
       if (!auditPreRateLimited) {
