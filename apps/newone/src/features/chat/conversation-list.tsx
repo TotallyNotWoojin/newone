@@ -327,6 +327,7 @@ export function ConversationList({
 
       <ScrollView
         contentContainerStyle={styles.listContent}
+        keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         onScroll={(event) => setScrolledAway(event.nativeEvent.contentOffset.y > 240)}
         ref={listRef}

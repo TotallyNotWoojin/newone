@@ -75,14 +75,19 @@ export function ChatSearchField({
               <Ionicons color={colors.mintDark} name="close" size={13} />
             </Pressable>
           ))}
+          {/* The return key closes the keyboard. With an empty field there is
+              no result list to drag and nothing else to tap, so without this
+              the keyboard had no way out (owner, Sep 10 2026). */}
           <TextInput
             keyboardAppearance={keyboardAppearance}
             accessibilityLabel={t('search.fieldPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}
+            blurOnSubmit
             onChangeText={onDraftChange}
             placeholder={chips.length ? '' : t('search.fieldPlaceholder')}
             placeholderTextColor={colors.inkSubtle}
+            returnKeyType="search"
             style={styles.input}
             testID="chat-search-field"
             value={draft}
@@ -105,6 +110,7 @@ export function ChatSearchField({
         <ScrollView
           accessibilityRole="list"
           contentContainerStyle={styles.suggestions}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           style={[styles.suggestionScroll, { maxHeight: Math.round(height * 0.5) }]}>
           {sections.map((section) => {
