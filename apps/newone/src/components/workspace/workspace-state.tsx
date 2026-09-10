@@ -13,6 +13,24 @@ import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
  * degraded state has actually persisted for a while. */
 const DEGRADED_INDICATOR_DELAY_MS = 10_000;
 
+/** A failure worth announcing is worth announcing once. The red pill used to
+ * sit there until something else replaced it, so a moment of "cannot connect"
+ * stayed on screen long after the app had reconnected (owner, Sep 10 2026).
+ * The error itself is left in state -- sheets still show it beside the control
+ * that failed -- only the floating pill gives up. */
+const ERROR_PILL_MS = 6_000;
+
+function useTransientPill(message: string): boolean {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    if (!message) return undefined;
+    setHidden(false);
+    const timer = setTimeout(() => setHidden(true), ERROR_PILL_MS);
+    return () => clearTimeout(timer);
+  }, [message]);
+  return !hidden;
+}
+
 function useDegradedRealtimeIndicator(realtimeState: string): boolean {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -34,6 +52,9 @@ export function WorkspaceStatusBanner() {
   const workspace = useWorkspace();
   const { t } = useI18n();
   const degradedIndicatorVisible = useDegradedRealtimeIndicator(workspace.realtimeState);
+  // Only the transient failures time out. Being offline, or holding queued
+  // messages, is a state rather than an event: those stay until they end.
+  const errorPillVisible = useTransientPill(workspace.actionError ?? '');
   let label = '';
   let icon: keyof typeof Ionicons.glyphMap = 'information-circle-outline';
   let tone: 'neutral' | 'warning' | 'danger' = 'neutral';
@@ -44,7 +65,7 @@ export function WorkspaceStatusBanner() {
       : t('status.guestOffline');
     icon = 'cloud-offline-outline';
     tone = 'warning';
-  } else if (workspace.actionError) {
+  } else if (workspace.actionError && errorPillVisible) {
     label = workspace.actionError;
     icon = 'alert-circle-outline';
     tone = 'danger';

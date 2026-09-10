@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -182,6 +183,7 @@ export function ConversationList({
   onOpenSuggestion,
   onRowAction,
   onOpenPinned,
+  onRefresh,
   markedUnreadIds = [],
 }: {
   conversations: Conversation[];
@@ -205,6 +207,8 @@ export function ConversationList({
   onRowAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
   /** Opens the pins gathered from every chat. */
   onOpenPinned?: () => void;
+  /** Pull the list down to ask the server again. */
+  onRefresh?: () => Promise<void>;
   /** Chats the reader put back to unread by hand. */
   markedUnreadIds?: readonly string[];
 }) {
@@ -212,6 +216,7 @@ export function ConversationList({
   const styles = useThemedStyles(buildStyles);
   const listRef = useRef<ScrollView>(null);
   const [scrolledAway, setScrolledAway] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const parsedSearch = useMemo(() => parseSearch(search, people), [people, search]);
   const messageConversationIds = useMemo(
@@ -325,6 +330,20 @@ export function ConversationList({
         keyboardShouldPersistTaps="handled"
         onScroll={(event) => setScrolledAway(event.nativeEvent.contentOffset.y > 240)}
         ref={listRef}
+        refreshControl={onRefresh ? (
+          // Pulling the list down asks the server again, the way the phone's
+          // other messaging apps do it (owner, Sep 10 2026). The spinner is
+          // cleared in a finally, so a refresh that fails cannot leave it
+          // turning for ever.
+          <RefreshControl
+            onRefresh={() => {
+              setRefreshing(true);
+              void onRefresh().finally(() => setRefreshing(false));
+            }}
+            refreshing={refreshing}
+            tintColor={colors.inkSubtle}
+          />
+        ) : undefined}
         scrollEventThrottle={64}
         showsVerticalScrollIndicator={false}
         testID="conversation-list">

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import type { SearchChip, SearchSuggestion } from '@/features/search/chat-search';
 import { useI18n } from '@/i18n/provider';
@@ -37,6 +37,11 @@ export function ChatSearchField({
   const styles = useThemedStyles(buildStyles);
   const keyboardAppearance = useKeyboardAppearance();
   const { t } = useI18n();
+  // The results sit above the filters and the chats they narrow, so the panel
+  // cannot own the screen -- searching still filters the list underneath. It
+  // is bounded and scrolls instead: a long set used to run off the bottom with
+  // nothing to drag (owner, Sep 10 2026).
+  const { height } = useWindowDimensions();
   // The visible text is only the unfinished tail; the finished parts are chips.
   const draft = value.includes(',') ? value.slice(value.lastIndexOf(',') + 1).trimStart() : value;
   const searched = chips.length > 0 || draft.trim().length > 0;
@@ -97,7 +102,11 @@ export function ChatSearchField({
       </View>
 
       {searched ? (
-        <View accessibilityRole="list" style={styles.suggestions}>
+        <ScrollView
+          accessibilityRole="list"
+          contentContainerStyle={styles.suggestions}
+          keyboardShouldPersistTaps="handled"
+          style={[styles.suggestionScroll, { maxHeight: Math.round(height * 0.5) }]}>
           {sections.map((section) => {
             const items = suggestions.filter((item) => item.kind === section.key);
             if (!items.length) return null;
@@ -136,7 +145,7 @@ export function ChatSearchField({
           {!suggestions.length && !loading ? (
             <Text style={styles.empty}>{t('search.nothingFound')}</Text>
           ) : null}
-        </View>
+        </ScrollView>
       ) : null}
     </View>
   );
@@ -183,6 +192,9 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 28,
     color: colors.ink,
     fontSize: 15,
+  },
+  suggestionScroll: {
+    flexGrow: 0,
   },
   suggestions: {
     gap: spacing.xs,

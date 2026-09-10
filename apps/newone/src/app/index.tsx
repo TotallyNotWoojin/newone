@@ -174,6 +174,7 @@ export default function ChatsScreen() {
     filter: workspace.inboxFilter,
     onCancelJoin: workspace.cancelConversationJoinRequest,
     onCompose: () => setNewMenuOpen(true),
+    onRefresh: workspace.refresh,
     onFilterChange: workspace.setInboxFilter,
     onOpenSuggestion: openSuggestion,
     onRequestJoin: workspace.requestConversationJoin,
