@@ -622,10 +622,9 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('Cierre la puerta norte a las 18:00.')).toBeTruthy();
     expect(screen.queryByText(/chat\.originalUpper|chat\.machineTranslation|chat\.originalCanonical|chat\.detectedLanguage/)).toBeNull();
     await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
-    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
-    expect(screen.getByText(/chat\.machineRoute/)).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.hideProvenance'));
-    expect(screen.queryByText(/chat\.machineRoute/)).toBeNull();
+    // Provenance left the consumer sheet (backlog 44), so there is no
+    // "Show details" to open here any more.
+    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
     expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
 
     // Proposing a correction was the workplace quality workflow.
@@ -969,8 +968,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await render(<ConversationPane conversation={conversation()} messages={[failed, notRequested]} onSend={noopSend} />);
     expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
     await fireEvent(screen.getByText('La bomba necesita servicio.'), 'longPress');
-    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
-    expect(screen.getByText(/failed-source-hash/)).toBeTruthy();
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
     await fireEvent.press(screen.getByLabelText('chat.retryTranslation'));
     await fireEvent.press(screen.getByText('chat.requestTranslation'));
@@ -1276,17 +1273,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText(/chat\.detectedLanguage|chat\.originalUpper|chat\.translationUpper/)).toBeNull();
     expect(screen.getByText('chat.translationUnavailable')).toBeTruthy();
     expect(screen.getByText('chat.requestTranslation')).toBeTruthy();
-    const details = async (text: string, expected: RegExp) => {
-      await fireEvent(screen.getByText(text), 'longPress');
-      await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
-      expect(screen.getByText(expected)).toBeTruthy();
-      await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-    };
-    await details('Approved correction source.', /chat\.translationPolicyStale/);
-    await details('Approved correction source.', /chat\.reviewedCorrection/);
-    await details('Detection failed input.', /chat\.languageDetectionFailed/);
-    await details('Detection pending input.', /chat\.languageDetectionPending/);
-    await details('Blocked translation source.', /policy_blocked/);
+    // Those five states were only ever visible through the provenance panel,
+    // which the consumer sheet no longer offers (backlog 44).
+    await fireEvent(screen.getByText('Approved correction source.'), 'longPress');
+    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
+    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
   });
 
   test('renders the direct-chat boundaries including read-only posting', async () => {
@@ -1401,9 +1392,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByLabelText('chat.attachmentProgress 35%')).toBeTruthy();
     expect(screen.getByLabelText('1/2 chat.receiptDelivered · chat.receiptReadPrivate')).toBeTruthy();
     await fireEvent(screen.getByText('Nullable translation provenance.'), 'longPress');
-    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
-    expect(screen.getByText(/chat\.notAvailable \/ chat\.notAvailable/)).toBeTruthy();
-    expect(screen.getByText(/chat\.humanReviewed/)).toBeTruthy();
+    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
   });
 
   test('covers initial bottom positioning, prepend anchors, and authoritative focus loading', async () => {
@@ -1965,8 +1954,8 @@ describe('personal realm message actions', () => {
     expect(screen.getByLabelText('chat.saveEdit')).toBeTruthy();
     expect(screen.getByLabelText('chat.deleteEveryone')).toBeTruthy();
 
-    // The review desk stays at work.
-    expect(screen.getByLabelText('chat.showProvenance')).toBeTruthy();
+    // The review desk stays at work, and so does provenance (backlog 44).
+    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
     expect(screen.queryByLabelText('chat.hideProvenance')).toBeNull();
     expect(screen.queryByLabelText('chat.proposeCorrection')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewCorrection')).toBeNull();
@@ -2009,16 +1998,6 @@ describe('personal realm message actions', () => {
     expect(screen.getByLabelText('chat.copy')).toBeTruthy();
     expect(screen.getByLabelText('chat.forward')).toBeTruthy();
     expect(screen.getByTestId('reaction-row')).toBeTruthy();
-  });
-
-  test('keeps the translation review items for workspace organizations', async () => {
-    const message = translatedMessage();
-    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
-    await fireEvent(screen.getByText(message.originalText), 'longPress');
-
-    expect(screen.getByLabelText('chat.showProvenance')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.showProvenance'));
-    expect(screen.getByLabelText('chat.hideProvenance')).toBeTruthy();
   });
 
 });

@@ -18,34 +18,13 @@
 
 set local check_function_bodies = off;
 
--- 2. Functions that only ever served the workplace product.
-
-drop function if exists bff_bootstrap_organization(uuid,text,text,text,text);
-drop function if exists bff_request_conversation_join(uuid,uuid,uuid,uuid,text,text);
-drop function if exists bff_search(uuid,uuid,uuid,text,text[],text,integer,uuid,timestamp with time zone,timestamp with time zone,text[],uuid,text);
-drop function if exists bff_update_organization_conversation_controls(uuid,uuid,uuid,text,integer,integer,integer,text,text,text);
-drop function if exists private.bff_bootstrap_organization_impl(uuid,text,text,text,text);
-drop function if exists private.bff_request_conversation_join_impl(uuid,uuid,uuid,uuid,text,text);
-drop function if exists private.bff_search_impl(uuid,uuid,uuid,text,text[],text,integer,uuid,timestamp with time zone,timestamp with time zone);
-drop function if exists private.bind_announcement_ack_version();
-drop function if exists private.bind_announcement_acknowledgement_evidence();
-drop function if exists private.bind_handoff_ack_version();
-drop function if exists private.broadcast_organization_conversation_controls_internal(uuid);
-drop function if exists private.dynamic_group_policy_candidates(uuid,jsonb,timestamp with time zone);
-drop function if exists private.enqueue_dynamic_group_user_source_change_internal(uuid,uuid,text,timestamp with time zone);
-drop function if exists private.mark_dynamic_group_unit_source_change();
-drop function if exists private.maybe_queue_automatic_summary();
-drop function if exists private.reconcile_dynamic_group_user_internal(uuid,uuid,uuid,timestamp with time zone,text);
-drop function if exists private.snapshot_announcement_audience_internal(uuid,uuid,uuid,jsonb,timestamp with time zone);
-drop function if exists private.snapshot_announcement_version();
-drop function if exists private.snapshot_handoff_version();
-drop function if exists private.validate_organization_unit_hierarchy();
-
--- 3. A report no longer belongs to an organization unit.
+-- 2. A report no longer belongs to an organization unit.
 
 alter table private.message_reports drop column if exists conversation_unit_id;
 
--- 4. The tables.
+-- 3. The tables. These go before the functions below, because a table
+-- still carrying a trigger is exactly what stops that trigger's function
+-- being dropped; dropping the table takes its triggers with it.
 
 drop table if exists public.announcement_acknowledgements cascade;
 drop table if exists public.announcement_recipients cascade;
@@ -76,6 +55,37 @@ drop table if exists private.dynamic_group_dirty_users cascade;
 drop table if exists private.dynamic_group_policy_previews cascade;
 drop table if exists private.dynamic_group_policy_source_boundaries cascade;
 drop table if exists private.dynamic_group_reconciliation_queue cascade;
+
+-- 3b. Two triggers sit on tables we keep, so they have to be named
+-- before their functions can go. messages_85_maybe_auto_summary fired on
+-- every message insert to look for an automatic-summary policy; no policy can
+-- exist any more, so it could only ever return null.
+
+drop trigger if exists messages_85_maybe_auto_summary on public.messages;
+drop trigger if exists organizations_95_dynamic_group_shift_authority_source on public.organizations;
+
+-- 4. Functions that only ever served the workplace product.
+
+drop function if exists bff_bootstrap_organization(uuid,text,text,text,text);
+drop function if exists bff_request_conversation_join(uuid,uuid,uuid,uuid,text,text);
+drop function if exists bff_search(uuid,uuid,uuid,text,text[],text,integer,uuid,timestamp with time zone,timestamp with time zone,text[],uuid,text);
+drop function if exists bff_update_organization_conversation_controls(uuid,uuid,uuid,text,integer,integer,integer,text,text,text);
+drop function if exists private.bff_bootstrap_organization_impl(uuid,text,text,text,text);
+drop function if exists private.bff_request_conversation_join_impl(uuid,uuid,uuid,uuid,text,text);
+drop function if exists private.bff_search_impl(uuid,uuid,uuid,text,text[],text,integer,uuid,timestamp with time zone,timestamp with time zone);
+drop function if exists private.bind_announcement_ack_version();
+drop function if exists private.bind_announcement_acknowledgement_evidence();
+drop function if exists private.bind_handoff_ack_version();
+drop function if exists private.broadcast_organization_conversation_controls_internal(uuid);
+drop function if exists private.dynamic_group_policy_candidates(uuid,jsonb,timestamp with time zone);
+drop function if exists private.enqueue_dynamic_group_user_source_change_internal(uuid,uuid,text,timestamp with time zone);
+drop function if exists private.mark_dynamic_group_unit_source_change();
+drop function if exists private.maybe_queue_automatic_summary();
+drop function if exists private.reconcile_dynamic_group_user_internal(uuid,uuid,uuid,timestamp with time zone,text);
+drop function if exists private.snapshot_announcement_audience_internal(uuid,uuid,uuid,jsonb,timestamp with time zone);
+drop function if exists private.snapshot_announcement_version();
+drop function if exists private.snapshot_handoff_version();
+drop function if exists private.validate_organization_unit_hierarchy();
 
 -- 5. Trigger functions whose only triggers went with those tables.
 

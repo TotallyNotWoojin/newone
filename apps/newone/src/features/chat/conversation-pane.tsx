@@ -1413,89 +1413,6 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-/** Language and translation provenance, reachable from the actions sheet. */
-function TranslationDetails({ message }: { message: Message }) {
-  const styles = useThemedStyles(buildStyles);
-  const workspace = useWorkspace();
-  const { t } = useI18n();
-  const conversation = workspace.conversations.find((item) => item.id === message.conversationId);
-  const translationEnabled = conversation?.translationMode !== 'off';
-  const translation = translationEnabled ? message.translation : undefined;
-  const state = translationEnabled ? message.translationState : 'not_requested';
-  const detection = message.languageDetection;
-  const correction = translation?.correction;
-  const notAvailable = t('chat.notAvailable');
-  const stateLabel = ({
-    not_requested: t('chat.translationNotRequested'),
-    queued: t('chat.translationQueued'),
-    translating: t('chat.translationProcessing'),
-    translated: t('chat.machineTranslation'),
-    corrected: t('chat.correctedTranslation'),
-    human_reviewed: t('chat.humanReviewedTranslation'),
-    blocked: t('chat.translationBlocked'),
-    needs_review: t('chat.translationNeedsReview'),
-    failed: t('chat.translationFailed'),
-  })[state];
-  const detectionLabel = detection?.state === 'completed'
-    ? `${t('chat.detectedLanguage')} · ${detection.detectedLanguage?.toUpperCase()}`
-    : detection?.state === 'ambiguous'
-      ? t('chat.languageAmbiguous')
-      : detection?.state === 'failed'
-        ? t('chat.languageDetectionFailed')
-        : detection?.state === 'pending'
-          ? t('chat.languageDetectionPending')
-          : t('chat.languageNotApplicable');
-  return (
-    <View style={styles.detailsBlock}>
-      <Text style={styles.detailText}>
-        {detectionLabel}
-        {detection?.confidence !== null && detection?.confidence !== undefined ? ` · ${Math.round(detection.confidence * 100)}%` : ''}
-        {detection?.method ? ` · ${detection.method}` : ''}
-      </Text>
-      <Text style={styles.detailText}>{stateLabel}</Text>
-      {translation ? (
-        <>
-          <Text style={styles.detailText}>
-            {t('chat.sourceLanguage')} · {translation.sourceLanguage.toUpperCase()} · {t('chat.targetLanguage')} · {translation.targetLanguage.toUpperCase()}
-          </Text>
-          <Text style={styles.detailText}>
-            {t('chat.machineRoute')} · {translation.provider ?? notAvailable} / {translation.model ?? notAvailable}
-          </Text>
-          <Text style={styles.detailText}>{t('chat.detector')} · {detection?.method ?? notAvailable}</Text>
-          <Text selectable style={styles.detailHash}>
-            {t('chat.sourceFingerprint')} · {translation.sourceBodySha256}
-          </Text>
-          <Text style={styles.detailText}>
-            {t('chat.policyVersion')} · {translation.policyVersion ?? notAvailable} · {translation.updatedAt}
-          </Text>
-          {translation.reviewedAt ? (
-            <Text style={styles.detailText}>
-              {t('chat.humanReviewed')} · {translation.reviewedByUserId ?? notAvailable} · {translation.reviewedAt}
-            </Text>
-          ) : null}
-          {translation.failureCode ? (
-            <Text selectable style={styles.detailText}>{t('chat.failureCode')} · {translation.failureCode}</Text>
-          ) : null}
-          {translation.policyState === 'stale' ? (
-            <Text style={styles.detailWarning}>{t('chat.translationPolicyStale')}</Text>
-          ) : null}
-          {correction?.status === 'approved' ? (
-            <Text style={styles.detailText}>
-              {t('chat.reviewedCorrection')}
-              {correction.reviewedByUserId ? ` · ${correction.reviewedByUserId}` : ''}
-              {correction.reviewedAt ? ` · ${correction.reviewedAt}` : ''}
-            </Text>
-          ) : correction?.status === 'pending' ? (
-            <Text style={styles.detailText}>{t('chat.correctionPendingReview')}</Text>
-          ) : null}
-        </>
-      ) : detection?.state === 'ambiguous' ? (
-        <Text style={styles.detailText}>{t('chat.ambiguousOriginalAvailable')}</Text>
-      ) : null}
-    </View>
-  );
-}
-
 function TranslationCorrectionModal({ message, onClose }: { message: Message; onClose: () => void }) {
   const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
@@ -2216,7 +2133,6 @@ function MessageActionsModal({
   const [forwardOpen, setForwardOpen] = useState(false);
   const [actionTitle, setActionTitle] = useState('');
   const [actionDetails, setActionDetails] = useState('');
-  const [detailsOpen, setDetailsOpen] = useState(false);
   // Language details, corrections, and review moved here from the bubble so
   // the bubble stays quiet; they still exist one long-press away.
   const conversation = message
@@ -2224,9 +2140,6 @@ function MessageActionsModal({
     : undefined;
   const translationEnabled = conversation?.translationMode !== 'off';
   const translation = message && translationEnabled ? message.translation : undefined;
-  const hasDetails = Boolean(
-    message && translationEnabled && (translation || message.languageDetection),
-  );
   const canCorrect = false;
   const canReview = false;
   const live = Boolean(message?.serverId && !message.deleted);
@@ -2252,14 +2165,6 @@ function MessageActionsModal({
           {onTranslate ? (
             <PrimaryButton icon="language-outline" label={t('chat.translateForMe')} onPress={onTranslate} tone="light" />
           ) : null}
-          {hasDetails ? (
-            <PrimaryButton
-              icon="information-circle-outline"
-              label={t(detailsOpen ? 'chat.hideProvenance' : 'chat.showProvenance')}
-              onPress={() => setDetailsOpen((value) => !value)}
-              tone="light"
-            />
-          ) : null}
           {canCorrect && onProposeCorrection ? (
             <PrimaryButton icon="create-outline" label={t('chat.proposeCorrection')} onPress={onProposeCorrection} tone="light" />
           ) : null}
@@ -2268,7 +2173,6 @@ function MessageActionsModal({
           ) : null}
         </View>
       ) : null}
-      {message && detailsOpen ? <TranslationDetails message={message} /> : null}
       {message && messageEditWindowOpen(message) ? (
         <View style={styles.modalSection}>
           <FormField label={t('chat.editMessage')} multiline onChangeText={onChangeEditDraft} value={editDraft} />
