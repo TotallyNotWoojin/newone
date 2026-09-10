@@ -36,7 +36,12 @@ const ROOT = join(HERE, '..', '..');
 const args = process.argv.slice(2);
 const option = (name, fallback) => {
   const index = args.indexOf(`--${name}`);
-  return index >= 0 ? args[index + 1] : fallback;
+  if (index >= 0) return args[index + 1];
+  // --name=value too. Without this, `--areas=groups` matched nothing, fell
+  // through to the fallback, and quietly ran the whole suite instead of one
+  // area (cost an hour on Sep 10 2026).
+  const inline = args.find((arg) => arg.startsWith(`--${name}=`));
+  return inline === undefined ? fallback : inline.slice(name.length + 3);
 };
 const flag = (name) => args.includes(`--${name}`);
 
