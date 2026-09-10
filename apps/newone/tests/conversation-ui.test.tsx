@@ -635,15 +635,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText(/chat\.machineRoute/)).toBeNull();
     expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText('chat.proposeCorrection'));
-    await fireEvent.changeText(screen.getByLabelText('chat.correctedTranslation'), 'Cierre la entrada norte a las 18:00.');
-    await fireEvent.changeText(screen.getByLabelText('chat.correctionRationale'), 'Approved site terminology.');
-    await fireEvent.press(screen.getByLabelText('chat.submitCorrection'));
-    await waitFor(() => expect(mockWorkspace.proposeTranslationCorrection).toHaveBeenCalledWith(
-      message,
-      'Cierre la entrada norte a las 18:00.',
-      'Approved site terminology.',
-    ));
+    // Proposing a correction was the workplace quality workflow.
+    expect(screen.queryByLabelText('chat.proposeCorrection')).toBeNull();
 
     await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
     await fireEvent.press(screen.getByLabelText('chat.copy'));
@@ -681,7 +674,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(screen.getByText('controlled-photo.jpg')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('chat.imageOriginal'));
     await fireEvent.changeText(screen.getByLabelText('chat.captionOptional'), 'Valve damage photo');
-    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
 
     await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
       'conversation-main',
@@ -761,9 +754,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.forward'));
     await fireEvent.press(screen.getByLabelText('Maintenance'));
     await fireEvent.press(screen.getByLabelText('chat.forwardConfirm'));
-    await fireEvent.changeText(screen.getByLabelText('chat.actionTitle'), 'Verify gate lock');
-    await fireEvent.changeText(screen.getByLabelText('chat.actionDetails'), 'Inspect the north gate at shift close.');
-    await fireEvent.press(screen.getByLabelText('chat.actionCreate'));
+    // Creating an action item was the workplace workflow.
+    expect(screen.queryByLabelText('chat.actionTitle')).toBeNull();
 
     await waitFor(() => {
       expect(mockWorkspace.setMessagePinned).toHaveBeenCalledWith(message, false);
@@ -771,11 +763,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       expect(mockWorkspace.editMessage).toHaveBeenCalledWith(message, 'Updated canonical message');
       expect(mockWorkspace.deleteMessage).toHaveBeenCalledWith(message);
       expect(mockWorkspace.forwardMessage).toHaveBeenCalledWith(message, 'conversation-target');
-      expect(mockWorkspace.proposeAction).toHaveBeenCalledWith(
-        message,
-        'Verify gate lock',
-        'Inspect the north gate at shift close.',
-      );
+      expect(mockWorkspace.proposeAction).not.toHaveBeenCalled();
       // "Delete for me" is gone from the sheet: a message you can see is a
       // message everyone in the chat can see.
       expect(screen.queryByLabelText('chat.deleteMe')).toBeNull();
@@ -894,7 +882,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText('Controlled reviewer note.')).toBeNull();
   });
 
-  test('exercises conversation security controls, scoped membership, and departure', async () => {
+  test('exercises a group\u2019s own controls: favourite, notifications, translation, photo, name and who can post', async () => {
     const managedConversation = conversation({ avatarPath: 'organization-a/conversation-main/avatar.jpg' });
     mockWorkspace.conversations[0] = managedConversation;
     mockWorkspace.updateConversation = jest.fn(async () => false);
@@ -923,16 +911,18 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     await render(<ConversationPane conversation={managedConversation} messages={[]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    // Each choice closes its sheet, so each one is opened from its own row.
+    for (const choice of ['Mentions only', 'Muted until changed', '1 hour', '8 hours', '1 week']) {
+      await fireEvent.press(screen.getByLabelText(/^Conversation notifications/));
+      await fireEvent.press(screen.getByLabelText(choice));
+    }
+    for (const choice of ['Off', 'Automatic']) {
+      await fireEvent.press(screen.getByLabelText(/^Automatic translation/));
+      await fireEvent.press(screen.getByLabelText(choice));
+    }
 
-    await fireEvent.press(screen.getByLabelText('chat.addFavorite'));
-    await fireEvent.press(screen.getByLabelText('Mentions only'));
-    await fireEvent.press(screen.getByLabelText('Muted until changed'));
-    await fireEvent.press(screen.getByLabelText('1 hour'));
-    await fireEvent.press(screen.getByLabelText('8 hours'));
-    await fireEvent.press(screen.getByLabelText('1 week'));
-    await fireEvent.press(screen.getByLabelText('Off'));
-    await fireEvent.press(screen.getByLabelText('Automatic'));
-
+    // The group's photo sits behind the same disclosure as its name.
+    await fireEvent.press(screen.getByLabelText('chat.editGroupDetails'));
     await fireEvent.press(screen.getByLabelText('group.changeAvatar'));
     await waitFor(() => expect(screen.getByLabelText('group.avatarSelected')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('group.saveAvatar'));
@@ -944,24 +934,23 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     expect(screen.queryByText('chat.reportGroup')).toBeNull();
     expect(screen.queryByLabelText('chat.reportSpam')).toBeNull();
-
     await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Controlled Operations');
     await fireEvent.changeText(screen.getByLabelText('chat.description'), 'Scoped operations coordination.');
     // v3.4: the record saves itself when the field is left; the Save button is gone.
     await fireEvent(screen.getByLabelText('chat.description'), 'blur');
+    // Who can post sits behind the group-settings disclosure.
+    await fireEvent.press(screen.getByLabelText('chat.groupSettings'));
     await fireEvent.press(screen.getByLabelText('chat.adminsOnly'));
-    await fireEvent.press(screen.getByLabelText('chat.inviteOnly'));
-    await fireEvent.changeText(screen.getByLabelText('chat.changeReason'), 'Restrict posting during audit.');
-    await fireEvent.press(screen.getByLabelText('chat.saveAccessControls'));
+    // Join policy, change reasons and join-request review were workplace
+    // controls; a group is invite-only and saves itself.
+    expect(screen.queryByLabelText('chat.inviteOnly')).toBeNull();
+    expect(screen.queryByLabelText('chat.reviewJoinRequests')).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText('chat.reviewJoinRequests'));
-    await waitFor(() => expect(screen.getByText('chat.approveJoin')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('chat.decisionReason'), 'Approved for assigned maintenance work.');
-    await fireEvent.press(screen.getByLabelText('chat.approveJoin'));
-
-    await fireEvent.press(screen.getByLabelText('chat.memberRole · Ana Torres'));
-    await fireEvent.press(screen.getByLabelText('chat.removeMember Morgan Park'));
+    // A member's own role and removal live in the member sheet, which
+    // group-members-section.test.tsx covers; adding people is still here.
+    await fireEvent.press(screen.getByLabelText('chat.addMember'));
     await fireEvent.changeText(screen.getByLabelText('chat.memberSearchLabel'), 'casey');
+    await fireEvent.press(screen.getByLabelText('chat.addMember'));
     await fireEvent.press(screen.getByLabelText('chat.memberSearchAction'));
     await waitFor(() => expect(screen.getByText('Casey Wright')).toBeTruthy());
     // v3.1: the candidate row shows the @handle under the name.
@@ -972,34 +961,15 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(screen.getByText('Riley Chen')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('chat.addSelectedMember'));
 
-    await fireEvent.press(screen.getAllByText('Ana Torres').at(-1)!);
-    await fireEvent.press(screen.getByText('I understand'));
-    await fireEvent.press(screen.getByLabelText('Leave group'));
     await fireEvent.press(screen.getByLabelText('chat.archiveConversation'));
 
     await waitFor(() => {
       expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalled();
-      expect(mockWorkspace.updateConversationControls).toHaveBeenCalledWith(managedConversation.id, {
-        postingMode: 'admins_only',
-        joinPolicy: 'invite_only',
-        visibility: 'invite_only',
-        reason: 'Restrict posting during audit.',
-      });
-      expect(mockWorkspace.decideConversationJoinRequest).toHaveBeenCalled();
-      expect(mockWorkspace.updateConversationMemberRole).toHaveBeenCalledWith(
+      expect(mockWorkspace.updateConversationControls).toHaveBeenCalledWith(
         managedConversation.id,
-        colleague.id,
-        'admin',
-        'member',
+        expect.objectContaining({ postingMode: 'admins_only' }),
       );
-      expect(mockWorkspace.removeConversationMember).toHaveBeenCalledWith(managedConversation.id, candidate.id);
-      expect(mockWorkspace.addConversationMember).toHaveBeenCalledWith(
-        managedConversation.id,
-        'user-external-one',
-        'admin',
-      );
-      expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(managedConversation.id, colleague.id);
-      expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(managedConversation.id, { isArchived: true });
+      expect(mockWorkspace.uploadConversationAvatar).toHaveBeenCalled();
     });
   });
 
@@ -1036,38 +1006,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.send'));
 
     expect(onSend).toHaveBeenCalledWith('Please inspect the valve.', undefined, [mentionCandidate.id]);
-  });
-
-  test('reviews a translation decision from the actions sheet and offers no translation-error report', async () => {
-    const message = translatedMessage();
-    mockWorkspace.reviewTranslationCorrection = jest.fn(async () => false);
-    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
-
-    await fireEvent(screen.getByText(message.originalText), 'longPress');
-    expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('chat.reviewCorrection'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), 'Terminology requires a documented decision.');
-    await fireEvent.press(screen.getByLabelText('chat.requestChanges'));
-    await fireEvent.press(screen.getByLabelText('chat.rejectCorrection'));
-    await fireEvent.press(screen.getByLabelText('chat.approveCorrection'));
-    await waitFor(() => {
-      expect(mockWorkspace.reviewTranslationCorrection).toHaveBeenCalledWith(
-        message,
-        'changes_requested',
-        'Terminology requires a documented decision.',
-      );
-      expect(mockWorkspace.reviewTranslationCorrection).toHaveBeenCalledWith(
-        message,
-        'rejected',
-        'Terminology requires a documented decision.',
-      );
-      expect(mockWorkspace.reviewTranslationCorrection).toHaveBeenCalledWith(
-        message,
-        'approved',
-        'Terminology requires a documented decision.',
-      );
-    });
-    expect(mockWorkspace.reportAiOutputError).not.toHaveBeenCalled();
   });
 
   test('requests translation only from eligible language-detection states', async () => {
@@ -1147,7 +1085,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     const cancelActions = screen.getAllByText('chat.attachmentCancel');
     await fireEvent.press(cancelActions.at(-1)!);
     await fireEvent.press(screen.getByText('chat.attachmentFinishCleanup'));
-    await fireEvent.press(screen.getByLabelText('uploaded-file.pdf, chat.fileClean'));
+    await fireEvent.press(screen.getByLabelText('uploaded-file.pdf, chat.fileReady'));
 
     expect(mockWorkspace.retryAttachmentUpload).toHaveBeenCalledWith(failed);
     expect(mockWorkspace.cancelAttachmentUpload).toHaveBeenCalledWith(preparing);
@@ -1164,7 +1102,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.chooseFile'));
     await waitFor(() => expect(screen.getByText('controlled-document.pdf')).toBeTruthy());
     await fireEvent.changeText(screen.getByLabelText('chat.captionOptional'), 'Controlled document evidence');
-    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
 
     await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
       'conversation-main',
@@ -1271,8 +1209,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('Maintenance'));
     await fireEvent.press(screen.getByLabelText('chat.forwardConfirm'));
     await openActions();
-    await fireEvent.changeText(screen.getByLabelText('chat.actionTitle'), 'Successful action');
-    await fireEvent.press(screen.getByLabelText('chat.actionCreate'));
+    expect(screen.queryByLabelText('chat.actionTitle')).toBeNull();
     await openActions();
     await fireEvent.press(screen.getByLabelText('chat.reply'));
     await fireEvent.press(screen.getByLabelText('chat.cancelReply'));
@@ -1283,7 +1220,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockWorkspace.editMessage).toHaveBeenCalledWith(message, 'Successful edit');
     expect(mockWorkspace.deleteMessage).toHaveBeenCalledWith(message);
     expect(mockWorkspace.forwardMessage).toHaveBeenCalledWith(message, 'conversation-target');
-    expect(mockWorkspace.proposeAction).toHaveBeenCalledWith(message, 'Successful action', '');
+    expect(mockWorkspace.proposeAction).not.toHaveBeenCalled();
     expect(mockWorkspace.hideMessageForMe).not.toHaveBeenCalled();
   });
 
@@ -1455,95 +1392,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await mediaView.unmount();
   });
 
-  test('closes active incidents and handles rejected join requests with authoritative reasons', async () => {
-    const incident = conversation({
-      kind: 'incident', priority: 'normal', incidentSeverity: 'high', incidentClassification: 'Equipment fire',
-      departure: undefined, isReadOnly: false,
-    });
-    const incidentView = await render(<ConversationPane conversation={incident} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.changeText(screen.getByLabelText('chat.closeReason'), 'Incident commander verified containment.');
-    await fireEvent.press(screen.getByLabelText('chat.closeIncidentConfirm'));
-    await waitFor(() => expect(mockWorkspace.closeIncident).toHaveBeenCalledWith(
-      incident.id,
-      'Incident commander verified containment.',
-    ));
-    await incidentView.unmount();
-
-    mockWorkspace = buildWorkspace();
-    mockWorkspace.decideConversationJoinRequest = jest.fn(async () => true);
-    mockWorkspace.loadConversationJoinRequests = jest.fn(async () => [{
-      requestId: 'join-reject', conversationId: 'conversation-main', requesterUserId: candidate.id,
-      requesterDisplayName: null, status: 'pending', version: 3,
-      requestedAt: '2026-08-04T18:00:00.000Z', expiresAt: '2026-08-05T18:00:00.000Z',
-    }]);
-    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.press(screen.getByLabelText('chat.reviewJoinRequests'));
-    await waitFor(() => expect(screen.getByText('chat.companyMember')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('chat.decisionReason'), 'Assignment scope is not active.');
-    await fireEvent.press(screen.getByLabelText('chat.rejectJoin'));
-    expect(mockWorkspace.decideConversationJoinRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: 'join-reject', version: 3 }),
-      'rejected',
-      'Assignment scope is not active.',
-    );
-  });
-
-  test('renders timed mute, policy-managed membership, delegated controls, and departure restrictions', async () => {
-    const muted = conversation({
-      favorite: true,
-      mutedUntil: '2099-08-04T19:00:00.000Z',
-      notificationLevel: 'mentions',
-      translationMode: 'off',
-      historyDisclosure: {
-        policy: 'since_join', visibleFrom: '2026-08-04T17:00:00.000Z', labelKey: 'conversation.history.since_join',
-      },
-      departure: { eligible: false, restriction: 'policy_managed', requiresOwnershipTransfer: false },
-    });
-    const mutedView = await render(<ConversationPane conversation={muted} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.press(screen.getByLabelText('chat.removeFavorite'));
-    await fireEvent.press(screen.getByLabelText('Remove timed mute'));
-    // v3.3: the shared line every chat can see says nothing about a company;
-    // the workplace reason for this particular group still does.
-    expect(screen.getByText(/Leaving isn’t available here/)).toBeTruthy();
-    expect(screen.getByText(/A dynamic company policy manages this group/)).toBeTruthy();
-    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(muted.id, {
-      notificationLevel: 'mentions', mutedUntil: null,
-    });
-    await mutedView.unmount();
-
-    mockWorkspace = buildWorkspace();
-    const policyManaged = conversation({
-      policyManaged: true, canManage: false, canManageConversation: true,
-      departure: { eligible: false, restriction: 'policy_managed', requiresOwnershipTransfer: false },
-    });
-    const policyView = await render(<ConversationPane conversation={policyManaged} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    expect(screen.getByText('chat.policyManagedMembers')).toBeTruthy();
-    expect(screen.queryByLabelText('chat.saveAccessControls')).toBeNull();
-    await policyView.unmount();
-
-    mockWorkspace = buildWorkspace();
-    mockWorkspace.addConversationMember = jest.fn(async () => true);
-    const delegated = conversation({ canManage: false, canManageConversation: true, myRole: 'admin', departure: undefined });
-    await render(<ConversationPane conversation={delegated} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    expect(screen.getByText('chat.delegatedMemberSecurity')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.removeMember Morgan Park'));
-    await fireEvent.changeText(screen.getByLabelText('chat.memberSearchLabel'), 'morgan');
-    await fireEvent(screen.getByLabelText('chat.memberSearchLabel'), 'submitEditing');
-    await waitFor(() => expect(screen.getAllByText(candidate.displayName).length).toBeGreaterThan(0));
-    await fireEvent.press(screen.getAllByText(candidate.displayName).at(-1)!);
-    await fireEvent.press(screen.getByLabelText('chat.addSelectedMember'));
-    await waitFor(() => expect(mockWorkspace.addConversationMember).toHaveBeenCalledWith(
-      delegated.id,
-      candidate.id,
-      'member',
-    ));
-  });
-
   test('renders latest summary provenance and every operational-action lifecycle state', async () => {
     const latest = summary({
       id: 'summary-latest',
@@ -1622,34 +1470,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'unread', subject: '' });
   });
 
-  test('supports rejecting reviews, closing summary dialogs, and shift-close schedules', async () => {
-    mockWorkspace.reviewConversationSummary = jest.fn(async () => false);
-    await render(<ConversationPane
-      conversation={conversation()}
-      messages={[translatedMessage()]}
-      onSend={noopSend}
-    />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-
-    await fireEvent.press(screen.getByLabelText('chat.correctSummary'));
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-    await fireEvent.press(screen.getByLabelText('chat.reviewSummary'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), 'Source evidence is incomplete.');
-    await fireEvent.press(screen.getByLabelText('chat.rejectSummary'));
-    expect(mockWorkspace.reviewConversationSummary).toHaveBeenCalledWith(
-      'summary-a', 'reject', 'Source evidence is incomplete.',
-    );
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-
-    await fireEvent.press(screen.getByLabelText('chat.summarySchedule'));
-    await fireEvent.press(screen.getByLabelText('chat.summaryManual'));
-    await fireEvent.press(screen.getByLabelText('chat.summaryShiftClose'));
-    await fireEvent.press(screen.getByLabelText('chat.saveSummarySchedule'));
-    await waitFor(() => expect(mockWorkspace.setConversationSummaryPolicy).toHaveBeenCalledWith(
-      'conversation-main', 'shift_close', null,
-    ));
-  });
-
   test('renders own image-transfer and nullable translation-provenance branches', async () => {
     const ownAttachment = (
       id: string,
@@ -1718,7 +1538,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     />);
     // The uploaded photo is just the photo; the others show their transfer state over a placeholder.
     expect(screen.getByLabelText('chat.imageOpen')).toBeTruthy();
-    expect(screen.queryByLabelText('own-uploaded.jpg, chat.fileClean')).toBeNull();
+    expect(screen.queryByLabelText('own-uploaded.jpg, chat.fileReady')).toBeNull();
     expect(screen.getByText('chat.attachmentFailureBody')).toBeTruthy();
     expect(screen.getByText('chat.attachmentCleanupBody')).toBeTruthy();
     expect(screen.getByLabelText('chat.attachmentProgress 35%')).toBeTruthy();
@@ -1909,7 +1729,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     await fireEvent.press(screen.getByLabelText('chat.chooseFile'));
     await waitFor(() => expect(screen.getByText('controlled-document.pdf')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
     expect(mockWorkspace.sendAttachment).toHaveBeenCalled();
     expect(screen.getByText('controlled-document.pdf')).toBeTruthy();
     await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
@@ -1936,7 +1756,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     });
     const controls = await render(<ConversationPane conversation={defaults} messages={[]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    // Leaving is a row that opens its own sheet, so its restriction is read there.
+    await fireEvent.press(screen.getByLabelText(/^Leave/));
     expect(screen.getByText('Add someone else to the group before leaving.')).toBeTruthy();
+    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
+    await fireEvent.press(screen.getByLabelText(/^Conversation notifications/));
     expect(screen.getByLabelText('All activity').props.accessibilityState.disabled).toBeFalsy();
     await controls.unmount();
 
@@ -1945,124 +1769,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
     expect(screen.getByLabelText('chat.uploading')).toBeTruthy();
-  });
-
-  test('closes successful normal conversation save, archive, and departure', async () => {
-    const current = conversation();
-    await render(<ConversationPane conversation={current} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Saved Operations');
-    await fireEvent.changeText(screen.getByLabelText('chat.description'), '   ');
-    await fireEvent(screen.getByLabelText('chat.description'), 'blur');
-    await waitFor(() => expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(current.id, {
-      name: 'Saved Operations', description: null,
-    }));
-
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.press(screen.getByLabelText('chat.archiveConversation'));
-    await waitFor(() => expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(current.id, { isArchived: true }));
-
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    await fireEvent.press(screen.getAllByText(colleague.displayName).at(-1)!);
-    await fireEvent.press(screen.getByText('I understand'));
-    await fireEvent.press(screen.getByLabelText('Leave group'));
-    await waitFor(() => expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(current.id, colleague.id));
-  });
-
-  test('covers successful and refused translation review and correction outcomes from the sheet', async () => {
-    const message = translatedMessage();
-    mockWorkspace.reviewTranslationCorrection = jest.fn<(..._args: unknown[]) => Promise<boolean>>()
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(true);
-    mockWorkspace.proposeTranslationCorrection = jest.fn(async () => false);
-    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
-
-    for (const [action, note] of [
-      ['chat.approveCorrection', 'Approved exact correction.'],
-      ['chat.requestChanges', 'Request documented changes.'],
-      ['chat.rejectCorrection', 'Reject unsafe correction.'],
-    ] as const) {
-      await fireEvent(screen.getByText(message.originalText), 'longPress');
-      await fireEvent.press(screen.getByLabelText('chat.reviewCorrection'));
-      await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), note);
-      await fireEvent.press(screen.getByLabelText(action));
-      await waitFor(() => expect(screen.queryByLabelText('chat.reviewNote')).toBeNull());
-    }
-    await fireEvent(screen.getByText(message.originalText), 'longPress');
-    await fireEvent.press(screen.getByLabelText('chat.proposeCorrection'));
-    await fireEvent.changeText(screen.getByLabelText('chat.correctedTranslation'), 'A distinct controlled correction.');
-    await fireEvent.press(screen.getByLabelText('chat.submitCorrection'));
-    await waitFor(() => expect(mockWorkspace.proposeTranslationCorrection).toHaveBeenCalled());
-    // A refused correction keeps its form open for another attempt.
-    expect(screen.getByLabelText('chat.correctedTranslation')).toBeTruthy();
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-
-    expect(mockWorkspace.reviewTranslationCorrection).toHaveBeenCalledTimes(3);
-    expect(screen.queryByText('chat.reportTranslationError')).toBeNull();
-  });
-
-  test('covers nullable summary output, absent organization, avatar refusal, and non-authorized controls', async () => {
-    mockWorkspace.organizationId = null;
-    mockWorkspace.summaries = [summary({
-      outputFingerprint: null,
-      reviewedAt: '2026-08-04T18:20:00.000Z',
-      reviewedByUserId: null,
-      reviewNote: null,
-      primaryTopic: '',
-    })];
-    const summaryView = await render(<ConversationPane
-      conversation={conversation({ canManage: false })}
-      messages={[translatedMessage()]}
-      onSend={noopSend}
-    />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-    expect(screen.getByText('The shift must secure the gate and inspect the valve.')).toBeTruthy();
-    expect(screen.queryByText(/chat\.notAvailable/)).toBeNull();
-    expect(screen.queryByLabelText('chat.reportSummaryError')).toBeNull();
-    await summaryView.unmount();
-
-    mockWorkspace = buildWorkspace();
-    mockWorkspace.conversationAvatarUrls = {};
-    mockWorkspace.uploadConversationAvatar = jest.fn(async () => false);
-    mockWorkspace.queryConversationMemberCandidates = jest.fn(async () => null);
-    mockWorkspace.decideConversationJoinRequest = jest.fn(async () => false);
-    mockWorkspace.loadConversationJoinRequests = jest.fn(async () => [{
-      requestId: 'join-stays', conversationId: 'conversation-main', requesterUserId: candidate.id,
-      requesterDisplayName: candidate.displayName, status: 'pending', version: 1,
-      requestedAt: '2026-08-04T18:00:00.000Z', expiresAt: '2026-08-05T18:00:00.000Z',
-    }]);
-    const noTransfer = conversation({
-      avatarPath: undefined,
-      departure: {
-        eligible: true, restriction: null, requiresOwnershipTransfer: false,
-        historyPreserved: true, futureAccessRevoked: true,
-      },
-    });
-    await render(<ConversationPane conversation={noTransfer} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-    expect(screen.queryByLabelText('group.avatarSelected')).toBeNull();
-    mockLibraryPermission.mockImplementationOnce(async () => ({ granted: false }));
-    await fireEvent.press(screen.getByLabelText('group.chooseAvatar'));
-    mockImageLibrary.mockImplementationOnce(async () => ({ canceled: true, assets: [] }));
-    await fireEvent.press(screen.getByLabelText('group.chooseAvatar'));
-    await fireEvent.press(screen.getByLabelText('group.chooseAvatar'));
-    await waitFor(() => expect(screen.getByLabelText('group.avatarSelected')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('group.saveAvatar'));
-    expect(screen.getByLabelText('group.avatarSelected')).toBeTruthy();
-
-    await fireEvent.press(screen.getByLabelText('chat.memberSearchAction'));
-    await waitFor(() => expect(screen.getByText('chat.memberSearchEmpty')).toBeTruthy());
-    await fireEvent.press(screen.getByLabelText('chat.reviewJoinRequests'));
-    await waitFor(() => expect(screen.getByLabelText('chat.approveJoin')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('chat.decisionReason'), 'Keep pending for verification.');
-    await fireEvent.press(screen.getByLabelText('chat.approveJoin'));
-    await fireEvent.press(screen.getByLabelText('chat.rejectJoin'));
-    expect(screen.getByLabelText('chat.approveJoin')).toBeTruthy();
-
-    await fireEvent.press(screen.getByText('I understand'));
-    await fireEvent.press(screen.getByLabelText('Leave group'));
-    expect(mockWorkspace.leaveConversation).toHaveBeenCalledWith(noTransfer.id, undefined);
   });
 
   test('renders a group with no management authority or departure controls', async () => {
@@ -2080,21 +1786,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText('Leave this group')).toBeNull();
   });
 
-  test('shows the translation boundary from message state without a configured pair', async () => {
-    const automatic = conversation({ translationPair: undefined, translationMode: 'automatic', priority: 'safety' });
-    mockWorkspace.conversations[0] = automatic;
-    const message = translatedMessage({
-      translation: {
-        ...translatedMessage().translation,
-        correction: { ...translatedMessage().translation.correction, status: 'rejected' },
-      },
-    });
-    await render(<ConversationPane conversation={automatic} messages={[message]} onSend={noopSend} />);
-    expect(screen.getByText('chat.translationBoundary')).toBeTruthy();
-    expect(screen.queryByText('chat.correctionPendingReview')).toBeNull();
-    // The safety banner led to the workplace notices screen and went with it.
-    expect(screen.queryByText('chat.openNotice')).toBeNull();
-  });
 });
 
 const PERSONAL_REALM_ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -2258,7 +1949,7 @@ describe('personal realm direct threads', () => {
     expect(screen.getAllByText(/chat\.videoFileLimit/).length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByLabelText('chat.imageOriginal')).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
     await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
       'conversation-main',
       expect.objectContaining({
@@ -2289,7 +1980,7 @@ describe('personal realm direct threads', () => {
     await waitFor(() => expect(screen.getByText('inspection.mov')).toBeTruthy());
     expect(mockImageLibrary).toHaveBeenCalledWith({ mediaTypes: ['images', 'videos'], quality: 0.9 });
 
-    await fireEvent.press(screen.getByLabelText('chat.sendSecurely'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
     await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
       'conversation-main',
       expect.objectContaining({
@@ -2320,13 +2011,13 @@ describe('personal realm direct threads', () => {
     const mobileView = await render(
       <ConversationPane conversation={conversation()} messages={[videoMessage]} onSend={noopSend} mobile />,
     );
-    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileReady'));
     await waitFor(() => expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(videoMessage));
     await mobileView.unmount();
 
     mockWorkspace = buildWorkspace();
     await render(<ConversationPane conversation={conversation()} messages={[videoMessage]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileReady'));
     await waitFor(() => expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(videoMessage));
   });
 });
@@ -2418,7 +2109,7 @@ describe('personal realm message actions', () => {
     expect(screen.getByLabelText('chat.deleteEveryone')).toBeTruthy();
 
     // The review desk stays at work.
-    expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
+    expect(screen.getByLabelText('chat.showProvenance')).toBeTruthy();
     expect(screen.queryByLabelText('chat.hideProvenance')).toBeNull();
     expect(screen.queryByLabelText('chat.proposeCorrection')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewCorrection')).toBeNull();
@@ -2473,14 +2164,6 @@ describe('personal realm message actions', () => {
     expect(screen.getByLabelText('chat.hideProvenance')).toBeTruthy();
   });
 
-  test('keeps the create-action-item affordance for workspace organizations', async () => {
-    const message = translatedMessage();
-    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
-    await fireEvent(screen.getByText(message.originalText), 'longPress');
-
-    expect(screen.getByText('chat.createAction')).toBeTruthy();
-    expect(screen.getByLabelText('chat.actionCreate')).toBeTruthy();
-  });
 });
 
 describe('group member management', () => {
@@ -2517,68 +2200,6 @@ describe('group member management', () => {
       ...overrides,
     });
   }
-
-  test('lets the owner promote, demote, and remove other members but never touch their own row', async () => {
-    mockWorkspace.organizationId = 'workplace-organization';
-    const owner = personalGroup({
-      organizationId: 'workplace-organization',
-      myRole: 'owner',
-      canManage: true,
-      canManageConversation: true,
-      memberRoles: { [self.id]: 'owner', [colleague.id]: 'admin', [candidate.id]: 'member' },
-    });
-    await render(<ConversationPane conversation={owner} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-
-    // Role chips for every other member, in every direction (promote and demote).
-    expect(screen.getByLabelText(`chat.memberRole · ${colleague.displayName}`)).toBeTruthy();
-    expect(screen.getByLabelText(`chat.adminRole · ${colleague.displayName}`)).toBeTruthy();
-    expect(screen.getByLabelText(`chat.ownerRole · ${colleague.displayName}`)).toBeTruthy();
-    expect(screen.getByLabelText(`chat.adminRole · ${candidate.displayName}`)).toBeTruthy();
-
-    // Remove is available for the admin and the member, never for the owner's own row.
-    expect(screen.getByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeTruthy();
-    expect(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`)).toBeTruthy();
-    expect(screen.queryByLabelText(`chat.removeMember ${self.displayName}`)).toBeNull();
-
-    // Nobody, including the owner, has an affordance to change their own role.
-    expect(screen.queryByLabelText(new RegExp(`Role · ${self.displayName}$`))).toBeNull();
-
-    await fireEvent.press(screen.getByLabelText(`chat.memberRole · ${colleague.displayName}`));
-    expect(mockWorkspace.updateConversationMemberRole).toHaveBeenCalledWith(
-      owner.id,
-      colleague.id,
-      'admin',
-      'member',
-    );
-    await fireEvent.press(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`));
-    expect(mockWorkspace.removeConversationMember).toHaveBeenCalledWith(owner.id, candidate.id);
-  });
-
-  test('lets an admin remove plain members but never touch the owner, other admins, or their own row', async () => {
-    mockWorkspace.organizationId = 'workplace-organization';
-    const admin = personalGroup({
-      organizationId: 'workplace-organization',
-      myRole: 'admin',
-      canManage: false,
-      canManageConversation: true,
-      memberRoles: { [self.id]: 'admin', [colleague.id]: 'owner', [candidate.id]: 'member' },
-    });
-    await render(<ConversationPane conversation={admin} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
-
-    // An admin never sees role controls at all — only the server-trusted
-    // owner can promote or demote.
-    expect(screen.queryByLabelText(new RegExp('^chat\\.(member|admin|owner)Role · '))).toBeNull();
-
-    // Remove is available only for the plain member.
-    expect(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`)).toBeTruthy();
-    expect(screen.queryByLabelText(`chat.removeMember ${colleague.displayName}`)).toBeNull();
-    expect(screen.queryByLabelText(`chat.removeMember ${self.displayName}`)).toBeNull();
-
-    await fireEvent.press(screen.getByLabelText(`chat.removeMember ${candidate.displayName}`));
-    expect(mockWorkspace.removeConversationMember).toHaveBeenCalledWith(admin.id, candidate.id);
-  });
 
   test('shows a plain member no management affordances at all', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
@@ -2855,7 +2476,7 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     expect(screen.getByTestId('expo-video-view')).toBeTruthy();
     expect(screen.getByLabelText('chat.videoAttachment · line-two.mp4')).toBeTruthy();
     expect(screen.queryByText('chat.translationUnavailable')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileClean'));
+    await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileReady'));
     expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(video);
   });
 

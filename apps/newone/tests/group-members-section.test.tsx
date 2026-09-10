@@ -41,6 +41,7 @@ function workspaceWith(overrides: Record<string, unknown> = {}) {
     updateConnection: jest.fn(async (..._args: unknown[]) => true),
     setPersonMuted: jest.fn(async (..._args: unknown[]) => true),
     setPersonBlocked: jest.fn(async (..._args: unknown[]) => true),
+    updateConversationMemberRole: jest.fn(async (..._args: unknown[]) => true),
     removeConversationMember: jest.fn(async (..._args: unknown[]) => true),
     ...overrides,
   };
@@ -134,6 +135,21 @@ describe('group members section', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Ana Friend' }));
     expect(screen.queryByRole('button', { name: 'group.memberAddFriend Ana Friend' })).toBeNull();
     expect(screen.getByRole('button', { name: 'group.memberMute Ana Friend' })).toBeTruthy();
+  });
+
+  test('an owner promotes and demotes from the member sheet', async () => {
+    // The per-member role control moved here out of the conversation pane when
+    // the two member menus became one sheet; this is its only coverage.
+    await render(<GroupMembersSection conversation={group()} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Sam Stranger' }));
+    await fireEvent.press(screen.getByLabelText('chat.adminRole · Sam Stranger'));
+    expect(mockWorkspace.updateConversationMemberRole).toHaveBeenCalledWith(
+      'conversation-group', 'user-sam', 'member', 'admin',
+    );
+    // The role a member already has is not a control.
+    mockWorkspace.updateConversationMemberRole.mockClear();
+    await fireEvent.press(screen.getByLabelText('chat.memberRole · Sam Stranger'));
+    expect(mockWorkspace.updateConversationMemberRole).not.toHaveBeenCalled();
   });
 
   test('a plain member cannot remove anyone', async () => {

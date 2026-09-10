@@ -30,7 +30,6 @@ import {
 } from 'react-native';
 import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments';
 import { useConversationTyping } from '@/data/realtime/use-conversation-typing';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
@@ -455,7 +454,7 @@ export function ConversationPane({
       <View style={styles.emptyPane}>
         {backOnlyHeader}
         <EmptyState
-          body={t(isPersonalRealm(workspace.organizationId) ? 'chat.chooseBodyConsumer' : 'chat.chooseBody')}
+          body={t('chat.chooseBodyConsumer')}
           icon="chatbubbles-outline"
           title={t('chat.choose')}
         />
@@ -498,17 +497,6 @@ export function ConversationPane({
         }}
         typingLabel={typingLabel}
       />
-
-      {/* The workplace disclaimer stays for organizations; consumer threads do
-          not carry it (owner request, Sep 4 2026). */}
-      {conversation.translationMode !== 'off'
-        && !isPersonalRealm(workspace.organizationId)
-        && (conversation.translationPair || messages.some((message) => message.translationState !== 'not_requested')) ? (
-        <View accessibilityRole="alert" style={styles.translationBoundary}>
-          <Ionicons name="shield-checkmark-outline" color={colors.amber} size={17} />
-          <Text style={styles.translationBoundaryText}>{t('chat.translationBoundary')}</Text>
-        </View>
-      ) : null}
 
       <View style={styles.timeline}>
         {awaitingFirstPage ? (
@@ -568,7 +556,7 @@ export function ConversationPane({
               action={(
                 <StatusBadge
                   icon="lock-closed"
-                  label={t(isPersonalRealm(workspace.organizationId) ? 'chat.privateConsumer' : 'chat.private')}
+                  label={t('chat.privateConsumer')}
                 />
               )}
               body={t('chat.startBody')}
@@ -979,7 +967,7 @@ function SystemEventRow({ message }: { message: Message }) {
   if (!event) return null;
   const targetName = event.targetUserId
     ? workspace.people.find((person) => person.id === event.targetUserId)?.displayName
-      ?? t(isPersonalRealm(workspace.organizationId) ? 'chat.companyMemberConsumer' : 'chat.companyMember')
+      ?? t('chat.companyMemberConsumer')
     : '';
   const label = event.eventType === 'conversation.posting.admins_only'
     ? t('chat.systemPostingAdminsOnly')
@@ -1752,7 +1740,7 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
   if (!attachment) return null;
   // Consumer uploads are not scanned (owner request): the card says "Ready"
   // and "Uploading" instead of the workplace scan wording.
-  const consumer = isPersonalRealm(workspace.organizationId);
+  const consumer = true;
   const scanStatus = {
     clean: { label: consumer ? t('chat.fileReady') : t('chat.fileClean'), icon: 'download-outline' as const },
     scanning: { label: consumer ? t('chat.attachmentUploading') : t('chat.fileScanning'), icon: 'hourglass-outline' as const },
@@ -2224,7 +2212,6 @@ function MessageActionsModal({
   // workplace concepts. In the personal realm the sheet is exactly: the
   // reaction row, Reply, Copy, Pin, Forward, Translate for me, and — on your
   // own messages — Edit and Delete.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const [forwardTargetId, setForwardTargetId] = useState('');
   const [forwardOpen, setForwardOpen] = useState(false);
   const [actionTitle, setActionTitle] = useState('');
@@ -2238,12 +2225,10 @@ function MessageActionsModal({
   const translationEnabled = conversation?.translationMode !== 'off';
   const translation = message && translationEnabled ? message.translation : undefined;
   const hasDetails = Boolean(
-    !personalRealm && message && translationEnabled && (translation || message.languageDetection),
+    message && translationEnabled && (translation || message.languageDetection),
   );
-  const canCorrect = Boolean(!personalRealm && message?.translatedText && translation?.status === 'completed');
-  const canReview = !personalRealm
-    && translation?.correction?.status === 'pending'
-    && workspace.hasCapability('language.review');
+  const canCorrect = false;
+  const canReview = false;
   const live = Boolean(message?.serverId && !message.deleted);
   return (
     <ActionModal
@@ -2343,21 +2328,6 @@ function MessageActionsModal({
               />
             </View>
           )}
-          {!personalRealm ? (
-            <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>{t('chat.createAction')}</Text>
-              <FormField label={t('chat.actionTitle')} onChangeText={setActionTitle} value={actionTitle} />
-              <FormField label={t('chat.actionDetails')} multiline onChangeText={setActionDetails} value={actionDetails} />
-              <PrimaryButton
-                disabled={!actionTitle.trim()}
-                icon="checkbox-outline"
-                label={t('chat.actionCreate')}
-                loading={busy === 'action-propose'}
-                onPress={() => void onProposeAction(actionTitle, actionDetails)}
-                tone="dark"
-              />
-            </View>
-          ) : null}
         </>
       ) : null}
       <ActionError message={error} />
@@ -2431,7 +2401,6 @@ function ConversationControlsModal({
   const { locale, t } = useI18n();
   const workspace = useWorkspace();
   // Workplace-only notes and discovery controls stay out of the personal realm.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const notification = notificationCopy(locale);
   const translationPreference = translationPreferenceCopy(locale);
   const departureCopy = conversationDepartureCopy(locale);
@@ -2473,7 +2442,7 @@ function ConversationControlsModal({
       visibility,
       // The service keeps a reason on every controls change; a consumer is
       // never asked for one, so the app records where it came from.
-      reason: personalRealm ? 'Changed in the app' : controlReason,
+      reason: 'Changed in the app',
     });
   };
   const scopedMemberProfiles = new Map(
@@ -2627,7 +2596,7 @@ function ConversationControlsModal({
           description need canManageConversation, and a consumer group owner
           can have the second without the first — which hid the form behind a
           disclosure that never rendered (chat-33, run-2026-09-08T08-56-59). */}
-      {personalRealm && conversation.kind !== 'direct'
+      {conversation.kind !== 'direct'
         && (conversation.canManage || conversation.canManageConversation) ? (
         <Pressable
           accessibilityLabel={t('chat.editGroupDetails')}
@@ -2640,7 +2609,7 @@ function ConversationControlsModal({
           <Ionicons color={colors.inkSubtle} name={editingGroup ? 'chevron-up' : 'chevron-down'} size={16} />
         </Pressable>
       ) : null}
-      {(!personalRealm || editingGroup)
+      {editingGroup
         && conversation.canManage && ['group', 'team', 'shift', 'incident'].includes(conversation.kind) ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('group.avatarTitle')}</Text>
@@ -2696,7 +2665,7 @@ function ConversationControlsModal({
           </View>
         </View>
       ) : null}
-      {(!personalRealm || editingGroup)
+      {editingGroup
         && conversation.canManageConversation && conversation.kind !== 'direct' ? (
         <View style={styles.modalSection}>
           {/* A change applies when it is made. The owner asked for the Save
@@ -2718,7 +2687,7 @@ function ConversationControlsModal({
           />
         </View>
       ) : null}
-      {personalRealm && ['group', 'team'].includes(conversation.kind)
+      {conversation.kind === 'group'
         && conversation.canManageConversation && !conversation.policyManaged ? (
         <Pressable
           accessibilityLabel={t('chat.groupSettings')}
@@ -2731,7 +2700,7 @@ function ConversationControlsModal({
           <Ionicons color={colors.inkSubtle} name={groupSettingsOpen ? 'chevron-up' : 'chevron-down'} size={16} />
         </Pressable>
       ) : null}
-      {(!personalRealm || groupSettingsOpen)
+      {groupSettingsOpen
         && conversation.canManageConversation
         && !conversation.policyManaged
         && ['group', 'team'].includes(conversation.kind) ? (
@@ -2751,87 +2720,21 @@ function ConversationControlsModal({
         </View>
       ) : null}
 
-          {personalRealm ? null : (
-            <>
-              <Text style={styles.modalLabel}>{t('chat.accessControls')}</Text>
-              <Text style={styles.modalNote}>{t('chat.accessControlsDescription')}</Text>
-            </>
-          )}
           <Text style={styles.modalLabel}>{t('chat.whoCanPost')}</Text>
           <View style={styles.modalRow}>
             {/* Tapping a choice is the change. A workplace still records a
                 reason, so there the Save button below stays. */}
             <Chip
               label={t('chat.allMembers')}
-              onPress={() => { setPostingMode('all_members'); if (personalRealm) saveControls('all_members'); }}
+              onPress={() => { setPostingMode('all_members'); saveControls('all_members'); }}
               selected={postingMode === 'all_members'}
             />
             <Chip
               label={t('chat.adminsOnly')}
-              onPress={() => { setPostingMode('admins_only'); if (personalRealm) saveControls('admins_only'); }}
+              onPress={() => { setPostingMode('admins_only'); saveControls('admins_only'); }}
               selected={postingMode === 'admins_only'}
             />
           </View>
-          {personalRealm ? null : (
-            <>
-              <Text style={styles.modalLabel}>{t('chat.groupDiscovery')}</Text>
-              <View style={styles.modalRow}>
-                <Chip label={t('chat.inviteOnly')} onPress={() => { setVisibility('invite_only'); setJoinPolicy('invite_only'); }} selected={visibility === 'invite_only'} />
-                <Chip label={t('chat.organizationVisible')} onPress={() => { setVisibility('organization'); setJoinPolicy('approval_required'); }} selected={visibility === 'organization'} />
-                {conversation.visibility === 'unit' ? <Chip label={t('chat.unitVisible')} onPress={() => { setVisibility('unit'); setJoinPolicy('approval_required'); }} selected={visibility === 'unit'} /> : null}
-              </View>
-            </>
-          )}
-          {personalRealm ? null : (
-            <FormField label={t('chat.changeReason')} multiline onChangeText={setControlReason} placeholder={t('chat.changeReasonPlaceholder')} value={controlReason} />
-          )}
-          {personalRealm ? null : (
-            <PrimaryButton
-              disabled={controlReason.trim().length < 3}
-              label={t('chat.saveAccessControls')}
-              loading={busy === 'conversation-controls'}
-              onPress={() => saveControls(postingMode)}
-              tone="dark"
-            />
-          )}
-          {personalRealm ? null : (
-          <>
-          <PrimaryButton
-            label={t('chat.reviewJoinRequests')}
-            onPress={() => void workspace.loadConversationJoinRequests(conversation.id).then(setJoinRequests)}
-            tone="light"
-          />
-          {joinRequests.length ? (
-            <>
-              <FormField label={t('chat.decisionReason')} multiline onChangeText={setDecisionReason} placeholder={t('chat.decisionReasonPlaceholder')} value={decisionReason} />
-              {joinRequests.map((request) => (
-                <View key={request.requestId} style={styles.memberControlRow}>
-                  <View style={styles.memberControlCopy}>
-                    <Text style={styles.memberControlName}>{request.requesterDisplayName ?? t(personalRealm ? 'chat.companyMemberConsumer' : 'chat.companyMember')}</Text>
-                    <Text style={styles.memberControlRole}>{new Date(request.requestedAt).toLocaleString()}</Text>
-                  </View>
-                  <PrimaryButton
-                    disabled={decisionReason.trim().length < 3}
-                    label={t('chat.approveJoin')}
-                    onPress={() => void workspace.decideConversationJoinRequest(request, 'approved', decisionReason).then((done) => {
-                      if (done) setJoinRequests((items) => items.filter((item) => item.requestId !== request.requestId));
-                    })}
-                    tone="dark"
-                  />
-                  <PrimaryButton
-                    disabled={decisionReason.trim().length < 3}
-                    label={t('chat.rejectJoin')}
-                    onPress={() => void workspace.decideConversationJoinRequest(request, 'rejected', decisionReason).then((done) => {
-                      if (done) setJoinRequests((items) => items.filter((item) => item.requestId !== request.requestId));
-                    })}
-                    tone="danger"
-                  />
-                </View>
-              ))}
-            </>
-          ) : null}
-          </>
-          )}
         </View>
       ) : null}
       {/* A consumer's sheet states each setting on one row and opens the
@@ -2919,86 +2822,6 @@ function ConversationControlsModal({
             : translationPreference.automaticHint}
         </Text>
       </ActionModal>
-      {!conversation.managementOnly && !personalRealm ? (
-        <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>{notification.title}</Text>
-        <Text style={styles.modalNote}>{notification.description}</Text>
-        <View style={styles.modalRow}>
-          {([
-            ['all', notification.all],
-            ['mentions', notification.mentions],
-            ['none', notification.none],
-          ] as [NonNullable<Conversation['notificationLevel']>, string][]).map(([level, label]) => (
-            <Chip
-              key={level}
-              label={label}
-              onPress={preferencesBusy ? undefined : () => {
-                void onUpdateNotificationSettings(level, null);
-              }}
-              selected={notificationLevel === level && !mutedUntil}
-            />
-          ))}
-        </View>
-        <Text style={styles.modalLabel}>{notification.temporary}</Text>
-        <View style={styles.modalRow}>
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.oneHour}
-            onPress={() => muteFor(60 * 60)}
-            tone="light"
-          />
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.eightHours}
-            onPress={() => muteFor(8 * 60 * 60)}
-            tone="light"
-          />
-          <PrimaryButton
-            disabled={preferencesBusy}
-            label={notification.oneWeek}
-            onPress={() => muteFor(7 * 24 * 60 * 60)}
-            tone="light"
-          />
-        </View>
-        {mutedUntil ? (
-          <View style={styles.notificationMuteStatus}>
-            <Ionicons name="time-outline" color={colors.amber} size={16} />
-            <Text style={styles.notificationMuteText}>
-              {notification.mutedUntil} · {new Date(mutedUntil).toLocaleString()}
-            </Text>
-            <PrimaryButton
-              disabled={preferencesBusy}
-              label={notification.unmute}
-              onPress={() => void onUpdateNotificationSettings(notificationLevel, null)}
-              tone="light"
-            />
-          </View>
-        ) : null}
-        </View>
-      ) : null}
-      {!conversation.managementOnly && !personalRealm ? (
-        <View style={styles.modalSection}>
-        <Text style={styles.modalLabel}>{translationPreference.title}</Text>
-        <Text style={styles.modalNote}>{translationPreference.description}</Text>
-        <View style={styles.modalRow}>
-          <Chip
-            label={translationPreference.automatic}
-            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('automatic')}
-            selected={(conversation.translationMode ?? 'automatic') === 'automatic'}
-          />
-          <Chip
-            label={translationPreference.off}
-            onPress={preferencesBusy ? undefined : () => void onUpdateTranslationMode('off')}
-            selected={conversation.translationMode === 'off'}
-          />
-        </View>
-        <Text style={styles.modalNote}>
-          {conversation.translationMode === 'off'
-            ? translationPreference.offHint
-            : translationPreference.automaticHint}
-        </Text>
-        </View>
-      ) : null}
       {conversation.canManage && conversation.kind === 'incident' && !conversation.isReadOnly ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.closeIncident')}</Text>
@@ -3019,72 +2842,12 @@ function ConversationControlsModal({
           sheet carries the role chips and Remove as well; this list is the
           workplace one, where the security notes and the delegation rules
           belong. Two lists for the same people was the mess (v3.4). */}
-      {conversation.kind !== 'direct' && !personalRealm ? (
-        <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{t('chat.members')}</Text>
-          {conversation.policyManaged ? (
-            <Text style={styles.modalNote}>{t('chat.policyManagedMembers')}</Text>
-          ) : conversation.canManage ? (
-            personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberRoleSecurity')}</Text>
-          ) : conversation.canManageConversation ? (
-            <Text style={styles.modalNote}>{t('chat.delegatedMemberSecurity')}</Text>
-          ) : null}
-          {members.map((person) => (
-            <View key={person.id} style={styles.memberControlRow}>
-              <Avatar color={person.avatarColor} initials={person.initials} size={38} />
-              <View style={styles.memberControlCopy}>
-                <Text style={styles.memberControlName}>{person.displayName}</Text>
-                <Text style={styles.memberControlRole}>{
-                  t(`chat.${conversation.memberRoles?.[person.id] ?? 'member'}Role`)
-                }</Text>
-                {!conversation.policyManaged && conversation.canManage && person.id !== currentUserId ? (
-                  <View style={styles.memberRoleChoices}>
-                    {(['member', 'admin', 'owner'] as const).map((role) => {
-                      const currentRole = conversation.memberRoles?.[person.id] ?? 'member';
-                      return (
-                        <Chip
-                          accessibilityLabel={`${t(`chat.${role}Role`)} · ${person.displayName}`}
-                          key={role}
-                          label={t(`chat.${role}Role`)}
-                          onPress={busy === 'conversation-member-role' || currentRole === role
-                            ? undefined
-                            : () => void onUpdateMemberRole(
-                              conversation.id,
-                              person.id,
-                              currentRole,
-                              role,
-                            )}
-                          selected={currentRole === role}
-                        />
-                      );
-                    })}
-                  </View>
-                ) : null}
-              </View>
-              {!conversation.policyManaged && (conversation.canManage
-                ? conversation.memberRoles?.[person.id] !== 'owner'
-                : conversation.canManageConversation
-                  && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
-                  && conversation.memberRoles?.[person.id] === 'member') ? (
-                <IconButton
-                  label={`${t('chat.removeMember')} ${person.displayName}`}
-                  name="person-remove-outline"
-                  onPress={() => void onRemoveMember(conversation.id, person.id)}
-                  size={40}
-                  tone="danger"
-                />
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : null}
-
       {/* Who is in the group, then how to add somebody: the two used to be
           the other way round, with the list last (v3.4). */}
       <GroupMembersSection conversation={conversation} />
       {/* A row, not a form standing open: the field, the role chips and the
           button live behind it (backlog 78). */}
-      {personalRealm && conversation.canManageConversation
+      {conversation.canManageConversation
         && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
         && !conversation.policyManaged
         && !conversation.archived
@@ -3096,100 +2859,10 @@ function ConversationControlsModal({
       {/* A sheet of its own, not a form unrolling at the bottom of this one:
           with the keyboard up, the search button and the results it returns
           were pushed off the screen (groups-05, run-2026-09-09T09-50-27). */}
-      {!personalRealm && conversation.canManageConversation
-        && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
-        && !conversation.policyManaged
-        && !conversation.archived
-        && !conversation.isReadOnly ? (
-        <View style={styles.modalSection}>
-          {personalRealm ? null : <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>}
-          {personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>}
-          <SearchField
-            onChangeText={setCandidateQuery}
-            onSubmitEditing={() => void loadMemberCandidates(false)}
-            placeholder={t('chat.memberSearchLabel')}
-            value={candidateQuery}
-          />
-          <PrimaryButton
-            disabled={memberCandidateLoading}
-            icon="search-outline"
-            label={t('chat.memberSearchAction')}
-            loading={memberCandidateLoading && !memberCandidateCursor}
-            onPress={() => void loadMemberCandidates(false)}
-            tone="light"
-          />
-          {candidateScopeMatches && !memberCandidateLoading && candidates.length === 0 ? (
-            <Text style={styles.modalNote}>{t('chat.memberSearchEmpty')}</Text>
-          ) : null}
-          {candidates.length ? <View style={styles.candidateList}>
-            {candidates.map((person) => (
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ selected: selectedCandidateId === person.userId }}
-                key={person.userId}
-                onPress={() => setCandidateId(person.userId)}
-                style={[styles.candidateRow, selectedCandidateId === person.userId && styles.candidateRowSelected]}>
-                <Avatar
-                  color={colors.blue}
-                  initials={person.displayName
-                    .trim()
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((part) => part[0]?.toUpperCase() ?? '')
-                    .join('') || 'M'}
-                  size={34}
-                />
-                <View style={styles.candidateCopy}>
-                  <Text style={styles.candidateName}>{person.displayName}</Text>
-                  {person.username ? <Text style={styles.candidateHandle}>{`@${person.username}`}</Text> : null}
-                </View>
-                {person.roleLabel ? <Text style={styles.memberControlRole}>{person.roleLabel}</Text> : null}
-                {selectedCandidateId === person.userId ? <Ionicons name="checkmark-circle" color={colors.mintDark} size={18} /> : null}
-              </Pressable>
-            ))}
-          </View> : null}
-          {candidateScopeMatches && memberCandidateCursor ? (
-            <PrimaryButton
-              disabled={memberCandidateLoading}
-              label={t('chat.loadMoreMembers')}
-              loading={memberCandidateLoading}
-              onPress={() => void loadMemberCandidates(true)}
-              tone="light"
-            />
-          ) : null}
-          {conversation.canManage ? (
-            <View style={styles.modalRow}>
-              <Chip label={t('chat.memberRole')} onPress={() => setCandidateRole('member')} selected={candidateRole === 'member'} />
-              <Chip label={t('chat.adminRole')} onPress={() => setCandidateRole('admin')} selected={candidateRole === 'admin'} />
-            </View>
-          ) : (
-            <Text style={styles.modalNote}>{t('chat.delegatedAddsMembersOnly')}</Text>
-          )}
-          <PrimaryButton
-            disabled={!selectedCandidateId}
-            label={t('chat.addSelectedMember')}
-            loading={busy === 'conversation-add-member'}
-            onPress={async () => {
-              if (await onAddMember(
-                conversation.id,
-                selectedCandidateId,
-                conversation.canManage ? candidateRole : 'member',
-              )) {
-                setCandidateId('');
-                setMemberCandidates((current) => current.filter(
-                  (candidate) => candidate.userId !== selectedCandidateId,
-                ));
-              }
-            }}
-          />
-        </View>
-      ) : null}
       <ActionModal
         onClose={() => setSheetPicker(null)}
         title={t('chat.addMember')}
-        visible={personalRealm && sheetPicker === 'addPeople'}>
-          {personalRealm ? null : <Text style={styles.modalLabel}>{t('chat.addMember')}</Text>}
-          {personalRealm ? null : <Text style={styles.modalNote}>{t('chat.memberSearchPrompt')}</Text>}
+        visible={sheetPicker === 'addPeople'}>
           <SearchField
             onChangeText={setCandidateQuery}
             onSubmitEditing={() => void loadMemberCandidates(false)}
@@ -3270,7 +2943,7 @@ function ConversationControlsModal({
           />
       </ActionModal>
 
-      {!conversation.managementOnly && personalRealm ? (
+      {!conversation.managementOnly ? (
         <View style={styles.settingRows}>
           <SettingRow
             label={notification.title}
@@ -3296,84 +2969,15 @@ function ConversationControlsModal({
           sheet of its own. As the last section of a long sheet its checkbox
           sat below the fold, where a tap lands on the backdrop and closes
           everything (groups-18, three runs on Sep 9 2026). */}
-      {personalRealm && conversationDepartureSectionVisible(conversation) && conversation.departure ? (
+      {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.settingRows}>
           <SettingRow label={departureCopy.title} onPress={() => setSheetPicker('leave')} />
-        </View>
-      ) : null}
-      {!personalRealm && conversationDepartureSectionVisible(conversation) && conversation.departure ? (
-        <View style={styles.modalSection}>
-          <Text style={styles.modalLabel}>{departureCopy.title}</Text>
-          <Text style={styles.modalNote}>
-            {conversation.departure.eligible
-              ? departureCopy.disclosure
-              : `${departureCopy.unavailable} ${conversationDepartureRestrictionCopy(
-                  locale,
-                  conversation.departure.restriction,
-                )}`}
-          </Text>
-          {conversation.departure.eligible ? (
-            <>
-              {conversation.departure.requiresOwnershipTransfer ? (
-                <>
-                  <Text style={styles.modalNote}>{departureCopy.transfer}</Text>
-                  <Text style={styles.modalLabel}>{departureCopy.replacement}</Text>
-                  {replacementCandidates.length ? (
-                    <View style={styles.candidateList}>
-                      {replacementCandidates.map((person) => (
-                        <Pressable
-                          accessibilityRole="radio"
-                          accessibilityState={{ selected: replacementOwnerId === person.id }}
-                          key={person.id}
-                          onPress={() => setReplacementOwnerId(person.id)}
-                          style={[
-                            styles.candidateRow,
-                            replacementOwnerId === person.id && styles.candidateRowSelected,
-                          ]}>
-                          <Avatar color={person.avatarColor} initials={person.initials} size={34} />
-                          <Text style={styles.candidateName}>{person.displayName}</Text>
-                          {replacementOwnerId === person.id ? (
-                            <Ionicons name="checkmark-circle" color={colors.mintDark} size={18} />
-                          ) : null}
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : <Text style={styles.modalNote}>{departureCopy.noReplacement}</Text>}
-                </>
-              ) : null}
-              <Pressable
-                // A Pressable with a role hides its children from assistive tech and
-                // UI drivers; name the checkbox explicitly.
-                accessibilityLabel={departureCopy.confirmation}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: departureConfirmed }}
-                onPress={() => setDepartureConfirmed((current) => !current)}
-                style={styles.candidateRow}>
-                <Ionicons
-                  name={departureConfirmed ? 'checkbox' : 'square-outline'}
-                  color={departureConfirmed ? colors.mintDark : colors.inkMuted}
-                  size={20}
-                />
-                <Text style={styles.candidateName}>{departureCopy.confirmation}</Text>
-              </Pressable>
-              <PrimaryButton
-                disabled={!departureConfirmed || (
-                  conversation.departure.requiresOwnershipTransfer && !replacementOwnerId
-                )}
-                icon="exit-outline"
-                label={departureCopy.confirm}
-                loading={busy === 'conversation-leave'}
-                onPress={() => void onLeave(replacementOwnerId || undefined)}
-                tone="danger"
-              />
-            </>
-          ) : null}
         </View>
       ) : null}
       <ActionModal
         onClose={() => setSheetPicker(null)}
         title={departureCopy.title}
-        visible={personalRealm && sheetPicker === 'leave' && Boolean(conversation.departure)}>
+        visible={sheetPicker === 'leave' && Boolean(conversation.departure)}>
         {conversation.departure ? (
           <>
           <Text style={styles.modalLabel}>{departureCopy.title}</Text>
@@ -3497,7 +3101,6 @@ function AttachmentPickerModal({
   const { t } = useI18n();
   return (
     <ActionModal
-      description={isPersonalRealm(workspace.organizationId) ? undefined : t('chat.attachmentDescription')}
       onClose={onClose}
       title={t('chat.addAttachment')}
       visible={visible}>
@@ -3542,7 +3145,7 @@ function AttachmentPickerModal({
         disabled={!selected}
         icon="shield-checkmark-outline"
         testID="attachment-send"
-        label={busy ? t('chat.uploading') : isPersonalRealm(workspace.organizationId) ? t('chat.sendAttachment') : t('chat.sendSecurely')}
+        label={busy ? t('chat.uploading') : t('chat.sendAttachment')}
         loading={busy}
         onPress={onSend}
       />

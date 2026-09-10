@@ -364,7 +364,7 @@ describe('audio attachment playback bubble', () => {
     await render(<ConversationPane conversation={conversation()} messages={[scanning, uploading]} onSend={noopSend} />);
 
     expect(screen.queryByLabelText('chat.playVoiceNote')).toBeNull();
-    expect(screen.getByLabelText('voice-scan.m4a, chat.fileScanning')).toBeTruthy();
+    expect(screen.getByLabelText('voice-scan.m4a, chat.attachmentUploading')).toBeTruthy();
     expect(screen.getByLabelText('voice-upload.m4a, chat.attachmentUploading')).toBeTruthy();
   });
 });

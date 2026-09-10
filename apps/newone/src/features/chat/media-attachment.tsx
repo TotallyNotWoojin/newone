@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { isPersonalRealm } from '@/constants/personal-realm';
 import type { Attachment, Message } from '@/domain/types';
 import { ImageViewerModal } from '@/features/chat/image-viewer';
 import { mediaFrame } from '@/features/chat/timeline-layout';
@@ -165,7 +164,7 @@ export function VideoMessageAttachment({
       </View>
     );
   }
-  const readyLabel = t(isPersonalRealm(workspace.organizationId) ? 'chat.fileReady' : 'chat.fileClean');
+  const readyLabel = t('chat.fileReady');
   return (
     <VideoAttachment
       downloadLabel={`${attachment.name}, ${readyLabel}`}
