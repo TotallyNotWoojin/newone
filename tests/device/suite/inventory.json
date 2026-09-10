@@ -1753,12 +1753,12 @@
         },
         {
           "id": "pane.controls-favorite",
-          "label": "Add favorite",
+          "label": "Bookmark this chat",
           "catalogKey": "chat.addFavorite",
           "kind": "button",
           "gating": "controls modal && !conversation.managementOnly",
           "consumerIosReachable": true,
-          "note": "Label 'Remove favorite' (chat.removeFavorite) when conversation.favorite; updateConversationPreferences({isFavorite})",
+          "note": "Label 'Remove bookmark' (chat.removeFavorite) when conversation.favorite; updateConversationPreferences({isFavorite})",
           "sourceLine": 2595
         },
         {
@@ -5085,7 +5085,7 @@
     },
     {
       "key": "chat.addFavorite",
-      "en": "Add favorite",
+      "en": "Bookmark this chat",
       "usedIn": [
         "features/chat/conversation-pane.tsx:2595"
       ],
@@ -5541,7 +5541,7 @@
     },
     {
       "key": "chat.filterFavorites",
-      "en": "Favorites",
+      "en": "Bookmarked",
       "usedIn": [
         "features/chat/conversation-list.tsx:203"
       ],
@@ -6174,7 +6174,7 @@
     },
     {
       "key": "chat.removeFavorite",
-      "en": "Remove favorite",
+      "en": "Remove bookmark",
       "usedIn": [
         "features/chat/conversation-pane.tsx:2595"
       ],
