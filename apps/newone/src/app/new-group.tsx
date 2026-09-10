@@ -21,7 +21,6 @@ import type {
 } from '@/data/repositories/group-creation-dto.mjs';
 import type { SelectedAttachment } from '@/data/attachments';
 import type { Person } from '@/domain/types';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing, type } from '@/theme/tokens';
@@ -120,27 +119,19 @@ export default function NewGroupScreen() {
   // kinds and no owner/admin promotion at creation. Anyone can be added: the
   // picker lists this account's contacts first and finds everyone else
   // underneath, through the same people search as the Contacts tab.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const searchUsers = workspace.searchUsers;
   const people = workspace.people;
   const directoryCandidates = useMemo(
-    () => (personalRealm
-      ? people
-          .filter((person) => person.connectionState !== 'self' && !person.blockedByMe)
-          .map(directoryCandidate)
-      : []),
-    [people, personalRealm],
+    () => people
+      .filter((person) => person.connectionState !== 'self' && !person.blockedByMe)
+      .map(directoryCandidate),
+    [people],
   );
+  // A group is the only kind there is; team, shift and incident belonged to
+  // the workplace product.
   const groupKindOptions = useMemo(
-    () => (personalRealm
-      ? [['group', t('group.private')]]
-      : [
-          ['group', t('group.private')],
-          ['team', t('group.team')],
-          ['shift', t('group.shift')],
-          ['incident', t('group.incident')],
-        ]) as [GroupKind, string][],
-    [personalRealm, t],
+    () => [['group', t('group.private')]] as [GroupKind, string][],
+    [t],
   );
 
   const rememberCandidates = useCallback((next: PickerCandidate[]) => {
@@ -152,22 +143,9 @@ export default function NewGroupScreen() {
     setCandidatesLoading(false);
   }, []);
 
-  useEffect(() => {
-    if (personalRealm) return;
-    const sequence = ++requestSequence.current;
-    const timer = setTimeout(() => {
-      setCandidatesLoading(true);
-      void queryCandidates(search).then((result) => {
-        if (requestSequence.current !== sequence) return;
-        rememberCandidates(result ?? []);
-      });
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [personalRealm, queryCandidates, rememberCandidates, search]);
-
   // Consumer picker, short query: the contacts this account already has,
   // narrowed locally by name or handle. Derived, never fetched.
-  const shortConsumerQuery = personalRealm && search.trim().length < 2;
+  const shortConsumerQuery = search.trim().length < 2;
   const knownCandidates = useMemo(() => {
     const lowered = search.trim().toLocaleLowerCase();
     return directoryCandidates.filter((candidate) => (
@@ -181,7 +159,6 @@ export default function NewGroupScreen() {
   // query that drops under two characters only invalidates the search in
   // flight; the contacts list above stands on its own.
   useEffect(() => {
-    if (!personalRealm) return;
     const normalized = search.trim();
     const sequence = ++requestSequence.current;
     if (normalized.length < 2) {
@@ -197,7 +174,7 @@ export default function NewGroupScreen() {
       });
     }, 220);
     return () => clearTimeout(timer);
-  }, [personalRealm, rememberCandidates, search, searchUsers]);
+  }, [rememberCandidates, search, searchUsers]);
 
   // Two visibly separate intents: the people you already know, then everyone
   // else. A stranger already in the contacts list is never listed twice.
@@ -206,10 +183,10 @@ export default function NewGroupScreen() {
     [directoryCandidates],
   );
   const strangerCandidates = useMemo(
-    () => (personalRealm && !shortConsumerQuery
+    () => (!shortConsumerQuery
       ? candidates.filter((candidate) => !knownIds.has(candidate.userId))
       : []),
-    [candidates, knownIds, personalRealm, shortConsumerQuery],
+    [candidates, knownIds, shortConsumerQuery],
   );
 
   // A selected person may have come from the contacts list, which is derived
@@ -254,7 +231,7 @@ export default function NewGroupScreen() {
       unitId,
       historyPolicy,
       postingMode,
-      joinPolicy: lockedInviteOnly || personalRealm ? 'invite_only' : joinPolicy,
+      joinPolicy: 'invite_only',
       incidentSeverity: kind === 'incident' ? incidentSeverity : undefined,
       incidentClassification: kind === 'incident' ? incidentClassification : undefined,
       members: Object.entries(selected).map(([membershipId, role]) => ({ membershipId, role })),
@@ -354,63 +331,20 @@ export default function NewGroupScreen() {
           <Avatar
             color={candidateColor(candidate)}
             initials={candidateInitials(candidate.displayName)}
-            size={personalRealm ? 36 : 44}
+            size={36}
           />
           <View style={styles.personCopy}>
             <View style={styles.personTitleRow}>
               <Text numberOfLines={1} style={styles.personName}>{candidate.displayName}</Text>
-              {personalRealm ? null : (
-                <StatusBadge
-                  label={membershipLabel}
-                  tone={candidate.membershipType === 'guest'
-                    ? 'warning'
-                    : candidate.membershipType === 'contractor' ? 'purple' : 'neutral'}
-                />
-              )}
             </View>
-            {personalRealm ? (
-              candidate.username ? (
-                <Text numberOfLines={1} style={styles.personMeta}>{`@${candidate.username}`}</Text>
-              ) : null
-            ) : (
-              <Text numberOfLines={1} style={styles.personMeta}>
-                {[
-                  candidate.jobTitle ?? candidate.membershipRole,
-                  candidate.username ? `@${candidate.username}` : null,
-                ].filter(Boolean).join(' · ')}
-              </Text>
-            )}
+            {candidate.username ? (
+              <Text numberOfLines={1} style={styles.personMeta}>{`@${candidate.username}`}</Text>
+            ) : null}
             {expiresAt ? (
               <Text style={styles.expiryText}>{t('group.accessUntil')} {expiresAt}</Text>
             ) : null}
           </View>
         </Pressable>
-        {role ? (
-          candidate.membershipType === 'guest' ? (
-            <View style={styles.guestRoleRow}>
-              <StatusBadge label={t('group.member')} tone="warning" />
-              <Text style={styles.helperText}>{t('group.guestRoleLocked')}</Text>
-            </View>
-          ) : personalRealm ? null : (
-            <View style={styles.roles}>
-              <Chip
-                label={t('group.member')}
-                onPress={() => setRole(candidate, 'member')}
-                selected={role === 'member'}
-              />
-              <Chip
-                label={t('group.admin')}
-                onPress={() => setRole(candidate, 'admin')}
-                selected={role === 'admin'}
-              />
-              <Chip
-                label={t('group.owner')}
-                onPress={() => setRole(candidate, 'owner')}
-                selected={role === 'owner'}
-              />
-            </View>
-          )
-        ) : null}
       </View>
     );
   };
@@ -425,13 +359,13 @@ export default function NewGroupScreen() {
         />
         <View style={styles.headerCopy}>
           <Text accessibilityRole="header" style={styles.headerTitle}>{t('group.title')}</Text>
-          <Text numberOfLines={wide ? 2 : 1} style={styles.headerSubtitle}>{t(personalRealm ? 'group.subtitleConsumer' : 'group.subtitle')}</Text>
+          <Text numberOfLines={wide ? 2 : 1} style={styles.headerSubtitle}>{t('group.subtitleConsumer')}</Text>
         </View>
         <PrimaryButton
           disabled={
             !createdConversationId && (
-              (!personalRealm && name.trim().length < 2) ||
-              Object.keys(selected).length < (personalRealm ? 2 : 1) ||
+              
+              Object.keys(selected).length < 2 ||
               (kind === 'incident' && !incidentClassification.trim())
             )
           }
@@ -496,7 +430,7 @@ export default function NewGroupScreen() {
             </View>
           </View>
           {workspace.actionBusy === 'conversation-avatar-upload' ? (
-            <Text style={styles.avatarStatus}>{t(personalRealm ? 'group.avatarUploadingPlain' : 'group.avatarUploading')}</Text>
+            <Text style={styles.avatarStatus}>{t('group.avatarUploadingPlain')}</Text>
           ) : null}
           {avatarUploadFailed && createdConversationId ? (
             <View style={styles.avatarRecovery}>
@@ -529,39 +463,6 @@ export default function NewGroupScreen() {
             </Pressable>
             {advancedOpen ? (
               <View style={styles.advancedBody}>
-                {personalRealm ? null : (
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.label}>{t('group.type')}</Text>
-                    <ScrollView horizontal contentContainerStyle={styles.chips} showsHorizontalScrollIndicator={false}>
-                      {groupKindOptions.map(([id, label]) => (
-                        <Chip key={id} label={label} onPress={() => selectKind(id)} selected={kind === id} />
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {personalRealm ? null : (
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.label}>{t('group.unitScope')}</Text>
-                    <ScrollView horizontal contentContainerStyle={styles.chips} showsHorizontalScrollIndicator={false}>
-                      <Chip
-                        label={t('group.organizationWide')}
-                        onPress={() => setUnitId(null)}
-                        selected={unitId === null}
-                      />
-                      {workspace.units.map((unit) => (
-                        <Chip
-                          key={unit.unitId}
-                          label={unit.name}
-                          onPress={() => setUnitId(unit.unitId)}
-                          selected={unitId === unit.unitId}
-                        />
-                      ))}
-                    </ScrollView>
-                    <Text style={styles.helperText}>{t('group.unitScopeDisclosure')}</Text>
-                  </View>
-                )}
-
                 <View style={styles.fieldGroup}>
                   <Text style={styles.label}>{t('group.postingPolicy')}</Text>
                   <View style={styles.chips}>
@@ -578,36 +479,6 @@ export default function NewGroupScreen() {
                   </View>
                 </View>
 
-                {personalRealm ? null : (
-                  <View style={styles.fieldGroup}>
-                    <Text style={styles.label}>{t('group.joinPolicy')}</Text>
-                    {lockedInviteOnly ? (
-                      <StatusBadge icon="lock-closed" label={t('group.joinInviteOnly')} tone="success" />
-                    ) : (
-                      <View style={styles.chips}>
-                        <Chip
-                          label={t('group.joinInherit')}
-                          onPress={() => setJoinPolicy('inherit')}
-                          selected={joinPolicy === 'inherit'}
-                        />
-                        <Chip
-                          label={t('group.joinInviteOnly')}
-                          onPress={() => setJoinPolicy('invite_only')}
-                          selected={joinPolicy === 'invite_only'}
-                        />
-                        <Chip
-                          label={t('group.joinApproval')}
-                          onPress={() => setJoinPolicy('approval_required')}
-                          selected={joinPolicy === 'approval_required'}
-                        />
-                      </View>
-                    )}
-                    <Text style={styles.helperText}>
-                      {lockedInviteOnly ? t('group.joinLockedDisclosure') : t('group.joinPolicyDisclosure')}
-                    </Text>
-                  </View>
-                )}
-
                 <View style={styles.fieldGroup}>
                   <Text style={styles.label}>{t('group.historyPolicy')}</Text>
                   <View style={styles.chips}>
@@ -622,16 +493,6 @@ export default function NewGroupScreen() {
                       selected={historyPolicy === 'all'}
                     />
                   </View>
-                  {personalRealm ? null : (
-                    <View style={styles.policyNotice}>
-                      <Ionicons name="time-outline" color={colors.mintDark} size={17} />
-                      <Text style={styles.policyNoticeText}>
-                        {historyPolicy === 'all'
-                          ? t('group.historyAllDisclosure')
-                          : t('group.historySinceJoinDisclosure')}
-                      </Text>
-                    </View>
-                  )}
                 </View>
 
                 {kind === 'incident' ? (
@@ -688,19 +549,12 @@ export default function NewGroupScreen() {
                 {Object.keys(selected).length} {t('group.selectedSuffix')}
               </Text>
             </View>
-            {personalRealm ? null : (
-              <StatusBadge icon="shield-checkmark" label={joinPolicyLabel} tone="success" />
-            )}
           </View>
-          {personalRealm ? (
-            // Said plainly on the form; the service refuses a smaller group too.
-            <Text style={styles.minimumNote}>{t('group.minimumPeople')}</Text>
-          ) : (
-            <Text style={styles.candidatePrivacy}>{t('group.candidatePrivacy')}</Text>
-          )}
+          {/* Said plainly on the form; the service refuses a smaller group too. */}
+          <Text style={styles.minimumNote}>{t('group.minimumPeople')}</Text>
           <SearchField
             onChangeText={setSearch}
-            placeholder={t(personalRealm ? 'people.usernameSearch' : 'group.search')}
+            placeholder={t('people.usernameSearch')}
             value={search}
           />
 
@@ -711,53 +565,38 @@ export default function NewGroupScreen() {
             </View>
           ) : null}
 
-          {personalRealm ? (
-            <>
-              {/* Contacts first: adding someone you know is not the same act as finding a stranger. */}
-              <Text style={styles.pickerSection}>{t('group.contacts')}</Text>
-              <View style={styles.peopleList}>
-                {knownCandidates.length
-                  ? knownCandidates.map(renderCandidate)
-                  : (
-                    <View style={styles.emptyCandidates}>
-                      <Text style={styles.helperText}>
-                        {search.trim() ? t('group.contactsEmpty') : t('group.pickerHint')}
-                      </Text>
-                    </View>
-                  )}
-              </View>
-              <Text style={styles.pickerSection}>{t('group.searchEveryone')}</Text>
-              <View style={styles.peopleList}>
-                {shortConsumerQuery ? (
+            {/* Contacts first: adding someone you know is not the same act as finding a stranger. */}
+            <Text style={styles.pickerSection}>{t('group.contacts')}</Text>
+            <View style={styles.peopleList}>
+              {knownCandidates.length
+                ? knownCandidates.map(renderCandidate)
+                : (
                   <View style={styles.emptyCandidates}>
-                    <Text style={styles.helperText}>{t('group.pickerHint')}</Text>
-                  </View>
-                ) : candidatesLoading ? (
-                  <View style={styles.emptyCandidates}>
-                    <Text style={styles.helperText}>{t('group.loadingCandidates')}</Text>
-                  </View>
-                ) : strangerCandidates.length ? (
-                  strangerCandidates.map(renderCandidate)
-                ) : (
-                  <View style={styles.emptyCandidates}>
-                    <Text style={styles.helperText}>{t('people.usernameNoResults')}</Text>
+                    <Text style={styles.helperText}>
+                      {search.trim() ? t('group.contactsEmpty') : t('group.pickerHint')}
+                    </Text>
                   </View>
                 )}
-              </View>
-            </>
-          ) : (
+            </View>
+            <Text style={styles.pickerSection}>{t('group.searchEveryone')}</Text>
             <View style={styles.peopleList}>
-              {candidatesLoading ? (
+              {shortConsumerQuery ? (
+                <View style={styles.emptyCandidates}>
+                  <Text style={styles.helperText}>{t('group.pickerHint')}</Text>
+                </View>
+              ) : candidatesLoading ? (
                 <View style={styles.emptyCandidates}>
                   <Text style={styles.helperText}>{t('group.loadingCandidates')}</Text>
                 </View>
-              ) : candidates.length === 0 ? (
+              ) : strangerCandidates.length ? (
+                strangerCandidates.map(renderCandidate)
+              ) : (
                 <View style={styles.emptyCandidates}>
-                  <Text style={styles.helperText}>{t('group.noCandidates')}</Text>
+                  <Text style={styles.helperText}>{t('people.usernameNoResults')}</Text>
                 </View>
-              ) : candidates.map(renderCandidate)}
+              )}
             </View>
-          )}
+            
         </View>
       </ScrollView>
     </SafeAreaView>
