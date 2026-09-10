@@ -141,7 +141,7 @@ export function filterConversations(
 ) {
   const parsed = parseSearch(search, people);
   const markedUnread = new Set(markedUnreadIds);
-  return conversations.filter((conversation) => {
+  const matched = conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
     // An archived chat is out of the way until you go looking for it, which is
     // the whole point of archiving; before v3.4 it stayed in the list and the
@@ -161,6 +161,12 @@ export function filterConversations(
     if (filter === 'announcements') return conversation.kind === 'announcement';
     return true;
   });
+  // Ask for a person and the chat with that person is what you meant; the
+  // groups you also share with them come after (owner, Sep 10 2026). Sort is
+  // stable, so within each half the server's newest-first order survives.
+  if (!parsed.chips.some((chip) => chip.personId)) return matched;
+  return [...matched].sort((left, right) =>
+    (left.kind === 'direct' ? 0 : 1) - (right.kind === 'direct' ? 0 : 1));
 }
 
 export function ConversationList({
