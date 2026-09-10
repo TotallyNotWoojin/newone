@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   Platform,
   Pressable,
   RefreshControl,
@@ -267,7 +268,14 @@ export function ConversationList({
   };
 
   return (
-    <View style={[styles.container, desktop && styles.containerDesktop]}>
+    // Tapping anywhere that is not itself a control puts the keyboard away,
+    // which is the gesture people already use. The search field with nothing
+    // typed in it had no other way out (owner, Sep 10 2026); accessible={false}
+    // keeps this wrapper out of the accessibility tree.
+    <Pressable
+      accessible={false}
+      onPress={() => Keyboard.dismiss()}
+      style={[styles.container, desktop && styles.containerDesktop]}>
       {desktop ? (
         <View style={styles.header}>
           <View>
@@ -451,7 +459,7 @@ export function ConversationList({
           <Ionicons color={colors.white} name="arrow-up" size={17} />
         </Pressable>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 

@@ -263,19 +263,27 @@ export function buildSearchSuggestions(input: {
   for (const person of input.people ?? []) pushPerson(person, true);
   for (const person of input.strangers ?? []) pushPerson(person, false);
 
-  const conversations: SearchSuggestion[] = [];
-  for (const conversation of input.conversations ?? []) {
-    if (conversations.length >= limits.conversations) break;
-    if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) continue;
-    conversations.push({
+  // Match everything first, then order, then cut to the limit. Cutting during
+  // the walk meant the limit fell wherever the server's order happened to put
+  // things: asking for a person listed the groups shared with them and could
+  // drop the chat with them entirely (owner, Sep 10 2026).
+  const conversationMatches = (input.conversations ?? [])
+    .filter((conversation) => conversationMatchesSearch(conversation, parsed, messageConversationIds));
+  if (parsed.personIds.length > 0) {
+    // Their own chat is what "find this person" means; shared groups follow.
+    conversationMatches.sort((left, right) =>
+      (isGroupConversation(left) ? 1 : 0) - (isGroupConversation(right) ? 1 : 0));
+  }
+  const conversations: SearchSuggestion[] = conversationMatches
+    .slice(0, limits.conversations)
+    .map((conversation) => ({
       kind: 'conversation',
       key: `conversation:${conversation.id}`,
       conversationId: conversation.id,
       title: conversation.title,
       subtitle: conversation.subtitle ?? '',
       group: isGroupConversation(conversation),
-    });
-  }
+    }));
 
   const visibleConversationIds = new Set(
     (input.conversations ?? [])

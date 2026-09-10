@@ -44,7 +44,12 @@ export function ChatSearchField({
   const { height } = useWindowDimensions();
   // The visible text is only the unfinished tail; the finished parts are chips.
   const draft = value.includes(',') ? value.slice(value.lastIndexOf(',') + 1).trimStart() : value;
-  const searched = chips.length > 0 || draft.trim().length > 0;
+  // Suggestions belong to typing. Once every word is a chip there is nothing
+  // left to suggest, and leaving the panel up split the screen between a list
+  // of things you had already chosen and the chats it had narrowed -- the
+  // awkward two-thirds the owner saw (Sep 10 2026). Finish the chip and the
+  // filtered list gets the room.
+  const searched = draft.trim().length > 0;
   const sections: { key: SearchSuggestion['kind']; label: string }[] = [
     { key: 'person', label: t('search.sectionPeople') },
     { key: 'conversation', label: t('search.sectionChats') },
