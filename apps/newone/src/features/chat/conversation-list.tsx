@@ -175,7 +175,6 @@ export function ConversationList({
   suggestions = [],
   searchLoading = false,
   onOpenSuggestion,
-  onOpenAdvancedSearch,
   onRowAction,
   onOpenPinned,
   markedUnreadIds = [],
@@ -198,7 +197,6 @@ export function ConversationList({
   suggestions?: readonly SearchSuggestion[];
   searchLoading?: boolean;
   onOpenSuggestion?: (suggestion: SearchSuggestion) => void;
-  onOpenAdvancedSearch?: () => void;
   onRowAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
   /** Opens the pins gathered from every chat. */
   onOpenPinned?: () => void;
@@ -283,16 +281,6 @@ export function ConversationList({
             onOpenSuggestion?.(suggestion);
           }}
           suggestions={[...suggestions]}
-          trailing={onOpenAdvancedSearch ? (
-            <Pressable
-              accessibilityLabel={t('search.moreFilters')}
-              accessibilityRole="button"
-              hitSlop={6}
-              onPress={onOpenAdvancedSearch}
-              style={({ pressed }) => [styles.moreFilters, pressed && styles.rowPressed]}>
-              <Ionicons color={colors.mintDark} name="options-outline" size={17} />
-            </Pressable>
-          ) : null}
           value={search}
         />
       </View>

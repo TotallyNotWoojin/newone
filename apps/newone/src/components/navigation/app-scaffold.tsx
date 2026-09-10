@@ -39,48 +39,18 @@ const navItems: {
     href: '/',
   },
   {
-    key: 'updates',
-    labelKey: 'nav.updates',
-    icon: 'megaphone-outline',
-    iconActive: 'megaphone',
-    href: '/updates',
-  },
-  {
-    key: 'handoffs',
-    labelKey: 'nav.handoffs',
-    icon: 'swap-horizontal-outline',
-    iconActive: 'swap-horizontal',
-    href: '/handoffs',
-  },
-  {
     key: 'people',
     labelKey: 'nav.contacts',
     icon: 'people-outline',
     iconActive: 'people',
     href: '/people',
   },
-  {
-    key: 'admin',
-    labelKey: 'nav.admin',
-    icon: 'shield-checkmark-outline',
-    iconActive: 'shield-checkmark',
-    href: '/admin',
-  },
 ];
 
 /**
- * Search has no tab of its own: the one field on Chats does that job, so a
- * consumer's bar is Chats · Contacts · Settings. Updates and handoffs remain
- * workspace-organization surfaces, and admin stays gated on server-granted
- * capabilities.
+ * Search has no tab of its own: the one field on Chats does that job, so the
+ * bar is Chats · Contacts · Settings.
  */
-function visibleNavItems(personalRealm: boolean, canOpenAdmin: boolean) {
-  return navItems.filter((item) => {
-    if (item.key === 'admin') return canOpenAdmin;
-    if (item.key === 'updates' || item.key === 'handoffs') return !personalRealm;
-    return true;
-  });
-}
 
 export function AppScaffold({
   current,
@@ -136,7 +106,6 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       {!compact ? (
         <View>
           <Text style={styles.brandName}>newone</Text>
-          {!personalRealm ? <Text style={styles.brandTag}>WORKPLACE</Text> : null}
         </View>
       ) : null}
     </View>
@@ -151,8 +120,7 @@ function DesktopRail({ current }: { current: NavigationKey }) {
   const ownAvatarUrl = useProfileAvatar(workspace.currentUser?.id ?? null);
   const { currentUser } = workspace;
   const { t } = useI18n();
-  const canOpenAdmin = canAccessAdminSurface(workspace.capabilities);
-  const visibleItems = visibleNavItems(isPersonalRealm(workspace.organizationId), canOpenAdmin);
+  const visibleItems = navItems;
   return (
     <View style={styles.rail}>
       <BrandMark compact />
@@ -238,8 +206,7 @@ function MobileTabs({ current }: { current: NavigationKey }) {
   const insets = useSafeAreaInsets();
   const workspace = useWorkspace();
   const { t } = useI18n();
-  const canOpenAdmin = canAccessAdminSurface(workspace.capabilities);
-  const visibleItems = visibleNavItems(isPersonalRealm(workspace.organizationId), canOpenAdmin);
+  const visibleItems = navItems;
   return (
     <View style={[styles.mobileTabs, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {visibleItems.map((item) => {

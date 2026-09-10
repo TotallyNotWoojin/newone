@@ -29,7 +29,6 @@ import {
   type SearchSuggestion,
 } from '@/features/search/chat-search';
 import { useChatSearch } from '@/features/search/use-chat-search';
-import { WorkspaceSearchPanel } from '@/features/search/workspace-search-panel';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import type { Conversation } from '@/domain/types';
 import { useWorkspace } from '@/state/workspace';
@@ -60,7 +59,6 @@ export default function ChatsScreen() {
   // must never see the workplace line flash on first launch.
   const realmKnown = Boolean(workspace.organizationId);
   const personalRealm = isPersonalRealm(workspace.organizationId);
-  const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
 
@@ -200,7 +198,6 @@ export default function ChatsScreen() {
     suggestions,
     discoverableConversations: workspace.discoverableConversations,
     // The full filter panel is a workplace tool; consumers never see it.
-    onOpenAdvancedSearch: personalRealm ? undefined : () => setAdvancedSearchOpen(true),
   };
 
   return (
@@ -225,9 +222,7 @@ export default function ChatsScreen() {
       }>
       {!desktop ? <WorkspaceStatusBanner /> : null}
       <NotificationPrompt />
-      {advancedSearchOpen ? (
-        <WorkspaceSearchPanel initialQuery={search} onClose={() => setAdvancedSearchOpen(false)} />
-      ) : workspace.status === 'loading' || workspace.status === 'error'
+      {workspace.status === 'loading' || workspace.status === 'error'
         || (ordinaryConversations.length === 0 && !searching) ? (
         <WorkspaceStatePanel resource="chats" />
       ) : desktop ? (

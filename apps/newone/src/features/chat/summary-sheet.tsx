@@ -218,14 +218,6 @@ export function SummarySheet({
           {!consumer && summary.failureCode ? (
             <Text selectable style={styles.meta}>{t('chat.failureCode')} · {summary.failureCode}</Text>
           ) : null}
-          {!consumer ? (
-            <PrimaryButton
-              icon="document-text-outline"
-              label={t('chat.createManualHandoff')}
-              onPress={() => router.push('/handoffs')}
-              tone="light"
-            />
-          ) : null}
         </View>
       ) : (
         <Text style={styles.empty}>{t('chat.summaryEmpty')}</Text>

@@ -218,11 +218,8 @@ describe('root application boundary', () => {
     expect(mockStackScreens.map(({ name }) => name)).toEqual([
       'index',
       'conversation/[id]',
-      'updates',
-      'handoffs',
       'people',
       'new-group',
-      'admin',
       'settings',
       'help',
       'sign-in',

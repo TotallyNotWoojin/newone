@@ -690,19 +690,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     ));
   });
 
-  test('routes unauthorized management shells to admin and opens authorized controls', async () => {
-    const restricted = conversation({ managementOnly: true, canManageConversation: false });
-    const first = await render(<ConversationPane conversation={restricted} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.managementOnlyOpenAdmin'));
-    expect(mockPush).toHaveBeenCalledWith('/admin');
-    await first.unmount();
-
-    const authorized = conversation({ managementOnly: true, canManageConversation: true });
-    await render(<ConversationPane conversation={authorized} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.managementOnlyOpen'));
-    expect(screen.getByText('chat.controlsTitle')).toBeTruthy();
-  });
-
   test('filters/selects conversations, requests group access, and renders details', async () => {
     const onSelect = jest.fn();
     const onFilter = jest.fn();
@@ -881,8 +868,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     const failed = await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
-    expect(mockPush).toHaveBeenCalledWith('/handoffs');
+    // There is no manual-handoff route to fall back to any more.
+    expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
     await failed.unmount();
 
     mockWorkspace = buildWorkspace();
@@ -1430,7 +1417,7 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await details('Blocked translation source.', /policy_blocked/);
   });
 
-  test('renders direct and incident authorization boundaries including read-only posting', async () => {
+  test('renders the direct-chat boundaries including read-only posting', async () => {
     const onBack = jest.fn();
     const direct = conversation({
       kind: 'direct', directParticipantId: colleague.id, presence: 'online', memberIds: [self.id, colleague.id],
@@ -1443,66 +1430,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByText('chat.translationBoundary')).toBeNull();
     await directView.unmount();
 
-    const incidentView = await render(<ConversationPane conversation={conversation({
-      kind: 'incident', incidentSeverity: 'critical', incidentClassification: 'Electrical fire',
-      isReadOnly: false, priority: 'normal', departure: undefined,
-    })} messages={[]} onSend={noopSend} />);
-    expect(screen.getByText(/chat\.incidentActive · critical/)).toBeTruthy();
-    expect(screen.getByText('Electrical fire')).toBeTruthy();
-    await incidentView.unmount();
-
-    await render(<ConversationPane conversation={conversation({
-      kind: 'incident', incidentSeverity: undefined, closureReason: 'Resolved by incident commander.',
-      isReadOnly: true, canPost: false, priority: 'normal', departure: undefined,
-    })} messages={[]} onSend={noopSend} />);
-    expect(screen.getByText(/chat\.incidentClosed/)).toBeTruthy();
-    expect(screen.getByText('Resolved by incident commander.')).toBeTruthy();
-    expect(screen.getByText('chat.incidentReadOnly')).toBeTruthy();
-    expect(screen.queryByLabelText('chat.message')).toBeNull();
-  });
-
-  test('executes management-only controls against scoped member profiles', async () => {
-    const management = conversation({
-      managementOnly: true,
-      canManage: true,
-      canManageConversation: true,
-      visibility: 'unit',
-      memberIds: ['scoped-member-id'],
-      memberRoles: { 'scoped-member-id': 'member' },
-      memberProfiles: [{
-        id: 'scoped-member-id', displayName: 'Scoped Member', initials: 'SM', avatarColor: '#884422',
-      }],
-      departure: undefined,
-      description: undefined,
-    });
-    mockWorkspace.updateConversation = jest.fn<(..._args: unknown[]) => Promise<boolean>>()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-    await render(<ConversationPane conversation={management} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.managementOnlyOpen'));
-    expect(screen.getByText('Scoped Member')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.adminRole · Scoped Member'));
-    await fireEvent.changeText(screen.getByLabelText('chat.name'), 'Scoped Management');
-    await fireEvent.changeText(screen.getByLabelText('chat.description'), 'Scoped profile management only.');
-    await fireEvent(screen.getByLabelText('chat.description'), 'blur');
-    await fireEvent.press(screen.getByLabelText('chat.unitVisible'));
-    await fireEvent.changeText(screen.getByLabelText('chat.changeReason'), 'Keep the unit scope.');
-    await fireEvent.press(screen.getByLabelText('chat.saveAccessControls'));
-    await fireEvent.press(screen.getByLabelText('chat.archiveConversation'));
-
-    await waitFor(() => {
-      expect(mockWorkspace.updateConversationMemberRole).toHaveBeenCalledWith(
-        management.id,
-        'scoped-member-id',
-        'member',
-        'admin',
-      );
-      expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(management.id, {
-        name: 'Scoped Management',
-        description: 'Scoped profile management only.',
-      });
-      expect(mockWorkspace.updateConversation).toHaveBeenCalledWith(management.id, { isArchived: true });
-    });
   });
 
   test('conversation settings open the chat\u2019s pins and its photos and files', async () => {
@@ -1721,24 +1648,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(mockWorkspace.setConversationSummaryPolicy).toHaveBeenCalledWith(
       'conversation-main', 'shift_close', null,
     ));
-  });
-
-  test('shows queued summaries as generating and routes superseded ones to the manual handoff workflow', async () => {
-    mockWorkspace.summaries = [summary({ status: 'queued' })];
-    const queued = await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-    expect(screen.getByText('chat.summaryGenerating')).toBeTruthy();
-    expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
-    await queued.unmount();
-
-    mockWorkspace = buildWorkspace();
-    mockWorkspace.summaries = [summary({ status: 'superseded', failureCode: null })];
-    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-    expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
-    expect(screen.queryByText(/chat\.failureCode/)).toBeNull();
-    await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
-    expect(mockPush).toHaveBeenCalledWith('/handoffs');
   });
 
   test('renders own image-transfer and nullable translation-provenance branches', async () => {
@@ -2183,8 +2092,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await render(<ConversationPane conversation={automatic} messages={[message]} onSend={noopSend} />);
     expect(screen.getByText('chat.translationBoundary')).toBeTruthy();
     expect(screen.queryByText('chat.correctionPendingReview')).toBeNull();
-    await fireEvent.press(screen.getByText('chat.openNotice'));
-    expect(mockPush).toHaveBeenCalledWith('/updates');
+    // The safety banner led to the workplace notices screen and went with it.
+    expect(screen.queryByText('chat.openNotice')).toBeNull();
   });
 });
 

@@ -204,15 +204,12 @@ describe('the one search field on Chats', () => {
     expect(screen.getAllByText('Beach trip').length).toBeGreaterThan(1);
   });
 
-  test('nothing at all says so, and the filter panel is offered only when there is one', async () => {
-    const onOpenAdvancedSearch = jest.fn();
-    const view = await render(<ConversationList {...listProps({ search: 'zzz' })} />);
+  test('nothing at all says so, and there is no second search to offer', async () => {
+    await render(<ConversationList {...listProps({ search: 'zzz' })} />);
     expect(screen.getByText('search.nothingFound')).toBeTruthy();
+    // The filter panel was the workplace product's advanced search; one field
+    // on Chats is the whole of it now.
     expect(screen.queryByRole('button', { name: 'search.moreFilters' })).toBeNull();
-
-    await view.rerender(<ConversationList {...listProps({ search: 'zzz', onOpenAdvancedSearch })} />);
-    await fireEvent.press(screen.getByRole('button', { name: 'search.moreFilters' }));
-    expect(onOpenAdvancedSearch).toHaveBeenCalled();
   });
 
   test('the field says it is working while the server answers', async () => {

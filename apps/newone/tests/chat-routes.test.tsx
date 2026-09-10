@@ -182,22 +182,6 @@ jest.mock('@/features/chat/pinned-messages', () => {
   };
 });
 
-jest.mock('@/features/search/workspace-search-panel', () => {
-  const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
-  return {
-    WorkspaceSearchPanel: (props: Record<string, any>) => (
-      <ReactNative.View testID="controlled-search-panel">
-        <ReactNative.Text>{`controlled-filters:${props.initialQuery}`}</ReactNative.Text>
-        <ReactNative.Pressable
-          accessibilityLabel="controlled close filters"
-          accessibilityRole="button"
-          onPress={props.onClose}
-        />
-      </ReactNative.View>
-    ),
-  };
-});
-
 jest.mock('@/features/chat/conversation-details', () => {
   const ReactNative = jest.requireActual<typeof import('react-native')>('react-native');
   return {
@@ -416,23 +400,6 @@ describe('chats index route', () => {
     expect(mockRouter.push).not.toHaveBeenCalled();
 
     await view.unmount();
-  });
-
-  test('the workplace filter panel opens from the field and closes again; consumers never get it', async () => {
-    mockWidth = 390;
-    const view = await render(<ChatsScreen />);
-    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeInstanceOf(Function);
-
-    await fireEvent.press(screen.getByRole('button', { name: 'controlled open filters' }));
-    expect(screen.getByText('controlled-filters:')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'controlled close filters' }));
-    expect(screen.queryByTestId('controlled-search-panel')).toBeNull();
-    await view.unmount();
-
-    mockWorkspace = baseWorkspace({ organizationId: PERSONAL_REALM_ORGANIZATION_ID });
-    const consumerView = await render(<ChatsScreen />);
-    expect(mockConversationListProps?.onOpenAdvancedSearch).toBeUndefined();
-    await consumerView.unmount();
   });
 
   test('row actions reach the preferences the server already has, and unread is remembered here', async () => {

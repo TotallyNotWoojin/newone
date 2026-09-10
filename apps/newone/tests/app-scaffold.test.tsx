@@ -69,28 +69,16 @@ describe('application navigation scaffold', () => {
     expect(screen.getByRole('button', { name: 'nav.chats' }).props.accessibilityState).toEqual({
       selected: true,
     });
-    expect(screen.getByRole('button', { name: 'nav.updates' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'nav.handoffs' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'nav.admin' })).toBeNull();
+    // Three tabs, and no fourth: updates, handoffs and admin belonged to the
+    // workplace product and went with it.
+    for (const gone of ['nav.updates', 'nav.handoffs', 'nav.admin']) {
+      expect(screen.queryByRole('button', { name: gone })).toBeNull();
+    }
 
     await fireEvent.press(screen.getByRole('button', { name: 'nav.contacts' }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/people');
     await fireEvent.press(screen.getByRole('button', { name: 'nav.settingsTab' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings');
-  });
-
-  test('shows admin navigation only for an account with a server capability', async () => {
-    mockWorkspace.capabilities = ['audit.read'];
-    await render(
-      <AppScaffold current="admin">
-        <Text>Admin body</Text>
-      </AppScaffold>,
-    );
-
-    const admin = screen.getByRole('button', { name: 'nav.admin' });
-    expect(admin.props.accessibilityState).toEqual({ selected: true });
-    await fireEvent.press(admin);
-    expect(mockRouter.replace).toHaveBeenCalledWith('/admin');
   });
 
   test('can intentionally hide all mobile tabs for focused flows', async () => {
@@ -118,13 +106,13 @@ describe('application navigation scaffold', () => {
     );
 
     expect(screen.getByText('Publisher body')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'nav.updates' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'nav.handoffs' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'nav.updates' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'nav.handoffs' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'nav.settings' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings');
   });
 
-  test('personal-realm consumers see only chats, contacts, and settings on mobile', async () => {
+  test('the mobile bar is chats, contacts and settings', async () => {
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     await render(
       <AppScaffold current="chats">
@@ -142,7 +130,7 @@ describe('application navigation scaffold', () => {
     expect(screen.queryByRole('button', { name: 'nav.admin' })).toBeNull();
   });
 
-  test('personal-realm consumers see no workspace-only items on the desktop rail', async () => {
+  test('the desktop rail carries nothing else either', async () => {
     mockWidth = 1280;
     mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     await render(
@@ -158,17 +146,4 @@ describe('application navigation scaffold', () => {
     expect(screen.queryByRole('button', { name: 'nav.handoffs' })).toBeNull();
   });
 
-  test('renders the workplace brand tag only outside the personal realm', async () => {
-    const view = await render(<BrandMark />);
-    expect(screen.getByText('newone')).toBeTruthy();
-    expect(screen.getByText('WORKPLACE')).toBeTruthy();
-
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
-    await view.rerender(<BrandMark />);
-    expect(screen.getByText('newone')).toBeTruthy();
-    expect(screen.queryByText('WORKPLACE')).toBeNull();
-
-    await view.rerender(<BrandMark compact />);
-    expect(screen.queryByText('newone')).toBeNull();
-  });
 });

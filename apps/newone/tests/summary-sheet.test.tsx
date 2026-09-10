@@ -319,7 +319,7 @@ describe('summary sheet for consumers', () => {
   });
 });
 
-describe('summary sheet for workplace organizations', () => {
+describe('summary sheet', () => {
   beforeEach(() => {
     mockWorkspace = buildWorkspace('organization-a');
     mockWorkspace.actions = [{
@@ -372,8 +372,8 @@ describe('summary sheet for workplace organizations', () => {
     const failed = await open();
     expect(screen.getByText('chat.summaryFailed')).toBeTruthy();
     expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.createManualHandoff'));
-    expect(mockPush).toHaveBeenCalledWith('/handoffs');
+    // The manual-handoff route went with the workplace product.
+    expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
     await failed.view.unmount();
 
     mockWorkspace = buildWorkspace('organization-a');
