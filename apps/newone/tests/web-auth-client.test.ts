@@ -11,7 +11,6 @@ import {
   listWebMfaFactors,
   lookupNativeAccount,
   lookupWebAccount,
-  redeemNativeInvitation,
   requestNativeOtp,
   requestNativeRecoveryOtp,
   requestNativeSignup,
@@ -86,8 +85,6 @@ describe('native identity gateway client', () => {
     await expect(requestNativeOtp({
       destinationType: 'email',
       destination: 'employee@example.test',
-      invitationToken: null,
-      employeeCode: null,
       captchaToken: 'controlled-captcha-input',
     })).resolves.toEqual({
       accepted: true,
@@ -106,8 +103,6 @@ describe('native identity gateway client', () => {
     expect(JSON.parse(String(init.body))).toEqual({
       destinationType: 'email',
       destination: 'employee@example.test',
-      invitationToken: null,
-      employeeCode: null,
       captchaToken: 'controlled-captcha-input',
       installationId: '20000000-0000-4000-8000-000000000002',
     });
@@ -254,20 +249,6 @@ describe('native identity gateway client', () => {
       accessToken: 'controlled-access-token',
       userId: 'user-a',
     })).rejects.toMatchObject({ code: 'invalid_response' });
-  });
-
-  test('activates invitations only from an explicit server receipt', async () => {
-    jsonResponse({ data: { activated: true, organizationId: 'org-a' } });
-    await expect(redeemNativeInvitation({
-      accessToken: 'controlled-access-token',
-      invitationToken: 'controlled-invitation-input',
-    })).resolves.toMatchObject({ activated: true, organizationId: 'org-a' });
-
-    jsonResponse({ data: { activated: false } }, 409);
-    await expect(redeemNativeInvitation({
-      accessToken: 'controlled-access-token',
-      invitationToken: 'expired-invitation-input',
-    })).rejects.toMatchObject({ code: 'invitation_rejected' });
   });
 
   test('sends the exact native consumer signup request and accepts only a code_sent receipt', async () => {

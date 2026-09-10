@@ -82,15 +82,11 @@ interface AuthState {
   requestOtp: (input: {
     destinationType: 'email' | 'phone';
     destination: string;
-    invitationToken?: string;
-    employeeCode?: string;
     captchaToken?: string | null;
   }) => Promise<{ channelConfigured: boolean }>;
   verifyOtp: (input: {
     destinationType: 'email' | 'phone';
     destination: string;
-    invitationToken?: string;
-    employeeCode?: string;
     code: string;
   }) => Promise<void>;
   requestSignup: (input: {
@@ -618,8 +614,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
           const result = await requestWebOtp({
             destinationType: input.destinationType,
             destination: input.destination,
-            invitationToken: input.invitationToken,
-            employeeCode: input.employeeCode,
             captchaToken: input.captchaToken,
           });
           return { channelConfigured: result.channel.configured };
@@ -632,8 +626,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
           const webSession = await verifyWebOtp({
             destinationType: input.destinationType,
             destination: input.destination,
-            invitationToken: input.invitationToken,
-            employeeCode: input.employeeCode,
             code: input.code,
           });
           setWebUser(webSession.user);

@@ -382,8 +382,6 @@ describe('web authentication security state machine', () => {
     const otpInput = {
       destinationType: 'email' as const,
       destination: 'employee@example.test',
-      invitationToken: 'controlled-invitation',
-      employeeCode: 'E-100',
       captchaToken: 'controlled-captcha-token',
     };
     await expect(currentAuth().requestOtp(otpInput)).resolves.toEqual({ channelConfigured: true });
@@ -399,8 +397,6 @@ describe('web authentication security state machine', () => {
       await currentAuth().verifyOtp({
         destinationType: 'email',
         destination: 'employee@example.test',
-        invitationToken: 'controlled-invitation',
-        employeeCode: 'E-100',
         code: '123456',
       });
     });

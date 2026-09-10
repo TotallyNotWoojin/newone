@@ -8,7 +8,6 @@ import {
   getWebRealtimeToken,
   getWebSession,
   listWebMfaFactors,
-  redeemNativeInvitation,
   refreshWebSession,
   requestNativeOtp,
   requestNativeRecoveryOtp,
@@ -185,8 +184,6 @@ describe('web identity response and security contracts', () => {
     await expect(requestWebOtp({
       destinationType: 'phone',
       destination: '+15555550100',
-      invitationToken: 'invitation-controlled-input',
-      employeeCode: 'EMP-123',
       captchaToken: 'captcha-controlled-input',
     })).resolves.toEqual({
       accepted: true,
@@ -195,8 +192,6 @@ describe('web identity response and security contracts', () => {
     await expect(verifyWebOtp({
       destinationType: 'phone',
       destination: '+15555550100',
-      invitationToken: null,
-      employeeCode: '',
       code: '123456',
     })).resolves.toMatchObject({
       user: { id: 'user-web', phone: '+15555550100' },
@@ -205,8 +200,6 @@ describe('web identity response and security contracts', () => {
     await expect(verifyWebOtp({
       destinationType: 'email',
       destination: 'employee@example.test',
-      invitationToken: 'invitation-controlled-input',
-      employeeCode: 'EMP-123',
       code: '123456',
     })).resolves.toMatchObject({ user: { id: 'user-web' } });
 
@@ -214,12 +207,9 @@ describe('web identity response and security contracts', () => {
     const secondBody = JSON.parse(String((controlledFetch.mock.calls[1]?.[1] as RequestInit).body));
     expect(firstBody).toMatchObject({
       installationId: '30000000-0000-4000-8000-000000000003',
-      invitationToken: 'invitation-controlled-input',
-      employeeCode: 'EMP-123',
       appVersion: null,
     });
-    expect(secondBody).not.toHaveProperty('invitationToken');
-    expect(secondBody).not.toHaveProperty('employeeCode');
+    expect(secondBody).toMatchObject({ destinationType: 'phone', code: '123456' });
   });
 
   test('omits the captcha token key from web auth requests when no token is available', async () => {
@@ -717,40 +707,5 @@ describe('native identity response and security contracts', () => {
     });
     await expect(validateNativeMembership({ accessToken: 'access', userId: 'user-a' }))
       .resolves.toEqual({ organizationId: 'org-a' });
-  });
-
-  test('rejects incomplete invitation gateway configuration', async () => {
-    mockRuntimeBoundary.apiUrlMode = 'unavailable';
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'gateway_unconfigured' });
-
-    mockRuntimeBoundary.apiUrlMode = 'relative';
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'gateway_unconfigured' });
-
-    mockRuntimeBoundary.apiUrlMode = 'absolute';
-    mockRuntimeBoundary.headersAvailable = false;
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'gateway_unconfigured' });
-  });
-
-  test('rejects malformed invitation receipts and accepts a direct activation receipt', async () => {
-    controlledFetch.mockImplementationOnce(async () => {
-      throw new Error('controlled invitation transport failure');
-    });
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'network_unavailable' });
-
-    queueInvalidJson();
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'invitation_rejected' });
-
-    queueJson({ activated: true }, 409);
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .rejects.toMatchObject({ code: 'invitation_rejected' });
-
-    queueJson({ activated: true, organizationId: 'org-a' });
-    await expect(redeemNativeInvitation({ accessToken: 'access', invitationToken: 'invite' }))
-      .resolves.toMatchObject({ activated: true, organizationId: 'org-a' });
   });
 });

@@ -418,8 +418,6 @@ describe('native authentication security state machine', () => {
     const otpInput = {
       destinationType: 'phone' as const,
       destination: '+15555550100',
-      invitationToken: 'controlled-invitation',
-      employeeCode: 'E-100',
       captchaToken: 'controlled-captcha-token',
     };
     await expect(currentAuth().requestOtp(otpInput)).resolves.toEqual({ channelConfigured: true });

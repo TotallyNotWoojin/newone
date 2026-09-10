@@ -192,8 +192,6 @@ function parseRecoverySession(payload: Record<string, unknown>) {
 interface OtpIdentity {
   destinationType: 'email' | 'phone';
   destination: string;
-  invitationToken?: string | null;
-  employeeCode?: string | null;
 }
 
 export type SignupLanguage = 'en' | 'es' | 'ko';
@@ -234,8 +232,6 @@ export async function requestWebOtp(input: OtpIdentity & { captchaToken?: string
         installationId: client.installationId,
         locale: client.locale,
         appVersion: client.appVersion,
-        ...(input.invitationToken ? { invitationToken: input.invitationToken } : {}),
-        ...(input.employeeCode ? { employeeCode: input.employeeCode } : {}),
       },
     }),
   );
@@ -253,8 +249,6 @@ export async function verifyWebOtp(input: OtpIdentity & { code: string }) {
         installationId: client.installationId,
         locale: client.locale,
         appVersion: client.appVersion,
-        ...(input.invitationToken ? { invitationToken: input.invitationToken } : {}),
-        ...(input.employeeCode ? { employeeCode: input.employeeCode } : {}),
       },
     }),
   );
@@ -406,8 +400,6 @@ export async function requestNativeOtp(input: NativeOtpIdentity & { captchaToken
   const payload = await nativeAuthRequest('/v2/auth/native/otp/request', {
     destinationType: input.destinationType,
     destination: input.destination,
-    invitationToken: input.invitationToken ?? null,
-    employeeCode: input.employeeCode ?? null,
     ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
   });
   return parseOtpRequest(payload);
@@ -417,8 +409,6 @@ export async function verifyNativeOtp(input: NativeOtpIdentity & { code: string 
   const payload = await nativeAuthRequest('/v2/auth/native/otp/verify', {
     destinationType: input.destinationType,
     destination: input.destination,
-    invitationToken: input.invitationToken ?? null,
-    employeeCode: input.employeeCode ?? null,
     code: input.code,
   });
   const parsed = parseSession(payload);
@@ -903,41 +893,4 @@ export async function deleteNativeAccount(input: { accessToken: string }) {
     );
   }
   return parseAccountDeletion(objectValue(objectValue(payload).data ?? payload));
-}
-
-export async function redeemNativeInvitation(input: {
-  accessToken: string;
-  invitationToken: string;
-}) {
-  const url = apiUrlFor('/v2/auth/invitations/redeem');
-  const edgeHeaders = nativeEdgeRequestHeaders(input.accessToken);
-  if (!url || url.startsWith('/') || !edgeHeaders) {
-    throw new WebAuthError('The native identity gateway is not configured.', 'gateway_unconfigured');
-  }
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      cache: 'no-store',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...edgeHeaders,
-      },
-      body: JSON.stringify({ invitationToken: input.invitationToken }),
-    });
-  } catch {
-    throw new WebAuthError('The invitation activation service is unreachable.', 'network_unavailable');
-  }
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    // Invalid payloads are classified without echoing upstream content.
-  }
-  const data = objectValue(objectValue(payload).data ?? payload);
-  if (!response.ok || data.activated !== true) {
-    throw new WebAuthError('That invitation is invalid, expired, or belongs to another account.', 'invitation_rejected');
-  }
-  return data;
 }

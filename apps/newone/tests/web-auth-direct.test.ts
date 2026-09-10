@@ -58,8 +58,6 @@ describe('direct (bearer) web sign-in', () => {
     await expect(requestNativeOtp({
       destinationType: 'email',
       destination: 'member@example.test',
-      invitationToken: null,
-      employeeCode: null,
     })).resolves.toEqual({ accepted: true, channel: { type: 'email', configured: true } });
 
     const [url, init] = controlledFetch.mock.calls[0] as [string, RequestInit];
