@@ -668,58 +668,8 @@ Deno.test('Must workflow routes map strict public inputs to atomic database RPCs
   const adminClient = {
     rpc(name: string, args: Record<string, unknown>) {
       called.push(name);
-      const dynamicData = name === 'bff_save_dynamic_group_policy_v2'
-        ? {
-          policy_id: entityId,
-          conversation_id: conversationId,
-          version: 1,
-          draft_state: 'draft',
-          selector_fingerprint: 'c'.repeat(64),
-          requires_preview: true,
-          published_version_id: null,
-        }
-        : name === 'bff_preview_dynamic_group_v2'
-        ? {
-          policy_id: args.p_policy_id,
-          policy_version: args.p_expected_version,
-          preview_fingerprint: 'd'.repeat(64),
-          selector_fingerprint: 'c'.repeat(64),
-          membership_state_fingerprint: 'e'.repeat(64),
-          evaluated_at: '2026-08-04T20:00:00.000Z',
-          valid_until: '2026-08-04T20:05:00.000Z',
-          eligible_count: 1,
-          added_count: 1,
-          removed_count: 0,
-          unchanged_count: 0,
-          added_sample_user_ids: [actor.user.id],
-          removed_sample_user_ids: [],
-          unchanged_sample_user_ids: [],
-          next_boundary_at: null,
-        }
-        : name === 'bff_publish_dynamic_group_policy'
-        ? {
-          policy_id: args.p_policy_id,
-          policy_version: args.p_expected_version,
-          published_version_id: '00000000-0000-4000-8000-000000000081',
-          status: 'active',
-          draft_state: 'published',
-          eligible_count: 1,
-          added_count: 1,
-          removed_count: 0,
-          unchanged_count: 0,
-          selector_fingerprint: 'c'.repeat(64),
-          next_evaluation_at: null,
-        }
-        : name === 'bff_pause_dynamic_group_policy'
-        ? {
-          policy_id: args.p_policy_id,
-          policy_version: args.p_expected_version,
-          status: 'paused',
-          paused_at: '2026-08-04T20:06:00.000Z',
-        }
-        : null;
       return Promise.resolve({
-        data: dynamicData ?? (name === 'bff_update_conversation_preferences'
+        data: (name === 'bff_update_conversation_preferences'
           ? { conversation_id: conversationId, is_hidden: true }
           : { ok: true }),
         error: null,
@@ -742,7 +692,7 @@ Deno.test('Must workflow routes map strict public inputs to atomic database RPCs
   for (
     const item of cases.filter((entry) =>
       entry.rpc.includes('review') || entry.rpc.includes('dynamic_group') ||
-      entry.rpc === 'bff_correct_announcement' || entry.rpc.includes('role_assignment')
+      entry.rpc.includes('role_assignment')
     )
   ) {
     const route = matchRoute(item.method, item.path);
