@@ -381,7 +381,6 @@ function personFromDirectory(
   connections: JsonRecord[],
   savedContacts: JsonRecord[],
   blockedIds: Set<string>,
-  personalRealm: boolean,
 ): Person {
   const userId = requiredString(row.userId, 'directory member');
   const displayName = requiredString(row.displayName, 'directory name');
@@ -405,16 +404,11 @@ function personFromDirectory(
     // now carries it for the directory and the viewer.
     username: optionalString(row.username),
     initials: initials(displayName),
-    // Consumers carry no job title, site, or department; the personal realm
-    // leaves these blank instead of showing workplace placeholders.
-    roleLabel: personalRealm ? '' : optionalString(row.jobTitle) ?? String(row.membershipRole ?? 'member'),
+    // Nobody carries a job title, a site or a department.
+    roleLabel: '',
     role: membershipRole(row.membershipRole),
-    site: personalRealm ? '' : memberUnits.find((unit) => unit.kind === 'site')?.name ?? 'Company-wide',
-    department: personalRealm
-      ? ''
-      : memberUnits.find((unit) => unit.kind === 'department')?.name
-        ?? memberUnits.find((unit) => unit.kind === 'team')?.name
-        ?? 'General',
+    site: '',
+    department: '',
     preferredLanguage: language(row.preferredLanguage),
     presence: userId === currentUserId ? 'online' : 'offline',
     connectionState: state,
@@ -431,7 +425,7 @@ function personFromDirectory(
   };
 }
 
-function currentPerson(row: JsonRecord, units: OrganizationUnitOption[], personalRealm: boolean): Person {
+function currentPerson(row: JsonRecord, units: OrganizationUnitOption[]): Person {
   const person = personFromDirectory(
     { ...row, unitIds: row.unitIds ?? [], isSavedContact: false, isBlocked: false },
     requiredString(row.userId, 'current user'),
@@ -439,7 +433,6 @@ function currentPerson(row: JsonRecord, units: OrganizationUnitOption[], persona
     [],
     [],
     new Set(),
-    personalRealm,
   );
   // The bootstrap strips a null status, so only a present string is carried.
   const statusMessage = optionalString(row.statusMessage);
@@ -834,7 +827,6 @@ function conversationFromDto(
   const kind = conversationKind(row.kind);
   const directId = optionalString(row.directCounterpartUserId);
   const direct = directId ? peopleById.get(directId) : undefined;
-  const personalRealm = isPersonalRealm(current.organizationId);
   const members = values(row.members).slice(0, 500);
   const memberCount = Math.max(0, integer(row.memberCount, members.length));
   const memberProfiles = members.map((member) => {
@@ -890,7 +882,7 @@ function conversationFromDto(
     subtitle: kind === 'direct'
       ? (direct?.username
         ? `@${direct.username}`
-        : personalRealm ? '' : direct?.roleLabel ?? unknownPersonLabel(current))
+        : '')
       : optionalString(row.description) ?? '',
     participantCount: memberCount,
     // Empty until something is sent; the list renders the localized fallback.
@@ -1088,7 +1080,7 @@ function updateFromDto(row: JsonRecord, current: Person, peopleById: Map<string,
 }
 
 function handoffFromDto(
-  row: JsonRecord, current: Person, peopleById: Map<string, Person>, personalRealm: boolean,
+  row: JsonRecord, current: Person, peopleById: Map<string, Person>,
 ): ShiftHandoff {
   const authorId = requiredString(row.authorUserId, 'handoff author');
   const acknowledgedAt = optionalString(row.acknowledgedAt);
@@ -1102,7 +1094,7 @@ function handoffFromDto(
     title: requiredString(row.title, 'handoff title'),
     // Consumers carry no site; the workplace placeholder stays only for an
     // author who has left the directory.
-    site: peopleById.get(authorId)?.site ?? (personalRealm ? '' : 'Company site'),
+    site: peopleById.get(authorId)?.site ?? '',
     outgoingShift: dateTimeLabel(row.shiftStartedAt),
     incomingShift: dateTimeLabel(row.shiftEndedAt),
     window: `${dateTimeLabel(row.shiftStartedAt)} – ${dateTimeLabel(row.shiftEndedAt)}`,
@@ -1435,7 +1427,6 @@ export class WebReadRepository implements ReadRepository {
     }
     const organization = objectValue(payload.organization);
     const organizationId = requiredString(organization.organizationId, 'organization');
-    const personalRealm = isPersonalRealm(organizationId);
     const units: OrganizationUnitOption[] = values(payload.units).map((unit) => {
       const kind = requiredString(unit.kind, 'organization unit kind');
       if (!['site', 'department', 'team', 'line', 'shift'].includes(kind)) {
@@ -1468,12 +1459,12 @@ export class WebReadRepository implements ReadRepository {
       );
     }
     const currentUser: CurrentWorkspaceUser = {
-      ...currentPerson(currentRow, units, personalRealm),
+      ...currentPerson(currentRow, units),
       ...currentMembership,
       organizationId,
     };
     const people = values(payload.directory).map((row) => {
-      const person = personFromDirectory(row, currentUser.id, units, connections, savedContacts, blockedIds, personalRealm);
+      const person = personFromDirectory(row, currentUser.id, units, connections, savedContacts, blockedIds);
       person.organizationId = organizationId;
       return person;
     });
@@ -1518,7 +1509,7 @@ export class WebReadRepository implements ReadRepository {
       people,
       units,
       updates: values(payload.updates).map((row) => updateFromDto(row, currentUser, peopleById)),
-      handoffs: values(payload.handoffs).map((row) => handoffFromDto(row, currentUser, peopleById, personalRealm)),
+      handoffs: values(payload.handoffs).map((row) => handoffFromDto(row, currentUser, peopleById)),
       summaries: values(payload.summaries).map(summaryFromDto),
       actions: values(payload.actions).map((row) => actionFromDto(row, peopleById)),
       moderationReports: values(payload.moderationReports).map(moderationFromDto),

@@ -841,8 +841,8 @@ describe('authoritative web read repository', () => {
     expect(workspace.currentUser).toMatchObject({
       id: currentUserId,
       membershipType: 'employee',
-      site: 'Denver Plant',
-      department: 'Operations',
+      site: '',
+      department: '',
     });
     expect(workspace.people.find((person) => person.id === colleagueId)).toMatchObject({
       connectionState: 'connected',
@@ -1025,14 +1025,13 @@ describe('authoritative web read repository', () => {
     mockFetch.mockImplementationOnce(async () => response({ data: alternateBootstrapPayload() }));
     const workplace = await repository().loadWorkspace(currentUserId, 'conversation-managed');
     // Two handoffs come from an author who is no longer in the directory.
-    expect(workplace.handoffs.slice(1).map((handoff) => handoff.site)).toEqual(['Company site', 'Company site']);
+    expect(workplace.handoffs.slice(1).map((handoff) => handoff.site)).toEqual(['', '']);
 
     const personal = alternateBootstrapPayload();
     personal.organization.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
     mockFetch.mockImplementationOnce(async () => response({ data: personal }));
     const consumer = await repository().loadWorkspace(currentUserId, 'conversation-managed');
     expect(consumer.handoffs.map((handoff) => handoff.site)).toEqual(['', '', '']);
-    expect(JSON.stringify(consumer.handoffs)).not.toContain('Company site');
   });
 
   test('rejects malformed bootstrap DTO boundaries without reflecting upstream data', async () => {
