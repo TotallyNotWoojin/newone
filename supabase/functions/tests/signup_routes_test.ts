@@ -58,7 +58,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     phoneOtpEnabled: false,
     reviewAccount: null,
     settleOtpRequest: async () => {},
-    authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeSignupOtp: async () => ({
       allowed: true,
@@ -91,9 +90,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     setPassword: async () => {},
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
-    },
-    redeemInvite: async () => {
-      throw new Error('signup flows must not redeem invitations');
     },
     refresh: async () => session,
     bindSessionInstallation: async () => ({ sessionId }),

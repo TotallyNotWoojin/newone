@@ -31,11 +31,9 @@ import { asRpcClient, firstRow, invokeRpc } from '../_shared/rpc.ts';
 import { networkFingerprint, requireIdempotencyKey } from '../_shared/security.ts';
 import { asObject, normalizedString, oneOf, onlyKeys, uuid } from '../_shared/validation.ts';
 
-const INVITE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 const OTP_PATTERN = /^[0-9]{6}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
-const EMPLOYEE_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$/;
 // The only password rule (owner decision, Sep 2026): at least eight characters.
 // GoTrue's minimum_password_length must agree or updateUserById rejects it.
 const PASSWORD_MIN_LENGTH = 8;
@@ -66,7 +64,7 @@ interface SessionTokens extends AuthIdentity {
   userId: string;
 }
 
-interface InviteAuthorization {
+interface OtpAuthorizationRow {
   allowed?: boolean;
   channel_configured?: boolean;
   retry_after_seconds?: number;
@@ -163,11 +161,6 @@ interface SessionInstallationInput {
 
 type UserAgentFamily = 'iphone' | 'ipad' | 'android' | 'mobile' | 'desktop' | 'unknown';
 
-interface RedeemedInvite {
-  organizationId: string;
-  role: 'admin' | 'manager' | 'member';
-}
-
 interface ActiveMembership {
   organizationId: string;
   role: 'owner' | 'admin' | 'manager' | 'member';
@@ -204,16 +197,6 @@ export interface AuthDependencies {
   phoneOtpEnabled: boolean;
   reviewAccount: ReviewAccountConfig | null;
   settleOtpRequest(startedAt: number): Promise<void>;
-  authorizeInviteOtp(
-    inviteToken: string,
-    destinationType: DestinationType,
-    destination: string,
-    employeeCode: string | null,
-    ipHash: string,
-    installationHash: string,
-    requestId: string,
-    purpose: OtpPurpose,
-  ): Promise<OtpAuthorization>;
   authorizeMemberOtp(
     destinationType: DestinationType,
     destination: string,
@@ -298,12 +281,6 @@ export interface AuthDependencies {
    * members whose (intentionally long-lived) session is older than a day.
    */
   setPassword(accessToken: string, userId: string, password: string): Promise<void>;
-  redeemInvite(
-    accessToken: string,
-    expectedUserId: string,
-    inviteToken: string,
-    employeeCode: string | null,
-  ): Promise<RedeemedInvite>;
   refresh(refreshToken: string): Promise<SessionTokens>;
   bindSessionInstallation(
     accessToken: string,
@@ -561,36 +538,6 @@ export function defaultAuthDependencies(): AuthDependencies {
         await new Promise((resolve) => setTimeout(resolve, remaining));
       }
     },
-    async authorizeInviteOtp(
-      inviteToken,
-      destinationType,
-      destination,
-      employeeCode,
-      ipHash,
-      installationHash,
-      correlationId,
-      purpose,
-    ) {
-      const result = firstRow(
-        await invokeRpc<InviteAuthorization | InviteAuthorization[]>(
-          asRpcClient(createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId })),
-          'bff_authorize_invite_otp',
-          {
-            p_invite_token: inviteToken,
-            p_destination_type: destinationType,
-            p_destination: destination,
-            p_employee_code: employeeCode,
-            p_ip_hash: ipHash,
-            p_installation_hash: installationHash,
-            p_purpose: purpose,
-          },
-        ),
-      );
-      return {
-        allowed: result.allowed === true,
-        channelConfigured: result.channel_configured === true,
-      };
-    },
     async authorizeMemberOtp(
       destinationType,
       destination,
@@ -600,7 +547,7 @@ export function defaultAuthDependencies(): AuthDependencies {
       purpose,
     ) {
       const result = firstRow(
-        await invokeRpc<InviteAuthorization | InviteAuthorization[]>(
+        await invokeRpc<OtpAuthorizationRow | OtpAuthorizationRow[]>(
           asRpcClient(createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId })),
           'bff_authorize_member_otp',
           {
@@ -733,7 +680,7 @@ export function defaultAuthDependencies(): AuthDependencies {
       purpose,
     ) {
       const result = firstRow(
-        await invokeRpc<InviteAuthorization | InviteAuthorization[]>(
+        await invokeRpc<OtpAuthorizationRow | OtpAuthorizationRow[]>(
           asRpcClient(createAdminClient(clientEnvironment, { 'X-Request-Id': correlationId })),
           'bff_authorize_account_recovery_otp',
           {
@@ -891,22 +838,6 @@ export function defaultAuthDependencies(): AuthDependencies {
         { app_metadata: { newone_password_set_at: new Date().toISOString() } },
       );
       if (error || !data.user) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    },
-    async redeemInvite(accessToken, expectedUserId, inviteToken, employeeCode) {
-      const result = asObject(
-        await invokeRpc(
-          asRpcClient(createUserClient(clientEnvironment, accessToken)),
-          'redeem_organization_invite',
-          { p_token: inviteToken, p_employee_code: employeeCode },
-        ),
-      );
-      if (result.redeemed !== true || uuid(result.user_id) !== expectedUserId) {
-        throw new ApiError(401, 'unauthorized');
-      }
-      return {
-        organizationId: uuid(result.organization_id),
-        role: oneOf(result.role, ['admin', 'manager', 'member'] as const),
-      };
     },
     async refresh(refreshToken) {
       const client = createPublicClient(clientEnvironment);
@@ -1108,18 +1039,9 @@ function parseDestination(destinationType: DestinationType, value: unknown): str
   return destinationType === 'email' ? parseEmail(value) : parsePhone(value);
 }
 
-function optionalEmployeeCode(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  const code = normalizedString(value, { min: 3, max: 64, trim: false }) as string;
-  if (!EMPLOYEE_CODE_PATTERN.test(code)) throw new ApiError(400, 'bad_request');
-  return code;
-}
-
 interface ParsedOtpIdentity {
   destinationType: DestinationType;
   destination: string;
-  inviteToken: string | null;
-  employeeCode: string | null;
   installationId: string;
   appVersion: string | null;
   locale: string | null;
@@ -1153,8 +1075,6 @@ function parseOtpIdentity(body: Record<string, unknown>): ParsedOtpIdentity {
   return {
     destinationType,
     destination,
-    inviteToken: optionalInviteToken(body.invitationToken),
-    employeeCode: optionalEmployeeCode(body.employeeCode),
     installationId: uuid(body.installationId),
     appVersion: optionalClientText(body.appVersion, 80),
     locale: optionalLocale(body.locale),
@@ -1224,18 +1144,7 @@ async function authorizeOtp(
   correlationId: string,
   purpose: OtpPurpose,
 ): Promise<OtpAuthorization> {
-  return identity.inviteToken
-    ? await dependencies.authorizeInviteOtp(
-      identity.inviteToken,
-      identity.destinationType,
-      identity.destination,
-      identity.employeeCode,
-      ipHash,
-      installationHash,
-      correlationId,
-      purpose,
-    )
-    : await dependencies.authorizeMemberOtp(
+  return await dependencies.authorizeMemberOtp(
       identity.destinationType,
       identity.destination,
       ipHash,
@@ -1248,7 +1157,6 @@ async function authorizeOtp(
 interface CompletedOtpAuthentication {
   session: SessionTokens;
   active: ActiveSession;
-  invite: RedeemedInvite | null;
 }
 
 function otpChannelConfigured(
@@ -1361,8 +1269,7 @@ async function completeOtpAuthentication(
   const session = await dependencies.verifyOtp(
     identity.destinationType,
     identity.destination,
-    identity.inviteToken === null &&
-      isReviewCredential(dependencies.reviewAccount, identity, code)
+    isReviewCredential(dependencies.reviewAccount, identity, code)
       ? await dependencies.generateReviewOtp(identity.destination)
       : code,
   );
@@ -1372,7 +1279,7 @@ async function completeOtpAuthentication(
 /**
  * Everything that happens after GoTrue has issued a session, shared by the
  * code and password grants: the destination must match, the session is bound
- * to this installation, the invite (if any) is redeemed, and the live session
+ * to this installation, and the live session
  * is re-inspected. Any failure revokes the brand-new session.
  */
 async function activateAuthenticatedSession(
@@ -1390,29 +1297,14 @@ async function activateAuthenticatedSession(
     throw new ApiError(401, 'unauthorized');
   }
 
-  let invite: RedeemedInvite | null = null;
   try {
     const binding = await dependencies.bindSessionInstallation(session.accessToken, installation);
-    if (identity.inviteToken) {
-      invite = await dependencies.redeemInvite(
-        session.accessToken,
-        session.userId,
-        identity.inviteToken,
-        identity.employeeCode,
-      );
-    } else if (identity.employeeCode !== null) {
-      throw new ApiError(401, 'unauthorized');
-    }
     const active = await dependencies.inspect(session.accessToken);
     if (
       active.userId !== session.userId || active.sessionId !== binding.sessionId ||
-      !identityMatches(active, identity.destinationType, identity.destination) ||
-      (invite !== null &&
-        !active.memberships.some((membership) =>
-          membership.organizationId === invite?.organizationId
-        ))
+      !identityMatches(active, identity.destinationType, identity.destination)
     ) throw new ApiError(401, 'unauthorized');
-    return { session, active, invite };
+    return { session, active };
   } catch (error) {
     try {
       await dependencies.revoke(session.accessToken);
@@ -1466,8 +1358,6 @@ function parseSignupIdentity(body: Record<string, unknown>): ParsedOtpIdentity {
   return {
     destinationType: 'email',
     destination: parseEmail(body.destination),
-    inviteToken: null,
-    employeeCode: null,
     installationId: uuid(body.installationId),
     appVersion: optionalClientText(body.appVersion, 80),
     locale: optionalLocale(body.locale),
@@ -1633,9 +1523,6 @@ async function completeRecoveryAuthentication(
   correlationId: string,
   installation: SessionInstallationInput,
 ): Promise<CompletedRecoveryAuthentication> {
-  if (identity.inviteToken !== null || identity.employeeCode !== null) {
-    throw new ApiError(400, 'bad_request');
-  }
   const authorization = await dependencies.authorizeRecoveryOtp(
     identity.destinationType,
     identity.destination,
@@ -1715,16 +1602,6 @@ function sessionInstallation(
   };
 }
 
-function parseInviteToken(value: unknown): string {
-  const token = normalizedString(value, { min: 64, max: 64 }) as string;
-  if (!INVITE_TOKEN_PATTERN.test(token)) throw new ApiError(400, 'bad_request');
-  return token;
-}
-
-function optionalInviteToken(value: unknown): string | null {
-  return value === null || value === undefined ? null : parseInviteToken(value);
-}
-
 function captchaRequiredFor(mode: CaptchaMode, native: boolean): boolean {
   // 'web' waives token presence only on the origin-less native paths; the
   // browser BFF path keeps proving a challenge token. A provided token is
@@ -1800,8 +1677,7 @@ function requireAllowedRequestContext(
     return;
   }
   if (
-    (path === '/v2/auth/invitations/redeem' ||
-      path === '/v2/auth/account/delete' ||
+    (path === '/v2/auth/account/delete' ||
       path === '/v2/auth/password/set' ||
       path.startsWith('/v2/auth/recovery/cases')) &&
     /^Bearer\s+[^\s]+$/i.test(request.headers.get('authorization') ?? '') &&
@@ -2048,8 +1924,7 @@ export function createAuthHandler(
           ]);
           const identity = parseOtpIdentity(body);
           if (
-            identity.inviteToken !== null || identity.employeeCode !== null ||
-            (native && identity.installationId !== nativeInstallationId(request))
+            native && identity.installationId !== nativeInstallationId(request)
           ) throw new ApiError(400, 'bad_request');
           const captcha = captchaToken(
             body.captchaToken,
@@ -2356,8 +2231,7 @@ export function createAuthHandler(
         const identity = parseOtpIdentity(body);
         // Email only: the app has no phone sign-in; the phone paths stay inert.
         if (
-          identity.destinationType !== 'email' || identity.inviteToken !== null ||
-          identity.employeeCode !== null ||
+          identity.destinationType !== 'email' ||
           (native && identity.installationId !== nativeInstallationId(request))
         ) throw new ApiError(400, 'bad_request');
         captchaToken(body.captchaToken, captchaRequiredFor(dependencies.captchaMode, native));
@@ -2392,8 +2266,6 @@ export function createAuthHandler(
           'email',
           'destinationType',
           'destination',
-          'invitationToken',
-          'employeeCode',
           'installationId',
           'appVersion',
           'locale',
@@ -2450,8 +2322,6 @@ export function createAuthHandler(
         onlyKeys(body, [
           'destinationType',
           'destination',
-          'invitationToken',
-          'employeeCode',
           'installationId',
           'appVersion',
           'locale',
@@ -2517,8 +2387,6 @@ export function createAuthHandler(
             ...(native ? [] : ['email']),
             'destinationType',
             'destination',
-            'invitationToken',
-            'employeeCode',
             'installationId',
             'appVersion',
             'locale',
@@ -2557,16 +2425,13 @@ export function createAuthHandler(
                 : 'web',
             ),
           );
-          const { session, active, invite } = completed;
+          const { session, active } = completed;
           const responseBody: Record<string, unknown> = {
             authenticated: true,
             user: publicUser(session.userId, active),
             memberships: active.memberships,
             sessionId: active.sessionId,
             aal: active.aal,
-            ...(invite === null
-              ? {}
-              : { organization: { id: invite.organizationId, role: invite.role } }),
           };
           if (native) {
             responseBody.session = {
@@ -3042,39 +2907,6 @@ export function createAuthHandler(
           // retryable error.
         }
         return clearSessionCookies(jsonResponse(meta, 200, { status: 'deleted' }), config);
-      }
-
-      if (request.method === 'POST' && path === '/v2/auth/invitations/redeem') {
-        const body = asObject((await parseJson(request, config)).value);
-        onlyKeys(body, ['invitationToken', 'employeeCode']);
-        const inviteToken = parseInviteToken(body.invitationToken);
-        const employeeCode = optionalEmployeeCode(body.employeeCode);
-        const credential = accessCredential(request, config);
-        verifyCsrf(request, config, credential.viaCookie);
-        const identity = await dependencies.identify(credential.token);
-        try {
-          const invite = await dependencies.redeemInvite(
-            credential.token,
-            identity.userId,
-            inviteToken,
-            employeeCode,
-          );
-          return jsonResponse(meta, 200, {
-            activated: true,
-            user: publicUser(identity.userId, identity),
-            organization: { id: invite.organizationId, role: invite.role },
-          });
-        } catch {
-          try {
-            await dependencies.revoke(credential.token);
-          } catch {
-            // Organization access remains impossible because redemption failed.
-          }
-          return clearSessionCookies(
-            errorResponse(meta, new ApiError(401, 'unauthorized')),
-            config,
-          );
-        }
       }
 
       if (request.method === 'POST' && path === '/v2/auth/session') {

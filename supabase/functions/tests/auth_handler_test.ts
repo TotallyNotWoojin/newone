@@ -48,7 +48,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     phoneOtpEnabled: false,
     reviewAccount: null,
     settleOtpRequest: async () => {},
-    authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeSignupOtp: async () => ({
       allowed: true,
@@ -76,10 +75,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
     },
-    redeemInvite: async () => ({
-      organizationId: '00000000-0000-4000-8000-000000000001',
-      role: 'member',
-    }),
     refresh: async () => session,
     bindSessionInstallation: async () => ({
       sessionId: '00000000-0000-4000-8000-000000000020',
@@ -175,61 +170,6 @@ function nativePost(
   });
 }
 
-Deno.test('invite OTP request is enumeration-resistant and rate authorization runs before delivery', async () => {
-  assertEquals(OTP_SHOULD_CREATE_USER, false);
-  let requested = false;
-  let fingerprint = '';
-  const handler = createAuthHandler(() =>
-    dependencies({
-      authorizeInviteOtp: async (
-        _token,
-        _destinationType,
-        _destination,
-        _employeeCode,
-        ipHash,
-        _installationHash,
-        _requestId,
-        purpose,
-      ) => {
-        fingerprint = ipHash;
-        assertEquals(purpose, 'request');
-        return { allowed: false, channelConfigured: true };
-      },
-      requestOtp: async () => {
-        requested = true;
-      },
-    })
-  );
-  const response = await handler(post('/v2/auth/otp/request', {
-    email: 'worker@example.com',
-    invitationToken: 'a'.repeat(64),
-    captchaToken: 'captcha-token-that-is-long-enough',
-  }, { 'CF-Connecting-IP': '203.0.113.7' }));
-  assertEquals(response.status, 202);
-  assertEquals(await response.json(), {
-    accepted: true,
-    channel: { type: 'email', configured: true },
-  });
-  assertEquals(requested, false);
-  assertEquals(fingerprint.length, 64);
-
-  const eligible = createAuthHandler(() =>
-    dependencies({
-      authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
-    })
-  );
-  const eligibleResponse = await eligible(post('/v2/auth/otp/request', {
-    email: 'worker@example.com',
-    invitationToken: 'a'.repeat(64),
-    captchaToken: 'captcha-token-that-is-long-enough',
-  }));
-  assertEquals(eligibleResponse.status, response.status);
-  assertEquals(await eligibleResponse.json(), {
-    accepted: true,
-    channel: { type: 'email', configured: true },
-  });
-});
-
 Deno.test('OTP CAPTCHA is required, bounded, and passed only through the delivery boundary', async () => {
   // Email OTP delivery is gateway-owned mail (generateEmailOtp + sendCodeEmail)
   // and never reaches requestOtp; only the phone channel forwards the CAPTCHA
@@ -247,7 +187,6 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
     (await handler(post('/v2/auth/otp/request', {
       destinationType: 'phone',
       destination: '+12025550123',
-      invitationToken: 'a'.repeat(64),
     }))).status,
     400,
   );
@@ -255,7 +194,6 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
     (await handler(post('/v2/auth/otp/request', {
       destinationType: 'phone',
       destination: '+12025550123',
-      invitationToken: 'a'.repeat(64),
       captchaToken: 'short',
     }))).status,
     400,
@@ -265,7 +203,6 @@ Deno.test('OTP CAPTCHA is required, bounded, and passed only through the deliver
     (await handler(post('/v2/auth/otp/request', {
       destinationType: 'phone',
       destination: '+12025550123',
-      invitationToken: 'a'.repeat(64),
       captchaToken: token,
     }))).status,
     202,
@@ -439,10 +376,6 @@ Deno.test('returning active members authenticate without invitation redemption',
           memberships,
         };
       },
-      redeemInvite: async () => {
-        calls.push('unexpected-redeem');
-        throw new Error('must not redeem');
-      },
     })
   );
   const response = await handler(post('/v2/auth/otp/verify', {
@@ -575,60 +508,6 @@ Deno.test('OTP session binding failure revokes the new session and never emits c
   assertEquals(response.status, 401);
   assertEquals(response.headers.getSetCookie().length, 0);
   assertEquals(calls, ['verify', 'bind', 'revoke']);
-});
-
-Deno.test('OTP verification redeems the invite before setting protected session cookies', async () => {
-  const calls: string[] = [];
-  const handler = createAuthHandler(() =>
-    dependencies({
-      verifyOtp: async () => {
-        calls.push('verify');
-        return session;
-      },
-      bindSessionInstallation: async () => {
-        calls.push('bind');
-        return { sessionId: '00000000-0000-4000-8000-000000000020' };
-      },
-      redeemInvite: async () => {
-        calls.push('redeem');
-        return {
-          organizationId: '00000000-0000-4000-8000-000000000001',
-          role: 'member',
-        };
-      },
-    })
-  );
-  const response = await handler(post('/v2/auth/otp/verify', {
-    email: 'worker@example.com',
-    invitationToken: 'a'.repeat(64),
-    code: '123456',
-  }, { 'CF-Connecting-IP': '203.0.113.7' }));
-  assertEquals(response.status, 200);
-  assertEquals(calls, ['verify', 'bind', 'redeem']);
-  const body = await response.json();
-  assertEquals(body.authenticated, true);
-  assertEquals(body.sessionId, '00000000-0000-4000-8000-000000000020');
-  assertEquals(body.aal, 'aal1');
-  assert(typeof body.csrfToken === 'string' && body.csrfToken.length >= 32);
-  const serialized = JSON.stringify(body);
-  assert(!serialized.includes(session.accessToken));
-  assert(!serialized.includes(session.refreshToken));
-  const cookies = response.headers.getSetCookie();
-  assertEquals(cookies.length, 3);
-  assert(
-    cookies.some((value) =>
-      value.startsWith('__Host-newone_access=') && value.includes('HttpOnly') &&
-      value.includes('SameSite=Strict')
-    ),
-  );
-  assert(
-    cookies.some((value) =>
-      value.startsWith('__Host-newone_refresh=') && value.includes('HttpOnly')
-    ),
-  );
-  assert(
-    cookies.some((value) => value.startsWith('__Host-newone_csrf=') && !value.includes('HttpOnly')),
-  );
 });
 
 Deno.test('refresh rotates tokens and CSRF while sign-out revokes before clearing cookies', async () => {
@@ -862,24 +741,15 @@ Deno.test('native OTP is preauthorized with CAPTCHA and installation rate bindin
   const handler = createAuthHandler(() =>
     dependencies({
       phoneOtpEnabled: true,
-      authorizeInviteOtp: async (
-        token,
+      authorizeMemberOtp: async (
         destinationType,
         destination,
-        employeeCode,
         _ipHash,
         installationHash,
         _requestId,
         purpose,
       ) => {
-        calls.push({
-          token,
-          destinationType,
-          destination,
-          employeeCode,
-          installationHash,
-          purpose,
-        });
+        calls.push({ destinationType, destination, installationHash, purpose });
         return { allowed: true, channelConfigured: true };
       },
       requestOtp: async (destinationType, destination, captcha) => {
@@ -890,8 +760,6 @@ Deno.test('native OTP is preauthorized with CAPTCHA and installation rate bindin
   const response = await handler(nativePost('/v2/auth/native/otp/request', {
     destinationType: 'phone',
     destination: '+12025550123',
-    invitationToken: 'a'.repeat(64),
-    employeeCode: 'EMP-1042',
     captchaToken: 'native-turnstile-token-long-enough',
   }));
   assertEquals(response.status, 202);
@@ -900,7 +768,6 @@ Deno.test('native OTP is preauthorized with CAPTCHA and installation rate bindin
     channel: { type: 'phone', configured: true },
   });
   assertEquals(calls[0]?.destinationType, 'phone');
-  assertEquals(calls[0]?.employeeCode, 'EMP-1042');
   assertEquals(calls[0]?.purpose, 'request');
   assertEquals((calls[0]?.installationHash as string).length, 64);
   assertEquals(calls[1], {
@@ -1025,42 +892,6 @@ Deno.test('Edge phone provider switch enables SMS independently of the database 
     channel: { type: 'phone', configured: true },
   });
   assertEquals(delivered, true);
-});
-
-Deno.test('native invite activation allows bearer context but revokes a mismatched principal', async () => {
-  const calls: string[] = [];
-  const handler = createAuthHandler(() =>
-    dependencies({
-      identify: async () => ({
-        userId: session.userId,
-        destinationType: session.destinationType,
-        destination: session.destination,
-        email: session.email,
-        phone: session.phone,
-        sessionId: '00000000-0000-4000-8000-000000000020',
-        expiresAt: 9999999999,
-      }),
-      redeemInvite: async () => {
-        calls.push('redeem');
-        throw new ApiError(403, 'forbidden');
-      },
-      revoke: async () => {
-        calls.push('revoke');
-      },
-    })
-  );
-  const response = await handler(
-    new Request('https://api.newone.example/v2/auth/invitations/redeem', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer native-pkce-access-token',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ invitationToken: 'a'.repeat(64) }),
-    }),
-  );
-  assertEquals(response.status, 401);
-  assertEquals(calls, ['redeem', 'revoke']);
 });
 
 Deno.test('session refresh rejects a suspended member and realtime token never exposes refresh credentials', async () => {

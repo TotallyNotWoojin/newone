@@ -176,7 +176,6 @@ function rpcResponse(name: string): unknown {
       return { attempt_id: '51', status: 'accepted' };
     case 'bff_complete_push_dispatch_job':
       return { job_id: '50', dispatch_completed: true, provider_delivery_pending: 1 };
-    case 'bff_authorize_invite_otp':
     case 'bff_authorize_member_otp':
     case 'bff_authorize_account_recovery_otp':
       return { allowed: true, channel_configured: true };
@@ -198,13 +197,6 @@ function rpcResponse(name: string): unknown {
       };
     case 'bff_delete_account':
       return { user_id: actorUserId, memberships_deactivated: 1 };
-    case 'redeem_organization_invite':
-      return {
-        redeemed: true,
-        user_id: actorUserId,
-        organization_id: organizationId,
-        role: 'admin',
-      };
     case 'bff_bind_session_installation':
       return {
         bound: true,
@@ -812,19 +804,6 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
     await dependencies.settleOtpRequest(Date.now() - 2_000);
 
     assertEquals(
-      await dependencies.authorizeInviteOtp(
-        'invite-token',
-        'email',
-        'owner@example.com',
-        null,
-        sha,
-        sha,
-        deviceId,
-        'request',
-      ),
-      { allowed: true, channelConfigured: true },
-    );
-    assertEquals(
       await dependencies.authorizeMemberOtp(
         'email',
         'owner@example.com',
@@ -901,10 +880,6 @@ Deno.test('default auth dependencies execute OTP, session, recovery, and MFA bou
     );
     assertEquals(await dependencies.lookupPasswordState('nobody@example.com'), null);
 
-    assertEquals(
-      await dependencies.redeemInvite(accessToken, actorUserId, 'invite-token', null),
-      { organizationId, role: 'admin' },
-    );
     assertEquals((await dependencies.refresh(refreshToken)).userId, actorUserId);
     assertEquals(
       await dependencies.bindSessionInstallation(accessToken, {

@@ -64,7 +64,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     phoneOtpEnabled: false,
     reviewAccount: null,
     settleOtpRequest: async () => {},
-    authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true, retryAfterSeconds: 0 }),
     authorizeSignupOtp: async () => ({
       allowed: true,
@@ -92,9 +91,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     signInWithPassword: async () => session,
     lookupPasswordState: async () => ({ hasPassword: true }),
     setPassword: async () => {},
-    redeemInvite: async () => {
-      throw new Error('never redeems an invite');
-    },
     refresh: async () => session,
     bindSessionInstallation: async () => ({ sessionId }),
     completeAccountRecovery: async () => ({

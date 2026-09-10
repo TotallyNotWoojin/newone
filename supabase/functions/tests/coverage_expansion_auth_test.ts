@@ -52,7 +52,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     phoneOtpEnabled: true,
     reviewAccount: null,
     settleOtpRequest: async () => {},
-    authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeSignupOtp: async () => ({
       allowed: true,
@@ -86,7 +85,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
     },
-    redeemInvite: async () => ({ organizationId, role: 'admin' }),
     refresh: async () => session,
     bindSessionInstallation: async () => ({ sessionId }),
     completeAccountRecovery: async () => ({
@@ -383,17 +381,6 @@ Deno.test('auth OTP and recovery authentication cover suppressed delivery and se
     401,
   );
   assertEquals(
-    await status(
-      {},
-      browserPost('/v2/auth/otp/verify', {
-        ...otpBody,
-        employeeCode: 'EMP-1',
-        code: '123456',
-      }),
-    ),
-    401,
-  );
-  assertEquals(
     await status({
       inspect: async () => ({
         ...(await dependencies().inspect(accessToken)),
@@ -420,17 +407,6 @@ Deno.test('auth OTP and recovery authentication cover suppressed delivery and se
       authorizeRecoveryOtp: async () => ({ allowed: false, channelConfigured: true }),
     }, browserPost('/v2/auth/recovery/otp/verify', { ...otpBody, code: '123456' })),
     401,
-  );
-  assertEquals(
-    await status(
-      {},
-      browserPost('/v2/auth/recovery/otp/verify', {
-        ...otpBody,
-        employeeCode: 'EMP-1',
-        code: '123456',
-      }),
-    ),
-    400,
   );
   assertEquals(
     await status({}, browserPost('/v2/auth/recovery/otp/verify', { ...otpBody, code: 'bad' })),
@@ -538,7 +514,7 @@ Deno.test('auth MFA response parsers and recent-auth gates fail closed', async (
   );
 });
 
-Deno.test('auth refresh, recovery responses, and invitation cleanup cover negative receipts', async () => {
+Deno.test('auth refresh and recovery responses cover negative receipts', async () => {
   const csrf = 'coverage-csrf';
   const refreshHeaders = {
     Cookie: `${runtimeConfig.refreshCookieName}=${
@@ -598,23 +574,5 @@ Deno.test('auth refresh, recovery responses, and invitation cleanup cover negati
       ),
     ),
     400,
-  );
-
-  assertEquals(
-    await status(
-      {
-        redeemInvite: async () => {
-          throw new Error('redemption failed');
-        },
-        revoke: async () => {
-          throw new Error('cleanup unavailable');
-        },
-      },
-      browserPost('/v2/auth/invitations/redeem', {
-        invitationToken: 'a'.repeat(64),
-        employeeCode: null,
-      }),
-    ),
-    401,
   );
 });

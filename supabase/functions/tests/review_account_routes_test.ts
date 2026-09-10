@@ -71,7 +71,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     phoneOtpEnabled: false,
     reviewAccount,
     settleOtpRequest: async () => {},
-    authorizeInviteOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeMemberOtp: async () => ({ allowed: true, channelConfigured: true }),
     authorizeSignupOtp: async () => ({
       allowed: true,
@@ -105,10 +104,6 @@ function dependencies(overrides: Partial<AuthDependencies> = {}): AuthDependenci
     generateReviewOtp: async () => {
       throw new Error('review OTP must not be generated');
     },
-    redeemInvite: async () => ({
-      organizationId: '00000000-0000-4000-8000-000000000001',
-      role: 'member',
-    }),
     refresh: async () => session,
     bindSessionInstallation: async () => ({ sessionId }),
     completeAccountRecovery: async () => ({
@@ -415,7 +410,7 @@ Deno.test('a wrong review code follows the invalid-code path without minting a l
   assertEquals(calls, ['verify:654321']);
 });
 
-Deno.test('the static review code never crosses to another destination or invite flow', async () => {
+Deno.test('the static review code never crosses to another destination', async () => {
   const calls: string[] = [];
   const handler = createAuthHandler(() =>
     dependencies({
@@ -438,15 +433,6 @@ Deno.test('the static review code never crosses to another destination or invite
   assertEquals(other.status, 400);
   assertEquals(calls, []);
 
-  // Invitation flows never bypass: the static code is forwarded to the
-  // normal verifier and fails like any invalid code.
-  const invited = await handler(post('/v2/auth/otp/verify', {
-    email: reviewEmail,
-    invitationToken: 'a'.repeat(64),
-    code: reviewCode,
-  }));
-  assertEquals(invited.status, 401);
-  assertEquals(calls, [`verify:${reviewEmail}:${reviewCode}`]);
 });
 
 Deno.test('review sign-in still honors authorization denial and a missing account', async () => {
