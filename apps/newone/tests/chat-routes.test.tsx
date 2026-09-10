@@ -338,7 +338,7 @@ describe('chats index route', () => {
     const view = await render(<ChatsScreen />);
 
     expect(screen.getByText('mobile-list')).toBeTruthy();
-    expect(screen.getByText('Controlled Company · chat.onShift')).toBeTruthy();
+    expect(screen.queryByText(/^@/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'controlled select conversation' }));
     expect(mockWorkspace.selectConversation).toHaveBeenCalledWith('conversation-secondary');
     expect(mockRouter.push).toHaveBeenCalledWith({

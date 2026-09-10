@@ -365,9 +365,8 @@ describe('settings screen', () => {
 
     await fireEvent(screen.getByLabelText('settings.sound'), 'valueChange', false);
     await fireEvent(screen.getByLabelText('settings.vibration'), 'valueChange', false);
-    await fireEvent(screen.getByLabelText('settings.shiftSuppression'), 'valueChange', true);
     await waitFor(() => expect(mockWorkspace.saveOrganizationPreferences).toHaveBeenCalledWith(
-      expect.objectContaining({ soundEnabled: false, vibrationEnabled: false, shiftAwareSuppression: true }),
+      expect.objectContaining({ soundEnabled: false, vibrationEnabled: false }),
     ));
     await view.unmount();
   });
@@ -440,56 +439,6 @@ describe('settings screen', () => {
     await view.unmount();
   });
 
-  test('revokes other and current sessions with a reason on a workspace account, and signs out', async () => {
-    const view = await renderAndHydrate();
-    expect(screen.getByText('WEB · 2.3.4')).toBeTruthy();
-    expect(screen.queryByText('settings.noOtherSessions')).toBeNull();
-
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
-    expect(screen.getByText('settings.revokeDescription')).toBeTruthy();
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog').at(-1)!);
-    expect(mockWorkspace.revokeSession).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
-    await fireEvent.changeText(screen.getByLabelText('settings.revokeReason'), 'Lost shared kiosk');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeConfirm' }));
-    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
-      'session-other',
-      'Lost shared kiosk',
-    ));
-    expect(mockWorkspace.loadAccountSettings).toHaveBeenCalledTimes(2);
-
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeCurrent' }));
-    await fireEvent.changeText(screen.getByLabelText('settings.revokeReason'), 'Secure this account');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeConfirm' }));
-    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
-      'session-current',
-      'Secure this account',
-    ));
-    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-
-    // Sign-out revokes the current session server-side first; the workspace
-    // performs the local sign-out as part of a successful current-session
-    // revoke, so auth.signOut is only the fallback.
-    mockWorkspace.revokeSession.mockClear();
-    mockAuth.signOut.mockClear();
-    mockRouter.replace.mockClear();
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.signOut' }));
-    await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
-      'session-current',
-      'sign_out',
-    ));
-    expect(mockAuth.signOut).not.toHaveBeenCalled();
-    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-
-    // When the revoke cannot be sent, the device still signs out locally.
-    mockWorkspace.revokeSession.mockResolvedValueOnce(false);
-    mockRouter.replace.mockClear();
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.signOut' }));
-    await waitFor(() => expect(mockAuth.signOut).toHaveBeenCalled());
-    expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in');
-    await view.unmount();
-  });
-
   test('keeps the sheet open when another device cannot be signed out', async () => {
     mockWorkspace = baseWorkspace({
       revokeSession: successfulAction(false),
@@ -498,211 +447,13 @@ describe('settings screen', () => {
     const view = await renderAndHydrate();
     expect(screen.getByText('iphone')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeSession' }));
-    await fireEvent.changeText(screen.getByLabelText('settings.revokeReason'), 'Keep active after review');
-    await fireEvent.press(screen.getByRole('button', { name: 'settings.revokeConfirm' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.signOutDeviceConfirm' }));
     await waitFor(() => expect(mockWorkspace.revokeSession).toHaveBeenCalledWith(
       'session-native-other',
-      'Keep active after review',
+      'sign_out',
     ));
     expect(mockRouter.replace).not.toHaveBeenCalledWith('/sign-in');
-    expect(screen.getByText('settings.revokeTitle')).toBeTruthy();
-    await view.unmount();
-  });
-
-  test('enrolls and verifies a native TOTP factor and removes stale enrollments', async () => {
-    const client = nativeMfaClient({
-      listFactors: jest.fn(async () => ({
-        data: {
-          all: [{
-            id: 'stale-factor',
-            factor_type: 'totp',
-            friendly_name: 'Incomplete enrollment',
-            status: 'unverified',
-          }],
-        },
-        error: null,
-      })),
-      getAuthenticatorAssuranceLevel: jest.fn(async () => ({
-        data: { currentLevel: 'aal1' },
-        error: null,
-      })),
-    });
-    mockGetSupabaseClient.mockReturnValue(client);
-    const view = await renderAndHydrate();
-    await waitForNativeMfaHydration(client, 'settings.mfaEnroll');
-    expect(screen.getByText('settings.mfaNotEnrolled')).toBeTruthy();
-
-    await pressEnabled('settings.mfaEnroll');
-    await waitFor(() => expect(screen.getByText('CONTROLLEDSECRET')).toBeTruthy());
-    expect(client.auth.mfa.unenroll).toHaveBeenCalledWith({ factorId: 'stale-factor' });
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
-    await waitFor(() => expect(client.auth.mfa.unenroll).toHaveBeenCalledWith({
-      factorId: 'factor-enrolled',
-    }));
-    await pressEnabled('settings.mfaEnroll');
-    await waitFor(() => expect(screen.getByText('CONTROLLEDSECRET')).toBeTruthy());
-    await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '123 456');
-    await pressEnabled('settings.mfaConfirm');
-    await waitFor(() => expect(client.auth.mfa.challengeAndVerify).toHaveBeenCalledWith({
-      factorId: 'factor-enrolled',
-      code: '123456',
-    }));
-    expect(mockAuth.refreshAssurance).toHaveBeenCalled();
-    await view.unmount();
-  });
-
-  test('shows a native MFA factor-list failure without assuming success', async () => {
-    const loadFailure = nativeMfaClient({
-      listFactors: jest.fn(async () => ({ data: { all: [] }, error: new Error('denied') })),
-      getAuthenticatorAssuranceLevel: jest.fn(async () => ({ data: { currentLevel: null }, error: null })),
-    });
-    mockGetSupabaseClient.mockReturnValue(loadFailure);
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByText('settings.mfaLoadError')).toBeTruthy());
-    await view.unmount();
-  });
-
-  test('shows a native MFA enrollment failure without assuming success', async () => {
-    const enrollFailure = nativeMfaClient({
-      listFactors: jest.fn(async () => ({ data: { all: [] }, error: null })),
-      getAuthenticatorAssuranceLevel: jest.fn(async () => ({ data: { currentLevel: 'aal1' }, error: null })),
-      enroll: jest.fn(async () => ({ data: null, error: new Error('enrollment rejected') })),
-    });
-    mockGetSupabaseClient.mockReturnValue(enrollFailure);
-    const view = await renderAndHydrate();
-    await waitForNativeMfaHydration(enrollFailure, 'settings.mfaEnroll');
-    // A privileged member without a factor sees the warning line.
-    expect(screen.getByText('settings.mfaPrivilegedWarning')).toBeTruthy();
-    await pressEnabled('settings.mfaEnroll');
-    await waitFor(() => expect(enrollFailure.auth.mfa.enroll).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByText('settings.mfaEnrollError')).toBeTruthy());
-    await view.unmount();
-  });
-
-  test('shows a native MFA verification failure without assuming success', async () => {
-    const verificationFailure = nativeMfaClient({
-      challengeAndVerify: jest.fn(async () => ({ data: null, error: new Error('bad code') })),
-    });
-    mockGetSupabaseClient.mockReturnValue(verificationFailure);
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
-    expect(screen.getByText('settings.mfaAal2')).toBeTruthy();
-    await pressEnabled('settings.mfaVerify');
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
-    await pressEnabled('settings.mfaVerify');
-    await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '111111');
-    await pressEnabled('settings.mfaConfirm');
-    await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
-    await view.unmount();
-  });
-
-  test('uses the web MFA boundary for a verified factor', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockAuth = { ...mockAuth, assuranceLevel: null };
-    mockListWebMfaFactors.mockResolvedValue([{
-      id: 'web-verified', friendlyName: 'Security key', status: 'verified',
-    }]);
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
-    await pressEnabled('settings.mfaVerify');
-    await waitFor(() => expect(mockChallengeWebMfa).toHaveBeenCalledWith('web-verified'));
-    await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '654321');
-    await pressEnabled('settings.mfaConfirm');
-    await waitFor(() => expect(mockVerifyWebMfa).toHaveBeenCalledWith({
-      factorId: 'web-verified',
-      challengeId: 'web-challenge',
-      code: '654321',
-    }));
-    expect(mockAuth.refreshAssurance).toHaveBeenCalled();
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('uses the web MFA boundary for a new factor and closes an incomplete dialog locally', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockAuth = { ...mockAuth, assuranceLevel: null };
-    mockListWebMfaFactors.mockResolvedValue([]);
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaEnroll' })).toBeTruthy());
-    await pressEnabled('settings.mfaEnroll');
-    await waitFor(() => expect(screen.getByText('CONTROLLEDWEBSECRET')).toBeTruthy());
-    expect(mockEnrollWebMfa).toHaveBeenCalledWith('Newone authenticator');
-    expect(mockChallengeWebMfa).toHaveBeenCalledWith('web-enrollment');
-    await pressEnabled('settings.mfaEnroll');
-    expect(mockEnrollWebMfa).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getAllByLabelText('common.closeDialog')[0]!);
-    await waitFor(() => expect(screen.queryByText('CONTROLLEDWEBSECRET')).toBeNull());
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('reports a web MFA factor-list dependency failure', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockListWebMfaFactors.mockRejectedValueOnce(new Error('gateway unavailable'));
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByText('settings.mfaLoadError')).toBeTruthy());
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('reports a web MFA enrollment dependency failure', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockListWebMfaFactors.mockResolvedValue([]);
-    mockEnrollWebMfa.mockRejectedValueOnce(new Error('enroll denied'));
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaEnroll' })).toBeTruthy());
-    await pressEnabled('settings.mfaEnroll');
-    await waitFor(() => expect(screen.getByText('settings.mfaEnrollError')).toBeTruthy());
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('reports a web MFA verification dependency failure', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockListWebMfaFactors.mockResolvedValue([{
-      id: 'web-verified', friendlyName: 'Verified factor', status: 'verified',
-    }]);
-    mockVerifyWebMfa.mockRejectedValueOnce(new Error('verify denied'));
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
-    await pressEnabled('settings.mfaVerify');
-    await waitFor(() => expect(mockChallengeWebMfa).toHaveBeenCalled());
-    await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '112233');
-    await pressEnabled('settings.mfaConfirm');
-    await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('reports a verified-factor web challenge failure as verification failure', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockListWebMfaFactors.mockResolvedValue([{
-      id: 'web-verified', friendlyName: 'Verified factor', status: 'verified',
-    }]);
-    mockChallengeWebMfa.mockRejectedValueOnce(new Error('challenge denied'));
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
-    await pressEnabled('settings.mfaVerify');
-    await waitFor(() => expect(screen.getByText('settings.mfaVerifyError')).toBeTruthy());
-    await view.unmount();
-    platform.restore();
-  });
-
-  test('fails closed when the native MFA client disappears before verification', async () => {
-    const client = nativeMfaClient({
-      getAuthenticatorAssuranceLevel: jest.fn(async () => ({
-        data: { currentLevel: 'aal1' },
-        error: null,
-      })),
-    });
-    mockGetSupabaseClient.mockReturnValue(client);
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByText('settings.mfaEnrolled')).toBeTruthy());
-    await pressEnabled('settings.mfaVerify');
-    mockGetSupabaseClient.mockReturnValue(null);
-    await fireEvent.changeText(screen.getByLabelText('settings.mfaCodeLabel'), '998877');
-    await pressEnabled('settings.mfaConfirm');
-    await waitFor(() => expect(screen.getAllByText('settings.mfaVerifyError').length).toBeGreaterThan(0));
+    expect(screen.getByText('settings.signOutDeviceTitle')).toBeTruthy();
     await view.unmount();
   });
 
@@ -835,34 +586,6 @@ describe('settings screen', () => {
     await view.unmount();
   });
 
-  test('renders loading and unavailable states without guessing', async () => {
-    mockLocale = 'es';
-    mockWorkspace = baseWorkspace({
-      actionBusy: 'account-settings-load',
-      actionError: 'Authoritative settings unavailable.',
-      organizationPreferences: null,
-      deviceNotificationPreferences: null,
-      accountSessions: [],
-      capabilities: [],
-    });
-    mockAuth = { ...mockAuth, sessionId: null, assuranceLevel: null };
-    mockGetSupabaseClient.mockReturnValue(null);
-    const view = await render(<SettingsScreen />);
-    await waitFor(() => expect(mockGetSupabaseClient).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getAllByText('Authoritative settings unavailable.').length).toBeGreaterThan(0));
-    expect(screen.getByText('settings.noOtherSessions')).toBeTruthy();
-    expect(screen.getByText('settings.spanish')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'settings.revokeCurrent' })).toBeNull();
-    // Account preference rows wait for the draft.
-    expect(screen.getByLabelText('settings.sound').props.accessibilityState?.disabled).toBe(true);
-    expect(screen.getByRole('button', { name: 'settings.quietHours' }).props.accessibilityState?.disabled).toBe(true);
-    // Permission granted but no device binding: the switch is off.
-    await waitFor(() => expect(screen.getByLabelText('settings.notifications').props.accessibilityState?.disabled).toBe(false));
-    expect(switchValue('settings.notifications')).toBe(false);
-    await pressEnabled('settings.mfaEnroll');
-    expect(screen.queryByText('settings.mfaEnrollDialog')).toBeNull();
-    await view.unmount();
-  });
 });
 
 describe('notifications switch', () => {
@@ -1044,15 +767,4 @@ describe('personal realm settings', () => {
     await view.unmount();
   });
 
-  test('keeps every workplace section for a workspace organization', async () => {
-    const view = await renderAndHydrate();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'settings.mfaVerify' })).toBeTruthy());
-    expect(screen.getByText('settings.securityTitle')).toBeTruthy();
-    expect(screen.getByText('settings.mfaTitle')).toBeTruthy();
-    expect(screen.getByLabelText('settings.shiftSuppression')).toBeTruthy();
-    expect(screen.getAllByText('Request lost-authenticator recovery').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'settings.revokeCurrent' })).toBeTruthy();
-    expect(mockGetSupabaseClient).toHaveBeenCalled();
-    await view.unmount();
-  });
 });

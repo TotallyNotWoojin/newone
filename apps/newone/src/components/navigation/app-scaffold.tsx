@@ -17,7 +17,6 @@ import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { useI18n } from '@/i18n/provider';
 import type { MessageKey } from '@/i18n/catalog';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -95,7 +94,6 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
   const workspace = useWorkspace();
   // Consumer accounts see the plain product mark; the workplace tag remains
   // the brand treatment for workspace organizations only.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   return (
     <View style={[styles.brand, compact && styles.brandCompact]}>
       <View style={styles.logoMark}>

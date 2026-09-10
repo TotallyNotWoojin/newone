@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -77,9 +76,7 @@ export function GroupMembersSection({ conversation, onOpenConversation }: GroupM
 
   if (conversation.kind === 'direct') return null;
   // A management-only view belongs to someone who manages the group without
-  // being in it; the workplace realm has its own member controls above.
   if (conversation.managementOnly) return null;
-  if (!isPersonalRealm(workspace.organizationId)) return null;
 
   const canManage = conversation.myRole === 'owner' || conversation.myRole === 'admin';
   const openConversation = (conversationId: string) => {

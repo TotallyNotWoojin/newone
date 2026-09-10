@@ -605,19 +605,12 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText('Gate and valve safety')).toBeTruthy();
     expect(screen.getByText('The shift must secure the gate and inspect the valve.')).toBeTruthy();
-    expect(screen.getByText('Inspect the valve')).toBeTruthy();
     expect(screen.queryByText(/chat\.sourceFingerprint|chat\.provenance|chat\.summaryBoundary/)).toBeNull();
 
-    await fireEvent.press(screen.getAllByLabelText('chat.confirmAction')[0]);
-    await fireEvent.press(screen.getByLabelText(colleague.displayName));
-    await fireEvent.changeText(screen.getByLabelText('chat.dueAt'), '2026-08-04T19:00:00.000Z');
-    await fireEvent.press(screen.getAllByLabelText('chat.confirmAction').at(-1)!);
-    await waitFor(() => expect(mockWorkspace.confirmAction).toHaveBeenCalledWith(
-      'action-proposed', colleague.id, '2026-08-04T19:00:00.000Z',
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.completeAction'));
-    expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-progress', 'completed');
+    // Confirming and completing operational actions was the workplace review
+    // desk; a summary here is something to read, not a workflow to run.
+    expect(screen.queryByLabelText('chat.confirmAction')).toBeNull();
+    expect(screen.queryByLabelText('chat.completeAction')).toBeNull();
   });
 
   test('runs translation correction, message actions, and reply composition through the real pane', async () => {
@@ -785,62 +778,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(mockWorkspace.reportMessage).not.toHaveBeenCalled();
   });
 
-  test('reviews, corrects, schedules, and reports a versioned conversation summary', async () => {
-    const existingSummary = summary();
-    await render(<ConversationPane
-      conversation={conversation()}
-      messages={[translatedMessage(), incomingMessage()]}
-      onSend={noopSend}
-    />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-
-    await fireEvent.press(screen.getByLabelText('chat.correctSummary'));
-    await fireEvent.changeText(screen.getByLabelText('chat.primaryTopic'), 'Verified gate safety');
-    await fireEvent.changeText(screen.getByLabelText('chat.summaryBody'), 'The gate must be secured and the valve inspected.');
-    await fireEvent.press(screen.getByLabelText('chat.saveCorrection'));
-    await waitFor(() => expect(mockWorkspace.correctConversationSummary).toHaveBeenCalledWith(
-      existingSummary,
-      'Verified gate safety',
-      'The gate must be secured and the valve inspected.',
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.reviewSummary'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), 'Sources and actions verified.');
-    await fireEvent.press(screen.getByLabelText('chat.approveExactVersion'));
-    await waitFor(() => expect(mockWorkspace.reviewConversationSummary).toHaveBeenCalledWith(
-      existingSummary.id,
-      'approve',
-      'Sources and actions verified.',
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.summarySchedule'));
-    await fireEvent.press(screen.getByLabelText('chat.summaryMessageCount'));
-    await fireEvent.changeText(screen.getByLabelText('chat.summaryThreshold'), '25');
-    await fireEvent.press(screen.getByLabelText('chat.saveSummarySchedule'));
-    await waitFor(() => expect(mockWorkspace.setConversationSummaryPolicy).toHaveBeenCalledWith(
-      'conversation-main',
-      'message_count',
-      25,
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.reportSummaryError'));
-    await fireEvent.press(screen.getByLabelText('quality.categoryMissingSource'));
-    await fireEvent.changeText(screen.getByLabelText('quality.whatWentWrong'), 'The valve action lacks a loaded source.');
-    const reportChecks = screen.getAllByRole('checkbox');
-    await fireEvent.press(reportChecks[0]);
-    await fireEvent.press(reportChecks[1]);
-    await fireEvent.press(screen.getByLabelText('quality.submitReport'));
-    await waitFor(() => expect(mockWorkspace.reportAiOutputError).toHaveBeenCalledWith({
-      outputKind: 'summary',
-      translationId: null,
-      summaryId: existingSummary.id,
-      category: 'missing_source',
-      details: 'The valve action lacks a loaded source.',
-      highConsequence: true,
-      qualityUseConsent: true,
-    }));
-  });
-
   test('covers missing, processing, failed, and stale summary states without inventing output', async () => {
     const messages = [translatedMessage()];
     mockWorkspace.summaries = [];
@@ -855,7 +792,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     mockWorkspace.summaries = [summary({ status: 'failed', failureCode: 'provider_unavailable' })];
     const failed = await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
-    expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
     // There is no manual-handoff route to fall back to any more.
     expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
     await failed.unmount();
@@ -878,7 +814,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await render(<ConversationPane conversation={conversation()} messages={messages} onSend={noopSend} />);
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
-    expect(screen.getByText('chat.summaryApproved')).toBeTruthy();
     expect(screen.queryByText('Controlled reviewer note.')).toBeNull();
   });
 
@@ -1390,84 +1325,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(mockWorkspace.loadSharedMedia).toHaveBeenCalledWith(chat.id));
     await waitFor(() => expect(screen.getByText('chat.sharedMediaEmpty')).toBeTruthy());
     await mediaView.unmount();
-  });
-
-  test('renders latest summary provenance and every operational-action lifecycle state', async () => {
-    const latest = summary({
-      id: 'summary-latest',
-      versionNumber: 4,
-      status: 'corrected',
-      primaryTopic: '',
-      summary: '',
-      keyTopics: [],
-      decisions: [],
-      actionItems: [],
-      ambiguities: [],
-      policyState: 'stale',
-      sourceLastMessageId: 'older-source',
-      provenance: {
-        processorType: 'manual', provider: null, model: null,
-        organizationAiPolicyVersion: null, routePolicyVersion: null, providerRoute: null,
-      },
-      reviewedAt: null,
-      reviewedByUserId: null,
-      reviewNote: null,
-    });
-    mockWorkspace.summaries = [summary({ id: 'summary-old', versionNumber: 1 }), latest];
-    mockWorkspace.aiOutputErrorReports = [{ summaryId: latest.id }];
-    mockWorkspace.hasCapability = jest.fn(() => false);
-    mockWorkspace.actions = [
-      ...mockWorkspace.actions,
-      {
-        id: 'action-confirmed', conversationId: 'conversation-main', sourceMessageId: null,
-        title: 'Confirmed inspection', details: null, status: 'confirmed', proposedByUserId: colleague.id,
-        assigneeUserId: self.id, assigneeName: self.displayName, dueAt: null,
-        createdAt: '2026-08-04T18:00:00.000Z', updatedAt: '2026-08-04T18:00:00.000Z',
-      },
-      {
-        id: 'action-completed', conversationId: 'conversation-main', sourceMessageId: null,
-        title: 'Completed inspection', details: null, status: 'completed', proposedByUserId: colleague.id,
-        assigneeUserId: colleague.id, assigneeName: colleague.displayName, dueAt: null,
-        createdAt: '2026-08-04T18:00:00.000Z', updatedAt: '2026-08-04T18:00:00.000Z',
-      },
-      {
-        id: 'action-confirmed-other', conversationId: 'conversation-main', sourceMessageId: null,
-        title: 'Other assignee confirmation', details: null, status: 'confirmed', proposedByUserId: colleague.id,
-        assigneeUserId: colleague.id, assigneeName: colleague.displayName, dueAt: null,
-        createdAt: '2026-08-04T18:00:00.000Z', updatedAt: '2026-08-04T18:00:00.000Z',
-      },
-      {
-        id: 'action-progress-other', conversationId: 'conversation-main', sourceMessageId: null,
-        title: 'Other assignee progress', details: null, status: 'in_progress', proposedByUserId: colleague.id,
-        assigneeUserId: colleague.id, assigneeName: colleague.displayName, dueAt: null,
-        createdAt: '2026-08-04T18:00:00.000Z', updatedAt: '2026-08-04T18:00:00.000Z',
-      },
-      {
-        id: 'action-cancelled', conversationId: 'conversation-main', sourceMessageId: null,
-        title: 'Cancelled inspection', details: null, status: 'cancelled', proposedByUserId: colleague.id,
-        assigneeUserId: null, assigneeName: null, dueAt: null,
-        createdAt: '2026-08-04T18:00:00.000Z', updatedAt: '2026-08-04T18:00:00.000Z',
-      },
-    ];
-    await render(<ConversationPane
-      conversation={conversation({ canManage: false })}
-      messages={[translatedMessage()]}
-      onSend={noopSend}
-    />);
-    await fireEvent.press(screen.getByLabelText('chat.summarize'));
-    // A corrected version with no text yet reads as "nothing summarized"; no provenance is shown.
-    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
-    expect(screen.queryByText(/chat\.manualCorrection/)).toBeNull();
-    expect(screen.queryByText(/chat\.sourceFingerprint/)).toBeNull();
-    expect(screen.getByText('Completed inspection')).toBeTruthy();
-    expect(screen.getByText('Cancelled inspection')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.startAction'));
-    await fireEvent.press(screen.getByLabelText('chat.cancelAction'));
-    // Every request names the reader's range; an earlier version never narrows it.
-    await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
-    expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-confirmed', 'in_progress');
-    expect(mockWorkspace.transitionAction).toHaveBeenCalledWith('action-progress', 'cancelled');
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'unread', subject: '' });
   });
 
   test('renders own image-transfer and nullable translation-provenance branches', async () => {

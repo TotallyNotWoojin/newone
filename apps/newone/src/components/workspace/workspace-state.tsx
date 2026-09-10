@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState, PrimaryButton } from '@/components/ui/primitives';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing } from '@/theme/tokens';
@@ -98,7 +97,6 @@ export function WorkspaceStatePanel({
   const workspace = useWorkspace();
   const { t } = useI18n();
   // Consumer accounts never see workplace directory wording in empty states.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   if (workspace.status === 'loading') {
     return (
       <View accessibilityLiveRegion="polite" style={styles.loading}>
@@ -129,7 +127,7 @@ export function WorkspaceStatePanel({
   )) {
     return (
       <EmptyState
-        body={t(personalRealm ? 'status.emptyChatsBodyConsumer' : 'status.emptyChatsBody')}
+        body={t('status.emptyChatsBodyConsumer')}
         icon="chatbubbles-outline"
         title={t('status.emptyChats')}
       />
@@ -138,9 +136,9 @@ export function WorkspaceStatePanel({
   if (resource === 'people' && workspace.people.filter((person) => person.connectionState !== 'self').length === 0) {
     return (
       <EmptyState
-        body={t(personalRealm ? 'status.emptyPeopleBodyConsumer' : 'status.emptyPeopleBody')}
+        body={t('status.emptyPeopleBodyConsumer')}
         icon="people-outline"
-        title={t(personalRealm ? 'status.emptyPeopleConsumer' : 'status.emptyPeople')}
+        title={t('status.emptyPeopleConsumer')}
       />
     );
   }

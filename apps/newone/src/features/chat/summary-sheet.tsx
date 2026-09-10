@@ -5,7 +5,6 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import {
   SUMMARY_SCOPE_KINDS,
   latestSummary,
@@ -61,9 +60,8 @@ export function SummarySheet({
   const workspace = useWorkspace();
   const router = useRouter();
   const { t } = useI18n();
-  const consumer = isPersonalRealm(workspace.organizationId);
   const currentUserId = workspace.currentUser?.id ?? null;
-  const summary = latestSummary(workspace.summaries, conversation.id, consumer ? currentUserId : null);
+  const summary = latestSummary(workspace.summaries, conversation.id, currentUserId);
   const readySummary = summaryIsReady(summary) ? summary : null;
   // The pane marks the chat read as it opens; the unread divider it keeps is
   // what "Unread" means here.
@@ -104,9 +102,6 @@ export function SummarySheet({
   const [notice, setNotice] = useState<'copied' | 'shareFailed' | null>(null);
   const [sharing, setSharing] = useState(false);
 
-  // Workplace-only state: review, correction, schedule, operational actions.
-  const canManage = !consumer && conversation.canManage === true;
-  const actions = consumer ? [] : workspace.actions.filter((item) => item.conversationId === conversation.id);
   const summaryErrorReport = summary
     ? workspace.aiOutputErrorReports.find((report) => report.summaryId === summary.id)
     : undefined;
@@ -131,7 +126,7 @@ export function SummarySheet({
     failed: t('chat.summaryFailed'),
     superseded: t('chat.summarySuperseded'),
   })[summary.status] : null;
-  const failureCopy = summary && summary.status === 'failed' && consumer
+  const failureCopy = summary && summary.status === 'failed'
     ? SHORTER_RANGE_FAILURE.test((summary.failureCode ?? '').toLowerCase())
       ? t('chat.summaryTooLong')
       : t('chat.summaryRetry')
@@ -175,14 +170,8 @@ export function SummarySheet({
       visible={visible}>
       {readySummary ? (
         <View style={styles.summary}>
-          {!consumer || readySummary.sourceState === 'stale' ? (
+          {readySummary.sourceState === 'stale' ? (
             <View style={styles.badges}>
-              {!consumer && statusLabel ? (
-                <StatusBadge
-                  label={statusLabel}
-                  tone={readySummary.status === 'approved' ? 'success' : 'warning'}
-                />
-              ) : null}
               {readySummary.sourceState === 'stale' ? (
                 <StatusBadge label={t('chat.summarySuperseded')} tone="warning" />
               ) : null}
@@ -215,9 +204,6 @@ export function SummarySheet({
       ) : summary && (summary.status === 'failed' || summary.status === 'superseded') ? (
         <View accessibilityLiveRegion="polite" style={styles.state}>
           <Text style={styles.stateText}>{failureCopy}</Text>
-          {!consumer && summary.failureCode ? (
-            <Text selectable style={styles.meta}>{t('chat.failureCode')} · {summary.failureCode}</Text>
-          ) : null}
         </View>
       ) : (
         <Text style={styles.empty}>{t('chat.summaryEmpty')}</Text>
@@ -270,99 +256,6 @@ export function SummarySheet({
         </Text>
       ) : null}
       <ActionError message={workspace.actionError} />
-
-      {!consumer && readySummary ? (
-        <View style={styles.actions}>
-          {readySummary.outputFingerprint ? (
-            summaryErrorReport ? (
-              <StatusBadge label={t('quality.reportSubmitted')} tone="info" />
-            ) : (
-              <PrimaryButton
-                icon="flag-outline"
-                label={t('chat.reportSummaryError')}
-                onPress={() => {
-                  workspace.clearActionError();
-                  onReportError?.(readySummary.id);
-                }}
-                tone="light"
-              />
-            )
-          ) : null}
-          {canManage && readySummary.sourceState === 'current' ? (
-            <PrimaryButton
-              icon="create-outline"
-              label={t('chat.correctSummary')}
-              onPress={() => {
-                workspace.clearActionError();
-                setCorrectionTopic(readySummary.primaryTopic);
-                setCorrectionBody(readySummary.summary);
-                setCorrecting(true);
-              }}
-              tone="light"
-            />
-          ) : null}
-          {canManage
-            && readySummary.sourceState === 'current'
-            && (readySummary.status === 'ready_for_review' || readySummary.status === 'corrected') ? (
-            <PrimaryButton
-              icon="shield-checkmark-outline"
-              label={t('chat.reviewSummary')}
-              onPress={() => {
-                workspace.clearActionError();
-                setReviewNote('');
-                setReviewing(true);
-              }}
-              tone="light"
-            />
-          ) : null}
-        </View>
-      ) : null}
-      {canManage && !consumer ? (
-        <PrimaryButton
-          icon="options-outline"
-          label={t('chat.summarySchedule')}
-          onPress={() => {
-            workspace.clearActionError();
-            setPolicyOpen(true);
-          }}
-          tone="light"
-        />
-      ) : null}
-      {actions.length ? (
-        <View style={styles.actionList}>
-          <Text style={styles.label}>{t('chat.operationalActions')}</Text>
-          {actions.map((action) => (
-            <View key={action.id} style={styles.actionRow}>
-              <View style={styles.actionCopy}>
-                <Text style={styles.actionTitle}>{action.title}</Text>
-                <Text style={styles.actionMeta}>
-                  {actionStatus(action.status)}
-                  {action.assigneeName ? ` · ${action.assigneeName}` : ''}
-                </Text>
-              </View>
-              {action.status === 'proposed' && workspace.hasCapability('actions.confirm') ? (
-                <PrimaryButton
-                  label={t('chat.confirmAction')}
-                  onPress={() => {
-                    workspace.clearActionError();
-                    setAssigneeId('');
-                    setDueAt('');
-                    setConfirming(action);
-                  }}
-                  tone="light"
-                />
-              ) : action.status === 'confirmed' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
-                <PrimaryButton label={t('chat.startAction')} onPress={() => void workspace.transitionAction(action.id, 'in_progress')} tone="light" />
-              ) : action.status === 'in_progress' && (action.assigneeUserId === currentUserId || workspace.hasCapability('actions.confirm')) ? (
-                <View style={styles.actions}>
-                  <PrimaryButton label={t('chat.completeAction')} onPress={() => void workspace.transitionAction(action.id, 'completed')} tone="dark" />
-                  <PrimaryButton label={t('chat.cancelAction')} onPress={() => void workspace.transitionAction(action.id, 'cancelled')} tone="danger" />
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : null}
 
       <ActionModal
         description={confirming?.title ?? ''}

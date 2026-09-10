@@ -29,7 +29,6 @@ import {
   type SearchSuggestion,
 } from '@/features/search/chat-search';
 import { useChatSearch } from '@/features/search/use-chat-search';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import type { Conversation } from '@/domain/types';
 import { useWorkspace } from '@/state/workspace';
 import { radii, shadow, spacing } from '@/theme/tokens';
@@ -58,7 +57,6 @@ export default function ChatsScreen() {
   // bootstrap fills organizationId, so nothing renders before then: a consumer
   // must never see the workplace line flash on first launch.
   const realmKnown = Boolean(workspace.organizationId);
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
 
@@ -95,11 +93,7 @@ export default function ChatsScreen() {
   );
   const searching = !parsedSearch.empty;
   const consumerUsername = workspace.currentUser?.username?.trim() || null;
-  const headerSubtitle = !realmKnown
-    ? undefined
-    : personalRealm
-      ? consumerUsername ? `@${consumerUsername}` : undefined
-      : `${workspace.organizationName} · ${t('chat.onShift')}`;
+  const headerSubtitle = realmKnown && consumerUsername ? `@${consumerUsername}` : undefined;
 
   useEffect(() => {
     if (!selectedConversation?.managementOnly) return;

@@ -61,7 +61,7 @@ describe('authoritative workspace state surfaces', () => {
     string,
   ]>([
     ['chats', 'conversations', 'status.emptyChats'],
-    ['people', 'people', 'status.emptyPeople'],
+    ['people', 'people', 'status.emptyPeopleConsumer'],
     ['updates', 'updates', 'status.emptyUpdates'],
     ['handoffs', 'handoffs', 'status.emptyHandoffs'],
   ])('shows the real empty state for %s', async (resource, collection, title) => {
@@ -98,37 +98,22 @@ describe('authoritative workspace state surfaces', () => {
   });
 });
 
-describe('personal realm empty states', () => {
-  test('uses consumer copy for empty chats and people and keeps workspace copy for organizations', async () => {
-    mockWorkspace.organizationId = PERSONAL_REALM_ORGANIZATION_ID;
+describe('empty states', () => {
+  test('the empty chats and people panels carry the copy people actually read', async () => {
     mockWorkspace.conversations = [];
     const chats = await render(<WorkspaceStatePanel resource="chats" />);
     expect(screen.getByText('status.emptyChats')).toBeTruthy();
     expect(screen.getByText('status.emptyChatsBodyConsumer')).toBeTruthy();
-    expect(screen.queryByText('status.emptyChatsBody')).toBeNull();
     await chats.unmount();
 
+    // Only yourself is nobody.
     mockWorkspace.people = [{ id: 'self', connectionState: 'self' }];
     const people = await render(<WorkspaceStatePanel resource="people" />);
     expect(screen.getByText('status.emptyPeopleConsumer')).toBeTruthy();
     expect(screen.getByText('status.emptyPeopleBodyConsumer')).toBeTruthy();
-    expect(screen.queryByText('status.emptyPeople')).toBeNull();
-    expect(screen.queryByText('status.emptyPeopleBody')).toBeNull();
     await people.unmount();
-
-    mockWorkspace.organizationId = 'organization-a';
-    await render(<>
-      <WorkspaceStatePanel resource="chats" />
-      <WorkspaceStatePanel resource="people" />
-    </>);
-    expect(screen.getByText('status.emptyChatsBody')).toBeTruthy();
-    expect(screen.getByText('status.emptyPeople')).toBeTruthy();
-    expect(screen.getByText('status.emptyPeopleBody')).toBeTruthy();
-    expect(screen.queryByText('status.emptyChatsBodyConsumer')).toBeNull();
-    expect(screen.queryByText('status.emptyPeopleConsumer')).toBeNull();
   });
 });
-
 describe('degraded realtime indicator', () => {
   afterEach(() => {
     jest.useRealTimers();

@@ -121,7 +121,6 @@ import type {
   AiOutputErrorReportDetail,
   AiOutputErrorCategory,
 } from '@/domain/types';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import { createClientId } from '@/lib/client-id';
 import { activeMutedUntil, isConversationMuted } from '@/data/notification-preferences.mjs';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -2615,18 +2614,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     ) => {
       if (!snapshot || personId === snapshot.currentUser.id) return null;
       const person = snapshot.people.find((item) => item.id === personId);
-      const personalRealm = isPersonalRealm(snapshot.organizationId);
-      // Workspace organizations keep the accepted-connection gate. The
-      // personal realm lets anyone chat with anyone (the service enforces
-      // blocks in both directions), including a people-search result the
-      // directory has not loaded yet, which the hint describes.
-      if (
-        person
-          ? person.blockedByMe || (!personalRealm && person.connectionState !== 'connected')
-          : !personalRealm
-      ) {
-        return null;
-      }
+      // Anyone can chat with anyone: the service enforces blocks in both
+      // directions, and a people-search result the directory has not loaded
+      // yet is described by the hint rather than refused here.
+      if (person?.blockedByMe) return null;
       const existing = snapshot.conversations.find(
         (conversation) =>
           conversation.kind === 'direct' && conversation.directParticipantId === personId,
@@ -5187,9 +5178,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!snapshot) return false;
       const person = snapshot.people.find((item) => item.id === personId);
       // Username-search results outside the loaded directory are valid targets
-      // only in the personal realm, where the connection commands address the
-      // target user's UUID directly.
-      if (person ? person.connectionState !== 'available' : !isPersonalRealm(snapshot.organizationId)) {
+      // A stranger from people search has no directory row yet; the connection
+      // commands address their user id directly.
+      if (person && person.connectionState !== 'available') {
         return false;
       }
       setActionError(null);
@@ -5375,11 +5366,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       // realm addresses connection routes by the target user's UUID, so an
       // unknown pending target is still cancellable there; workspace
       // organizations keep the directory gate.
-      if (
-        person
-          ? !['connected', 'pending'].includes(person.connectionState)
-          : !isPersonalRealm(snapshot.organizationId)
-      ) {
+      if (person && !['connected', 'pending'].includes(person.connectionState)) {
         return false;
       }
       const result = await executeImmediate('connection-remove', () =>

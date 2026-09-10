@@ -20,7 +20,6 @@ import { MessageOutboxSection } from '@/components/settings/message-outbox-secti
 import { Avatar, IconButton, PrimaryButton } from '@/components/ui/primitives';
 import type { AppLocale } from '@/i18n/catalog';
 import type { OrganizationPreferences } from '@/domain/types';
-import { isPersonalRealm } from '@/constants/personal-realm';
 // Metro selects the native notification bridge or the web no-op.
 // eslint-disable-next-line import/no-unresolved
 import { getNotificationPermissionState, openNotificationSettings, type NotificationPermissionState } from '@/device/push-registration';
@@ -30,10 +29,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useI18n } from '@/i18n/provider';
 import { getSupabaseClient } from '@/lib/supabase';
 import {
-  challengeWebMfa,
-  enrollWebMfa,
-  listWebMfaFactors,
-  verifyWebMfa,
 } from '@/lib/web-auth';
 import { SelfRecoveryRequest } from '@/features/security/self-recovery-request';
 import { PasswordSection } from '@/features/settings/password-section';
@@ -44,18 +39,6 @@ import { useWorkspace } from '@/state/workspace';
 import { radii, spacing, type } from '@/theme/tokens';
 import { THEME_PREFERENCES, type ThemePreference, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 import { a11yState } from '@/lib/a11y-state';
-
-interface MfaFactor {
-  id: string;
-  friendly_name?: string;
-  status: 'verified' | 'unverified';
-}
-
-interface MfaEnrollment {
-  factorId: string;
-  qrCode: string;
-  secret: string;
-}
 
 type Picker = 'appearance' | 'language' | 'messageLanguage' | 'readVisibility' | 'quietHours';
 
@@ -71,7 +54,6 @@ export default function SettingsScreen() {
   const workspace = useWorkspace();
   // Consumer accounts have no authenticator, recovery-case, or shift tooling;
   // those sections stay exclusively on workspace organizations.
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const loadAccountSettings = workspace.loadAccountSettings;
   const enableNotifications = workspace.enableNotifications;
   const { currentUser } = workspace;
@@ -80,13 +62,6 @@ export default function SettingsScreen() {
   const devicePreferencesState = useDevicePreferences();
   const localPreferences = devicePreferencesState.preferences;
   const setLocalPreference = devicePreferencesState.setPreference;
-  const [mfaLoading, setMfaLoading] = useState(false);
-  const [mfaError, setMfaError] = useState('');
-  const [mfaFactors, setMfaFactors] = useState<MfaFactor[]>([]);
-  const [mfaLevel, setMfaLevel] = useState<'aal1' | 'aal2' | null>(auth.assuranceLevel);
-  const [mfaVisible, setMfaVisible] = useState(false);
-  const [mfaCode, setMfaCode] = useState('');
-  const [mfaEnrollment, setMfaEnrollment] = useState<MfaEnrollment | null>(null);
   const [challengeFactorId, setChallengeFactorId] = useState('');
   const [webChallengeId, setWebChallengeId] = useState('');
   const [revokeVisible, setRevokeVisible] = useState(false);
@@ -199,56 +174,6 @@ export default function SettingsScreen() {
     }
   }, [devicePreferences, enableNotifications, permission, workspace.actionBusy]);
 
-  const loadMfa = useCallback(async () => {
-    if (Platform.OS === 'web') {
-      setMfaLoading(true);
-      try {
-        const factors = await listWebMfaFactors();
-        setMfaFactors(factors.map((factor) => ({
-          id: factor.id,
-          friendly_name: factor.friendlyName,
-          status: factor.status,
-        })));
-        setMfaLevel((current) => current ?? 'aal1');
-        setMfaError('');
-      } catch {
-        setMfaError(t('settings.mfaLoadError'));
-      } finally {
-        setMfaLoading(false);
-      }
-      return;
-    }
-    const client = getSupabaseClient();
-    if (!client) return;
-    setMfaLoading(true);
-    const [factorResult, levelResult] = await Promise.all([
-      client.auth.mfa.listFactors(),
-      client.auth.mfa.getAuthenticatorAssuranceLevel(),
-    ]);
-    setMfaLoading(false);
-    if (factorResult.error || levelResult.error) {
-      setMfaError(t('settings.mfaLoadError'));
-      return;
-    }
-    setMfaFactors(
-      factorResult.data.all
-        .filter((factor) => factor.factor_type === 'totp')
-        .map((factor) => ({
-          id: factor.id,
-          friendly_name: factor.friendly_name,
-          status: factor.status,
-        })),
-    );
-    setMfaLevel(levelResult.data.currentLevel === 'aal2' ? 'aal2' : 'aal1');
-    setMfaError('');
-  }, [t]);
-
-  useEffect(() => {
-    if (personalRealm) return;
-    const timeout = setTimeout(() => void loadMfa(), 0);
-    return () => clearTimeout(timeout);
-  }, [loadMfa, personalRealm]);
-
   useEffect(() => {
     const timeout = setTimeout(() => void loadAccountSettings(), 0);
     return () => clearTimeout(timeout);
@@ -259,125 +184,6 @@ export default function SettingsScreen() {
     const timeout = setTimeout(() => setPreferenceDraft(workspace.organizationPreferences), 0);
     return () => clearTimeout(timeout);
   }, [workspace.organizationPreferences]);
-
-  const openMfa = async () => {
-    if (Platform.OS === 'web') {
-      setMfaLoading(true);
-      setMfaError('');
-      setMfaCode('');
-      try {
-        if (mfaEnrollment) {
-          setMfaVisible(true);
-          return;
-        }
-        const verified = mfaFactors.find((factor) => factor.status === 'verified');
-        if (verified) {
-          const challenge = await challengeWebMfa(verified.id);
-          setChallengeFactorId(verified.id);
-          setWebChallengeId(challenge.challengeId);
-          setMfaEnrollment(null);
-        } else {
-          const enrollment = await enrollWebMfa('Newone authenticator');
-          const challenge = await challengeWebMfa(enrollment.factorId);
-          setChallengeFactorId(enrollment.factorId);
-          setWebChallengeId(challenge.challengeId);
-          setMfaEnrollment(enrollment);
-        }
-        setMfaVisible(true);
-      } catch {
-        setMfaError(verifiedFactor ? t('settings.mfaVerifyError') : t('settings.mfaEnrollError'));
-      } finally {
-        setMfaLoading(false);
-      }
-      return;
-    }
-    const client = getSupabaseClient();
-    if (!client) return;
-    setMfaLoading(true);
-    setMfaError('');
-    setMfaCode('');
-    const verified = mfaFactors.find((factor) => factor.status === 'verified');
-    if (verified) {
-      setChallengeFactorId(verified.id);
-      setMfaEnrollment(null);
-      setMfaVisible(true);
-      setMfaLoading(false);
-      return;
-    }
-    for (const factor of mfaFactors.filter((item) => item.status === 'unverified')) {
-      await client.auth.mfa.unenroll({ factorId: factor.id });
-    }
-    const { data, error } = await client.auth.mfa.enroll({
-      factorType: 'totp',
-      friendlyName: 'Newone authenticator',
-    });
-    setMfaLoading(false);
-    if (error || !data) {
-      setMfaError(t('settings.mfaEnrollError'));
-      return;
-    }
-    setChallengeFactorId(data.id);
-    setMfaEnrollment({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
-    setMfaVisible(true);
-  };
-
-  const closeMfa = async () => {
-    if (Platform.OS === 'web') {
-      setMfaVisible(false);
-      setMfaCode('');
-      return;
-    }
-    if (mfaEnrollment) {
-      await getSupabaseClient()?.auth.mfa.unenroll({ factorId: mfaEnrollment.factorId });
-    }
-    setMfaVisible(false);
-    setMfaEnrollment(null);
-    setMfaCode('');
-    await loadMfa();
-  };
-
-  const verifyMfa = async () => {
-    const client = getSupabaseClient();
-    const code = mfaCode.replace(/\s/g, '');
-    if (!challengeFactorId || !/^\d{6}$/.test(code)) {
-      setMfaError(t('settings.mfaCodeError'));
-      return;
-    }
-    setMfaLoading(true);
-    setMfaError('');
-    if (Platform.OS === 'web') {
-      try {
-        await verifyWebMfa({ factorId: challengeFactorId, challengeId: webChallengeId, code });
-        await auth.refreshAssurance();
-        setMfaLevel('aal2');
-        setMfaEnrollment(null);
-        setMfaVisible(false);
-        setMfaCode('');
-        await loadMfa();
-      } catch {
-        setMfaError(t('settings.mfaVerifyError'));
-      } finally {
-        setMfaLoading(false);
-      }
-      return;
-    }
-    if (!client) {
-      setMfaLoading(false);
-      setMfaError(t('settings.mfaVerifyError'));
-      return;
-    }
-    const { error } = await client.auth.mfa.challengeAndVerify({ factorId: challengeFactorId, code });
-    setMfaLoading(false);
-    if (error) {
-      setMfaError(t('settings.mfaVerifyError'));
-      return;
-    }
-    await auth.refreshAssurance();
-    setMfaEnrollment(null);
-    setMfaVisible(false);
-    setMfaCode('');
-    await loadMfa();
-  };
 
   // The draft holds only what the user has typed. Untouched fields follow the
   // authoritative profile, and a successful save clears the draft so the
@@ -475,14 +281,10 @@ export default function SettingsScreen() {
       ? t('settings.messageLanguage')
       : picker === 'readVisibility' ? t('settings.readVisibility') : t('settings.quietHours');
 
-  const verifiedFactor = mfaFactors.find((factor) => factor.status === 'verified');
   const privileged = workspace.capabilities.some((capability) => [
     'members.security', 'sessions.revoke', 'roles.manage', 'invites.manage',
     'communications.publish', 'reports.investigate', 'reports.assign', 'audit.read',
   ].includes(capability));
-  const mfaStatus = verifiedFactor
-    ? mfaLevel === 'aal2' ? t('settings.mfaAal2') : t('settings.mfaEnrolled')
-    : t('settings.mfaNotEnrolled');
   const otherSessions = workspace.accountSessions.filter((session) => !session.current && !session.revoked);
   const showOutbox = workspace.messageOutbox.length > 0 || Boolean(workspace.outboxDegradedReason);
 
@@ -633,15 +435,6 @@ export default function SettingsScreen() {
             onPress={() => setPicker('quietHours')}
             value={preferenceDraft ? quietHoursValue : ''}
           />
-          {!personalRealm ? (
-            <SwitchRow
-              disabled={!preferenceDraft}
-              icon="time-outline"
-              label={t('settings.shiftSuppression')}
-              onValueChange={(value) => setPreferenceDraft((current) => current ? { ...current, shiftAwareSuppression: value } : current)}
-              value={preferenceDraft?.shiftAwareSuppression ?? false}
-            />
-          ) : null}
         </Group>
 
         {showOutbox ? (
@@ -660,45 +453,10 @@ export default function SettingsScreen() {
           />
         ) : null}
 
-        {!personalRealm ? (
-          <>
-            <Group title={t('settings.securityTitle')}>
-              <Row
-                hint={mfaStatus}
-                icon="shield-checkmark-outline"
-                label={t('settings.mfaTitle')}
-                right={(
-                  <RowAction
-                    label={verifiedFactor ? t('settings.mfaVerify') : t('settings.mfaEnroll')}
-                    loading={mfaLoading && !mfaVisible}
-                    onPress={() => void openMfa()}
-                    tone={!verifiedFactor && privileged ? 'danger' : 'accent'}
-                  />
-                )}
-              />
-              {privileged && !verifiedFactor ? (
-                <Text style={styles.warningText}>{t('settings.mfaPrivilegedWarning')}</Text>
-              ) : null}
-              {mfaError ? <View style={styles.inlineError}><ActionError message={mfaError} /></View> : null}
-            </Group>
-            <SelfRecoveryRequest
-              accessToken={auth.session?.access_token ?? null}
-              organizationId={workspace.organizationId}
-            />
-          </>
-        ) : null}
-
         <Group title={t('settings.sessionsTitle')}>
           <Row
             icon={Platform.OS === 'web' ? 'globe-outline' : 'phone-portrait-outline'}
             label={t('settings.currentSession')}
-            right={!personalRealm && auth.sessionId ? (
-              <RowAction
-                label={t('settings.revokeCurrent')}
-                onPress={() => openRevoke(auth.sessionId as string)}
-                tone="danger"
-              />
-            ) : undefined}
             value={t('settings.activeNow')}
           />
           {otherSessions.map((session) => (
@@ -883,63 +641,19 @@ export default function SettingsScreen() {
       </ActionModal>
 
       <ActionModal
-        description={mfaEnrollment ? t('settings.mfaEnrollInstructions') : t('settings.mfaVerifyInstructions')}
-        onClose={() => void closeMfa()}
-        title={mfaEnrollment ? t('settings.mfaEnrollDialog') : t('settings.mfaVerifyDialog')}
-        visible={mfaVisible}>
-        {mfaEnrollment ? (
-          <View style={styles.enrollment}>
-            <Image
-              accessibilityLabel={t('settings.mfaQrLabel')}
-              resizeMode="contain"
-              source={{ uri: `data:image/svg+xml;utf-8,${encodeURIComponent(mfaEnrollment.qrCode)}` }}
-              style={styles.qrCode}
-            />
-            <Text style={styles.secretLabel}>{t('settings.mfaSecretLabel')}</Text>
-            <Text selectable style={styles.secret}>{mfaEnrollment.secret}</Text>
-          </View>
-        ) : null}
-        <FormField
-          keyboardType="number-pad"
-          label={t('settings.mfaCodeLabel')}
-          onChangeText={setMfaCode}
-          value={mfaCode}
-        />
-        <ActionError message={mfaError} />
-        <PrimaryButton
-          disabled={!/^\d{6}$/.test(mfaCode.replace(/\s/g, ''))}
-          icon="shield-checkmark-outline"
-          label={t('settings.mfaConfirm')}
-          loading={mfaLoading}
-          onPress={() => void verifyMfa()}
-          tone="dark"
-        />
-      </ActionModal>
-
-      <ActionModal
-        description={personalRealm ? undefined : t('settings.revokeDescription')}
         onClose={() => setRevokeVisible(false)}
-        title={personalRealm ? t('settings.signOutDeviceTitle') : t('settings.revokeTitle')}
+        title={t('settings.signOutDeviceTitle')}
         visible={revokeVisible}>
-        {!personalRealm ? (
-          <FormField
-            label={t('settings.revokeReason')}
-            multiline
-            onChangeText={setRevokeReason}
-            value={revokeReason}
-          />
-        ) : null}
         <ActionError message={workspace.actionError} />
         <PrimaryButton
-          disabled={!personalRealm && revokeReason.trim().length < 3}
           icon="log-out-outline"
-          label={personalRealm ? t('settings.signOutDeviceConfirm') : t('settings.revokeConfirm')}
+          label={t('settings.signOutDeviceConfirm')}
           loading={workspace.actionBusy === 'session-revoke'}
           onPress={async () => {
             const revokingCurrentSession = revokeTargetSessionId === auth.sessionId;
             if (
               revokeTargetSessionId
-              && await workspace.revokeSession(revokeTargetSessionId, personalRealm ? 'sign_out' : revokeReason)
+              && await workspace.revokeSession(revokeTargetSessionId, 'sign_out')
             ) {
               if (revokingCurrentSession) {
                 router.replace('/sign-in');

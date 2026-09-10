@@ -30,7 +30,6 @@ import {
 } from '@/components/workspace/workspace-state';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
-import { isPersonalRealm } from '@/constants/personal-realm';
 import type { UserSearchResult } from '@/data/repositories/contracts';
 import type { Person } from '@/domain/types';
 import { useProfileAvatar } from '@/state/profile-avatar';
@@ -78,7 +77,6 @@ export default function PeopleScreen() {
   const [reportConsent, setReportConsent] = useState(false);
   const managePerson = workspace.people.find((person) => person.id === managePersonId);
   const decliningPerson = workspace.people.find((person) => person.id === decliningPersonId);
-  const personalRealm = isPersonalRealm(workspace.organizationId);
   const [peopleQuery, setPeopleQuery] = useState('');
   const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
   const [peopleSearched, setPeopleSearched] = useState(false);
@@ -128,7 +126,7 @@ export default function PeopleScreen() {
 
   useEffect(() => {
     const normalized = peopleQuery.trim();
-    if (!personalRealm || !addFriendOpen || normalized.length < 2) return;
+    if (!addFriendOpen || normalized.length < 2) return;
     const sequence = ++peopleSequenceRef.current;
     const timer = setTimeout(() => {
       void searchUsers(normalized).then((results) => {
@@ -138,7 +136,7 @@ export default function PeopleScreen() {
       });
     }, PEOPLE_SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [addFriendOpen, personalRealm, searchUsers, peopleQuery]);
+  }, [addFriendOpen, searchUsers, peopleQuery]);
 
   const safetyCopy = moderationCopy(locale);
   const reportCategoryLabels = {
@@ -279,13 +277,13 @@ export default function PeopleScreen() {
       current="people"
       mobileHeader={
         <MobileBrandHeader
-          subtitle={t(personalRealm ? 'people.subtitleConsumer' : 'people.subtitle')}
-          title={t(personalRealm ? 'people.contactsTitle' : 'people.title')}
+          subtitle={t('people.subtitleConsumer')}
+          title={t('people.contactsTitle')}
         />
       }>
       <WorkspaceStatusBanner />
       {workspace.status === 'loading' || workspace.status === 'error'
-        || (workspace.people.length <= 1 && !personalRealm) ? (
+        ? (
         <WorkspaceStatePanel resource="people" />
       ) : (
       // Keeps the search field and its first results above the iOS keyboard;
@@ -297,114 +295,59 @@ export default function PeopleScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {/* The consumer wording exists, is translated and is asserted by
-            localized-security-copy; gating the whole header on !personalRealm
             meant a consumer saw neither variant. No eyebrow on the consumer
             side: people.eyebrowConsumer already labels the contacts list a few
             lines down, and repeating it is noise. */}
         {desktop ? (
           <DesktopPageHeader
-            description={t(personalRealm ? 'people.descriptionConsumer' : 'people.description')}
-            eyebrow={personalRealm ? undefined : t('people.eyebrow')}
-            title={t(personalRealm ? 'people.contactsTitle' : 'people.heading')}
+            description={t('people.descriptionConsumer')}
+            title={t('people.contactsTitle')}
           />
         ) : null}
 
         <View style={[styles.content, desktop && styles.contentDesktop]}>
-          {personalRealm ? (
-            <View style={styles.consumerSections}>
-              <View style={styles.contactTools}>
-                <View style={styles.contactSearch}>
-                  <SearchField
-                    onChangeText={setContactQuery}
-                    placeholder={t('people.searchContacts')}
-                    testID="people-search"
-                    value={contactQuery}
-                  />
-                </View>
-                <IconButton
-                  label={t('people.addFriendOpen')}
-                  name="person-add-outline"
-                  onPress={openAddFriend}
-                  tone="accent"
-                />
-              </View>
-              <View style={styles.consumerSection}>
-                <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
-                {contactMatches.length ? (
-                  <View style={styles.rows}>
-                    {contactMatches.map((person) => (
-                      <PersonRow
-                        key={person.id}
-                        onManage={() => openManage(person)}
-                        onMessage={() => void openMessage(person)}
-                        person={person}
-                      />
-                    ))}
-                  </View>
-                ) : contactQuery.trim() ? (
-                  <Text style={styles.rowsEmpty}>{t('people.noContactMatch')}</Text>
-                ) : (
-                  <EmptyState
-                    body={t('people.emptyConsumerBody')}
-                    icon="people-outline"
-                    title={t('people.emptyConsumer')}
-                  />
-                )}
-              </View>
-            </View>
-          ) : (
-            <>
-              <View style={[styles.directoryTools, shadow]}>
+                    <View style={styles.consumerSections}>
+            <View style={styles.contactTools}>
+              <View style={styles.contactSearch}>
                 <SearchField
-                  onChangeText={setSearch}
-                  placeholder={t('people.search')}
-                  value={search}
+                  onChangeText={setContactQuery}
+                  placeholder={t('people.searchContacts')}
+                  testID="people-search"
+                  value={contactQuery}
                 />
-                <ScrollView
-                  horizontal
-                  contentContainerStyle={styles.filters}
-                  showsHorizontalScrollIndicator={false}>
-                  {[
-                    ['all', t('people.everyone')],
-                    ['connected', t('people.connections')],
-                    ['online', t('people.online')],
-                    ['my_site', t('people.mySite')],
-                    ['pending', t('people.pending')],
-                  ].map(([id, label]) => (
-                    <Chip
-                      key={id}
-                      label={label}
-                      onPress={() => setFilter(id as PeopleFilter)}
-                      selected={filter === id}
+              </View>
+              <IconButton
+                label={t('people.addFriendOpen')}
+                name="person-add-outline"
+                onPress={openAddFriend}
+                tone="accent"
+              />
+            </View>
+            <View style={styles.consumerSection}>
+              <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
+              {contactMatches.length ? (
+                <View style={styles.rows}>
+                  {contactMatches.map((person) => (
+                    <PersonRow
+                      key={person.id}
+                      onManage={() => openManage(person)}
+                      onMessage={() => void openMessage(person)}
+                      person={person}
                     />
                   ))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.directoryTopline}>
-                <View>
-                  <Text style={styles.directoryEyebrow}>{t('people.directory')}</Text>
-                  <Text style={styles.directoryTitle}>{people.length} {t('people.countSuffix')}</Text>
                 </View>
-                <View style={styles.directoryPrivacy}>
-                  <Ionicons name="shield-checkmark" size={14} color={colors.mintDark} />
-                  <Text style={styles.directoryPrivacyText}>{t('people.safeFields')}</Text>
-                </View>
-              </View>
-
-              <View style={styles.peopleGrid}>
-                {people.length ? (
-                  people.map(renderPersonCard)
-                ) : (
-                  <EmptyState
-                    body={t('status.emptyPeopleBody')}
-                    icon="search-outline"
-                    title={t('status.emptyPeople')}
-                  />
-                )}
-              </View>
-            </>
-          )}
+              ) : contactQuery.trim() ? (
+                <Text style={styles.rowsEmpty}>{t('people.noContactMatch')}</Text>
+              ) : (
+                <EmptyState
+                  body={t('people.emptyConsumerBody')}
+                  icon="people-outline"
+                  title={t('people.emptyConsumer')}
+                />
+              )}
+            </View>
+          </View>
+        
         </View>
       </ScrollView>
       </KeyboardAvoidingScreen>
@@ -473,7 +416,6 @@ export default function PeopleScreen() {
         </View>
       </ActionModal>
       <ActionModal
-        description={personalRealm ? undefined : t('people.manageDescription')}
         onClose={() => setManagePersonId('')}
         title={managePerson ? `${t('people.manageTitle')} · ${personDisplayName(managePerson)}` : t('people.manageTitle')}
         visible={Boolean(managePerson)}>
@@ -508,12 +450,6 @@ export default function PeopleScreen() {
           }}
           tone={managePerson?.favoriteContact ? 'dark' : 'light'}
         />
-        {personalRealm ? null : (
-          <View style={styles.privacyNote}>
-            <Ionicons name="shield-checkmark-outline" color={colors.inkSubtle} size={17} />
-            <Text style={styles.privacyNoteText}>{t('people.blockNotice')}</Text>
-          </View>
-        )}
         <ActionError message={workspace.actionError} />
         <PrimaryButton
           icon={managePerson?.blockedByMe ? 'shield-checkmark-outline' : 'ban-outline'}
@@ -560,18 +496,8 @@ export default function PeopleScreen() {
           value={reportDetails}
         />
         <View style={styles.reportDisclosure}>
-          {personalRealm ? (
-            <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
-          ) : (
-            <>
-              <Text style={styles.reportDisclosureText}>
-                {moderationTargetReportConsentNotice(locale, 'member')}
-              </Text>
-              <Text style={styles.reportRouteText}>
-                {moderationMemberSafetyRouteNotice(locale)}
-              </Text>
-            </>
-          )}
+                    <Text style={styles.reportDisclosureText}>{t('people.reportNoticeConsumer')}</Text>
+        
           <Pressable
             accessibilityRole="checkbox"
             {...a11yState({ checked: reportConsent })}
@@ -586,7 +512,7 @@ export default function PeopleScreen() {
               color={reportConsent ? colors.mintDark : colors.inkSubtle}
               size={22}
             />
-            <Text style={styles.reportConsentText}>{personalRealm ? t('people.reportConsentConsumer') : safetyCopy.reportConsentLabel}</Text>
+            <Text style={styles.reportConsentText}>{t('people.reportConsentConsumer')}</Text>
           </Pressable>
         </View>
         <PrimaryButton

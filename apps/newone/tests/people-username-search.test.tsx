@@ -353,32 +353,6 @@ describe('adding a friend from Contacts', () => {
     await view.unmount();
   });
 
-  test('keeps workspace organizations on the untouched directory surface', async () => {
-    mockWorkspace = baseWorkspace({
-      organizationId: 'organization-a',
-      people: [self, person({ id: 'user-avail', displayName: 'Avery Available' })],
-    });
-    const view = await render(<PeopleScreen />);
-    expect(screen.queryByLabelText('people.usernameSearch')).toBeNull();
-    expect(screen.getByText('people.eyebrow')).toBeTruthy();
-    expect(screen.getByText('people.description')).toBeTruthy();
-    expect(screen.getByText('Avery Available')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'people.connect' }));
-    await waitFor(() => expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-avail'));
-    expect(mockWorkspace.searchUsers).not.toHaveBeenCalled();
-    expect(screen.getAllByLabelText(/^people\.manage /).length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getAllByLabelText(/^people\.manage /)[0]!);
-    expect(screen.getByText('people.manageDescription')).toBeTruthy();
-    expect(screen.getByText('people.blockNotice')).toBeTruthy();
-    await view.unmount();
-
-    // A workspace org with a self-only directory keeps the existing state panel.
-    mockWorkspace = baseWorkspace({ organizationId: 'organization-a' });
-    const emptyView = await render(<PeopleScreen />);
-    expect(screen.queryByLabelText('people.usernameSearch')).toBeNull();
-    expect(screen.queryByLabelText('people.search')).toBeNull();
-    await emptyView.unmount();
-  });
 });
 
 describe('personal realm known-people list', () => {

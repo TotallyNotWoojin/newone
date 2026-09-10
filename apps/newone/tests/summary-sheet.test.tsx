@@ -330,48 +330,12 @@ describe('summary sheet', () => {
     }];
   });
 
-  test('keeps review status, error reporting, correction, review, schedule, and operational actions', async () => {
-    const { onReportError } = await open();
-    expect(screen.getByText('chat.summaryReadyReview')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.reportSummaryError'));
-    expect(onReportError).toHaveBeenCalledWith('summary-a');
-
-    await fireEvent.press(screen.getByLabelText('chat.correctSummary'));
-    await fireEvent.changeText(screen.getByLabelText('chat.summaryBody'), 'Saturday at noon is confirmed.');
-    await fireEvent.press(screen.getByLabelText('chat.saveCorrection'));
-    await waitFor(() => expect(mockWorkspace.correctConversationSummary).toHaveBeenCalledWith(
-      mockWorkspace.summaries[0], 'Weekend plans', 'Saturday at noon is confirmed.',
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.reviewSummary'));
-    await fireEvent.changeText(screen.getByLabelText('chat.reviewNote'), 'Checked against the thread.');
-    await fireEvent.press(screen.getByLabelText('chat.approveExactVersion'));
-    await waitFor(() => expect(mockWorkspace.reviewConversationSummary).toHaveBeenCalledWith(
-      'summary-a', 'approve', 'Checked against the thread.',
-    ));
-
-    await fireEvent.press(screen.getByLabelText('chat.summarySchedule'));
-    await fireEvent.press(screen.getByLabelText('chat.summaryMessageCount'));
-    await fireEvent.changeText(screen.getByLabelText('chat.summaryThreshold'), '25');
-    await fireEvent.press(screen.getByLabelText('chat.saveSummarySchedule'));
-    await waitFor(() => expect(mockWorkspace.setConversationSummaryPolicy).toHaveBeenCalledWith(
-      'conversation-a', 'message_count', 25,
-    ));
-
-    expect(screen.getByText('Inspect the valve')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('chat.confirmAction'));
-    await fireEvent.press(screen.getByLabelText('Ana Torres'));
-    await fireEvent.press(screen.getAllByLabelText('chat.confirmAction').at(-1)!);
-    await waitFor(() => expect(mockWorkspace.confirmAction).toHaveBeenCalledWith('action-proposed', 'user-other', ''));
-  });
-
-  test('shows the failure code and manual handoff route, and a submitted report badge', async () => {
+  test('shows retry copy for a failed summary and a submitted report badge', async () => {
     mockWorkspace.summaries = [summary({
       status: 'failed', summary: '', primaryTopic: '', outputFingerprint: null, failureCode: 'provider_unavailable',
     })];
     const failed = await open();
-    expect(screen.getByText('chat.summaryFailed')).toBeTruthy();
-    expect(screen.getByText(/provider_unavailable/)).toBeTruthy();
+    expect(screen.getByText('chat.summaryRetry')).toBeTruthy();
     // The manual-handoff route went with the workplace product.
     expect(screen.queryByLabelText('chat.createManualHandoff')).toBeNull();
     await failed.view.unmount();
@@ -380,8 +344,6 @@ describe('summary sheet', () => {
     mockWorkspace.aiOutputErrorReports = [{ summaryId: 'summary-a' }];
     mockWorkspace.summaries = [summary({ status: 'approved', sourceState: 'stale' })];
     await open({ conversation: conversation({ canManage: false }) });
-    expect(screen.getByText('quality.reportSubmitted')).toBeTruthy();
-    expect(screen.getByText('chat.summaryApproved')).toBeTruthy();
     expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
     expect(screen.queryByLabelText('chat.correctSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.summarySchedule')).toBeNull();

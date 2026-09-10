@@ -119,6 +119,6 @@ describe('workspace status and empty-state branch ordering', () => {
     mockWorkspace.status = 'ready';
     mockWorkspace.people = [{ id: 'self', connectionState: 'self' }];
     await view.rerender(<WorkspaceStatePanel resource="people" />);
-    expect(screen.getByText('status.emptyPeople')).toBeTruthy();
+    expect(screen.getByText('status.emptyPeopleConsumer')).toBeTruthy();
   });
 });

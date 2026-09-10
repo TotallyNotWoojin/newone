@@ -2246,43 +2246,6 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
-  test('opens an existing direct conversation but rejects unauthorized targets', async () => {
-    const snapshot = workspaceSnapshot();
-    snapshot.conversations.push({
-      id: 'direct-a',
-      directParticipantId: otherUserId,
-      title: 'Connected Employee',
-      initials: 'CO',
-      avatarColor: '#654321',
-      kind: 'direct',
-      subtitle: 'Supervisor',
-      lastMessage: 'Hello',
-      lastActivity: 'now',
-      unreadCount: 0,
-      pinned: false,
-      favorite: false,
-      muted: false,
-    });
-    snapshot.messages['direct-a'] = [];
-    snapshot.cursors['direct-a'] = null;
-    mockLoadWorkspace.mockImplementation(async () => snapshot);
-    await render(
-      <WorkspaceProvider>
-        <WorkspaceProbe />
-      </WorkspaceProvider>,
-    );
-    await waitFor(() => expect(screen.getByText('ready:Controlled Company:2')).toBeTruthy());
-
-    let directConversationId: string | null = null;
-    await act(async () => {
-      directConversationId = await currentWorkspace().openOrCreateDirectConversation(otherUserId);
-      await currentWorkspace().refresh();
-    });
-    expect(directConversationId).toBe('direct-a');
-    await expect(currentWorkspace().openOrCreateDirectConversation('missing-person')).resolves.toBeNull();
-    expect(mockCommand).not.toHaveBeenCalledWith('createDirectConversation', expect.anything());
-  });
-
   test('loads older messages through the authorized read repository and merges them', async () => {
     const olderMessage = {
       id: 'message-older',
@@ -4282,22 +4245,6 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
-  test('keeps unknown cancel targets gated outside the personal realm', async () => {
-    const view = await render(
-      <WorkspaceProvider>
-        <WorkspaceProbe />
-      </WorkspaceProvider>,
-    );
-    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
-    let cancelled: unknown = 'unset';
-    await act(async () => {
-      cancelled = await currentWorkspace().removeConnection('60000000-0000-4000-8000-000000000023');
-    });
-    expect(cancelled).toBe(false);
-    expect(mockCommand).not.toHaveBeenCalledWith('removeConnection', expect.anything());
-    await view.unmount();
-  });
-
   test('opens a direct chat with a search-discovered stranger in the personal realm and keeps can_post authoritative', async () => {
     const strangerId = '60000000-0000-4000-8000-000000000031';
     const lockedCounterpartId = '60000000-0000-4000-8000-000000000032';
@@ -4387,59 +4334,6 @@ describe('authoritative workspace provider', () => {
     expect(mockEnqueue).not.toHaveBeenCalled();
     expect(currentWorkspace().messages['direct-locked']).toHaveLength(0);
     expect(currentWorkspace().actionError).not.toBeNull();
-    await view.unmount();
-  });
-
-  test('maps username search failures and keeps workspace-org connection gating closed', async () => {
-    mockSearchUsers.mockImplementation(async () => {
-      throw new RepositoryError('raw upstream', 'rate_limited', true, undefined, 429);
-    });
-    mockCommand.mockImplementation(async (method: string) => method === 'sendMessageRequest'
-      ? { conversationId: conversationBId, messageId: '78', connectionStatus: 'accepted' }
-      : undefined);
-    const view = await render(
-      <WorkspaceProvider>
-        <WorkspaceProbe />
-      </WorkspaceProvider>,
-    );
-    await waitFor(() => expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy());
-    mockLoadWorkspace.mockImplementation(() => new Promise(() => {}));
-
-    let failed: unknown = 'unset';
-    await act(async () => {
-      failed = await currentWorkspace().searchUsers('sam');
-    });
-    expect(failed).toBeNull();
-    expect(currentWorkspace().actionError).toBe('errors.rateLimit');
-
-    // Outside the personal realm an unknown target must not reach the server.
-    let connected: unknown = 'unset';
-    await act(async () => {
-      connected = await currentWorkspace().updateConnection('60000000-0000-4000-8000-000000000010');
-    });
-    expect(connected).toBe(false);
-    expect(mockCommand).not.toHaveBeenCalledWith('requestConnection', expect.anything());
-
-    // An accepted receipt (auto-accept pair) records the counterpart as connected.
-    let conversationId: unknown = null;
-    await act(async () => {
-      conversationId = await currentWorkspace().sendMessageRequest(otherUserId, 'Hola', 'Ignored');
-    });
-    expect(conversationId).toBe(conversationBId);
-    expect(currentWorkspace().people.find((person) => person.id === otherUserId)).toMatchObject({
-      connectionState: 'connected',
-    });
-
-    // A rejected command surfaces the mapped error and returns null.
-    mockCommand.mockImplementation(async () => {
-      throw new RepositoryError('raw upstream', 'message_request_cap', false);
-    });
-    let capped: unknown = 'unset';
-    await act(async () => {
-      capped = await currentWorkspace().sendMessageRequest(otherUserId, 'One more');
-    });
-    expect(capped).toBeNull();
-    expect(currentWorkspace().actionError).toBe('errors.messageRequestCap');
     await view.unmount();
   });
 
