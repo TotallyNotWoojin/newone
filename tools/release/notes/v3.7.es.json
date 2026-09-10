@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Marcar un chat como no leído ahora se queda\n\nAntes se olvidaba en cuanto cerrabas la aplicación, y tus otros dispositivos nunca se enteraban. Ahora viaja con tu cuenta, y abrir el chat lo deshace.\n\nLos enlaces muestran su imagen\n\nUn enlace compartido dibuja la miniatura de la página. Tu teléfono sigue sin tocar el sitio para conseguirla: la buscamos una vez, guardamos nuestra propia copia, y al sitio nunca se le dice a quién se le envió el enlace.\n\nMenos datos en cada mensaje\n\nQue llegara un mensaje hacía que la aplicación volviera a pedir cien mensajes que ya tenía. Aproximadamente la mitad de los datos de cada mensaje recibido, fuera.\n\nAdemás\n\n- Los selectores de grupo vuelven a mostrar @nombres de usuario.\n- Los controles anuncian bien su estado en la web.\n\nQué probar\n\n- Marca un chat como no leído, cierra la aplicación del todo y vuelve a abrirla.\n- Abre la misma cuenta en otro sitio y comprueba que la marca está.\n- Comparte un enlace que tenga imagen.",
+  "whatsNewPlay": "Marcar un chat como no leído ahora se queda: sobrevive a cerrar la aplicación y llega a tus otros dispositivos.\n\nLos enlaces compartidos muestran la imagen de la página, que buscamos nosotros una vez: tu teléfono nunca toca el sitio y al sitio nunca se le dice a quién se le envió el enlace.\n\nRecibir un mensaje ya no hace que la aplicación vuelva a pedir cien que ya tenía."
+}

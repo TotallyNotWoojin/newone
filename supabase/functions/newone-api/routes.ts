@@ -4264,11 +4264,17 @@ function publicConversationMemberCandidates(value: unknown, requestedLimit: numb
     }
     const candidates = root.candidates.map((entry) => {
       const row = asObject(entry);
-      onlyKeys(row, ['userId', 'displayName', 'avatarPath', 'roleLabel', 'membershipType']);
+      // The @handle rides along: it is what the picker is searched by, and
+      // the client has tolerated the key since v3.1.
+      onlyKeys(row, ['userId', 'username', 'displayName', 'avatarPath', 'roleLabel', 'membershipType']);
       const candidate: JsonObject = {
         userId: uuid(row.userId),
         displayName: normalizedString(row.displayName, { min: 1, max: 160 }) as string,
       };
+      // A row without a handle omits the key rather than carrying a null.
+      if ('username' in row && row.username !== null) {
+        candidate.username = normalizedString(row.username, { min: 1, max: 64 }) as string;
+      }
       if ('avatarPath' in row) {
         candidate.avatarPath = normalizedString(row.avatarPath, {
           min: 1,

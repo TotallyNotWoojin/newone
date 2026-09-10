@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Marking a chat unread now sticks\n\nIt used to be forgotten the moment you closed the app, and your other devices never heard about it. It travels with your account now, and opening the chat takes it back.\n\nLinks show their picture\n\nA shared link draws the page's own thumbnail. Your phone still never touches the site to get it: we fetch it once, keep our own copy, and the site is never told who was sent the link.\n\nLess data on every message\n\nA message arriving used to make the app re-fetch a hundred messages it already had. About half the data of each received message, gone.\n\nAlso\n\n- Group pickers show @usernames again.\n- Controls announce their state properly to VoiceOver on the web.\n\nPlease check\n\n- Mark a chat unread, force-quit the app, and reopen it.\n- Open the same account somewhere else and see the mark there.\n- Share a link that has a picture.\n- Add someone to a group and check the @handle shows in the picker.",
+  "whatsNewPlay": "Marking a chat unread now sticks: it survives closing the app and reaches your other devices, and opening the chat takes it back.\n\nShared links draw the page’s own picture — fetched once by us, so your phone never touches the site and the site is never told who was sent the link.\n\nA message arriving no longer makes the app re-fetch a hundred it already had. Group pickers show @usernames again."
+}
