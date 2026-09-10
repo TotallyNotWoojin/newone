@@ -3,6 +3,18 @@ appId: com.totallynotwoojin.newone
 # Controls → Pinned → the pinned message is listed → tapping it closes the sheet
 # and lands on the message in the conversation.
 - tapOn: "Conversation settings"
+# Same settle problem as people/message-from-result.yaml: a tap on the header
+# that lands mid-transition opens nothing, and the step then fails on a sheet
+# that was never asked for.
+- extendedWaitUntil:
+    visible: "Conversation controls"
+    timeout: 8000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Conversation controls"
+    commands:
+      - tapOn: "Conversation settings"
 - extendedWaitUntil:
     visible: "Conversation controls"
     timeout: 15000

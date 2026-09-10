@@ -13,6 +13,25 @@ appId: com.totallynotwoojin.newone
     text: "Message"
     rightOf:
       text: ".*${NAME}.*"
+# The row sits in a sheet over a list that is still settling with the keyboard
+# up. A tap that lands before the row's handler is attached does nothing at
+# all: the driver reports it, the sheet stays open, and no conversation is
+# created (seen once on run-2026-09-10T14-35-50). Give the first tap eight
+# seconds to prove itself, then tap once more rather than fail the step.
+- extendedWaitUntil:
+    visible:
+      id: "composer-input"
+    timeout: 8000
+    optional: true
+- runFlow:
+    when:
+      notVisible:
+        id: "composer-input"
+    commands:
+      - tapOn:
+          text: "Message"
+          rightOf:
+            text: ".*${NAME}.*"
 - extendedWaitUntil:
     visible:
       id: "composer-input"
