@@ -113,6 +113,29 @@ export async function runPair(ctx, cfg) {
     timeoutMs: 240_000,
   });
 
+  // The Settings switch that decides whether a sender sees their own message
+  // the way the other person reads it. The owner reported this twice - own
+  // messages translating with it off, then only one of three chats showing a
+  // translation with it on - and nothing on a device covered it until now.
+  await ctx.step({
+    id: 'trans-13b-own-translations-on', title: 'B turns "Show my translations" on in Settings', device: devB,
+    flow: 'translation/own-translations-toggle.yaml', env: { WANT: 'on' },
+    expected: 'The switch reads "Show my translations: On" after the tap; Settings closes',
+    screen: 'settings',
+  });
+  await ctx.step({
+    id: 'trans-13c-own-shows-translation', title: `B's own message carries its ${cfg.code} line with the setting on`, device: devB,
+    flow: 'chat/see-text.yaml', env: { TEXT: cfg.ownHit, TIMEOUT: '30000' },
+    expected: `The sender's own bubble shows the ${cfg.code} reading without being long-pressed`,
+    screen: 'conversation',
+  });
+  await ctx.step({
+    id: 'trans-13d-own-translations-off', title: 'B turns it off again', device: devB,
+    flow: 'translation/own-translations-toggle.yaml', env: { WANT: 'off' },
+    expected: 'The switch reads "Show my translations: Off"; the setting is the reader\'s own and nobody else sees a change',
+    screen: 'settings',
+  });
+
   // Mixed-language message (owner question): B writes in cfg.language and
   // English in one message. A (English) gets it automatically; B can ask for
   // the whole thing in cfg.language from the actions sheet.

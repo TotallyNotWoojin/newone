@@ -1,0 +1,43 @@
+appId: com.totallynotwoojin.newone
+---
+# Settings → "Show my translations" → ${WANT} (on|off).
+#
+# The owner reported this twice: their own messages carried a translation with
+# the setting off, and then only one of three echo chats showed one with it on.
+# The switch says its own state out loud, so the flow asserts what it reads
+# before and after rather than trusting a tap to have flipped anything.
+- launchApp
+- runFlow:
+    when:
+      visible: "(.*(Typing Predictions|Dictate).*|space)"
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 88%"
+          duration: 600
+- runFlow:
+    when:
+      visible: "Close settings"
+    commands:
+      - tapOn: "Close settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Close settings"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Show my translations"
+    direction: DOWN
+    timeout: 15000
+- takeScreenshot: ${SHOT}-before
+- tapOn: "Show my translations"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: ${SHOT}-after
+- tapOn: "Close settings"
+- extendedWaitUntil:
+    notVisible: "Close settings"
+    timeout: 15000

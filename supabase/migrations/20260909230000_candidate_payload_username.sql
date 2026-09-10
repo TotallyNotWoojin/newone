@@ -1,3 +1,10 @@
+-- Held since Sep 7 2026 until v3.1 was the installed floor, because v3.0
+-- clients parsed these payloads with an exact key set in the workplace group
+-- form. Released Sep 9 2026: v3.6 is out, v3.0 is six releases back, the
+-- current parser uses an exact key set only for system events, and the
+-- personal realm holds every conversation there is - the workplace form that
+-- was fragile has no data to run against.
+--
 -- Backlog 14 (v3.1): both people pickers show @usernames. The v3.1 client
 -- parsers tolerate the key (member candidates and group-creation candidates),
 -- so the handle returns to both payloads: the same rows as 20260906080000 plus
