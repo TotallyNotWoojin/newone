@@ -17,7 +17,6 @@ import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 import { useI18n } from '@/i18n/provider';
 import type { MessageKey } from '@/i18n/catalog';
-import { canAccessAdminSurface } from '@/features/admin/admin-access';
 import { isPersonalRealm } from '@/constants/personal-realm';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 

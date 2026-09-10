@@ -12,7 +12,7 @@ import {
 import {
   interpolateRecoveryCopy,
   recoveryCopy,
-} from '@/features/admin/recovery-copy';
+} from '@/features/security/recovery-copy';
 import { useI18n } from '@/i18n/provider';
 import { createClientId } from '@/lib/client-id';
 import { radii, shadow, spacing, type } from '@/theme/tokens';

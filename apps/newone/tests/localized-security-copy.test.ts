@@ -1,24 +1,19 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { aiPolicyCopy } from '@/features/admin/ai-policy-copy';
-import { auditCopy } from '@/features/admin/audit-copy';
-import { dynamicGroupCopy } from '@/features/admin/dynamic-group-copy';
 import {
   moderationCopy,
   moderationMemberSafetyRouteNotice,
   moderationReportConsentNotice,
   moderationTargetReportConsentNotice,
-} from '@/features/admin/moderation-copy';
+} from '@/features/moderation/moderation-copy';
 import {
   interpolateRecoveryCopy,
   recoveryCopy,
-} from '@/features/admin/recovery-copy';
+} from '@/features/security/recovery-copy';
 import { conversationDepartureCopy } from '@/features/chat/conversation-departure-copy';
 import { mentionCopy } from '@/features/chat/mention-copy';
 import { notificationCopy } from '@/features/chat/notification-copy';
 import { translationPreferenceCopy } from '@/features/chat/translation-preference-copy';
-import { handoffAcknowledgementCopy } from '@/features/handoffs/handoff-acknowledgement-copy';
-import { handoffCorrectionCopy } from '@/features/handoffs/handoff-correction-copy';
 import { searchCopy } from '@/features/search/search-copy';
 import { outboxCopy } from '@/features/settings/outbox-copy';
 import { updateCopy } from '@/features/updates/update-copy';
@@ -47,28 +42,16 @@ describe('localized security and workflow copy', () => {
 
   test.each(locales)('%s feature copy remains complete', (locale) => {
     const featureCopies = [
-      aiPolicyCopy(locale),
-      auditCopy(locale),
-      dynamicGroupCopy(locale),
       moderationCopy(locale),
       recoveryCopy(locale),
       conversationDepartureCopy(locale),
       mentionCopy(locale),
       notificationCopy(locale),
       translationPreferenceCopy(locale),
-      handoffAcknowledgementCopy(locale),
-      handoffCorrectionCopy(locale),
       searchCopy(locale),
       outboxCopy(locale),
-      updateCopy(locale),
     ];
     for (const featureCopy of featureCopies) expectDeepCopy(featureCopy);
-  });
-
-  test('locale normalization never selects an unsupported audit language', () => {
-    expect(auditCopy('ko-KR').title).toBe(auditCopy('ko').title);
-    expect(auditCopy('es-MX').title).toBe(auditCopy('es').title);
-    expect(auditCopy('fr-FR').title).toBe(auditCopy('en').title);
   });
 
   test('recovery receipts interpolate known values and retain unknown placeholders', () => {

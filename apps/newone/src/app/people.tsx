@@ -43,7 +43,7 @@ import {
   moderationCopy,
   moderationMemberSafetyRouteNotice,
   moderationTargetReportConsentNotice,
-} from '@/features/admin/moderation-copy';
+} from '@/features/moderation/moderation-copy';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 import { a11yState } from '@/lib/a11y-state';
 
