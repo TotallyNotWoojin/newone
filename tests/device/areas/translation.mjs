@@ -123,6 +123,15 @@ export async function runPair(ctx, cfg) {
     expected: 'The switch reads "Show my translations: On" after the tap; Settings closes',
     screen: 'settings',
   });
+  // The toggle flow launches the app, which lands on Chats, so the thread has
+  // to be reopened before anything asserts what a bubble says - otherwise the
+  // row's preview line stands in for the bubble and the check passes without
+  // having looked at the conversation at all.
+  await ctx.step({
+    id: 'trans-13b2-reopen', title: 'B reopens the conversation after Settings', device: devB,
+    flow: 'common/open-conversation.yaml', env: { PEER: A.displayName },
+    expected: 'composer visible', screen: 'chats → conversation',
+  });
   await ctx.step({
     id: 'trans-13c-own-shows-translation', title: `B's own message carries its ${cfg.code} line with the setting on`, device: devB,
     flow: 'chat/see-text.yaml', env: { TEXT: cfg.ownHit, TIMEOUT: '30000' },
@@ -134,6 +143,11 @@ export async function runPair(ctx, cfg) {
     flow: 'translation/own-translations-toggle.yaml', env: { WANT: 'off' },
     expected: 'The switch reads "Show my translations: Off"; the setting is the reader\'s own and nobody else sees a change',
     screen: 'settings',
+  });
+  await ctx.step({
+    id: 'trans-13d2-reopen', title: 'B reopens the conversation, so the steps after this one start where they expect to', device: devB,
+    flow: 'common/open-conversation.yaml', env: { PEER: A.displayName },
+    expected: 'composer visible', screen: 'chats → conversation',
   });
 
   // Mixed-language message (owner question): B writes in cfg.language and
