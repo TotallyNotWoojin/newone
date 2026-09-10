@@ -14,13 +14,6 @@ import {
 } from '../newone-ai-worker/handler.ts';
 import { type BootstrapDependencies, createBootstrapHandler } from '../newone-bootstrap/handler.ts';
 import {
-  createMaintenanceWorkerHandler,
-  type MaintenanceWorkerDependencies,
-  parseHandoffResult,
-  parseObligationResult,
-  parsePromotionResult,
-} from '../newone-maintenance-worker/handler.ts';
-import {
   createPushReceiptWorkerHandler,
   type PushReceiptWorkerDependencies,
 } from '../newone-push-receipt-worker/handler.ts';
@@ -47,43 +40,6 @@ const secondRecipientId = '00000000-0000-4000-8000-000000000083';
 const handoffId = '00000000-0000-4000-8000-000000000081';
 const secondHandoffId = '00000000-0000-4000-8000-000000000084';
 
-function maintenanceDependencies(
-  overrides: Partial<MaintenanceWorkerDependencies> = {},
-): MaintenanceWorkerDependencies {
-  return {
-    runtimeConfig,
-    clientEnvironment: {
-      url: 'https://project.supabase.co',
-      publishableKey: 'publishable',
-      secretKey,
-    },
-    workerToken,
-    promote: async () => ({
-      processed: 0,
-      promoted: 0,
-      blocked: 0,
-      announcement_ids: [],
-      blocked_announcement_ids: [],
-      snapshot_basis: 'reevaluated_at_scheduled_publish',
-    }),
-    processAnnouncementObligations: async () => ({
-      processed: 0,
-      reminders_enqueued: 0,
-      escalations_enqueued: 0,
-      sms_fallback_available: false,
-      announcement_recipient_keys: [],
-    }),
-    processOverdueHandoffs: async () => ({
-      processed: 0,
-      reminders_enqueued: 0,
-      escalations_enqueued: 0,
-      sms_fallback_available: false,
-      handoff_keys: [],
-    }),
-    ...overrides,
-  };
-}
-
 function workerRequest(
   path: string,
   body: Record<string, unknown> = {},
@@ -108,135 +64,6 @@ async function rejectsDependency(run: () => unknown | Promise<unknown>): Promise
     (error) => error instanceof ApiError && error.code === 'dependency_unavailable',
   );
 }
-
-Deno.test('maintenance result parsers reject each incoherent identity and count shape', async () => {
-  const validPromotion = {
-    processed: 2,
-    promoted: 1,
-    blocked: 1,
-    announcement_ids: [announcementId],
-    blocked_announcement_ids: [secondAnnouncementId],
-    snapshot_basis: 'reevaluated_at_scheduled_publish',
-  };
-  const invalidPromotions: unknown[] = [
-    { ...validPromotion, announcement_ids: null },
-    { ...validPromotion, promoted: 0, announcement_ids: [announcementId] },
-    {
-      ...validPromotion,
-      promoted: 2,
-      blocked: 0,
-      announcement_ids: [announcementId, announcementId],
-      blocked_announcement_ids: [],
-    },
-    { ...validPromotion, processed: 1 },
-    { ...validPromotion, promoted: 0 },
-    { ...validPromotion, blocked: 0 },
-    { ...validPromotion, blocked_announcement_ids: [announcementId] },
-    { ...validPromotion, snapshot_basis: 'scheduled_without_reevaluation' },
-  ];
-  for (const value of invalidPromotions) {
-    await rejectsDependency(() => parsePromotionResult(value, 2));
-  }
-
-  const reminderKey = `${announcementId}:${recipientId}:reminder:1`;
-  const escalationKey = `${secondAnnouncementId}:${secondRecipientId}:escalated`;
-  const validObligation = {
-    processed: 2,
-    reminders_enqueued: 1,
-    escalations_enqueued: 1,
-    sms_fallback_available: false,
-    announcement_recipient_keys: [reminderKey, escalationKey],
-  };
-  const invalidObligations: unknown[] = [
-    { ...validObligation, announcement_recipient_keys: null },
-    { ...validObligation, processed: 1 },
-    {
-      ...validObligation,
-      announcement_recipient_keys: ['x'.repeat(80), escalationKey],
-    },
-    {
-      ...validObligation,
-      announcement_recipient_keys: [reminderKey, reminderKey],
-    },
-    { ...validObligation, reminders_enqueued: 2, escalations_enqueued: 1 },
-  ];
-  for (const value of invalidObligations) {
-    await rejectsDependency(() => parseObligationResult(value, 2));
-  }
-
-  const validHandoff = {
-    processed: 2,
-    reminders_enqueued: 1,
-    escalations_enqueued: 1,
-    sms_fallback_available: false,
-    handoff_keys: [`${handoffId}:reminder:1`, `${secondHandoffId}:escalated`],
-  };
-  const invalidHandoffs: unknown[] = [
-    { ...validHandoff, handoff_keys: null },
-    { ...validHandoff, processed: 1 },
-    { ...validHandoff, handoff_keys: ['x'.repeat(46), `${secondHandoffId}:escalated`] },
-    {
-      ...validHandoff,
-      handoff_keys: [`${handoffId}:reminder:1`, `${handoffId}:reminder:1`],
-    },
-    { ...validHandoff, reminders_enqueued: 2, escalations_enqueued: 1 },
-  ];
-  for (const value of invalidHandoffs) await rejectsDependency(() => parseHandoffResult(value, 2));
-});
-
-Deno.test('maintenance handler exercises explicit limits, transport guards, and dependency failures', async () => {
-  const correlations: string[] = [];
-  const handler = createMaintenanceWorkerHandler(() =>
-    maintenanceDependencies({ setCorrelationId: (value) => correlations.push(value) })
-  );
-  const success = await handler(workerRequest('newone-maintenance-worker', {
-    announcementPromotionLimit: 1,
-    announcementObligationLimit: 2,
-    handoffLimit: 3,
-  }));
-  assertEquals(success.status, 200);
-  assertEquals(correlations.length, 1);
-
-  assertEquals(
-    (await createMaintenanceWorkerHandler(() => maintenanceDependencies())(
-      workerRequest('newone-maintenance-worker', {}, {}, 'GET'),
-    )).status,
-    405,
-  );
-  for (
-    const headers of [
-      { Cookie: 'session=value' },
-      { Authorization: 'Bearer service-key' },
-      { apikey: '' },
-    ] as Array<Record<string, string>>
-  ) {
-    assertEquals(
-      (await createMaintenanceWorkerHandler(() => maintenanceDependencies())(
-        workerRequest('newone-maintenance-worker', {}, headers),
-      )).status,
-      401,
-    );
-  }
-  assertEquals(
-    (await createMaintenanceWorkerHandler(() =>
-      maintenanceDependencies({
-        runtimeConfig: {
-          ...runtimeConfig,
-          allowedOrigins: new Set(['https://browser.example']),
-        },
-      })
-    )(
-      workerRequest('newone-maintenance-worker', {}, { Origin: 'https://browser.example' }),
-    )).status,
-    401,
-  );
-  const failed = await createMaintenanceWorkerHandler(() =>
-    maintenanceDependencies({
-      promote: () => Promise.reject(new Error('database offline')),
-    })
-  )(workerRequest('newone-maintenance-worker'));
-  assertEquals(failed.status, 500);
-});
 
 interface ReceiptShape {
   attempt_id: string;

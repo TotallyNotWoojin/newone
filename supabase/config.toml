@@ -435,9 +435,6 @@ verify_jwt = false
 [functions.newone-push-receipt-worker]
 verify_jwt = false
 
-[functions.newone-maintenance-worker]
-verify_jwt = false
-
 [analytics]
 enabled = true
 port = 55327

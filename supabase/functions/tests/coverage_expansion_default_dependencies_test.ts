@@ -14,7 +14,6 @@ import {
 } from '../newone-attachment-scan-worker/handler.ts';
 import { createAuthHandler, defaultAuthDependencies } from '../newone-auth/handler.ts';
 import { defaultBootstrapDependencies } from '../newone-bootstrap/handler.ts';
-import { defaultMaintenanceWorkerDependencies } from '../newone-maintenance-worker/handler.ts';
 import {
   defaultOutboxWorkerDependencies,
   type DynamicGroupSyncJob,
@@ -473,7 +472,7 @@ async function withDefaultEnvironment(run: () => Promise<void>): Promise<void> {
   }
 }
 
-Deno.test('default API, bootstrap, maintenance, receipt, and scanner dependencies execute', async () => {
+Deno.test('default API, bootstrap, receipt, and scanner dependencies execute', async () => {
   await withDefaultEnvironment(async () => {
     const api = defaultApiDependencies();
     assertEquals(api.publicAppUrl, 'https://app.newone.example');
@@ -494,11 +493,6 @@ Deno.test('default API, bootstrap, maintenance, receipt, and scanner dependencie
       requestDigest: sha,
     });
 
-    const maintenance = defaultMaintenanceWorkerDependencies();
-    maintenance.setCorrelationId?.(deviceId);
-    await maintenance.promote(workerId, 5);
-    await maintenance.processAnnouncementObligations(workerId, 5);
-    await maintenance.processOverdueHandoffs(workerId, 5);
 
     const receipts = defaultPushReceiptWorkerDependencies();
     receipts.setCorrelationId?.(deviceId);

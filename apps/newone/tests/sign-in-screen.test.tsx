@@ -505,26 +505,6 @@ describe('sign-in and account recovery screen', () => {
     await view.unmount();
   });
 
-  test('accepts an initial web invitation only from the fragment and scrubs the bearer capability', async () => {
-    const platform = jest.replaceProperty(Platform, 'OS', 'web');
-    mockWidth = 1280;
-    const replaceState = jest.fn();
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: {
-        location: { href: `https://newone.example/sign-in?keep=1#invite=${'b'.repeat(64)}&view=compact` },
-        history: { state: { navigation: 1 }, replaceState },
-      },
-    });
-    const view = await render(<SignInScreen />);
-    expect(screen.getByText('auth.titleEnroll')).toBeTruthy();
-    expect(screen.getByLabelText('auth.invitationTokenLabel').props.value).toBe('b'.repeat(64));
-    expect(replaceState).toHaveBeenCalledWith(
-      { navigation: 1 }, '', '/sign-in?keep=1#view=compact',
-    );
-    await view.unmount();
-    platform.restore();
-  });
 });
 
 describe('returning sign-in', () => {

@@ -12,7 +12,6 @@ const entrypoints = [
   'newone-attachment-scan-worker',
   'newone-outbox-worker',
   'newone-push-receipt-worker',
-  'newone-maintenance-worker',
 ];
 
 function localSupabaseStatus() {

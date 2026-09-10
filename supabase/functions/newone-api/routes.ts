@@ -144,9 +144,6 @@ export type RouteKind =
   | 'member.unblock'
   | 'person.mute'
   | 'person.unmute'
-  | 'handoff.sign'
-  | 'handoff.acknowledge'
-  | 'action.confirm'
   | 'attachment.grant'
   | 'attachment.complete'
   | 'attachment.state'
@@ -1875,38 +1872,6 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         values: { targetUserId: pathUuid(route, 'membershipId') },
       };
     }
-    case 'handoff.sign': {
-      onlyKeys(body, ['organizationId', 'deviceId']);
-      return {
-        organizationId: organization(body),
-        values: {
-          handoffVersionId: pathUuid(route, 'versionId'),
-          deviceId: optionalUuid(body, 'deviceId', true) ?? null,
-        },
-      };
-    }
-    case 'handoff.acknowledge': {
-      onlyKeys(body, ['organizationId', 'note', 'deviceId']);
-      return {
-        organizationId: organization(body),
-        values: {
-          handoffVersionId: pathUuid(route, 'versionId'),
-          note: optionalString(body, 'note', { max: 2000, nullable: true }) ?? null,
-          deviceId: optionalUuid(body, 'deviceId', true) ?? null,
-        },
-      };
-    }
-    case 'action.confirm': {
-      onlyKeys(body, ['organizationId', 'assigneeMembershipId', 'dueAt']);
-      return {
-        organizationId: organization(body),
-        values: {
-          actionId: pathUuid(route, 'actionId'),
-          assigneeUserId: requiredUuid(body, 'assigneeMembershipId'),
-          dueAt: nullableIsoDate(body, 'dueAt'),
-        },
-      };
-    }
     case 'attachment.grant': {
       onlyKeys(body, [
         'organizationId',
@@ -2145,180 +2110,6 @@ async function businessRpc(
   );
 }
 
-function resolvedInviteUserId(value: unknown): string | null {
-  const row = asObject(value);
-  if (row.authorized !== true) throw new ApiError(403, 'forbidden');
-  return row.user_id === null ? null : uuid(row.user_id);
-}
-
-function maskedInviteDestination(destinationType: 'email' | 'phone', destination: string): string {
-  if (destinationType === 'phone') {
-    return `${destination.slice(0, 2)}${'*'.repeat(Math.max(4, destination.length - 6))}${
-      destination.slice(-4)
-    }`;
-  }
-  const separator = destination.lastIndexOf('@');
-  const local = destination.slice(0, separator);
-  return `${local.slice(0, 1)}***${destination.slice(separator)}`;
-}
-
-async function resolveInvitePrincipal(
-  actor: AuthenticatedActor,
-  organizationId: string,
-  destinationType: 'email' | 'phone',
-  destination: string,
-): Promise<string | null> {
-  return resolvedInviteUserId(
-    await invokeRpc(asRpcClient(actor.adminClient), 'bff_resolve_invite_principal', {
-      p_actor_user_id: actor.user.id,
-      p_organization_id: organizationId,
-      p_session_id: actor.claims.sessionId,
-      p_destination_type: destinationType,
-      p_destination: destination,
-    }),
-  );
-}
-
-async function issueOrganizationInvite(
-  actor: AuthenticatedActor,
-  command: ParsedCommand,
-  idempotencyKey: string,
-  requestDigest: string,
-): Promise<unknown> {
-  const destinationType = command.values.destinationType as 'email' | 'phone';
-  const destination = command.values.destination as string;
-  let invitedUserId = await resolveInvitePrincipal(
-    actor,
-    command.organizationId,
-    destinationType,
-    destination,
-  );
-  let newlyCreated = false;
-  if (!invitedUserId) {
-    const principal = destinationType === 'email'
-      ? { email: destination, email_confirm: true }
-      : { phone: destination, phone_confirm: true };
-    const { data, error } = await actor.adminClient.auth.admin.createUser({
-      ...principal,
-      app_metadata: { newone_invite_state: 'pending' },
-    });
-    if (!error && data.user) {
-      invitedUserId = uuid(data.user.id);
-      newlyCreated = true;
-    } else {
-      // A concurrent inviter may have created the same exact principal. Resolve
-      // through the bounded database primitive; never paginate Auth users.
-      invitedUserId = await resolveInvitePrincipal(
-        actor,
-        command.organizationId,
-        destinationType,
-        destination,
-      );
-    }
-  }
-  if (!invitedUserId) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-
-  try {
-    const result = await businessRpc(
-      actor,
-      command.organizationId,
-      idempotencyKey,
-      requestDigest,
-      'bff_issue_organization_invite_v2',
-      {
-        p_destination_type: destinationType,
-        p_destination: destination,
-        p_invited_user_id: invitedUserId,
-        p_employee_code: command.values.employeeCode,
-        p_activation_mode: command.values.activationMode,
-        p_role: command.values.role,
-        p_expires_in_seconds: command.values.expiresInSeconds,
-        p_membership_type: command.values.membershipType,
-        p_membership_access_expires_at: command.values.membershipAccessExpiresAt,
-        p_guest_sponsor_user_id: command.values.guestSponsorUserId,
-      },
-    );
-    if (newlyCreated) {
-      try {
-        await actor.adminClient.auth.admin.updateUserById(invitedUserId, {
-          app_metadata: { newone_invite_state: 'invited' },
-        });
-      } catch {
-        // The database-bound invite is authoritative. Metadata is only a
-        // cleanup hint and must not invalidate an otherwise successful invite.
-      }
-    }
-    const row = asObject(result);
-    const inviteId = uuid(row.inviteId);
-    const expiresAt = normalizedString(row.expiresAt, { min: 20, max: 40 }) as string;
-    if (!Number.isFinite(Date.parse(expiresAt)) || row.singleUse !== true) {
-      throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    }
-    if (typeof row.tokenAvailable !== 'boolean') {
-      throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    }
-    const token = row.token;
-    if (
-      (row.tokenAvailable && (typeof token !== 'string' || !/^[0-9a-f]{64}$/.test(token))) ||
-      (!row.tokenAvailable && token !== undefined && token !== null)
-    ) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    if (
-      row.destinationType !== destinationType ||
-      row.activationMode !== command.values.activationMode ||
-      typeof row.channelConfigured !== 'boolean'
-    ) {
-      throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    }
-    const membershipAccessExpiresAt = row.membershipAccessExpiresAt === null
-      ? null
-      : isoDate(row.membershipAccessExpiresAt);
-    const guestSponsorUserId = row.guestSponsorUserId === null
-      ? null
-      : uuid(row.guestSponsorUserId);
-    const requestedMembershipExpiryMs = typeof command.values.membershipAccessExpiresAt === 'string'
-      ? Date.parse(command.values.membershipAccessExpiresAt)
-      : null;
-    const returnedMembershipExpiryMs = membershipAccessExpiresAt === null
-      ? null
-      : Date.parse(membershipAccessExpiresAt);
-    if (
-      row.membershipType !== command.values.membershipType ||
-      returnedMembershipExpiryMs !== requestedMembershipExpiryMs ||
-      guestSponsorUserId !== command.values.guestSponsorUserId
-    ) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-    return {
-      inviteId,
-      destinationType,
-      destinationMasked: maskedInviteDestination(destinationType, destination),
-      role: command.values.role,
-      activationMode: command.values.activationMode,
-      expiresAt,
-      singleUse: true,
-      ...(row.tokenAvailable ? { activationToken: token as string } : {}),
-      tokenAvailable: row.tokenAvailable,
-      channelConfigured: row.channelConfigured,
-      membershipType: command.values.membershipType,
-      membershipAccessExpiresAt,
-      guestSponsorUserId,
-      // A raw token is returned only on the first successful issue. Idempotent
-      // replays intentionally return metadata without recovering the secret.
-      delivery: 'manual_secure',
-    };
-  } catch (error) {
-    if (newlyCreated) {
-      try {
-        await actor.adminClient.auth.admin.updateUserById(invitedUserId, {
-          app_metadata: { newone_invite_state: 'orphaned' },
-          ban_duration: '876000h',
-        });
-      } catch {
-        // Even if compensation is unavailable, no active membership exists and
-        // every Newone data path independently rejects the orphaned principal.
-      }
-    }
-    throw error;
-  }
-}
 
 export function configuredPublicAppUrl(
   env: Pick<typeof Deno.env, 'get'> = Deno.env,
@@ -4608,46 +4399,6 @@ export async function executeCommand(
           {
             p_target_user_id: values.targetUserId,
             p_muted: route.kind === 'person.mute',
-          },
-        ),
-      };
-    case 'handoff.sign':
-      return {
-        status: 200,
-        body: await businessRpc(actor, org, idempotencyKey, requestDigest, 'bff_sign_handoff', {
-          p_handoff_version_id: values.handoffVersionId,
-          p_device_id: values.deviceId,
-        }),
-      };
-    case 'handoff.acknowledge':
-      return {
-        status: 201,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_acknowledge_handoff',
-          {
-            p_handoff_version_id: values.handoffVersionId,
-            p_note: values.note,
-            p_device_id: values.deviceId,
-          },
-        ),
-      };
-    case 'action.confirm':
-      return {
-        status: 200,
-        body: await businessRpc(
-          actor,
-          org,
-          idempotencyKey,
-          requestDigest,
-          'bff_confirm_operational_action',
-          {
-            p_action_id: values.actionId,
-            p_assignee_user_id: values.assigneeUserId,
-            p_due_at: values.dueAt,
           },
         ),
       };

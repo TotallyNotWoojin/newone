@@ -28,30 +28,6 @@ import { errorMessageKey } from '@/i18n/errors';
 import type { MessageKey } from '@/i18n/catalog';
 import { useHydrationSafeWindowDimensions } from '@/hooks/use-hydration-safe-window-dimensions';
 
-function invitationFromInitialLocation() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    // Native invitation capabilities are entered directly and never accepted
-    // from deep links, query strings, or URLs.
-    return '';
-  }
-
-  const current = new URL(window.location.href);
-  const fragment = new URLSearchParams(current.hash.startsWith('#') ? current.hash.slice(1) : current.hash);
-  const invitationToken = fragment.get('invite')
-    ?? fragment.get('invitationToken')
-    ?? '';
-
-  // Invitation capabilities are bearer secrets. Scrub the fragment synchronously
-  // during the first render, before Turnstile mounts.
-  fragment.delete('invite');
-  fragment.delete('invitationToken');
-  const remainingFragment = fragment.toString();
-  const cleanLocation = `${current.pathname}${current.search}${remainingFragment ? `#${remainingFragment}` : ''}`;
-  window.history.replaceState(window.history.state, '', cleanLocation);
-
-  return invitationToken;
-}
-
 // Sign-in is email only (owner decision, Sep 2026); the server's phone paths
 // stay inert.
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
@@ -82,7 +58,7 @@ const UI_LANGUAGES = [
   { code: 'ko', labelKey: 'auth.languageKorean' },
 ] as const;
 
-type AccessMode = 'signup' | 'returning' | 'enrollment';
+type AccessMode = 'signup' | 'returning';
 
 // identity: the email (plus the signup or invitation fields). password: a
 // known account's password. verify: the emailed code (signup, invitation, or
@@ -107,12 +83,7 @@ export default function SignInScreen() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
-  const [initialInvitationToken] = useState(invitationFromInitialLocation);
-  const [accessMode, setAccessMode] = useState<AccessMode>(
-    initialInvitationToken ? 'enrollment' : 'signup',
-  );
-  const [invitationToken, setInvitationToken] = useState(initialInvitationToken);
-  const [employeeCode, setEmployeeCode] = useState('');
+  const [accessMode, setAccessMode] = useState<AccessMode>('signup');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -120,7 +91,6 @@ export default function SignInScreen() {
   const [unknownAccount, setUnknownAccount] = useState(false);
   const signupMode = accessMode === 'signup';
   const returningMode = accessMode === 'returning';
-  const enrollmentMode = accessMode === 'enrollment';
   // Without a configured Turnstile site key the challenge cannot load; the
   // server exempts tokenless native requests, so the client omits the token.
   const captchaConfigured = Boolean(publicRuntimeConfig.turnstileSiteKey);
@@ -172,10 +142,6 @@ export default function SignInScreen() {
     setMessage('');
     setUnknownAccount(false);
     resetCaptcha();
-    if (nextMode !== 'enrollment') {
-      setInvitationToken('');
-      setEmployeeCode('');
-    }
   };
 
   // Back to the email from the password, code, or new-password step.
@@ -337,12 +303,6 @@ export default function SignInScreen() {
       setMessage(t('auth.passwordRule'));
       return;
     }
-    const normalizedInvitationToken = invitationToken.trim().toLocaleLowerCase();
-    const normalizedEmployeeCode = employeeCode.trim();
-    if (enrollmentMode && !/^[0-9a-f]{64}$/.test(normalizedInvitationToken)) {
-      setMessage(t('auth.invitationTokenInvalid'));
-      return;
-    }
     setLoading(true);
     setMessage('');
     try {
@@ -364,8 +324,6 @@ export default function SignInScreen() {
         destinationType: 'email',
         destination: normalized,
         ...(captchaToken ? { captchaToken } : {}),
-        ...(enrollmentMode ? { invitationToken: normalizedInvitationToken } : {}),
-        ...(normalizedEmployeeCode ? { employeeCode: normalizedEmployeeCode } : {}),
       });
       if (!result.channelConfigured) {
         setMessage(t('auth.channelUnavailable'));
@@ -405,8 +363,6 @@ export default function SignInScreen() {
         : await auth.requestOtp({
             destinationType: 'email',
             destination: normalized,
-            ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
-            ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
           });
       if (!result.channelConfigured) {
         setMessage(t('auth.channelUnavailable'));
@@ -452,8 +408,6 @@ export default function SignInScreen() {
       await auth.verifyOtp({
         destinationType: 'email',
         destination: normalized,
-        ...(enrollmentMode ? { invitationToken: invitationToken.trim().toLocaleLowerCase() } : {}),
-        ...(employeeCode.trim() ? { employeeCode: employeeCode.trim() } : {}),
         code: normalizedCode,
       });
       router.replace('/');
@@ -481,16 +435,12 @@ export default function SignInScreen() {
   const onCaptchaToken = useCallback((token: string | null) => setCaptchaToken(token), []);
   const onCaptchaError = useCallback(() => setMessage(t('auth.challengeUnavailable')), [t]);
 
-  const title = enrollmentMode
-    ? t('auth.titleEnroll')
-    : signupMode
+  const title = signupMode
       ? t('auth.titleSignup')
       : authStep === 'new-password'
         ? t('auth.newPasswordTitle')
         : t('auth.titleReturn');
-  const subtitle = enrollmentMode
-    ? t('auth.subtitleEnroll')
-    : signupMode
+  const subtitle = signupMode
       ? t('auth.subtitleSignup')
       : authStep === 'password'
         ? t('auth.subtitlePassword')
@@ -583,42 +533,6 @@ export default function SignInScreen() {
             </View>
           ) : null}
 
-          {authStep === 'identity' && enrollmentMode ? (
-            <View style={styles.enrollmentFields}>
-              <Text style={styles.label}>{t('auth.invitationTokenLabel')}</Text>
-              <View style={styles.inputWrap}>
-                <Ionicons name="key-outline" size={18} color={colors.inkSubtle} />
-                <TextInput
-                  keyboardAppearance={keyboardAppearance}
-                  accessibilityLabel={t('auth.invitationTokenLabel')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onChangeText={setInvitationToken}
-                  placeholder={t('auth.invitationTokenPlaceholder')}
-                  placeholderTextColor={colors.inkSubtle}
-                  secureTextEntry
-                  style={styles.input}
-                  value={invitationToken}
-                />
-              </View>
-              <Text style={styles.label}>{t('auth.employeeCodeLabel')}</Text>
-              <View style={styles.inputWrap}>
-                <Ionicons name="id-card-outline" size={18} color={colors.inkSubtle} />
-                <TextInput
-                  keyboardAppearance={keyboardAppearance}
-                  accessibilityLabel={t('auth.employeeCodeLabel')}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  onChangeText={setEmployeeCode}
-                  placeholder={t('auth.employeeCodePlaceholder')}
-                  placeholderTextColor={colors.inkSubtle}
-                  style={styles.input}
-                  value={employeeCode}
-                />
-              </View>
-            </View>
-          ) : null}
-
           {authStep === 'identity' || authStep === 'verify' ? (
             <>
               <Text style={styles.label}>
@@ -653,11 +567,7 @@ export default function SignInScreen() {
                   <TextInput
                     keyboardAppearance={keyboardAppearance}
                     accessibilityHint={
-                      enrollmentMode
-                        ? t('auth.emailInviteHint')
-                        : signupMode
-                          ? t('auth.signupEmailHint')
-                          : t('auth.emailHint')
+                      signupMode ? t('auth.signupEmailHint') : t('auth.emailHint')
                     }
                     accessibilityLabel={t(signupMode ? 'auth.signupEmailLabel' : 'auth.emailLabel')}
                     autoCapitalize="none"
@@ -1037,7 +947,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  enrollmentFields: { gap: spacing.xs, marginBottom: spacing.sm },
   signupFields: { gap: spacing.xs, marginTop: spacing.sm },
   helperText: {
     color: colors.inkSubtle,

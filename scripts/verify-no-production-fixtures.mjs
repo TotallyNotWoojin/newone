@@ -15,7 +15,6 @@ const productionInputs = [
   'supabase/functions/newone-attachment-scan-worker',
   'supabase/functions/newone-auth',
   'supabase/functions/newone-bootstrap',
-  'supabase/functions/newone-maintenance-worker',
   'supabase/functions/newone-outbox-worker',
   'supabase/functions/newone-push-receipt-worker',
   'supabase/functions/newone-read',
