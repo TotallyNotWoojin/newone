@@ -90,8 +90,11 @@ export default function PeopleScreen() {
   const [contactQuery, setContactQuery] = useState('');
   const [addFriendOpen, setAddFriendOpen] = useState(false);
   const [requestedIds, setRequestedIds] = useState<string[]>([]);
-  const addParam = useLocalSearchParams<{ add?: string }>().add;
+  const routeParams = useLocalSearchParams<{ add?: string; report?: string }>();
+  const addParam = routeParams.add;
+  const reportParam = routeParams.report;
   const [seenAddParam, setSeenAddParam] = useState<string | undefined>(undefined);
+  const [seenReportParam, setSeenReportParam] = useState<string | undefined>(undefined);
   // The "+" menu on Chats routes here with ?add=1, so one control on one
   // screen is the only way in. The parameter is read as it arrives rather than
   // in an effect, which would render the screen twice on the way in.
@@ -221,6 +224,20 @@ export default function PeopleScreen() {
     setReportConsent(false);
     setManagePersonId(person.id);
   };
+
+  // A group's member sheet routes here with ?report=<id>, so reporting someone
+  // is reachable from the conversation they are in without the chat carrying a
+  // second copy of this form.
+  if (reportParam !== seenReportParam) {
+    setSeenReportParam(reportParam);
+    const target = reportParam
+      ? workspace.people.find((person) => person.id === reportParam)
+      : undefined;
+    if (target) {
+      openManage(target);
+      setReportOpen(true);
+    }
+  }
 
   const renderPersonCard = (person: Person) => (
     <PersonCard

@@ -165,6 +165,7 @@ function MemberSheet({
   const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
   const workspace = useWorkspace();
+  const router = useRouter();
   if (!member) return null;
   const muted = member.person?.mutedByMe === true;
   const blocked = member.person?.blockedByMe === true;
@@ -206,6 +207,20 @@ function MemberSheet({
         label={t(blocked ? 'group.memberUnblock' : 'group.memberBlock')}
         onPress={() => void workspace.setPersonBlocked(member.userId, !blocked)}
         tone={blocked ? 'light' : 'danger'}
+      />
+      {/* Reporting has to be reachable from the conversation the person is in,
+          not only from Contacts. The form itself stays in one place: this opens
+          Contacts on that person with it up, rather than the chat carrying a
+          second copy of a category picker, a details field and a consent
+          notice. */}
+      <PrimaryButton
+        accessibilityLabel={`${t('group.memberReport')} ${member.displayName}`}
+        label={t('group.memberReport')}
+        onPress={() => {
+          onClose();
+          router.push({ pathname: '/people', params: { report: member.userId } });
+        }}
+        tone="light"
       />
       {canManage && !conversation.policyManaged ? (
         <>

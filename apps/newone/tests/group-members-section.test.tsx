@@ -108,6 +108,20 @@ describe('group members section', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberBlock Sam Stranger' }));
     expect(mockWorkspace.setPersonBlocked).toHaveBeenCalledWith('user-sam', true);
 
+    // Reporting is reachable from the conversation the person is in, which is
+    // where a reviewer looks for it; the form itself stays in Contacts rather
+    // than being carried a second time by the chat.
+    mockRouter.push.mockClear();
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberReport Sam Stranger' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/people', params: { report: 'user-sam' },
+    });
+    // It closes behind itself, so returning does not land back on the sheet.
+    await waitFor(() => expect(
+      screen.queryByRole('button', { name: 'group.memberBlock Sam Stranger' }),
+    ).toBeNull());
+    await fireEvent.press(screen.getByRole('button', { name: 'group.memberActions Sam Stranger' }));
+
     await fireEvent.press(screen.getByRole('button', { name: 'group.memberRemove Sam Stranger' }));
     await waitFor(() => expect(mockWorkspace.removeConversationMember)
       .toHaveBeenCalledWith('conversation-group', 'user-sam'));
