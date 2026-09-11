@@ -102,7 +102,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
       </View>
       {!compact ? (
         <View>
-          <Text style={styles.brandName}>newone</Text>
+          <Text style={styles.brandName}>gist</Text>
         </View>
       ) : null}
     </View>

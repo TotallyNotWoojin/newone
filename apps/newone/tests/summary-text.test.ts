@@ -100,9 +100,9 @@ describe('summary text never shows machinery', () => {
 
   test('file names are safe and dated', () => {
     const date = new Date(2026, 8, 5, 9, 30);
-    expect(summaryFileName('Family: trip/plans?', date)).toBe('Newone summary – Family trip plans – 2026-09-05.txt');
-    expect(summaryFileName('   ', date)).toBe('Newone summary – Conversation – 2026-09-05.txt');
-    expect(summaryFileName('x'.repeat(80), date)).toBe(`Newone summary – ${'x'.repeat(60)} – 2026-09-05.txt`);
+    expect(summaryFileName('Family: trip/plans?', date)).toBe('Gist summary – Family trip plans – 2026-09-05.txt');
+    expect(summaryFileName('   ', date)).toBe('Gist summary – Conversation – 2026-09-05.txt');
+    expect(summaryFileName('x'.repeat(80), date)).toBe(`Gist summary – ${'x'.repeat(60)} – 2026-09-05.txt`);
   });
 });
 

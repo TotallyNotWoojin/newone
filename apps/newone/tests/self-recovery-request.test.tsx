@@ -187,13 +187,13 @@ describe('self-service authenticator recovery', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
     rejectedFactors.reject(repositoryError('network_unavailable'));
     await rejectedFactors.promise.catch(() => undefined);
-    expect(screen.queryByText('Newone could not reach the recovery service. The same action can be retried safely while this dialog remains open.')).toBeNull();
+    expect(screen.queryByText('Gist could not reach the recovery service. The same action can be retried safely while this dialog remains open.')).toBeNull();
     await rejectedView.unmount();
   });
 
   test.each([
     [new Error('controlled unknown error'), 'The server rejected this action. Refresh and verify with MFA again before retrying.'],
-    [repositoryError('network_unavailable'), 'Newone could not reach the recovery service. The same action can be retried safely while this dialog remains open.'],
+    [repositoryError('network_unavailable'), 'Gist could not reach the recovery service. The same action can be retried safely while this dialog remains open.'],
     [repositoryError('other_code', 401), 'Your session or recent MFA verification is no longer sufficient. Verify with MFA again.'],
     [repositoryError('other_code', 403), 'Your session or recent MFA verification is no longer sufficient. Verify with MFA again.'],
     [repositoryError('authentication_required'), 'Your session or recent MFA verification is no longer sufficient. Verify with MFA again.'],
@@ -243,7 +243,7 @@ describe('self-service authenticator recovery', () => {
       'The verified authenticator is no longer available.',
     );
     await fireEvent.press(screen.getByRole('button', { name: 'Create recovery case' }));
-    await waitFor(() => expect(screen.getByText('Newone could not reach the recovery service. The same action can be retried safely while this dialog remains open.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Gist could not reach the recovery service. The same action can be retried safely while this dialog remains open.')).toBeTruthy());
     await fireEvent.press(screen.getByRole('button', { name: 'Create recovery case' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(mockCreateCase).toHaveBeenCalledTimes(2);

@@ -191,7 +191,7 @@ test('offline workspace serialization filters malformed rows and observes byte a
   const serialized = serializeOfflineWorkspace(snapshot, now);
   assert.ok(serialized);
   const envelope = JSON.parse(serialized);
-  assert.equal(envelope.snapshot.organizationName, 'Newone');
+  assert.equal(envelope.snapshot.organizationName, 'Gist');
   assert.equal(envelope.snapshot.conversationControlsVersion, 1);
   assert.equal(envelope.snapshot.messageDisplayLanguage, 'es');
   assert.deepEqual(envelope.snapshot.conversations, [{ id: ids.conversation }]);

@@ -4,7 +4,7 @@ import { webAuthMode } from '@/config/runtime';
 import { clientStore } from '@/data/persistence/client-store';
 import { createWebSessionStorage } from '@/lib/web-session-storage';
 
-// Production web authentication terminates at the Newone BFF and uses an
+// Production web authentication terminates at the Gist BFF and uses an
 // HttpOnly, Secure, SameSite cookie. This in-memory adapter deliberately avoids
 // persisting a bearer token in localStorage during the standalone client phase.
 const values = new Map<string, string>();

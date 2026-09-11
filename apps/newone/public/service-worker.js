@@ -1,10 +1,10 @@
-const SHELL_CACHE = 'newone-shell-v2';
-const ASSET_CACHE = 'newone-public-assets-v1';
+const SHELL_CACHE = 'gist-shell-v1';
+const ASSET_CACHE = 'gist-public-assets-v1';
 const APPROVED_SHELL_ASSETS = new Set([
   '/offline.html',
   '/manifest.json',
-  '/newone-icon-192.png',
-  '/newone-icon-512.png',
+  '/gist-icon-192.png',
+  '/gist-icon-512.png',
 ]);
 
 self.addEventListener('install', (event) => {
@@ -33,9 +33,12 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((names) => Promise.all(
         names
+          // The newone-* prefixes are the pre-rename caches. A returning
+          // visitor still holds them, so they have to be swept here or the old
+          // shell and the old icons stay on their device for good.
           .filter((name) => (
-            (name.startsWith('newone-shell-') && name !== SHELL_CACHE)
-            || (name.startsWith('newone-public-assets-') && name !== ASSET_CACHE)
+            ((name.startsWith('gist-shell-') || name.startsWith('newone-shell-')) && name !== SHELL_CACHE)
+            || ((name.startsWith('gist-public-assets-') || name.startsWith('newone-public-assets-')) && name !== ASSET_CACHE)
           ))
           .map((name) => caches.delete(name)),
       ))
@@ -109,6 +112,6 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Employee data and arbitrary HTML/assets remain network-only. Offline state lives
-  // only in Newone's encrypted client store, never the service-worker cache.
+  // only in Gist's encrypted client store, never the service-worker cache.
   event.respondWith(networkOnlyNoStore(request));
 });

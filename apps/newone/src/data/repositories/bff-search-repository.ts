@@ -78,7 +78,7 @@ export class BffSearchRepository implements SearchRepository {
         signal: controller.signal,
       });
     } catch {
-      throw new RepositoryError('Newone cannot reach secure search.', 'network_unavailable', true);
+      throw new RepositoryError('Gist cannot reach secure search.', 'network_unavailable', true);
     } finally {
       clearTimeout(timeout);
     }

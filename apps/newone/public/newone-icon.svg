@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">Newone</title>
-  <rect width="512" height="512" rx="112" fill="#102e27"/>
-  <path d="M146 354V158h48l124 122V158h48v196h-45L194 230v124z" fill="#f4f1e8"/>
-  <circle cx="366" cy="146" r="28" fill="#ef6d4d"/>
-</svg>

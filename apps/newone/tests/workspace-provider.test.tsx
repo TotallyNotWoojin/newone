@@ -1097,7 +1097,7 @@ describe('authoritative workspace provider', () => {
       'error::0',
     )).toBeTruthy());
     expect(currentWorkspace().currentUser).toBeNull();
-    expect(currentWorkspace().error).toBe('Connect the Newone identity and data service to continue.');
+    expect(currentWorkspace().error).toBe('Connect the Gist identity and data service to continue.');
     expect(mockLoadWorkspace).not.toHaveBeenCalled();
   });
 

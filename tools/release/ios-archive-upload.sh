@@ -21,7 +21,7 @@ export EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_zp2CRMddXG_cKKo1cXvjM
 
 BUILD_NUMBER=${1:?build number}
 UPLOAD=${2:-yes}
-PLIST=ios/Newone/Info.plist
+PLIST=ios/Gist/Info.plist
 ORIG=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")
 trap '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ORIG" "$PLIST"' EXIT
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$PLIST"
@@ -29,16 +29,16 @@ trap '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $ORIG" "$PLIST"' EXIT
 echo "=== archive build $BUILD_NUMBER $(date +%H:%M:%S) ==="
 # The team and profile are named here because the project itself carries no
 # team: the archive fails with "requires a development team" otherwise.
-xcodebuild -workspace ios/Newone.xcworkspace -scheme Newone -configuration Release -sdk iphoneos \
-  -destination 'generic/platform=iOS' -archivePath "$OUT/Newone.xcarchive" archive \
+xcodebuild -workspace ios/Gist.xcworkspace -scheme Gist -configuration Release -sdk iphoneos \
+  -destination 'generic/platform=iOS' -archivePath "$OUT/Gist.xcarchive" archive \
   DEVELOPMENT_TEAM=XAD7U9U737 CODE_SIGN_STYLE=Manual \
-  PROVISIONING_PROFILE_SPECIFIER="Newone App Store 1788301805177" \
+  PROVISIONING_PROFILE_SPECIFIER="Gist App Store" \
   CODE_SIGN_IDENTITY="iPhone Distribution" \
   | grep -E "ARCHIVE (SUCCEEDED|FAILED)|error:" || true
 
 echo "=== export $(date +%H:%M:%S) ==="
 rm -rf "$OUT/export"
-xcodebuild -exportArchive -archivePath "$OUT/Newone.xcarchive" \
+xcodebuild -exportArchive -archivePath "$OUT/Gist.xcarchive" \
   -exportOptionsPlist "$HERE/ExportOptions.plist" -exportPath "$OUT/export" \
   | grep -E "EXPORT (SUCCEEDED|FAILED)|Exported|error:" || true
 ls -la "$OUT/export"/*.ipa
@@ -47,7 +47,7 @@ if [ "$UPLOAD" = "yes" ]; then
   echo "=== upload $(date +%H:%M:%S) ==="
   KEY_ID=$(node -e "console.log(require(process.env.HOME + '/.config/newone/asc.json').keyId)")
   ISSUER=$(node -e "console.log(require(process.env.HOME + '/.config/newone/asc.json').issuerId)")
-  xcrun altool --upload-app -f "$OUT/export"/Newone.ipa -t ios \
+  xcrun altool --upload-app -f "$OUT/export"/Gist.ipa -t ios \
     --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
 fi
 echo "=== done $(date +%H:%M:%S) ==="

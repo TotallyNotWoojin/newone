@@ -91,7 +91,7 @@ export function serializeOfflineWorkspace(snapshot, now = Date.now()) {
     organizationId: root.organizationId,
     snapshot: {
       organizationId: root.organizationId,
-      organizationName: typeof root.organizationName === 'string' ? root.organizationName : 'Newone',
+      organizationName: typeof root.organizationName === 'string' ? root.organizationName : 'Gist',
       conversationControlsVersion: Number.isSafeInteger(root.conversationControlsVersion)
         ? root.conversationControlsVersion
         : 1,

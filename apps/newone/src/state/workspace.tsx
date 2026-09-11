@@ -1150,8 +1150,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setStatus('error');
       setError(
         auth.mode === 'web_locked'
-          ? 'Secure web sessions require the Newone BFF and are not enabled in this build.'
-          : 'Connect the Newone identity and data service to continue.',
+          ? 'Secure web sessions require the Gist BFF and are not enabled in this build.'
+          : 'Connect the Gist identity and data service to continue.',
       );
       return;
     }

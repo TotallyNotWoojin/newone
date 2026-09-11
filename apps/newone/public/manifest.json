@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Newone Workplace",
-  "short_name": "Newone",
+  "name": "Gist",
+  "short_name": "Gist",
   "description": "Private, multilingual workplace messaging, updates, and shift coordination.",
   "lang": "en",
   "dir": "ltr",
@@ -11,22 +11,26 @@
   "orientation": "any",
   "background_color": "#F3F5F1",
   "theme_color": "#F3F5F1",
-  "categories": ["business", "productivity", "social"],
+  "categories": [
+    "business",
+    "productivity",
+    "social"
+  ],
   "icons": [
     {
-      "src": "/newone-icon-192.png",
+      "src": "/gist-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/newone-icon-512.png",
+      "src": "/gist-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/newone-icon-512.png",
+      "src": "/gist-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

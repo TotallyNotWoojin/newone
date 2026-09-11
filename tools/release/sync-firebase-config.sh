@@ -17,7 +17,7 @@ DEST="$ROOT/apps/newone/google-services.json"
 
 if [[ ! -f "$SRC" ]]; then
   echo "missing $SRC -- download google-services.json from the Firebase console" >&2
-  echo "(project newline-38a60, Android app com.totallynotwoojin.newone)" >&2
+  echo "(project newline-38a60, Android app com.totallynotwoojin.gist)" >&2
   exit 1
 fi
 
@@ -26,8 +26,8 @@ import json,sys
 d=json.load(open('$SRC'))
 print(d['client'][0]['client_info']['android_client_info']['package_name'])
 ")
-if [[ "$PACKAGE" != "com.totallynotwoojin.newone" ]]; then
-  echo "wrong app: $SRC is for $PACKAGE, not com.totallynotwoojin.newone" >&2
+if [[ "$PACKAGE" != "com.totallynotwoojin.gist" ]]; then
+  echo "wrong app: $SRC is for $PACKAGE, not com.totallynotwoojin.gist" >&2
   exit 1
 fi
 

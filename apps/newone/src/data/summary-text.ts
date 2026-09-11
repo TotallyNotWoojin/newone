@@ -121,7 +121,7 @@ function localDate(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** "Newone summary – Weekend plans – 2026-09-05.txt", safe for every file system. */
+/** "Gist summary – Weekend plans – 2026-09-05.txt", safe for every file system. */
 export function summaryFileName(conversationTitle: string, date = new Date()): string {
   const safeTitle = conversationTitle
     .replace(/[\\/:*?"<>| -]/g, ' ')
@@ -129,5 +129,5 @@ export function summaryFileName(conversationTitle: string, date = new Date()): s
     .trim()
     .slice(0, 60)
     .trim() || 'Conversation';
-  return `Newone summary – ${safeTitle} – ${localDate(date)}.txt`;
+  return `Gist summary – ${safeTitle} – ${localDate(date)}.txt`;
 }

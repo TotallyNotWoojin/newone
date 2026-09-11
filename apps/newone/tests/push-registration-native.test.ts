@@ -120,7 +120,7 @@ describe('native notification visibility and channels', () => {
   test.each([
     [null, null, false],
     ['New message', null, true],
-    [null, 'Open Newone to view it.', true],
+    [null, 'Open Gist to view it.', true],
   ])('shows a notification only when visible copy exists', async (title, body, visible) => {
     await expect(capturedHandler.handleNotification({
       request: { content: { title, body } },
@@ -137,14 +137,14 @@ describe('native notification visibility and channels', () => {
     await configureNotificationChannels();
     expect(mockSetNotificationChannelAsync.mock.calls).toEqual([
       ['newone-default', {
-        name: 'Newone activity',
+        name: 'Gist activity',
         importance: 5,
         lockscreenVisibility: -1,
         sound: 'default',
         vibrationPattern: [0, 250, 180, 250],
       }],
       ['newone-silent', {
-        name: 'Newone quiet activity',
+        name: 'Gist quiet activity',
         importance: 2,
         lockscreenVisibility: -1,
         sound: null,

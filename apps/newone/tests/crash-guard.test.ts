@@ -25,7 +25,7 @@ describe('crash guard', () => {
     installCrashGuard(fake.utils, { development: false, alert });
     fake.fire(new TypeError("Cannot read property 'method' of undefined"), true);
     expect(fake.previous).not.toHaveBeenCalled();
-    expect(alert).toHaveBeenCalledWith('Newone hit a problem', "TypeError: Cannot read property 'method' of undefined");
+    expect(alert).toHaveBeenCalledWith('Gist hit a problem', "TypeError: Cannot read property 'method' of undefined");
     consoleError.mockRestore();
   });
 

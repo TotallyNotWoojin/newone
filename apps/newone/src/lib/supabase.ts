@@ -22,8 +22,8 @@ let client: SupabaseClient<Database> | null = null;
 let webRealtimeClient: SupabaseClient<Database> | null = null;
 
 export function getSupabaseClient() {
-  // Native sessions come only from Newone's bounded OTP gateway and are kept
-  // in OS-protected storage. Web auth terminates at the Newone BFF so refresh
+  // Native sessions come only from Gist's bounded OTP gateway and are kept
+  // in OS-protected storage. Web auth terminates at the Gist BFF so refresh
   // tokens never enter browser JavaScript, unless the build opted into direct
   // bearer auth (isDirectEdgeConfigured), where the web storage adapter keeps
   // the session in the encrypted IndexedDB client store.

@@ -274,18 +274,18 @@ describe('root application boundary', () => {
     mockPathname = '/help';
     const view = await render(<RootLayout />);
 
-    expect(screen.getByLabelText('Newone content hidden')).toBeTruthy();
+    expect(screen.getByLabelText('Gist content hidden')).toBeTruthy();
     expect(AppState.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
 
     await act(async () => {
       mockAppStateHandler?.('active');
     });
-    expect(screen.queryByLabelText('Newone content hidden')).toBeNull();
+    expect(screen.queryByLabelText('Gist content hidden')).toBeNull();
 
     await act(async () => {
       mockAppStateHandler?.('inactive');
     });
-    expect(screen.getByLabelText('Newone content hidden')).toBeTruthy();
+    expect(screen.getByLabelText('Gist content hidden')).toBeTruthy();
 
     await view.unmount();
     expect(mockAppStateRemove).toHaveBeenCalledTimes(1);

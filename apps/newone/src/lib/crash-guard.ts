@@ -33,7 +33,7 @@ export function installCrashGuard(
       previous(error, isFatal);
       return;
     }
-    alert('Newone hit a problem', identifier);
+    alert('Gist hit a problem', identifier);
   });
 }
 

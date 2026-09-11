@@ -93,7 +93,7 @@ export async function optimizeImageAttachment(selected: SelectedAttachment) {
       temporary: true,
     };
   } catch {
-    throw new RepositoryError('Newone could not prepare the optimized image.', 'image_optimization_failed', false);
+    throw new RepositoryError('Gist could not prepare the optimized image.', 'image_optimization_failed', false);
   }
 }
 
@@ -124,10 +124,10 @@ export async function prepareAttachment(selected: SelectedAttachment): Promise<P
   try {
     response = await fetch(selected.uri);
   } catch {
-    throw new RepositoryError('Newone could not read the selected file.', 'file_read_failed', false);
+    throw new RepositoryError('Gist could not read the selected file.', 'file_read_failed', false);
   }
   if (!response.ok) {
-    throw new RepositoryError('Newone could not read the selected file.', 'file_read_failed', false);
+    throw new RepositoryError('Gist could not read the selected file.', 'file_read_failed', false);
   }
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength < 1 || bytes.byteLength > byteLimit) {

@@ -40,14 +40,14 @@ export async function configureNotificationChannels() {
   if (Platform.OS !== 'android') return;
   await Promise.all([
     Notifications.setNotificationChannelAsync('newone-default', {
-      name: 'Newone activity',
+      name: 'Gist activity',
       importance: Notifications.AndroidImportance.HIGH,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
       sound: 'default',
       vibrationPattern: [0, 250, 180, 250],
     }),
     Notifications.setNotificationChannelAsync('newone-silent', {
-      name: 'Newone quiet activity',
+      name: 'Gist quiet activity',
       importance: Notifications.AndroidImportance.LOW,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
       sound: null,

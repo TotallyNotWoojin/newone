@@ -991,7 +991,7 @@ export class BffCommandRepository implements CommandRepository {
   ) {
     if (!publicRuntimeConfig.apiUrl) {
       throw new RepositoryError(
-        'The Newone command service is not configured in this build.',
+        'The Gist command service is not configured in this build.',
         'service_unconfigured',
         false,
       );
@@ -1013,7 +1013,7 @@ export class BffCommandRepository implements CommandRepository {
       }
       const url = apiUrlFor(path as `/${string}`);
       if (!url) {
-        throw new RepositoryError('The Newone command service is not configured.', 'service_unconfigured', false);
+        throw new RepositoryError('The Gist command service is not configured.', 'service_unconfigured', false);
       }
       const edgeHeaders = nativeEdgeRequestHeaders(session?.access_token);
       if (!edgeHeaders) {
@@ -1036,7 +1036,7 @@ export class BffCommandRepository implements CommandRepository {
     } catch (requestError) {
       if (requestError instanceof RepositoryError) throw requestError;
       throw new RepositoryError(
-        'Newone cannot reach the command service. Your action remains queued.',
+        'Gist cannot reach the command service. Your action remains queued.',
         'network_unavailable',
         true,
       );
@@ -1064,7 +1064,7 @@ export class BffCommandRepository implements CommandRepository {
       const root = objectValue(payload) as ErrorPayload;
       const problem = root.error ?? root;
       throw new RepositoryError(
-        'The action was rejected by the Newone service.',
+        'The action was rejected by the Gist service.',
         problem.code || `http_${response.status}`,
         response.status === 408 || response.status === 429 || response.status >= 500,
         problem.correlationId,

@@ -56,7 +56,7 @@ function authBaseUrl() {
     const apiOrigin = new URL(publicRuntimeConfig.apiUrl, window.location.origin).origin;
     if (apiOrigin !== window.location.origin) {
       throw new WebAuthError(
-        'Web sign-in must use the same-origin Newone gateway.',
+        'Web sign-in must use the same-origin Gist gateway.',
         'gateway_origin_mismatch',
       );
     }
@@ -370,6 +370,8 @@ async function nativeAuthRequest(path: NativeAuthPath, body: Record<string, unkn
         Accept: 'application/json',
         'Content-Type': 'application/json',
         ...edgeHeaders,
+        // Wire headers, not copy. The server reads these exact names, so they
+        // keep the old spelling through the rename to Gist (Sep 11 2026).
         'X-Newone-Client-Platform': Platform.OS,
         'X-Newone-Installation-Id': installationId,
       },

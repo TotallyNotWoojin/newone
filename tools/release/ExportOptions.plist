@@ -12,8 +12,8 @@
 	<string>app-store-connect</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>com.totallynotwoojin.newone</key>
-		<string>Newone App Store 1788301805177</string>
+		<key>com.totallynotwoojin.gist</key>
+		<string>Gist App Store</string>
 	</dict>
 	<key>signingCertificate</key>
 	<string>iPhone Distribution</string>

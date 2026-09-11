@@ -253,7 +253,7 @@ describe('summary sheet for consumers', () => {
     await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
     const fileName = String(mockFileArgs.mock.calls[0]?.[1]);
     expect(mockFileArgs.mock.calls[0]?.[0]).toBe('file:///cache/');
-    expect(fileName).toMatch(/^Newone summary – Ana Torres – \d{4}-\d{2}-\d{2}\.txt$/);
+    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.txt$/);
     expect(mockFileDelete).toHaveBeenCalledTimes(1);
     expect(mockFileCreate).toHaveBeenCalledTimes(1);
     expect(mockFileWrite.mock.calls[0]?.[0]).toContain('You asked whether Saturday works.');
@@ -352,7 +352,7 @@ describe('summary sheet', () => {
 
 describe('web share adapter', () => {
   test('uses the Web Share API when present, treats a cancelled sheet as dismissed, and falls back to the clipboard', async () => {
-    const input = { fileName: 'Newone summary – A – 2026-09-05.txt', title: 'A', text: 'Body' };
+    const input = { fileName: 'Gist summary – A – 2026-09-05.txt', title: 'A', text: 'Body' };
     const share = jest.fn<(_data: unknown) => Promise<void>>(async () => undefined);
     Object.defineProperty(globalThis, 'navigator', { value: { share }, configurable: true });
     expect(await shareSummaryWeb(input)).toBe('shared');

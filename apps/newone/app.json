@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Newone",
+    "name": "Gist",
     "slug": "newone",
     "version": "1.0.0",
     "runtimeVersion": {
@@ -13,24 +13,24 @@
     },
     "orientation": "default",
     "backgroundColor": "#F3F5F1",
-    "icon": "./assets/images/newone-app-icon.png",
-    "scheme": "newone",
+    "icon": "./assets/images/gist-app-icon.png",
+    "scheme": "gist",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/newone-app-icon.png",
-      "bundleIdentifier": "com.totallynotwoojin.newone",
+      "icon": "./assets/images/gist-app-icon.png",
+      "bundleIdentifier": "com.totallynotwoojin.gist",
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Newone uses the camera only when you choose to take a photo or video to share in a conversation.",
-        "NSMicrophoneUsageDescription": "Newone uses the microphone only when you record a voice message or a video to share."
+        "NSCameraUsageDescription": "Gist uses the camera only when you choose to take a photo or video to share in a conversation.",
+        "NSMicrophoneUsageDescription": "Gist uses the microphone only when you record a voice message or a video to share."
       },
       "config": {
         "usesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.totallynotwoojin.newone",
+      "package": "com.totallynotwoojin.gist",
       "versionCode": 1,
       "allowBackup": false,
       "predictiveBackGestureEnabled": false,
@@ -38,28 +38,32 @@
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ],
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/gist-adaptive-foreground.png",
+        "backgroundColor": "#102E27"
+      }
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/newone-favicon.png"
+      "favicon": "./assets/images/gist-favicon.png"
     },
     "plugins": [
       [
         "expo-router",
         {
-          "origin": "https://newonechat.com"
+          "origin": "https://gistchat.com"
         }
       ],
       [
         "expo-splash-screen",
         {
           "backgroundColor": "#102E27",
-          "image": "./assets/images/newone-splash.png",
+          "image": "./assets/images/gist-splash.png",
           "imageWidth": 104,
           "dark": {
             "backgroundColor": "#0B211C",
-            "image": "./assets/images/newone-splash.png",
+            "image": "./assets/images/gist-splash.png",
             "imageWidth": 104
           }
         }
@@ -70,9 +74,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Newone accesses only the photos and videos you choose to share in a conversation.",
-          "cameraPermission": "Newone uses the camera only when you choose to take a photo or video to share in a conversation.",
-          "microphonePermission": "Newone uses the microphone only when you record a voice message or a video to share."
+          "photosPermission": "Gist accesses only the photos and videos you choose to share in a conversation.",
+          "cameraPermission": "Gist uses the camera only when you choose to take a photo or video to share in a conversation.",
+          "microphonePermission": "Gist uses the microphone only when you record a voice message or a video to share."
         }
       ],
       "expo-asset",
@@ -80,7 +84,7 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Newone uses the microphone only when you record a voice message or a video to share."
+          "microphonePermission": "Gist uses the microphone only when you record a voice message or a video to share."
         }
       ],
       "expo-video"

@@ -35,12 +35,12 @@ export EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_zp2CRMddXG_cKKo1cXvjM
 if [ "$WHAT" = "aab" ] || [ "$WHAT" = "both" ]; then
   echo "=== bundle versionCode $NEWONE_ANDROID_VERSION_CODE $(date +%H:%M:%S) ==="
   ./gradlew --no-daemon bundleRelease
-  cp "$(ls -t app/build/outputs/bundle/release/*.aab | head -1)" "$OUT/newone-$NEWONE_ANDROID_VERSION_CODE.aab"
+  cp "$(ls -t app/build/outputs/bundle/release/*.aab | head -1)" "$OUT/gist-$NEWONE_ANDROID_VERSION_CODE.aab"
 fi
 if [ "$WHAT" = "apk" ] || [ "$WHAT" = "both" ]; then
   echo "=== apk versionCode $NEWONE_ANDROID_VERSION_CODE $(date +%H:%M:%S) ==="
   ./gradlew --no-daemon assembleRelease
-  cp "$(ls -t app/build/outputs/apk/release/*.apk | head -1)" "$OUT/newone-$NEWONE_ANDROID_VERSION_CODE.apk"
+  cp "$(ls -t app/build/outputs/apk/release/*.apk | head -1)" "$OUT/gist-$NEWONE_ANDROID_VERSION_CODE.apk"
 fi
-ls -la "$OUT"/newone-$NEWONE_ANDROID_VERSION_CODE.* 2>/dev/null
+ls -la "$OUT"/gist-$NEWONE_ANDROID_VERSION_CODE.* 2>/dev/null
 echo "=== done $(date +%H:%M:%S) ==="

@@ -305,7 +305,7 @@ async function readRequest(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new RepositoryError('Newone cannot reach the workspace service.', 'network_unavailable', true);
+    throw new RepositoryError('Gist cannot reach the workspace service.', 'network_unavailable', true);
   }
   let payload: unknown = null;
   try {

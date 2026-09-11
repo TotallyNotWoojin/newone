@@ -16,18 +16,18 @@ export default function RootDocument({ children }: PropsWithChildren) {
         {/* Replaced at runtime by useSystemChrome once the stored override is known. */}
         <meta content={lightColors.canvas} name="theme-color" />
         <meta content="no-referrer" name="referrer" />
-        <meta content="Newone" name="application-name" />
+        <meta content="Gist" name="application-name" />
         <meta
           content="Private, multilingual workplace messaging, updates, and shift coordination."
           name="description"
         />
         <meta content="yes" name="mobile-web-app-capable" />
         <meta content="yes" name="apple-mobile-web-app-capable" />
-        <meta content="Newone" name="apple-mobile-web-app-title" />
+        <meta content="Gist" name="apple-mobile-web-app-title" />
         <meta content="black-translucent" name="apple-mobile-web-app-status-bar-style" />
         <link href={`${base}/manifest.json`} rel="manifest" />
-        <link href={`${base}/newone-icon.svg`} rel="icon" type="image/svg+xml" />
-        <link href={`${base}/newone-icon-192.png`} rel="apple-touch-icon" sizes="192x192" />
+        <link href={`${base}/gist-icon.svg`} rel="icon" type="image/svg+xml" />
+        <link href={`${base}/gist-icon-192.png`} rel="apple-touch-icon" sizes="192x192" />
         <script defer src={`${base}/register-service-worker.js`} />
         <ScrollViewStyleReset />
         {/* The document is painted from the phone's appearance before any

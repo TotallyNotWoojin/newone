@@ -69,7 +69,7 @@ function AppShell() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
           <Head>
-            <title>Newone · Workplace communication</title>
+            <title>Gist · Messages in any language</title>
             <meta
               content="Private workplace messaging, company updates, contacts, and shift handoffs for multilingual teams."
               name="description"
@@ -83,7 +83,7 @@ function AppShell() {
       </SafeAreaProvider>
       {privacyShielded ? (
         <View
-          accessibilityLabel="Newone content hidden"
+          accessibilityLabel="Gist content hidden"
           accessibilityRole="none"
           importantForAccessibility="yes"
           pointerEvents="auto"

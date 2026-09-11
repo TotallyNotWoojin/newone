@@ -496,7 +496,7 @@ export default function SignInScreen() {
             <View style={wide ? styles.logoStem : styles.logoStemCompact} />
             <View style={wide ? styles.logoDot : styles.logoDotCompact} />
           </View>
-          <Text style={wide ? styles.brand : styles.brandCompact}>newone</Text>
+          <Text style={wide ? styles.brand : styles.brandCompact}>gist</Text>
           {wide ? (
             <>
               <Text style={styles.brandStatement}>{t('auth.statement')}</Text>
