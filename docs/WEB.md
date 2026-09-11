@@ -275,3 +275,39 @@ once that deploy has happened.
   repository rather than here.
 - **Anything on a phone browser beyond sign-in**; the desktop layout is what
   this suite is for.
+
+## What a browser does differently, and how the suite missed it
+
+Three bugs reached the deployed web app on Sep 11 2026 that every other check
+was blind to. All three share a shape: **a browser's input model is not the
+phone's, and a test that does not use the browser's own input path will not
+notice.**
+
+1. **`Pressable` swallows the click that focuses an input.** Wrapping a screen
+   in a `Pressable` so that tapping away dismisses the phone keyboard is
+   correct on a phone and fatal in a browser: react-native-web's Pressable
+   claims the pointer event that would otherwise focus a `TextInput` inside
+   it, and the field simply cannot be typed into. Both search fields shipped
+   that way. Use `KeyboardDismissArea`
+   (`apps/newone/src/components/keyboard-dismiss-area.tsx`), which renders a
+   plain `View` on web — where there is no on-screen keyboard to dismiss
+   anyway.
+
+2. **Hover belongs to whatever holds the thing being hovered.** A hover
+   handler on a row, with the revealed panel drawn *over* the row rather than
+   inside it, is a flicker loop: reaching for the panel leaves the row, which
+   unmounts the panel, which puts the pointer back on the row. Put the handler
+   on the common ancestor — `pointerleave` does not fire for a move onto a
+   descendant.
+
+3. **Every Playwright assertion retries, so none of them can see a flicker.**
+   `expect(x).toBeVisible()` passes against an element that is only
+   *sometimes* there. To pin instability, park the mouse and sample the DOM in
+   `page.evaluate`, then assert on the whole sample set: the row-actions test
+   in `live/chats.spec.mjs` reads 22 of 24 samples with the bug and 24 with
+   the fix.
+
+The corresponding rule for writing these tests: **`locator.fill()` is not a
+click.** It sets a value without dispatching the pointer sequence, so a field
+that no human could focus stays green under it. At least one test per input
+should `click()` and then `keyboard.type()`.
