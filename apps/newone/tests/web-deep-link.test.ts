@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('static-host deep link restore', () => {
   test('strips the app base and keeps the in-app route and query', () => {
-    expect(restoreDeepLinkPath('/newone-legal/app/conversation/abc', '/newone-legal/app'))
+    expect(restoreDeepLinkPath('/gist-legal/app/conversation/abc', '/gist-legal/app'))
       .toBe('/conversation/abc');
     expect(restoreDeepLinkPath('/app/conversation/abc?messageId=m1#frag', '/app'))
       .toBe('/conversation/abc?messageId=m1');
@@ -27,10 +27,10 @@ describe('static-host deep link restore', () => {
   });
 
   test('ignores paths outside the base, the root, sign-in, and anything unsafe', () => {
-    expect(restoreDeepLinkPath('/privacy.html', '/newone-legal/app')).toBeNull();
-    expect(restoreDeepLinkPath('/newone-legal/app', '/newone-legal/app')).toBeNull();
-    expect(restoreDeepLinkPath('/newone-legal/app/', '/newone-legal/app')).toBeNull();
-    expect(restoreDeepLinkPath('/newone-legal/app/sign-in', '/newone-legal/app')).toBeNull();
+    expect(restoreDeepLinkPath('/privacy.html', '/gist-legal/app')).toBeNull();
+    expect(restoreDeepLinkPath('/gist-legal/app', '/gist-legal/app')).toBeNull();
+    expect(restoreDeepLinkPath('/gist-legal/app/', '/gist-legal/app')).toBeNull();
+    expect(restoreDeepLinkPath('/gist-legal/app/sign-in', '/gist-legal/app')).toBeNull();
     expect(restoreDeepLinkPath('//evil.example/x', '')).toBeNull();
     expect(restoreDeepLinkPath('https://evil.example/x', '')).toBeNull();
     expect(restoreDeepLinkPath('/x\\y', '')).toBeNull();

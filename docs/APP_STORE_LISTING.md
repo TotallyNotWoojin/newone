@@ -39,8 +39,8 @@ messenger,chat,translate,translation,korean,spanish,english,friends,group chat,v
 First release: private chats and groups with automatic English/Spanish/Korean translation, photos, videos, voice notes, reactions, replies, and message requests.
 
 ## URLs
-- Privacy policy: https://totallynotwoojin.github.io/newone-legal/privacy.html
-- Terms: https://totallynotwoojin.github.io/newone-legal/terms.html
+- Privacy policy: https://totallynotwoojin.github.io/gist-legal/privacy.html
+- Terms: https://totallynotwoojin.github.io/gist-legal/terms.html
 - Support: mailto:totallynotwoojin@gmail.com (a support page on newonechat.com can replace this)
 
 ## App Review information

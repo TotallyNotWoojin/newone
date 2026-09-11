@@ -301,7 +301,7 @@ anywhere in the client, tests or scripts: **`/v2/ready`** — a health probe; ke
 (post-wipe) and referenced throughout `newone-api/routes.ts`. The third, **`site`**, is
 **public**, holds 4 files (`index.html`, `privacy.html`, `support.html`, `terms.html`,
 8,219 bytes) and **is referenced by no code at all** — `docs/APP_STORE_LISTING.md` points
-the store listing at GitHub Pages (`totallynotwoojin.github.io/newone-legal/`) instead. It
+the store listing at GitHub Pages (`totallynotwoojin.github.io/gist-legal/`) instead. It
 is a superseded hosting attempt. *Risk: safe*, but confirm the store listing is not still
 pointing anywhere at the Supabase URL before removing. 8 kB, so the only real argument is
 that it is the project's one public bucket.

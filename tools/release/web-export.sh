@@ -3,13 +3,13 @@
 #
 # experiments.baseUrl is read from the Expo config at export time, so the
 # project path goes in through a temporary dynamic config rather than an edit
-# to app.json. Pages serves the app under /newone-legal/app; a root domain
+# to app.json. Pages serves the app under /gist-legal/app; a root domain
 # would pass an empty base.
 set -e
 HERE=${0:a:h}
 ROOT=${HERE}/../..
 OUT=${NEWONE_RELEASE_OUT:-$HOME/.cache/newone-release}/web
-BASE=${1-/newone-legal/app}
+BASE=${1-/gist-legal/app}
 cd "$ROOT/apps/newone"
 cat > app.config.js <<'JS'
 module.exports = ({ config }) => ({

@@ -70,8 +70,8 @@ for (const required of [
   'service-worker.js',
   'register-service-worker.js',
   'offline.html',
-  'newone-icon-192.png',
-  'newone-icon-512.png',
+  'gist-icon-192.png',
+  'gist-icon-512.png',
 ]) {
   const found = files.some((file) => path.relative(root, file) === required);
   if (!found) throw new Error(`Installed-web asset ${required} is missing.`);
@@ -111,7 +111,7 @@ for (const file of files) {
   }
   if (
     path.basename(file) !== 'offline.html'
-    // A hosted export carries a base path (/newone-legal/app on Pages), so the
+    // A hosted export carries a base path (/gist-legal/app on Pages), so the
     // registration is not at the site root.
     && !/<script[^>]+src=["'][^"']*\/register-service-worker\.js["']/i.test(text)
   ) {

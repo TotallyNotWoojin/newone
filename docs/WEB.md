@@ -85,7 +85,7 @@ module.exports = ({ config }) => ({
 });
 JS
 set -a; . ./.env.local; set +a
-EXPO_PUBLIC_WEB_AUTH_MODE=direct NEWONE_WEB_BASE_URL=/newone-legal/app \
+EXPO_PUBLIC_WEB_AUTH_MODE=direct NEWONE_WEB_BASE_URL=/gist-legal/app \
   npx expo export --platform web --output-dir /tmp/newone-web/app --clear
 rm app.config.js
 ```
@@ -99,12 +99,12 @@ Switching hosts later is one variable: `NEWONE_WEB_BASE_URL=/app` for
 `src/app/+html.tsx` prefixes its fixed assets with `process.env.EXPO_BASE_URL`,
 which Expo inlines from `experiments.baseUrl`.
 
-## Hosting on GitHub Pages (TotallyNotWoojin/newone-legal)
+## Hosting on GitHub Pages (TotallyNotWoojin/gist-legal)
 
-The landing site already lives at `https://totallynotwoojin.github.io/newone-legal/`
+The landing site already lives at `https://totallynotwoojin.github.io/gist-legal/`
 (later `https://newonechat.com`). The app is served from `/app/` beside it:
 
-1. Export with `NEWONE_WEB_BASE_URL=/newone-legal/app` and copy the output to
+1. Export with `NEWONE_WEB_BASE_URL=/gist-legal/app` and copy the output to
    `app/` in the Pages repo (replace the directory wholesale on each release).
 2. Add an empty `.nojekyll` at the repo root: the bundles live under `_expo/`,
    which Jekyll would otherwise drop.
@@ -123,10 +123,10 @@ The landing site already lives at `https://totallynotwoojin.github.io/newone-leg
 Local check without a browser (mirrors the Pages path):
 
 ```sh
-mkdir -p /tmp/pages/newone-legal && ln -sfn /tmp/newone-web/app /tmp/pages/newone-legal/app
+mkdir -p /tmp/pages/gist-legal && ln -sfn /tmp/newone-web/app /tmp/pages/gist-legal/app
 (cd /tmp/pages && python3 -m http.server 4173 >/dev/null 2>&1 &)
-curl -sI http://127.0.0.1:4173/newone-legal/app/index.html | head -1
-curl -sI "http://127.0.0.1:4173/newone-legal/app/conversation/%5Bid%5D.html" | head -1
+curl -sI http://127.0.0.1:4173/gist-legal/app/index.html | head -1
+curl -sI "http://127.0.0.1:4173/gist-legal/app/conversation/%5Bid%5D.html" | head -1
 ```
 
 ## Desktop behaviour

@@ -10,7 +10,7 @@ Console; the answers to give are written out here.
 - Category: Social Networking (secondary: Productivity). Age rating: 4+ (messaging and user-generated content declared; reporting and blocking exist).
 - Pricing: free, no in-app purchases, no ads.
 - Sign-in (v3.2): email, then password ("Sign in" chip → email → Continue → password → Sign in); "Forgot password?" emails a one-time code and then asks for a new password. Review account: `review@newonechat.com`; its password lives in `~/.config/newone/review-account-password.txt` on the owner's Mac (the App Store Connect demo-account field carries it; never commit it). The six-digit static code in `~/.config/newone/review-account-code.txt` still serves the server's web/admin code route but the app no longer offers a code sign-in.
-- Hosted pages: GitHub Pages from the `newone-legal` repo (https://totallynotwoojin.github.io/newone-legal/): index, privacy, terms, support. Switch to newonechat.com once DNS is set (see below). A copy also sits in the public Supabase storage bucket `site`.
+- Hosted pages: GitHub Pages from the `gist-legal` repo (https://totallynotwoojin.github.io/gist-legal/): index, privacy, terms, support. Switch to newonechat.com once DNS is set (see below). A copy also sits in the public Supabase storage bucket `site`.
 
 ## What the app collects (for both questionnaires)
 
@@ -60,7 +60,7 @@ Done through the API:
 
 ## Website and domain (Sep 5 2026)
 
-The site lives in the public GitHub repo `TotallyNotWoojin/newone-legal` (GitHub Pages, branch `main`, root): landing page, privacy, terms, support. Live now at https://totallynotwoojin.github.io/newone-legal/ and both stores point there.
+The site lives in the public GitHub repo `TotallyNotWoojin/gist-legal` (GitHub Pages, branch `main`, root): landing page, privacy, terms, support. Live now at https://totallynotwoojin.github.io/gist-legal/ and both stores point there.
 
 To serve it at newonechat.com, add these records at the domain registrar, then tell the assistant (or set the custom domain in the repo's Pages settings and commit a `CNAME` file containing `newonechat.com`):
 
@@ -84,4 +84,4 @@ Meanwhile the sideload APK and the internal track (up to 100 emailed testers) ke
 
 ## Android sideload distribution (Sep 5 2026)
 
-The APK is published as a GitHub Release asset on `TotallyNotWoojin/newone-legal` (GitHub Pages cannot host files over 100 MB). Stable link used on the site: https://github.com/TotallyNotWoojin/newone-legal/releases/latest/download/newone.apk — upload each new build as `newone.apk` on a new release tag (plus the versioned file name) so the link never changes. Sideloaded installs do not auto-update; if Play App Signing later signs the app with a different key, sideload users must uninstall before installing from Play.
+The APK is published as a GitHub Release asset on `TotallyNotWoojin/gist-legal` (GitHub Pages cannot host files over 100 MB). Stable link used on the site: https://github.com/TotallyNotWoojin/gist-legal/releases/latest/download/newone.apk — upload each new build as `newone.apk` on a new release tag (plus the versioned file name) so the link never changes. Sideloaded installs do not auto-update; if Play App Signing later signs the app with a different key, sideload users must uninstall before installing from Play.
