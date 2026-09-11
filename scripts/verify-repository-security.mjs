@@ -15,7 +15,23 @@ const forbiddenPaths = new Set([
 ]);
 const ruleSourcePaths = new Set(['scripts/verify-repository-security.mjs']);
 
+// Files that must never be in the index, whatever .gitignore currently says.
+// The Firebase client config was committed to this public repository once and
+// the key in it had to be revoked; an ignore rule alone is one `git add -f`
+// away from repeating that (owner, Sep 11 2026).
+const neverTracked = ['google-services.json', 'GoogleService-Info.plist'];
+
 const findings = [];
+
+const indexed = execFileSync('git', ['ls-files', '--cached', '-z'], { encoding: 'utf8' })
+  .split('\0')
+  .filter(Boolean);
+for (const path of indexed) {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  if (neverTracked.includes(name)) {
+    findings.push(`${path}: Firebase client config is tracked; it belongs in ~/.config/newone/`);
+  }
+}
 
 for (const path of tracked) {
   // A dirty migration worktree can legitimately contain tracked files that

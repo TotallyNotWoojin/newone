@@ -6,6 +6,11 @@ HERE=${0:a:h}
 ROOT=${HERE}/../..
 OUT=${NEWONE_RELEASE_OUT:-$HOME/.cache/newone-release}
 mkdir -p "$OUT"
+# google-services.json is gitignored, so a fresh clone has none and a stale
+# checkout may have an old one. Put the canonical copy in place, including the
+# copy gradle's google-services plugin actually reads, before building.
+"$HERE/sync-firebase-config.sh"
+cp "$ROOT/apps/newone/google-services.json" "$ROOT/apps/newone/android/app/google-services.json"
 cd "$ROOT/apps/newone/android"
 
 CODE=${1:?version code}

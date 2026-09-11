@@ -65,3 +65,12 @@ platinum-sorter-*.json
 
 # iOS crash reports copied off a device while testing.
 *.ips
+
+# The Firebase client config carries a live Android API key. It is compiled
+# into every APK and so is not a secret in the strict sense, but it was
+# published here once and had to be rotated (Sep 2026). The canonical copy
+# lives in ~/.config/newone/ and tools/release/sync-firebase-config.sh puts it
+# in place for a build; verify-repository-security.mjs fails if it is ever
+# tracked again.
+google-services.json
+GoogleService-Info.plist
