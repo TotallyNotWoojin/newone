@@ -1,21 +1,12 @@
 import { expect, test } from '../support/live-fixtures.mjs';
 
-// Every route is a file on a static host, so a consumer can type the two
-// workplace ones. They must turn them away rather than render an empty
-// workplace surface.
+// What a signed-in consumer is offered. The workplace routes used to be
+// guarded here, turning a typed URL back to Chats; the removal of Sep 10 2026
+// deleted the route files outright, so there is no page left to redirect and
+// the static routes.spec pins them at a 404 instead. What remains live is the
+// navigation itself, which needs an account to see.
 
 test.describe.configure({ mode: 'serial' });
-
-for (const path of ['/updates', '/handoffs']) {
-  test(`${path} turns a consumer back to Chats`, async ({ chats }) => {
-    await chats.goto(path);
-    await chats.waitForURL((url) => url.pathname === '/', { timeout: 30_000 });
-    await expect(chats.getByTestId('conversation-list')).toBeVisible();
-    // Nothing workplace-shaped was drawn on the way past.
-    await expect(chats.locator('body')).not.toContainText('Company communications');
-    await expect(chats.locator('body')).not.toContainText('Shift continuity');
-  });
-}
 
 test('the navigation a consumer sees is Chats, Contacts and Settings', async ({ chats }) => {
   await expect(chats.getByRole('button', { name: 'Chats' })).toBeVisible();

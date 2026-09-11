@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -31,6 +30,7 @@ import {
 } from '@/components/workspace/workspace-state';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { KeyboardAvoidingScreen } from '@/components/ui/keyboard-avoiding-screen';
+import { KeyboardDismissArea } from '@/components/keyboard-dismiss-area';
 import type { UserSearchResult } from '@/data/repositories/contracts';
 import type { Person } from '@/domain/types';
 import { useProfileAvatar } from '@/state/profile-avatar';
@@ -309,7 +309,7 @@ export default function PeopleScreen() {
       {/* Tapping anywhere that is not a control puts the keyboard away, the
           same as Chats. Dragging already did; a tap did not (owner, Sep 10
           2026). accessible={false} keeps it out of the accessibility tree. */}
-      <Pressable accessible={false} onPress={() => Keyboard.dismiss()} style={styles.keyboard}>
+      <KeyboardDismissArea style={styles.keyboard}>
       <ScrollView
         contentContainerStyle={[styles.page, !desktop && styles.pageMobile]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -371,7 +371,7 @@ export default function PeopleScreen() {
         
         </View>
       </ScrollView>
-      </Pressable>
+      </KeyboardDismissArea>
       </KeyboardAvoidingScreen>
       )}
       <ActionModal

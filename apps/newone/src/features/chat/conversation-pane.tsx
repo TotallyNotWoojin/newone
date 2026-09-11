@@ -94,12 +94,17 @@ export function ConversationPane({
   onBack,
   mobile = false,
   focusMessageId,
+  detailsOpen,
+  onToggleDetails,
 }: {
   conversation?: Conversation;
   messages: Message[];
   onSend: (text: string, replyTo?: Message, mentionUserIds?: string[]) => void | Promise<void>;
   onBack?: () => void;
   mobile?: boolean;
+  /** Only passed when the window is wide enough to hold the details pane. */
+  detailsOpen?: boolean;
+  onToggleDetails?: () => void;
   focusMessageId?: string;
 }) {
   const { colors } = useTheme();
@@ -483,8 +488,10 @@ export function ConversationPane({
     <KeyboardAvoidingScreen extraOffset={mobile ? 0 : 24} style={styles.container}>
       <ConversationHeader
         conversation={conversation}
+        detailsOpen={detailsOpen}
         mobile={mobile}
         onBack={onBack}
+        onToggleDetails={onToggleDetails}
         onOpenControls={() => {
           workspace.clearActionError();
           setConversationName(conversation.title);
@@ -850,6 +857,8 @@ function ConversationHeader({
   onBack,
   onOpenControls,
   onOpenSummary,
+  onToggleDetails,
+  detailsOpen,
   mobile,
   typingLabel,
 }: {
@@ -857,6 +866,8 @@ function ConversationHeader({
   onBack?: () => void;
   onOpenControls: () => void;
   onOpenSummary?: () => void;
+  onToggleDetails?: () => void;
+  detailsOpen?: boolean;
   mobile: boolean;
   typingLabel?: string;
 }) {
@@ -917,6 +928,14 @@ function ConversationHeader({
       <View style={styles.headerActions}>
         {onOpenSummary ? (
           <IconButton name="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} size={36} />
+        ) : null}
+        {onToggleDetails ? (
+          <IconButton
+            name={detailsOpen ? 'chevron-forward' : 'information-circle-outline'}
+            label={t(detailsOpen ? 'chat.hideDetails' : 'chat.showDetails')}
+            onPress={onToggleDetails}
+            size={36}
+          />
         ) : null}
         <IconButton
           name="ellipsis-horizontal"

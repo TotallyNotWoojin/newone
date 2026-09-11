@@ -864,6 +864,23 @@ function conversationFromDto(
   const notificationLevel = normalizeNotificationLevel(preferences.notificationLevel);
   const mutedUntil = activeMutedUntil(preferences.mutedUntil);
   const translationMode = preferences.translationMode === 'off' ? 'off' : 'automatic';
+  // Which languages are in play. A group reads in every language its members
+  // do, so naming only a direct counterpart's left every group claiming its
+  // translation was off (owner, Sep 11 2026). Members are sent for the open
+  // conversation, which is the only one whose details are on screen; anyone
+  // outside the reader's directory has no language here, so the Translation
+  // row falls back to the mode rather than inventing one.
+  const counterpartLanguages = [...new Set(
+    (direct
+      ? [direct.preferredLanguage]
+      : members
+        .map((member) => peopleById.get(String(member.userId))?.preferredLanguage)
+        .filter((value): value is LanguageCode => Boolean(value))
+    ).filter((value) => value !== readingLanguage),
+  )];
+  const translationPair = counterpartLanguages.length > 0
+    ? `${readingLanguage.toUpperCase()} ↔ ${counterpartLanguages.map((value) => value.toUpperCase()).join(' · ')}`
+    : undefined;
   const memberRole = String(row.memberRole ?? members.find((member) => member.userId === current.id)?.role ?? 'member');
   // A nickname is what this reader calls them, so it names the thread too.
   const title = kind === 'direct'
@@ -904,9 +921,7 @@ function conversationFromDto(
     mutedUntil,
     translationMode,
     presence: direct?.presence,
-    translationPair: direct && direct.preferredLanguage !== readingLanguage
-      ? `${readingLanguage.toUpperCase()} ↔ ${direct.preferredLanguage.toUpperCase()}`
-      : undefined,
+    translationPair,
     description: optionalString(row.description) ?? undefined,
     archived: row.isArchived === true,
     // Archiving is this reader's own choice about their own list; the

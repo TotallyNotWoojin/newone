@@ -49,12 +49,102 @@ test('one field searches, a person becomes a chip, and the chip clears in one ta
   await expect(chats.getByRole('button', { name: `Remove ${liveWorkspace.third.displayName}` })).toBeVisible();
 });
 
+test('both search fields take a real click, not just a scripted fill', async ({ chats }) => {
+  // Clicking is the part that broke. Both screens were wrapped in a Pressable
+  // so that tapping away would put the phone keyboard down, and
+  // react-native-web's Pressable swallows the pointer event that focuses an
+  // input inside it — so in a browser neither search field could be typed in
+  // at all (owner, Sep 11 2026). Every existing test reached the field with
+  // `fill()`, which sets the value without that pointer path, so the suite
+  // stayed green through it. These two click.
+  const field = chats.getByTestId('chat-search-field');
+  await field.click();
+  await expect(field).toBeFocused();
+  await chats.keyboard.type('umbrella');
+  await expect(field).toHaveValue('umbrella');
+
+  await chats.goto('/people');
+  const people = chats.getByTestId('people-search');
+  await people.click();
+  await expect(people).toBeFocused();
+  await chats.keyboard.type('echo');
+  await expect(people).toHaveValue('echo');
+});
+
 test('a name typed with its own comma makes the same chip', async ({ chats, liveWorkspace }) => {
   const field = chats.getByTestId('chat-search-field');
   await field.fill(`${liveWorkspace.friend.displayName}, `);
   await expect(chats.getByRole('button', { name: `Remove ${liveWorkspace.friend.displayName}` })).toBeVisible();
   await chats.getByRole('button', { name: 'Clear search' }).click();
   await expect(chats.getByRole('button', { name: `Remove ${liveWorkspace.friend.displayName}` })).toHaveCount(0);
+});
+
+test('a hovered chat row holds its actions while the mouse reaches for them', async ({
+  chats,
+  liveWorkspace,
+}) => {
+  const row = chats.getByRole('button', {
+    name: new RegExp(`^${liveWorkspace.friend.displayName}:`),
+  });
+  const archive = chats.getByRole('button', { name: 'Archive', exact: true });
+  await expect(archive).toHaveCount(0);
+
+  await row.hover();
+  await expect(archive).toBeVisible();
+
+  // The bug this pins: hover lived on the row, and the strip is drawn over it
+  // rather than inside it, so moving the mouse onto an action counted as
+  // leaving the row. The actions unmounted, which put the pointer back on the
+  // row, which brought them back -- they flickered in and out under the
+  // pointer and could not be clicked (owner, Sep 11 2026).
+  //
+  // Every Playwright assertion retries, so `toBeVisible` is happy with an
+  // element that is only *sometimes* there and cannot see a flicker at all.
+  // Park the mouse on the action and sample the DOM directly instead: with the
+  // loop running the samples alternate, and only a steady strip is all true.
+  const box = await archive.boundingBox();
+  await chats.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const samples = await chats.evaluate(async () => {
+    const seen = [];
+    for (let index = 0; index < 24; index += 1) {
+      seen.push(Boolean(document.querySelector('[aria-label="Archive"]')));
+      await new Promise((resolve) => { setTimeout(resolve, 25); });
+    }
+    return seen;
+  });
+  expect(samples.filter(Boolean)).toHaveLength(samples.length);
+  await expect(archive).toBeEnabled();
+
+  // Leaving the row for good still puts them away.
+  await chats.getByTestId('chat-search-field').hover();
+  await expect(archive).toHaveCount(0);
+});
+
+test('the details pane folds away and hands the room to the conversation', async ({
+  chats,
+  liveWorkspace,
+}) => {
+  const pane = await openTheFriendChat(chats, liveWorkspace);
+  const details = chats.getByTestId('conversation-details');
+  await expect(details).toBeVisible();
+
+  // Translation is running; there is simply no second language in play here.
+  // The row used to call that "Off", which read as a broken feature rather
+  // than a setting -- most visibly in groups (owner, Sep 11 2026).
+  await expect(details.getByText('Translation')).toBeVisible();
+  await expect(details.getByText('Off', { exact: true })).toHaveCount(0);
+
+  const narrow = (await pane.boundingBox()).width;
+
+  await chats.getByRole('button', { name: 'Hide details' }).click();
+  await expect(details).toHaveCount(0);
+  // The point of folding it away is the room it gives back, so measure that
+  // rather than trusting the pane is simply gone (owner, Sep 11 2026).
+  const wide = (await pane.boundingBox()).width;
+  expect(wide).toBeGreaterThan(narrow);
+
+  await chats.getByRole('button', { name: 'Show details' }).click();
+  await expect(details).toBeVisible();
 });
 
 test('the "+" menu holds two rows and nothing else', async ({ chats }) => {

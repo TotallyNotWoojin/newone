@@ -57,6 +57,9 @@ export default function ChatsScreen() {
   // bootstrap fills organizationId, so nothing renders before then: a consumer
   // must never see the workplace line flash on first launch.
   const realmKnown = Boolean(workspace.organizationId);
+  // The details pane is worth 278px of chat when it is not being read, so it
+  // folds away and the conversation takes the room (owner, Sep 11 2026).
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
 
@@ -229,12 +232,14 @@ export default function ChatsScreen() {
               scope="conversation">
               <ConversationPane
                 conversation={selectedConversation}
+                detailsOpen={detailsOpen}
                 messages={workspace.messages[workspace.selectedConversationId] ?? []}
+                onToggleDetails={showDetails ? () => setDetailsOpen((open) => !open) : undefined}
                 onSend={(text, replyTo, mentionUserIds) =>
                   workspace.sendMessage(workspace.selectedConversationId, text, replyTo, mentionUserIds)}
               />
             </ScreenErrorBoundary>
-            {showDetails && selectedConversation && !selectedConversation.managementOnly ? (
+            {showDetails && detailsOpen && selectedConversation && !selectedConversation.managementOnly ? (
               <ConversationDetails conversation={selectedConversation} />
             ) : null}
           </View>

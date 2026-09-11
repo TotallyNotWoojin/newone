@@ -49,7 +49,12 @@ export function ChatSearchField({
   // of things you had already chosen and the chats it had narrowed -- the
   // awkward two-thirds the owner saw (Sep 10 2026). Finish the chip and the
   // filtered list gets the room.
-  const searched = draft.trim().length > 0;
+  const suggesting = draft.trim().length > 0;
+  // The X empties the whole field, chips included, so it belongs whenever
+  // there is anything to empty. Tying it to the same flag as the panel took it
+  // away the moment the last word became a chip, which is exactly when a
+  // search is most worth clearing in one tap (live browser suite, Sep 11 2026).
+  const clearable = value.trim().length > 0;
   const sections: { key: SearchSuggestion['kind']; label: string }[] = [
     { key: 'person', label: t('search.sectionPeople') },
     { key: 'conversation', label: t('search.sectionChats') },
@@ -99,7 +104,7 @@ export function ChatSearchField({
           />
         </View>
         {loading ? <ActivityIndicator color={colors.mintDark} size="small" /> : null}
-        {searched ? (
+        {clearable ? (
           <Pressable
             accessibilityLabel={t('common.clearSearch')}
             accessibilityRole="button"
@@ -111,7 +116,7 @@ export function ChatSearchField({
         {trailing}
       </View>
 
-      {searched ? (
+      {suggesting ? (
         <ScrollView
           accessibilityRole="list"
           contentContainerStyle={styles.suggestions}

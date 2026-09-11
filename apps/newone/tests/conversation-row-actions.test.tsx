@@ -127,17 +127,28 @@ describe('reaching those actions with a mouse', () => {
 });
 
 describe('the row on screen', () => {
+  // Hover belongs to the row's outer shell, which holds both the row and the
+  // action strip, so that reaching for an action is not "leaving the row".
+  // The shell is deliberately not in the accessibility tree, so the test
+  // climbs to whichever ancestor owns the handler rather than naming it.
+  const hoverTarget = (node: any) => {
+    let current = node;
+    while (current && !current.props?.onPointerEnter) current = current.parent;
+    if (!current) throw new Error('no element owns hover');
+    return current;
+  };
+
   test('hovering shows the actions and moving away puts them back', async () => {
     const onRowAction = jest.fn();
     await render(<ConversationList {...listProps({ onRowAction })} />);
     expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
 
-    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
-    await fireEvent(row, 'hoverIn');
+    const row = hoverTarget(screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' }));
+    await fireEvent(row, 'pointerEnter');
     expect(screen.getByRole('button', { name: 'chat.archive' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'chat.leaveGroup' })).toBeTruthy();
 
-    await fireEvent(row, 'hoverOut');
+    await fireEvent(row, 'pointerLeave');
     expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
   });
 
@@ -193,8 +204,8 @@ describe('the row on screen', () => {
     })} />);
 
     expect(screen.getByText('1')).toBeTruthy();
-    const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
-    await fireEvent(row, 'hoverIn');
+    const row = hoverTarget(screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' }));
+    await fireEvent(row, 'pointerEnter');
     expect(screen.getByRole('button', { name: 'chat.markRead' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'chat.markUnread' })).toBeNull();
   });

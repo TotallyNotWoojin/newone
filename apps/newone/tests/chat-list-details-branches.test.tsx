@@ -194,9 +194,19 @@ describe('conversation detail notification states', () => {
   test('renders direct and announcement identity variants and translation fallback', async () => {
     const view = await render(<ConversationDetails conversation={conversation({
       id: 'direct', kind: 'direct', participantCount: undefined, translationPair: null,
+      translationMode: 'off',
     })} />);
     expect(screen.queryByText(/chat.membersLower/)).toBeNull();
     expect(screen.getByText('chat.off')).toBeTruthy();
+
+    // Only the setting says Off. A group whose members' languages are not all
+    // known has no pair to name, but translation is still running, and the row
+    // used to call that Off (owner, Sep 11 2026).
+    await view.rerender(<ConversationDetails conversation={conversation({
+      id: 'group', kind: 'group', translationPair: null, translationMode: 'automatic',
+    })} />);
+    expect(screen.queryByText('chat.off')).toBeNull();
+    expect(screen.getByText('chat.translationAutomatic')).toBeTruthy();
 
     await view.rerender(<ConversationDetails conversation={conversation({
       id: 'announcement', kind: 'announcement', participantCount: undefined,

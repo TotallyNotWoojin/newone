@@ -26,10 +26,19 @@ export function ConversationDetails({ conversation }: { conversation: Conversati
         : notification.all;
   const items = [
     { icon: 'notifications-outline' as const, label: t('chat.notifications'), value: notificationValue },
-    { icon: 'language-outline' as const, label: t('chat.translation'), value: conversation.translationPair ?? t('chat.off') },
+    // "Off" is a setting, not the absence of a language pair. A group whose
+    // members' languages are not all known still has translation running, and
+    // saying Off there was simply wrong (owner, Sep 11 2026).
+    {
+      icon: 'language-outline' as const,
+      label: t('chat.translation'),
+      value: conversation.translationMode === 'off'
+        ? t('chat.off')
+        : conversation.translationPair ?? t('chat.translationAutomatic'),
+    },
   ];
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="conversation-details">
       <View style={styles.profile}>
         <Avatar
           color={conversation.avatarColor}

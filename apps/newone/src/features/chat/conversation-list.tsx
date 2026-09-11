@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Keyboard,
   Platform,
   Pressable,
   RefreshControl,
@@ -17,6 +16,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import type { Conversation, DiscoverableConversation, InboxFilter } from '@/domain/types';
 import type { MessageKey } from '@/i18n/catalog';
 import { Avatar, Chip, IconButton, StatusBadge } from '@/components/ui/primitives';
+import { KeyboardDismissArea } from '@/components/keyboard-dismiss-area';
 import { ChatSearchField } from '@/features/search/chat-search-field';
 import {
   addPersonToSearch,
@@ -272,10 +272,7 @@ export function ConversationList({
     // which is the gesture people already use. The search field with nothing
     // typed in it had no other way out (owner, Sep 10 2026); accessible={false}
     // keeps this wrapper out of the accessibility tree.
-    <Pressable
-      accessible={false}
-      onPress={() => Keyboard.dismiss()}
-      style={[styles.container, desktop && styles.containerDesktop]}>
+    <KeyboardDismissArea style={[styles.container, desktop && styles.containerDesktop]}>
       {desktop ? (
         <View style={styles.header}>
           <View>
@@ -459,7 +456,7 @@ export function ConversationList({
           <Ionicons color={colors.white} name="arrow-up" size={17} />
         </Pressable>
       ) : null}
-    </Pressable>
+    </KeyboardDismissArea>
   );
 }
 
@@ -567,14 +564,23 @@ function ConversationRow({
   );
 
   const row = (
-    <View accessible={false} ref={rowRef} style={styles.rowShell}>
+    // Hover belongs to the whole row, panel included. While it sat on the
+    // Pressable, moving the mouse onto the actions left the Pressable, which
+    // unmounted them, which put the mouse back over the row — so the strip
+    // flickered in and out and could not be clicked (owner, Sep 11 2026).
+    // pointerleave does not fire for a move onto a descendant, so the panel
+    // now holds its own hover.
+    <View
+      accessible={false}
+      onPointerEnter={actionable ? () => setHovered(true) : undefined}
+      onPointerLeave={actionable ? () => setHovered(false) : undefined}
+      ref={rowRef}
+      style={styles.rowShell}>
       <Animated.View style={[styles.rowSlide, rowStyle]}>
       <Pressable
         accessibilityLabel={`${conversation.title}: ${previewLine}`}
         accessibilityRole="button"
         accessibilityState={{ selected }}
-        onHoverIn={actionable ? () => setHovered(true) : undefined}
-        onHoverOut={actionable ? () => setHovered(false) : undefined}
         onLongPress={actionable ? openActions : undefined}
         onPress={() => (actionsOpen ? onToggleActions?.(false) : onPress())}
         style={({ pressed }) => [

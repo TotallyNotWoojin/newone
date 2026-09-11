@@ -179,6 +179,22 @@ describe('the one search field on Chats', () => {
     expect(onSearchChange).toHaveBeenLastCalledWith('');
   });
 
+  test('a search made only of chips still offers to clear itself', async () => {
+    const onSearchChange = jest.fn();
+    await render(<ConversationList {...listProps({
+      search: 'Ana Ruiz, ',
+      onSearchChange,
+    })} />);
+
+    // Nothing is half-typed, so there are no suggestions to show -- but there
+    // is a whole search to clear. Both used to hang off the same flag, so
+    // finishing the chip took the clear control away with the panel and left
+    // the only way out one chip at a time (live browser suite, Sep 11 2026).
+    expect(screen.queryByRole('list')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'common.clearSearch' }));
+    expect(onSearchChange).toHaveBeenLastCalledWith('');
+  });
+
   test('two people chipped leave only the conversation containing both', async () => {
     const view = await render(<ConversationList {...listProps({ search: 'Ana Ruiz, ' })} />);
     expect(screen.getAllByText('Beach trip').length).toBeGreaterThan(0);
