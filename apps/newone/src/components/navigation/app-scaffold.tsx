@@ -117,13 +117,17 @@ function DesktopRail({ current }: { current: NavigationKey }) {
   const ownAvatarUrl = useProfileAvatar(workspace.currentUser?.id ?? null);
   const { currentUser } = workspace;
   const { t } = useI18n();
+  const workspaceInitial = (workspace.organizationName?.trim() || 'Gist').charAt(0).toUpperCase();
   const visibleItems = navItems;
   return (
     <View style={styles.rail}>
       <BrandMark compact />
 
+      {/* This was a hardcoded "N", for Newone. A rename that greps the product
+          name cannot find a single letter, so it survived the rebrand and sat
+          in the rail on every desktop and iPad session. Derive it instead. */}
       <View style={styles.workspaceMark}>
-        <Text style={styles.workspaceInitial}>N</Text>
+        <Text style={styles.workspaceInitial}>{workspaceInitial}</Text>
         <View style={styles.workspaceOnline} />
       </View>
 
