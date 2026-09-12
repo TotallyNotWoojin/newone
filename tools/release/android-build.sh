@@ -10,6 +10,9 @@ mkdir -p "$OUT"
 # checkout may have an old one. Put the canonical copy in place, including the
 # copy gradle's google-services plugin actually reads, before building.
 "$HERE/sync-firebase-config.sh"
+# prebuild rewrites app/build.gradle from the template, which signs release
+# with the debug key; Play rejects that outright. Re-wire it every build.
+"$HERE/android-signing.sh"
 cp "$ROOT/apps/newone/google-services.json" "$ROOT/apps/newone/android/app/google-services.json"
 cd "$ROOT/apps/newone/android"
 
