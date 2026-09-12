@@ -3,7 +3,7 @@
 Status: candidate-source inventory, not immutable release evidence
 Last updated: August 4, 2026
 
-This document identifies material third-party software and hosted services used or anticipated by Newone. It is an engineering inventory, not legal advice. The Company must approve contracts, data-processing terms, subprocessors, regions, licenses, retention, and recurring charges before live employee data is enabled.
+This document identifies material third-party software and hosted services used or anticipated by Gist. It is an engineering inventory, not legal advice. The Company must approve contracts, data-processing terms, subprocessors, regions, licenses, retention, and recurring charges before live employee data is enabled.
 
 The exhaustive JavaScript dependency graph and integrity hashes are pinned in [`package-lock.json`](../package-lock.json) and [`apps/newone/package-lock.json`](../apps/newone/package-lock.json). The server-side Deno graph is pinned in [`supabase/functions/deno.lock`](../supabase/functions/deno.lock). `npm run supply-chain:evidence` generates separate CycloneDX documents for release tooling, the universal client, and Edge Functions plus a combined license/integrity inventory and a machine-readable license-policy report. The policy blocks prohibited production licenses and separately identifies attribution, weak-copyleft, or unclassified expressions for owner/legal review. For an immutable release candidate, those lockfiles, the exact release commit, and freshly generated reports form the authoritative transitive inventory. This candidate-source summary lists direct and operationally material components but is not itself immutable release evidence.
 
@@ -107,7 +107,7 @@ For every immutable release candidate:
 
 ## Not included or claimed
 
-- ChatGPT, a ChatGPT app, ChatGPT identity, ChatGPT hosting, and a ChatGPT Pro subscription are not Newone runtime components.
+- ChatGPT, a ChatGPT app, ChatGPT identity, ChatGPT hosting, and a ChatGPT Pro subscription are not Gist runtime components.
 - WhatsApp code, APIs, accounts, contacts, or message data are not included; WhatsApp only informed interaction research.
 - No custom end-to-end encryption protocol is claimed. Transport and at-rest protections are platform/provider controls, while authorized server processing remains possible by design.
 - Provider availability, app-store approval, legal interpretation, bilingual safety approval, backup/PITR, SMTP deliverability, phone/SMS registration, and production security review cannot be created solely by committing source code.

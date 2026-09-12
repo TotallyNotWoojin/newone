@@ -1,4 +1,11 @@
-# Newone training guide
+# Gist training guide
+
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
 
 Status: delivery-ready agenda; live delivery remains a Company/contractor acceptance activity
 Last updated: August 3, 2026
@@ -40,7 +47,7 @@ At the end of the session, participants should be able to:
 - draft, review, sign, and acknowledge a source-linked handoff;
 - operate during an AI, push, scanner, or network outage without losing the original message workflow;
 - find security, privacy, accessibility, language, device, and support controls;
-- explain the boundaries: Newone is not an emergency alarm, a qualified interpreter, an employee-performance system, or end-to-end encrypted while server processing is enabled.
+- explain the boundaries: Gist is not an emergency alarm, a qualified interpreter, an employee-performance system, or end-to-end encrypted while server processing is enabled.
 
 ## Two-hour agenda
 
@@ -62,7 +69,7 @@ If a role-specific topic does not apply to the attendees, spend the time on hand
 
 ### 1. Identity and security
 
-1. Open the exact Newone application or company-controlled web origin.
+1. Open the exact Gist application or company-controlled web origin.
 2. Enter the invited identity and complete the generic OTP/code flow. Explain why the product does not confirm whether arbitrary employee identities exist.
 3. Complete CAPTCHA and, for a privileged role, TOTP MFA.
 4. Open **You → Security and devices**. Identify the current platform, last-used time, and approximate security signal.
@@ -106,7 +113,7 @@ Ask each participant or group to answer these questions without prompting:
 4. What should you do when detected language is unknown or a safety translation seems wrong?
 5. Does approving an AI summary assign work or issue a shift handoff?
 6. Where do you revoke a lost device/session, and who is the company support contact?
-7. What must you do during an emergency instead of relying solely on Newone or AI output?
+7. What must you do during an emergency instead of relying solely on Gist or AI output?
 
 The trainer records misunderstood answers and repeats the relevant exercise. Completion means the participant performed the core journey and understood the safety boundary; attendance alone is not sufficient evidence.
 

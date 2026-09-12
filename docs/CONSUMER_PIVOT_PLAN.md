@@ -1,10 +1,10 @@
-# Newone consumer pivot plan
+# Gist consumer pivot plan
 
 Status: active implementation plan, decided September 1, 2026. Supersedes the workplace-only product scope in FULL_PRODUCT_REQUIREMENTS.md where they conflict; the security architecture, testing bar, and evidence discipline in SECURITY_ARCHITECTURE_V2.md and RELEASE_EVIDENCE.md remain binding.
 
 ## Product decisions (owner-confirmed)
 
-1. Newone becomes a **general consumer messenger** — anyone can create an account, find people, and message them. Target experience: seamless transition for WhatsApp users.
+1. Gist becomes a **general consumer messenger** — anyone can create an account, find people, and message them. Target experience: seamless transition for WhatsApp users.
 2. **Workspaces remain an optional mode.** The consumer experience is the default surface; organizations (with the existing admin, updates, handoffs machinery) remain joinable/creatable on top.
 3. **Identity: email + password-less OTP signup with a unique username** for discovery. No phone identity in 1.0.
 4. **Message-requests model**: anyone can send a first message to any discoverable user; it arrives as a request; the full conversation unlocks when the recipient accepts. Friend (contact) connections continue to exist and auto-accept implies friendship.
@@ -34,7 +34,7 @@ Personal-realm configuration that makes this safe:
 
 - `public.profiles` gains `username citext` with a case-insensitive unique index, format `^[a-z0-9](?:[a-z0-9_]{2,28})[a-z0-9]$` (4–30 chars), plus a reserved-names table.
 - Signup flow (new `signup` intent in `newone-auth`, alongside the untouched invite/member flows):
-  1. `POST /v2/auth/signup/request` — email + username + display name + language; Turnstile-gated on web; validates and reserves the username, creates the `auth.users` row via the admin API with `app_metadata.newone_signup_state = 'pending'`, sends the email OTP. Destination-keyed and IP-keyed rate-limit buckets (already the right shape from the invite flow, retuned for consumer volume).
+  1. `POST /v2/auth/signup/request` — email + username + display name + language; Turnstile-gated on web; validates and reserves the username, creates the `auth.users` row via the admin API with `app_metadata.gist_signup_state = 'pending'`, sends the email OTP. Destination-keyed and IP-keyed rate-limit buckets (already the right shape from the invite flow, retuned for consumer volume).
   2. `POST /v2/auth/signup/verify` — OTP verify; on success a new `private.redeem_signup_impl` atomically creates the profile (with `preferred_language`), claims the username, and inserts the active personal-realm membership with `directory_visibility='private'`.
 - `private.bff_authorize_member_otp_impl` keeps its active-membership requirement — every completed signup has a personal-realm membership, so returning-user OTP works unchanged. A parallel `bff_authorize_signup_otp_impl` authorizes the pending-signup window only.
 - Supabase GoTrue public signup **stays disabled**; account creation continues to flow exclusively through the Edge gateway (CAPTCHA, rate limits, username atomicity).
@@ -61,7 +61,7 @@ Person-scoped requests reuse the DM machinery rather than a parallel inbox:
 - **Onboarding**: language picker (works pre-auth; I18nProvider already sits outside AuthProvider) → sign-up (email, username with live availability, display name) → OTP verify. Existing `accessMode` union gains `'signup'`.
 - **People → Chats-adjacent "Friends"**: the existing four-state connection UI carries over; new username-search box (new bounded search endpoint) replaces the org directory as the discovery surface in the personal realm; new Requests inbox for incoming message requests.
 - **Workspace switcher**: bootstrap payload gains `organizations[]`; `WorkspaceState.organizationId` stays a scalar that switching re-bootstraps (realtime channels, offline cache, and outbox are already keyed by `(userId, organizationId)`).
-- **Branding/copy**: remove `WORKPLACE` brand tag and org-name subtitle in the personal realm; consumer permission strings (done); bundle ID `com.newone.app`, slug `newone` (done).
+- **Branding/copy**: remove `WORKPLACE` brand tag and org-name subtitle in the personal realm; consumer permission strings (done); bundle ID `com.gist.app`, slug `newone` (done).
 - **New parity features**: typing indicators (ephemeral realtime broadcast, no persistence), voice notes (expo-audio record + playback; audio MIME already allowed server-side), video attachments (extend MIME allowlist + thumbnails), camera capture.
 - Admin/updates/handoffs screens remain, gated to workspace realms only.
 

@@ -1,4 +1,11 @@
-# Newone acceptance and release test plan
+# Gist acceptance and release test plan
+
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
 
 This is the executable verification contract for the independent Expo/Supabase product. Passing a smaller unit suite never implies that an unrun device, provider, security, or owner-controlled gate passed.
 
@@ -34,7 +41,7 @@ The August 5 working-tree checkpoint observed the following results. They are us
 | Edge/RPC contract | Current name-and-shape drift check passed | Drift coverage only; candidate rerun open |
 | Expo exports and fixture scan | Web, iOS, and Android export checks passed; 211 client, API, Edge, configuration, migration, and seed inputs plus 29 bundled text artifacts contained none of the forbidden runtime-fixture markers | Source/bundle proof only, not signed binaries or a repository-wide semantic proof |
 | Playwright static surface | 6/6 unauthenticated sign-in rendering and client-side validation checks passed across desktop Chromium and Pixel 7 mobile Chromium on the current working tree | Static UI regression only; not hosted Auth, employee workflow, or acceptance proof |
-| Hosted core-backend simulation | Artifact `newone-e2e-20260805t073237z-bbb833d0` passed 18 real hosted Auth/API/database/private-Realtime steps and completed guarded cleanup | Core development evidence only; deployed-web, provider, authenticated browser, and signed-device matrices remain open |
+| Hosted core-backend simulation | Artifact `gist-e2e-20260805t073237z-bbb833d0` passed 18 real hosted Auth/API/database/private-Realtime steps and completed guarded cleanup | Core development evidence only; deployed-web, provider, authenticated browser, and signed-device matrices remain open |
 | Measured coverage | Shared runtime/API, universal-client, and Edge global reports exceeded 90% for every metric their tools measure; complete production-file inventory checks passed for the 83 client and 32 Edge files | Reports are gitignored working-tree evidence; retain them and rerun on the immutable candidate |
 | AI | Paid synthetic evaluation passed 20/20 and production-adapter smoke passed; employee-data egress remained false | Human Korean-Spanish approval and candidate rerun open |
 | Linked development | 37-migration parity; six active functions; hosted core artifact passed; fresh dry-run reported six active functions and zero existing organizations/users; hosted Auth hardening and Postgres SSL enabled | Development evidence only, not staging or production acceptance |
@@ -100,11 +107,11 @@ Core commands include enrollment/invites, sessions, direct/groups/membership, me
 
 ### Hosted Edge transport and development canaries
 
-Gateway JWT verification is intentionally disabled for the versioned functions because Newone performs route-specific bearer, cookie, worker-token, session, membership, MFA, and recent-auth checks inside the handlers. Acceptance must therefore prove each route fails closed on its own; a deployed function or gateway response is not authentication evidence by itself.
+Gateway JWT verification is intentionally disabled for the versioned functions because Gist performs route-specific bearer, cookie, worker-token, session, membership, MFA, and recent-auth checks inside the handlers. Acceptance must therefore prove each route fails closed on its own; a deployed function or gateway response is not authentication evidence by itself.
 
 The transport contract must reject ordinary insecure HTTP and spoofed forwarding headers. An internal Supabase `http:` hop may be treated as secure only when `x-forwarded-proto` is exactly `https` and the request host exactly matches the canonical host injected through `SUPABASE_URL`. CORS must allow only an exact configured web origin and the required `GET, POST, PUT, PATCH, DELETE, OPTIONS` methods. Worker functions must reject browser origins and cookie authentication.
 
-The linked Free development project currently has six active functions: `newone-api`, `newone-auth`, `newone-bootstrap`, `newone-read`, `newone-outbox-worker`, and `newone-maintenance-worker`. The observed live canary contract was:
+The linked Free development project currently has six active functions: `newone-api`, `newone-auth`, `newone-bootstrap`, `newone-read`, `gist-outbox-worker`, and `newone-maintenance-worker`. The observed live canary contract was:
 
 | Probe class | Required status |
 |---|---|
@@ -193,7 +200,7 @@ Post-cleanup coverage reports now exist for the agreed working-tree scope. Share
 
 Deterministic Expo web, iOS, and Android exports passed at the August 5 working-tree checkpoint, and the production-fixture scanner found no forbidden runtime-fixture markers in 211 client, API, Edge, configuration, migration, and seed inputs plus 29 inspectable bundled text artifacts. The iOS and Android results are source/Hermes bundle evidence only. They do not replace EAS-signed binaries, install/launch checks, deep/app-link verification, notification-open behavior, store review, or tests on physical iOS and Android devices.
 
-One additional simulator launch observation was recorded on August 4, 2026: Expo Go 57.0.6 bundled the app successfully on a booted iPhone 17 Pro simulator running iOS 26.5, rendered Newone's branded secure-access screen, emitted only the expected `expo-notifications` Expo Go limitation warnings, and showed no runtime error during that launch. This is not a signed development build, physical-device result, TestFlight build, App Store acceptance, or workflow evidence, and it does not satisfy the native workflow matrix below.
+One additional simulator launch observation was recorded on August 4, 2026: Expo Go 57.0.6 bundled the app successfully on a booted iPhone 17 Pro simulator running iOS 26.5, rendered Gist's branded secure-access screen, emitted only the expected `expo-notifications` Expo Go limitation warnings, and showed no runtime error during that launch. This is not a signed development build, physical-device result, TestFlight build, App Store acceptance, or workflow evidence, and it does not satisfy the native workflow matrix below.
 
 Manual and automated accessibility checks cover:
 

@@ -1,12 +1,19 @@
-# Newone security architecture v2
+# Gist security architecture v2
+
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
 
 Status: target architecture and release gate, not a claim that every control is implemented
 Research cut-off: July 28, 2026
-Applies to: independent Newone iOS, Android, and web clients; Supabase backend; optional OpenRouter processing
+Applies to: independent Gist iOS, Android, and web clients; Supabase backend; optional OpenRouter processing
 
 ## Executive decision
 
-Newone is a company-owned communications system. It must not depend on ChatGPT identity, ChatGPT Sites, caller-supplied identity headers, or any consumer messaging account. The production trust root is Newone's own company enrollment and Supabase Auth session. The replacement runs under a Newone-controlled domain and native app identifiers.
+Gist is a company-owned communications system. It must not depend on ChatGPT identity, ChatGPT Sites, caller-supplied identity headers, or any consumer messaging account. The production trust root is Gist's own company enrollment and Supabase Auth session. The replacement runs under a Gist-controlled domain and native app identifiers.
 
 The first production architecture uses:
 
@@ -15,7 +22,7 @@ The first production architecture uses:
 - an Expo/React Native client for iOS and Android and a responsive web client, with platform-specific session storage and hardening;
 - OpenRouter only behind an explicit organizational release gate, with an exact provider allowlist and no client-visible key.
 
-This version is **not end-to-end encrypted**. Server-side Korean-Spanish translation, organization-wide search, summaries, malware scanning, moderation, retention, and legal export all require authorized services to process plaintext. WhatsApp defines E2EE as a design in which only the sender and recipient have the keys and not even WhatsApp can read the messages. Newone must not use that label while its servers or model providers can process message content. See [WhatsApp's official privacy explanation](https://www.whatsapp.com/privacy).
+This version is **not end-to-end encrypted**. Server-side Korean-Spanish translation, organization-wide search, summaries, malware scanning, moderation, retention, and legal export all require authorized services to process plaintext. WhatsApp defines E2EE as a design in which only the sender and recipient have the keys and not even WhatsApp can read the messages. Gist must not use that label while its servers or model providers can process message content. See [WhatsApp's official privacy explanation](https://www.whatsapp.com/privacy).
 
 This architecture treats database RLS as the final authorization boundary, not as a substitute for API, client, monitoring, or organizational controls. Supabase's own [shared-responsibility model](https://supabase.com/docs/guides/deployment/shared-responsibility-model) and [production checklist](https://supabase.com/docs/guides/deployment/going-into-prod) make those application responsibilities explicit.
 
@@ -31,7 +38,7 @@ The release must provide all of the following:
 6. **Safe file handling:** files remain quarantined until type, size, and malware checks pass. File access is re-authorized at download time.
 7. **Controlled external processing:** AI and notification vendors receive the minimum necessary data, only after approval, with independently testable kill switches.
 8. **Detectability and recovery:** security-relevant actions produce tamper-resistant audit events; alerts have owners; backups cover both database and file objects; restores are exercised.
-9. **Honest user claims:** delivered, read, acknowledged, translated, and human-reviewed are distinct states. None implies comprehension. Newone never claims E2EE for a server-readable conversation.
+9. **Honest user claims:** delivered, read, acknowledged, translated, and human-reviewed are distinct states. None implies comprehension. Gist never claims E2EE for a server-readable conversation.
 
 Availability matters, but emergency communications must have an approved fallback such as phone, radio, SMS, or an onsite procedure. Push delivery and AI availability are not safety guarantees.
 
@@ -64,9 +71,9 @@ Message text is Confidential even if it appears operationally mundane. Authentic
 ```text
 Untrusted device / browser
         |
-        | TLS; Newone Auth JWT or same-origin web session
+        | TLS; Gist Auth JWT or same-origin web session
         v
-Newone edge/API boundary --------> WAF + distributed rate limiter
+Gist edge/API boundary --------> WAF + distributed rate limiter
         |                                  |
         | scoped user JWT                  | counters, abuse signals
         v                                  v
@@ -127,7 +134,7 @@ OWASP's [API Security Top 10](https://owasp.org/www-project-api-security/) also 
 - A Supabase custom-access-token hook rechecks canonical current membership or
   an exact live invitation before every initial token, MFA-upgraded token, and
   refresh token is issued. Direct calls to the public Auth API therefore do not
-  bypass Newone lifecycle authorization. The hook is versioned in SQL, granted
+  bypass Gist lifecycle authorization. The hook is versioned in SQL, granted
   only to `supabase_auth_admin`, and must be independently enabled and tested in
   each hosted project. This control is available on Supabase Free and Pro; see
   [Auth Hooks](https://supabase.com/docs/guides/auth/auth-hooks) and the
@@ -158,7 +165,7 @@ If passwords are enabled, use a minimum of 15 characters for single-factor use, 
 - High-impact RLS/API paths verify `aal2` and confirm `session_id` still exists rather than trusting a stale role claim. Supabase documents both the AAL claim and session record in [MFA](https://supabase.com/docs/guides/auth/auth-mfa) and [user sessions](https://supabase.com/docs/guides/auth/sessions).
 - Recovery must be at least as strong as enrollment. Self-service OTP recovery uses a non-creating, enumeration-safe request; independently limits request and verification by destination, network, and installation; binds the newly verified session before membership access; and revokes all other sessions, device bindings, and push destinations.
 - Lost-TOTP help-desk recovery requires an expiring immutable case. A separate AAL2/recent-auth recovery manager records only a keyed digest of an approved external-verification reference, never identity documents or the raw reference. The target cannot verify or approve, the verifier cannot approve, and privileged targets require two distinct approvers.
-- Exact-factor deletion at Supabase Auth and database cleanup cannot share one transaction. Newone therefore uses a target-locked, versioned, fail-closed saga: snapshot sessions and mark `executing`, delete the exact verified TOTP factor through the Auth admin API, then atomically revoke every session/device/push destination and finalize. An ambiguous provider response remains `executing` for safe retry; only a definite first-attempt factor mismatch cancels the case.
+- Exact-factor deletion at Supabase Auth and database cleanup cannot share one transaction. Gist therefore uses a target-locked, versioned, fail-closed saga: snapshot sessions and mark `executing`, delete the exact verified TOTP factor through the Auth admin API, then atomically revoke every session/device/push destination and finalize. An ambiguous provider response remains `executing` for safe retry; only a definite first-attempt factor mismatch cancels the case.
 - Security questions are prohibited. Completion appends immutable security/audit evidence and a `pending_external_delivery` notice. That queue record is not proof that the user was notified; approved human verification and a delivery provider with retained receipts remain production gates.
 
 ### Session policy
@@ -174,7 +181,7 @@ Starting policy:
 | Shared device | 10 minutes | 12 hours or end of shift | 15 minutes | every shift/user change |
 | Admin/compliance/support | 10 minutes | 8 hours | 15 minutes | AAL2; five-minute freshness for destructive/export actions |
 
-Do not enable a single-session limit globally: a legitimate employee may use phone and web. Maintain a Newone device/session inventory, default to five active devices for a standard user and two for privileged users, notify on new-device enrollment, and let users/admins revoke individual devices.
+Do not enable a single-session limit globally: a legitimate employee may use phone and web. Maintain a Gist device/session inventory, default to five active devices for a standard user and two for privileged users, notify on new-device enrollment, and let users/admins revoke individual devices.
 
 Native refresh tokens live only in platform-protected storage. Web refresh tokens live behind a same-origin session gateway in `Secure`, `HttpOnly`, `SameSite` cookies with CSRF protection; browser JavaScript receives only an ephemeral access token. If the web build instead persists refresh tokens in `localStorage`, production web launch is blocked pending an explicit threat review.
 
@@ -184,7 +191,7 @@ One audited operation must:
 
 1. set the organization membership to suspended in a transaction;
 2. prevent all future RLS/API/Storage authorization through a database lookup of active membership;
-3. revoke every Auth session and Newone device registration;
+3. revoke every Auth session and Gist device registration;
 4. terminate or force re-authorization of active Realtime connections;
 5. invalidate notification destinations and future signed-URL creation;
 6. transfer owned groups/workflows and preserve existing records under retention policy;
@@ -212,7 +219,7 @@ Conversation membership and active organization membership are always checked. A
 
 Supabase requires RLS on every table in an exposed schema. Its [RLS guide](https://supabase.com/docs/guides/database/postgres/row-level-security) also warns that views bypass RLS by default, user metadata is user-editable, JWT claims can be stale, and service keys bypass RLS.
 
-Newone requirements:
+Gist requirements:
 
 - Enable RLS on every `public` table, every application-accessible view, `storage.objects`, and applicable `realtime.messages` operations. Use RLS in private schemas as defense in depth.
 - Grant Data API privileges explicitly and minimally. A 2026 Supabase change means new tables are no longer automatically exposed; explicit grants and RLS are separate controls. See the [Data API exposure changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically) and [Securing your API](https://supabase.com/docs/guides/api/securing-your-api).
@@ -246,7 +253,7 @@ Run `SELECT`, `INSERT`, `UPDATE`, and `DELETE` tests, including forged immutable
 
 ## API and server-side boundaries
 
-Direct client-to-Supabase access is limited to simple, RLS-scoped reads and low-risk writes. The following go through a Newone API/Edge Function:
+Direct client-to-Supabase access is limited to simple, RLS-scoped reads and low-risk writes. The following go through a Gist API/Edge Function:
 
 - enrollment, recovery coordination, session/device management, and offboarding;
 - group creation and membership changes;
@@ -292,7 +299,7 @@ The maximum ordering guarantee is the database's committed order, not client clo
 
 ## Attachment and media boundary
 
-Supabase Storage denies uploads until RLS policies permit them, and upsert requires `INSERT`, `SELECT`, and `UPDATE`; see [Storage access control](https://supabase.com/docs/guides/storage/security/access-control). Newone should avoid upsert for conversation files and treat objects as immutable.
+Supabase Storage denies uploads until RLS policies permit them, and upsert requires `INSERT`, `SELECT`, and `UPDATE`; see [Storage access control](https://supabase.com/docs/guides/storage/security/access-control). Gist should avoid upsert for conversation files and treat objects as immutable.
 
 ### Upload flow
 
@@ -314,9 +321,9 @@ Expo Push Service relays payloads to FCM and APNs, and Expo notes that a success
 
 Requirements:
 
-- Default payload: generic title/body such as “New activity in Newone” plus opaque event and conversation IDs. No message text, translation, attachment name/URL, employee ID, safety detail, or auth token.
+- Default payload: generic title/body such as “New activity in Gist” plus opaque event and conversation IDs. No message text, translation, attachment name/URL, employee ID, safety detail, or auth token.
 - The app authenticates and fetches current content after the user opens the notification. Access can be denied if membership changed.
-- Each push token is bound to a Newone user, device record, platform, app environment, and last-seen time. Encrypt tokens at rest, never use them as identity, and remove them after `DeviceNotRegistered` or revocation.
+- Each push token is bound to a Gist user, device record, platform, app environment, and last-seen time. Encrypt tokens at rest, never use them as identity, and remove them after `DeviceNotRegistered` or revocation.
 - Enable Expo Push access-token protection if Expo Push Service is used. For higher-assurance deployments, send directly to APNs/FCM to remove Expo from the processor chain; that does not remove Apple/Google from it.
 - Staging and production credentials, bundle IDs, projects, and tokens are isolated.
 - Quiet hours and shift policy apply before enqueueing. An urgent override is a privileged, rate-limited, audited workflow.
@@ -349,14 +356,14 @@ Safety, disciplinary, medical, legal, payroll, immigration, union, identity-docu
 
 ## End-to-end encryption trade-off
 
-### What Newone can claim in this version
+### What Gist can claim in this version
 
 - encrypted in transit between clients and services;
 - encrypted at rest through managed platform/storage controls;
 - access-controlled by organization and conversation membership;
 - external AI processing disabled by default and policy-gated when enabled.
 
-It cannot claim that “only participants can read messages” because authorized Newone services must process plaintext for translation, search, summaries, malware scanning, governance, and recovery. A provider's ZDR promise reduces retention; it does not turn server-side processing into E2EE.
+It cannot claim that “only participants can read messages” because authorized Gist services must process plaintext for translation, search, summaries, malware scanning, governance, and recovery. A provider's ZDR promise reduces retention; it does not turn server-side processing into E2EE.
 
 ### Future sealed-conversation mode
 
@@ -379,16 +386,16 @@ OWASP MASVS treats secure storage, authentication, network communication, platfo
 - Store refresh tokens and local-database keys in `expo-secure-store`, backed by Android Keystore and iOS Keychain. Do not put tokens or message content in AsyncStorage, plaintext SQLite, Redux persistence, crash breadcrumbs, clipboard history, URL parameters, or logs.
 - SecureStore is not a database or backup. Expo documents that iOS Keychain values may survive reinstall, Android values do not, Android backup must exclude SecureStore, and biometric changes can invalidate protected values; see [Expo SecureStore](https://docs.expo.dev/versions/latest/sdk/securestore/). Detect a new app-instance identifier and clear/rebind an orphaned session after reinstall.
 - Encrypted offline workspace caching is release-disabled by default and requires an explicit build-time opt-in. When enabled, it is employee/contractor-only: guests are never cached or hydrated, expired memberships fail closed, and a contractor cache expires no later than the canonical membership `access_expires_at`. Guests are online-only for sends, receipts, and update acknowledgements; their message bodies, reply previews, cursors, and queued commands are never written to the durable user store. Contractor queued commands are purged at access expiry. Bound cache age and size by conversation policy. On logout, definitive revocation response, suspension contact, ineligible online bootstrap, or user switch, delete message/attachment caches, drafts, search indexes, thumbnails, notification state, and queued commands.
-- Offline encryption protects data at rest; it is not remote revocation. A persisted employee envelope is bounded to 24 hours and cannot be hydrated after expiry, but content already decrypted into a running app can remain visible while that device stays disconnected until the app process ends or revalidates. Newone also cannot remotely wipe ciphertext from a disconnected unmanaged device. Treat this already-offline employee window as an explicit risk acceptance. Keep offline caching disabled for deployments requiring immediate cutoff, or require managed-device controls and remote wipe before enabling it.
+- Offline encryption protects data at rest; it is not remote revocation. A persisted employee envelope is bounded to 24 hours and cannot be hydrated after expiry, but content already decrypted into a running app can remain visible while that device stays disconnected until the app process ends or revalidates. Gist also cannot remotely wipe ciphertext from a disconnected unmanaged device. Treat this already-offline employee window as an explicit risk acceptance. Keep offline caching disabled for deployments requiring immediate cutoff, or require managed-device controls and remote wipe before enabling it.
 - Shared kiosks, pooled tablets, and shift phones are prohibited during the employee pilot. Any later shared-device rollout uses a dedicated mode with short idle timeout, no cross-user cache, no notification preview, and a visible “end shift/sign out” action. MDM is required for high-sensitivity shared deployments.
 - Blur the app-switcher snapshot and use Android secure-window controls on Restricted screens. Detect iOS screen capture and warn/blank where practical. These controls reduce accidental disclosure but cannot guarantee that another camera or compromised OS cannot copy the screen.
 - Disable clipboard actions for credentials and Restricted records; clear any app-written sensitive clipboard value promptly.
 
 ### Authentication and deep links
 
-- Use authorization code + PKCE, `state`, and `nonce` where applicable. Accept callbacks only from exact universal/app links and redirect paths owned by Newone.
+- Use authorization code + PKCE, `state`, and `nonce` where applicable. Accept callbacks only from exact universal/app links and redirect paths owned by Gist.
 - Do not trust a custom URL scheme alone when an associated/universal link is available. Validate host, path, state, pending transaction, and one-time code before establishing a session.
-- Magic links are single-use and can be consumed by enterprise email scanners. Prefer an intermediate Newone-controlled page with an explicit user action or use OTP, consistent with the [Supabase production checklist](https://supabase.com/docs/guides/deployment/going-into-prod#email-link-validity).
+- Magic links are single-use and can be consumed by enterprise email scanners. Prefer an intermediate Gist-controlled page with an explicit user action or use OTP, consistent with the [Supabase production checklist](https://supabase.com/docs/guides/deployment/going-into-prod#email-link-validity).
 - Expo Go is not a production security environment. Test authentication, deep links, secure storage, push, biometrics, screenshots, and native configuration in signed development/preview builds and final store builds. See [Expo authentication guidance](https://docs.expo.dev/develop/authentication/).
 
 ### Build, update, and dependency integrity
@@ -419,7 +426,7 @@ OWASP MASVS treats secure storage, authentication, network communication, platfo
 
 ## Starting rate limits and abuse controls
 
-This section is the authoritative source for Newone's numeric launch limits. Other product and architecture documents link here rather than duplicating values. These are conservative starting values, not vendor defaults or permanent capacity claims. They must be load-tested and tuned from observed worker behavior through versioned server policy. Apply atomic distributed counters at the edge/API layer. Supabase's Auth limits are configurable, while its Edge Function example uses Redis for application limiting; see [production Auth limits](https://supabase.com/docs/guides/deployment/going-into-prod#auth-rate-limits) and [Edge Function rate limiting](https://supabase.com/docs/guides/functions/examples/rate-limiting).
+This section is the authoritative source for Gist's numeric launch limits. Other product and architecture documents link here rather than duplicating values. These are conservative starting values, not vendor defaults or permanent capacity claims. They must be load-tested and tuned from observed worker behavior through versioned server policy. Apply atomic distributed counters at the edge/API layer. Supabase's Auth limits are configurable, while its Edge Function example uses Redis for application limiting; see [production Auth limits](https://supabase.com/docs/guides/deployment/going-into-prod#auth-rate-limits) and [Edge Function rate limiting](https://supabase.com/docs/guides/functions/examples/rate-limiting).
 
 Use several keys together: IP/subnet, destination/account, invitation, user, device, organization, conversation, and action. Do not use IP as the only key because many frontline workers may share a site NAT. Return `429` with `Retry-After`; clients use jittered backoff. Avoid permanent account lockout that an attacker can weaponize.
 
@@ -492,7 +499,7 @@ Backups expire on their own documented schedule. A deletion is removed from acti
 
 ## Backups and disaster recovery
 
-Supabase provides daily database backups on paid plans and optional PITR, but explicitly states that database backups contain only Storage metadata, not Storage objects. See [Supabase Database Backups](https://supabase.com/docs/guides/platform/backups). Newone therefore needs two coordinated backup systems.
+Supabase provides daily database backups on paid plans and optional PITR, but explicitly states that database backups contain only Storage metadata, not Storage objects. See [Supabase Database Backups](https://supabase.com/docs/guides/platform/backups). Gist therefore needs two coordinated backup systems.
 
 Requirements:
 
@@ -503,7 +510,7 @@ Requirements:
 - Define and contractually validate vendor-region and retention behavior for database, object, log, and AI metadata backups.
 - Pilot target: database RPO at most 15 minutes and service RTO at most 4 hours, with a separately verified object-backup design supporting the same business recovery requirement. Broad rollout may tighten these objectives after risk, load, regional, and contractual review; it may not silently weaken the pilot baseline.
 - Perform a full staging restore before pilot, quarterly thereafter, and after material backup changes. Test database + files + Auth/config + Realtime recovery, attachment hash verification, deletion/legal-hold replay, and credential rotation.
-- Maintain a read-only degraded mode and an approved non-Newone emergency communication path. Do not send messages that appear successful while the durable database is unavailable.
+- Maintain a read-only degraded mode and an approved non-Gist emergency communication path. Do not send messages that appear successful while the durable database is unavailable.
 
 ## Incident response
 
@@ -544,7 +551,7 @@ No gate may be waived merely because the UI works. Each gate needs stored eviden
 
 ### Gate A: architecture and independence
 
-- [ ] Production domain, mobile bundle IDs, auth, hosting, analytics, and support are Newone-controlled and have no ChatGPT identity/header/Sites dependency.
+- [ ] Production domain, mobile bundle IDs, auth, hosting, analytics, and support are Gist-controlled and have no ChatGPT identity/header/Sites dependency.
 - [ ] Data-flow diagram, processor inventory, data classification, threat model, and this document are reviewed by engineering and Company security/privacy owners.
 - [ ] Production, staging, and development accounts/projects/keys/data are isolated.
 - [ ] Ordinary managers/admins cannot read private DMs by role alone; compliance access behavior is documented and tested.

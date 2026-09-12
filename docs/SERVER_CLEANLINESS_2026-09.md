@@ -125,12 +125,12 @@ kilobytes. It wants its own careful stream with the device suite run against it.
 
 | job | schedule | runs/24 h | what it claims |
 |---|---|---|---|
-| `newone-outbox-worker` | 5 seconds | 17,225 | outbox jobs |
-| `newone-ai-worker` | 10 seconds | 8,626 | translation / detection / summary |
-| `newone-attachment-scan-worker` | 10 seconds | 8,626 | attachment scans |
-| `newone-push-receipt-worker` | 30 seconds | 2,878 | push receipts |
+| `gist-outbox-worker` | 5 seconds | 17,225 | outbox jobs |
+| `gist-ai-worker` | 10 seconds | 8,626 | translation / detection / summary |
+| `gist-attachment-scan-worker` | 10 seconds | 8,626 | attachment scans |
+| `gist-push-receipt-worker` | 30 seconds | 2,878 | push receipts |
 | `newone-maintenance-worker` | 1 minute | 1,440 | announcements + handoffs (see §4) |
-| `newone-language-detection-revive` | 2 minutes | 720 | in-database only, no HTTP |
+| `gist-language-detection-revive` | 2 minutes | 720 | in-database only, no HTTP |
 
 **Evidence.**
 

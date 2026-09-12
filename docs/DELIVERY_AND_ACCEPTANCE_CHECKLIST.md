@@ -1,4 +1,4 @@
-# Newone delivery and acceptance checklist
+# Gist delivery and acceptance checklist
 
 Status: evidence template; not a claim of acceptance
 Last updated: August 3, 2026

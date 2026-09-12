@@ -1,4 +1,4 @@
-# Newone on the web (desktop browser)
+# Gist on the web (desktop browser)
 
 The Expo app exports to a static site (`expo-router`, `web.output: static`). This
 document covers how that static build authenticates, what the backend must allow,
@@ -10,7 +10,7 @@ Two web modes exist in `apps/newone/src/config/runtime.ts`, selected at build ti
 
 | `EXPO_PUBLIC_WEB_AUTH_MODE` | Transport | Needs |
 | --- | --- | --- |
-| `cookie` (default, unchanged) | Same-origin `/api` gateway sets `__Host-newone_*` HttpOnly cookies (`SameSite=Strict`) and a CSRF cookie. | A server-side proxy on the app's own origin (`api/[...path].mjs` on Vercel). |
+| `cookie` (default, unchanged) | Same-origin `/api` gateway sets `__Host-gist_*` HttpOnly cookies (`SameSite=Strict`) and a CSRF cookie. | A server-side proxy on the app's own origin (`api/[...path].mjs` on Vercel). |
 | `direct` | The browser calls the Supabase Edge Functions directly and carries the session as `Authorization: Bearer` + `apikey`, exactly like the iOS/Android apps. | A static host only. |
 
 The cookie design cannot work from a static host: the cookies are `__Host`-prefixed
@@ -86,7 +86,7 @@ module.exports = ({ config }) => ({
 JS
 set -a; . ./.env.local; set +a
 EXPO_PUBLIC_WEB_AUTH_MODE=direct NEWONE_WEB_BASE_URL=/gist-legal/app \
-  npx expo export --platform web --output-dir /tmp/newone-web/app --clear
+  npx expo export --platform web --output-dir /tmp/gist-web/app --clear
 rm app.config.js
 ```
 
@@ -112,7 +112,7 @@ The landing site already lives at `https://totallynotwoojin.github.io/gist-legal
    rewrites, so `/app/conversation/<id>` on a reload is a 404; that page stores the
    path in `sessionStorage` and opens `/app/`, and `src/lib/web-deep-link.ts`
    restores the route once the session is ready. Non-app 404s show a plain page.
-4. Landing page: add the primary button `Open Newone in your browser` linking to
+4. Landing page: add the primary button `Open Gist in your browser` linking to
    the relative `app/` (works on both the project path and the custom domain);
    keep the iPhone/Android links. `/privacy`, `/terms`, `/support` stay put.
 5. Add the origin to `NEWONE_ALLOWED_WEB_ORIGINS` and redeploy the functions.
@@ -123,7 +123,7 @@ The landing site already lives at `https://totallynotwoojin.github.io/gist-legal
 Local check without a browser (mirrors the Pages path):
 
 ```sh
-mkdir -p /tmp/pages/gist-legal && ln -sfn /tmp/newone-web/app /tmp/pages/gist-legal/app
+mkdir -p /tmp/pages/gist-legal && ln -sfn /tmp/gist-web/app /tmp/pages/gist-legal/app
 (cd /tmp/pages && python3 -m http.server 4173 >/dev/null 2>&1 &)
 curl -sI http://127.0.0.1:4173/gist-legal/app/index.html | head -1
 curl -sI "http://127.0.0.1:4173/gist-legal/app/conversation/%5Bid%5D.html" | head -1
@@ -233,7 +233,7 @@ form with an email and a password.
   open, Contacts, and group creation, in both schemes.
 
 The accounts a run creates are real, and it does not delete them: their emails
-all begin with the run's `newone-e2e-…` prefix, which is what
+all begin with the run's `gist-e2e-…` prefix, which is what
 `tests/hosted/run.mjs --cleanup` matches (see `tests/hosted/README.md`). Run
 that, or let the pre-release database wipe take them.
 

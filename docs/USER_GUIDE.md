@@ -1,12 +1,19 @@
-# Newone user guide
+# Gist user guide
 
-Newone is a company-owned workplace messenger for web, iOS, and Android. It lets verified coworkers use private direct messages, groups, official updates, shift handoffs, and Korean-Spanish translation without exchanging personal phone numbers.
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
+
+Gist is a company-owned workplace messenger for web, iOS, and Android. It lets verified coworkers use private direct messages, groups, official updates, shift handoffs, and Korean-Spanish translation without exchanging personal phone numbers.
 
 This guide describes the intended employee-pilot product. A control is available only when the organization enables it and the signed-in membership has permission.
 
 ## Safety boundary
 
-Newone is not an emergency alarm. For an immediate hazard, use the site alarm, radio, supervisor, evacuation, lockout/tagout, or other required emergency procedure first.
+Gist is not an emergency alarm. For an immediate hazard, use the site alarm, radio, supervisor, evacuation, lockout/tagout, or other required emergency procedure first.
 
 Delivery, read state, translation, and acknowledgement mean different things:
 
@@ -23,7 +30,7 @@ Delivery, read state, translation, and acknowledgement mean different things:
 4. Enroll a second factor when your role requires it.
 5. Review the organization name and your verified profile before continuing.
 
-There is no public workspace registration. Never forward an invitation, OTP, recovery link, or QR code. Newone support will never ask for one.
+There is no public workspace registration. Never forward an invitation, OTP, recovery link, or QR code. Gist support will never ask for one.
 
 ## Chats
 
@@ -40,7 +47,7 @@ To create a group, choose **New group**, add the intended members, confirm the n
 
 ## Send and receive messages
 
-- Newone stores the sender's original text first.
+- Gist stores the sender's original text first.
 - A stable local send identifier makes retries safe after poor connectivity.
 - Pending, sent, delivered, read, and failed states are shown separately.
 - Reply, react, edit, delete, copy, forward, pin, and report controls appear only when policy allows them.
@@ -50,7 +57,7 @@ For operational messages, include the exact location, equipment/part ID, quantit
 
 ## Translation
 
-Incoming messages can show an approved translation in your preferred language while keeping the labeled original visible. Newone detects the original language on the server; the label may show Korean, Spanish, English, mixed, or unknown plus an ambiguity warning. Your profile language helps choose the translation you receive but is not treated as proof of what the sender wrote. Translation may be queued, ready, need review, or fail; original messaging continues in every state.
+Incoming messages can show an approved translation in your preferred language while keeping the labeled original visible. Gist detects the original language on the server; the label may show Korean, Spanish, English, mixed, or unknown plus an ambiguity warning. Your profile language helps choose the translation you receive but is not treated as proof of what the sender wrote. Translation may be queued, ready, need review, or fail; original messaging continues in every state.
 
 Human review is required before relying on machine translation for safety, legal, disciplinary, medical, payroll, immigration, accommodation, or other high-impact communication. Numbers, units, negation, urgency, deadlines, and equipment identifiers deserve explicit verification.
 
@@ -66,11 +73,11 @@ An authorized conversation member or supervisor can request a summary of a permi
 4. Correct or reject unsupported text, then approve only the exact version you reviewed.
 5. Confirm proposed actions separately before assigning an owner or due time.
 
-A summary is a derived convenience layer. It does not edit the conversation, acknowledge an update, assign work, or issue a shift handoff. If a source message changes or is removed under policy, Newone supersedes the affected summary rather than silently presenting it as current.
+A summary is a derived convenience layer. It does not edit the conversation, acknowledge an update, assign work, or issue a shift handoff. If a source message changes or is removed under policy, Gist supersedes the affected summary rather than silently presenting it as current.
 
 ## Files and photos
 
-Choose the attachment control to take a photo, select an image, or choose an approved document. Upload does not make a file immediately readable: Newone validates type/size, uploads it to a private quarantine path, scans it, and marks it available only when clean.
+Choose the attachment control to take a photo, select an image, or choose an approved document. Upload does not make a file immediately readable: Gist validates type/size, uploads it to a private quarantine path, scans it, and marks it available only when clean.
 
 Blocked or failed files cannot be opened. A copied link does not bypass conversation membership and expires quickly.
 
@@ -87,7 +94,7 @@ If acknowledgement is required, read the original/approved translation and selec
 **Work** contains source-linked shift handoffs and confirmed operational actions.
 
 1. The outgoing lead selects the time window and source messages.
-2. Newone may draft a summary when approved AI processing is available.
+2. Gist may draft a summary when approved AI processing is available.
 3. A person edits and signs the outgoing version.
 4. The incoming lead reviews the sources and acknowledges the exact signed version.
 5. Any extracted action begins unconfirmed; a person verifies its owner and timing.

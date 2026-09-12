@@ -1,4 +1,11 @@
-# Newone full product requirements
+# Gist full product requirements
+
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
 
 Status: implementation baseline for the replacement product
 Last updated: August 3, 2026
@@ -6,22 +13,22 @@ Research basis: [WhatsApp and frontline communications research](RESEARCH_WHATSA
 
 ## 1. Product decision
 
-Newone is a company-owned, WhatsApp-familiar communications system for multilingual frontline teams. It combines private direct messaging, operational groups, official company updates, verified shift handoffs, and Korean-Spanish translation in native mobile apps and a responsive web application.
+Gist is a company-owned, WhatsApp-familiar communications system for multilingual frontline teams. It combines private direct messaging, operational groups, official company updates, verified shift handoffs, and Korean-Spanish translation in native mobile apps and a responsive web application.
 
-The existing Vinext/D1 single-channel site is a **legacy prototype**. It is useful only as evidence for a few original-first translation and summary behaviors. It is not the product information architecture, identity system, persistence layer, deployment target, or visual foundation for Newone V2.
+The existing Vinext/D1 single-channel site is a **legacy prototype**. It is useful only as evidence for a few original-first translation and summary behaviors. It is not the product information architecture, identity system, persistence layer, deployment target, or visual foundation for Gist V2.
 
-Newone V2 is an independent product:
+Gist V2 is an independent product:
 
 - It does not use ChatGPT sign-in, ChatGPT account state, ChatGPT Sites hosting, or a ChatGPT user interface.
 - The target product will have its own company workspaces, accounts, sessions, applications, domain, backend, data, policies, and administration. None of those production services is implied to be deployed by this requirements document.
-- If OpenRouter is approved, Newone calls it only from Newone-controlled server infrastructure. Employees never need an OpenRouter or ChatGPT account.
+- If OpenRouter is approved, Gist calls it only from Gist-controlled server infrastructure. Employees never need an OpenRouter or ChatGPT account.
 - Native iOS and Android applications and the web application are first-class clients of the same product, not wrappers around the legacy site.
 
 ## 2. Product promise
 
-> A worker can open Newone, find the right person or team, and communicate in their own language within seconds. The company can deliver critical information, verify handoffs, and manage access without turning everyday private messaging into an administrator-visible public channel.
+> A worker can open Gist, find the right person or team, and communicate in their own language within seconds. The company can deliver critical information, verify handoffs, and manage access without turning everyday private messaging into an administrator-visible public channel.
 
-Newone should feel familiar enough that a WhatsApp user can begin without formal training, while providing the identity, access, delivery, acknowledgement, lifecycle, and audit controls expected of a company system.
+Gist should feel familiar enough that a WhatsApp user can begin without formal training, while providing the identity, access, delivery, acknowledgement, lifecycle, and audit controls expected of a company system.
 
 ## 3. Problems to solve
 
@@ -46,7 +53,7 @@ Frontline organizations commonly have some combination of these problems:
 6. **Official communication is distinct.** Updates and critical notices have targeting, delivery, acknowledgement, and escalation semantics that ordinary chat messages do not.
 7. **Work context controls noise.** Site, team, role, line, and current shift determine membership and notification routing.
 8. **Human confirmation for operational records.** AI may draft a handoff or action, but a person confirms the record and responsibility.
-9. **Transparent security.** Newone must not claim end-to-end encryption while servers process content for translation, search, retention, or governance.
+9. **Transparent security.** Gist must not claim end-to-end encryption while servers process content for translation, search, retention, or governance.
 10. **Low-friction, low-bandwidth operation.** The core loop works on older phones, intermittent networks, and shared-device deployments.
 
 ## 5. Users and jobs to be done
@@ -195,7 +202,7 @@ Acceptance criteria:
 - Administrators and privileged communicators must enroll a second factor before privileged actions.
 - A successful self-service recovery binds the newly verified session to its installation before returning membership data, preserves only that session, revokes every other Auth session/device/push destination, and records immutable security evidence.
 - Lost-TOTP help-desk recovery requires an expiring case, externally verified evidence referenced only by a keyed digest, separation of target/verifier/approver, and two distinct approvers for a privileged target. Execution resets the exact verified factor and revokes every session/device/push destination.
-- Newone does not perform human identity proofing itself. The approved verification procedure and responsible staff remain an operational launch gate, and a queued `pending_external_delivery` security notice is not delivery evidence.
+- Gist does not perform human identity proofing itself. The approved verification procedure and responsible staff remain an operational launch gate, and a queued `pending_external_delivery` security notice is not delivery evidence.
 - A session cannot be minted for an inactive organization membership.
 
 #### ID-03 — Session and device control — Must
@@ -344,7 +351,7 @@ Acceptance criteria:
 
 #### MSG-03 — Delivery and read state — Must
 
-Newone records sent, delivered, and read states separately and lets users disable read visibility for ordinary DMs if company policy permits. Critical-notice delivery and acknowledgement remain governed separately.
+Gist records sent, delivered, and read states separately and lets users disable read visibility for ordinary DMs if company policy permits. Critical-notice delivery and acknowledgement remain governed separately.
 
 Acceptance criteria:
 
@@ -403,7 +410,7 @@ Each user chooses Korean, Spanish, or original-first display. For supported text
 Acceptance criteria:
 
 - The original remains canonical and cannot be overwritten by translation.
-- Newone detects the language of every supported original server-side and routes Korean, Spanish, English, mixed, and unknown results without trusting a client-supplied language as authoritative.
+- Gist detects the language of every supported original server-side and routes Korean, Spanish, English, mixed, and unknown results without trusting a client-supplied language as authoritative.
 - Translation states are queued, translating, translated, failed, corrected, and human-reviewed.
 - Numbers, units, dates, equipment IDs, line breaks, and mentions are preserved or flagged.
 - Detected language, confidence/ambiguity, detector provenance, source language used for translation, and target language are durable and visible where they affect interpretation.
@@ -434,13 +441,13 @@ Acceptance criteria:
 
 #### TR-04 — Human-review boundary — Must
 
-Newone displays a persistent warning that automated translation is not the sole authority for emergencies, safety, medical, legal, payroll, disciplinary, immigration, or other high-impact decisions.
+Gist displays a persistent warning that automated translation is not the sole authority for emergencies, safety, medical, legal, payroll, disciplinary, immigration, or other high-impact decisions.
 
 ### 7.7 Conversation and shift summaries
 
 #### SUM-01 — Authorized automatic summary draft — Must
 
-Newone can create a conversation or shift summary on an authorized user's request and, when an organization explicitly enables it, automatically at a configured message-count or shift-boundary trigger. A summary is a derived, source-linked draft; it never replaces or edits the underlying conversation.
+Gist can create a conversation or shift summary on an authorized user's request and, when an organization explicitly enables it, automatically at a configured message-count or shift-boundary trigger. A summary is a derived, source-linked draft; it never replaces or edits the underlying conversation.
 
 Acceptance criteria:
 
@@ -496,7 +503,7 @@ Acceptance criteria:
 
 - Every urgent override and fallback attempt is audited.
 - Push/SMS content is minimized on locked screens and never exposes sensitive message bodies by default.
-- Newone does not claim to replace emergency sirens, 911/112, fire alarms, or legally required safety systems.
+- Gist does not claim to replace emergency sirens, 911/112, fire alarms, or legally required safety systems.
 
 #### UPD-04 — Updates analytics — Next
 
@@ -538,7 +545,7 @@ Acceptance criteria:
 
 #### OPS-04 — Operational forms and integrations — Later
 
-Integrate maintenance, quality, incident, HR, scheduling, timekeeping, ERP, or ticketing systems through tenant-approved connectors. Newone must not become the unreviewed system of record for specialized regulated workflows.
+Integrate maintenance, quality, incident, HR, scheduling, timekeeping, ERP, or ticketing systems through tenant-approved connectors. Gist must not become the unreviewed system of record for specialized regulated workflows.
 
 ### 7.10 Search and history
 
@@ -582,7 +589,7 @@ Acceptance criteria:
 
 #### NOTIF-02 — Presence restraint — Must
 
-Newone may show available, on shift, or last active only according to organization and user privacy policy. It must not become an employee productivity surveillance score.
+Gist may show available, on shift, or last active only according to organization and user privacy policy. It must not become an employee productivity surveillance score.
 
 #### NOTIF-03 — Push-to-talk and calls — Later
 
@@ -680,7 +687,7 @@ Users can access language-appropriate onboarding, security/recovery help, transl
 
 ## 8. Cross-platform behavior
 
-Newone uses one Expo Router product codebase with platform-specific interaction and security adapters. Capability parity means the same account, permissions, history, messages, updates, acknowledgements, and handoffs exist across platforms; it does not mean every screen must have an identical layout.
+Gist uses one Expo Router product codebase with platform-specific interaction and security adapters. Capability parity means the same account, permissions, history, messages, updates, acknowledgements, and handoffs exist across platforms; it does not mean every screen must have an identical layout.
 
 ### 8.1 Native phone: iOS and Android
 
@@ -720,7 +727,7 @@ Shared-device mode is **Next**. Shared kiosks, pooled tablets, and shift phones 
 
 The first live pilot includes:
 
-- Independent Newone identity, hosting, domain, and applications.
+- Independent Gist identity, hosting, domain, and applications.
 - Verified accounts, invitation enrollment, account recovery, MFA for privileged roles, device/session list, and immediate suspension.
 - Company hierarchy, directory, contacts, DM policy, DMs, group DMs, team groups, and scoped group administration.
 - Reliable text messaging, replies, reactions, mentions, receipts, offline outbox, private images/PDFs, and authorized search.
@@ -815,10 +822,10 @@ Metrics must not be repurposed as individual productivity, sentiment, or perform
 
 ## 13. Non-goals and hard boundaries
 
-- Newone is not a ChatGPT app, a reskinned AI chatbot, a single public company channel, or a WhatsApp Business API client.
-- Newone does not require employees to disclose personal phone numbers or upload personal address books.
+- Gist is not a ChatGPT app, a reskinned AI chatbot, a single public company channel, or a WhatsApp Business API client.
+- Gist does not require employees to disclose personal phone numbers or upload personal address books.
 - The pilot does not include public social feeds, stories/status, ads, commerce catalogs, creator discovery, or customer marketing automation.
-- Newone does not replace emergency services, alarms, legally required safety systems, or a qualified interpreter.
+- Gist does not replace emergency services, alarms, legally required safety systems, or a qualified interpreter.
 - AI does not automatically issue disciplinary actions, evaluate performance, approve payroll, determine immigration/employment eligibility, or make other high-impact employment decisions.
 - An AI-drafted action is not assigned work until a person confirms it.
 - Native apps are in scope, but app-store approval dates and external Apple/Google account decisions cannot be guaranteed by software implementation alone.

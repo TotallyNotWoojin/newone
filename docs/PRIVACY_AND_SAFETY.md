@@ -9,7 +9,7 @@ The authoritative security design is [SECURITY_ARCHITECTURE_V2.md](SECURITY_ARCH
 - AI employee-data egress is disabled by default.
 - Encrypted offline workspace caching is disabled by default. If a deployment explicitly enables it, guests remain online-only and never persist workspace snapshots, cursors, queued messages, or reply previews; expired memberships fail closed; and contractor snapshots and queued commands are capped to the membership expiry.
 - Message originals remain functional when translation, push, scanning, or other processors fail.
-- Private DMs are member-private inside a company-governed service. Newone does not claim technical end-to-end encryption while server translation, search, retention, or governance exists.
+- Private DMs are member-private inside a company-governed service. Gist does not claim technical end-to-end encryption while server translation, search, retention, or governance exists.
 - Ordinary managers and administrators have no browse-all private-message capability.
 
 ## Data minimization
@@ -18,7 +18,7 @@ Routine telemetry may contain correlation IDs, safe route/error classes, latency
 
 Push payloads default to an opaque event ID and privacy-safe category. A push never grants access to the underlying content.
 
-Offline encryption protects a cache at rest but cannot revoke it while the device is disconnected. On its next online contact, an ineligible membership triggers user-store deletion. A persisted employee envelope cannot be hydrated after its 24-hour expiry, but an app that already decrypted the workspace can keep that in-memory view while it remains disconnected until the process ends or revalidates. Newone cannot remotely wipe that memory or ciphertext unless the company separately manages the device. Deployments requiring immediate cutoff keep offline workspace caching disabled.
+Offline encryption protects a cache at rest but cannot revoke it while the device is disconnected. On its next online contact, an ineligible membership triggers user-store deletion. A persisted employee envelope cannot be hydrated after its 24-hour expiry, but an app that already decrypted the workspace can keep that in-memory view while it remains disconnected until the process ends or revalidates. Gist cannot remotely wipe that memory or ciphertext unless the company separately manages the device. Deployments requiring immediate cutoff keep offline workspace caching disabled.
 
 ## OpenRouter and model processing
 

@@ -1,18 +1,18 @@
-# App Store listing — Newone Chat
+# App Store listing — Gist Chat
 
-Status: draft for the 1.0 submission (owner review pending). Bundle `com.totallynotwoojin.newone`, ASC app id 6808028951, name "Newone Chat".
+Status: draft for the 1.0 submission (owner review pending). Bundle `com.totallynotwoojin.newone`, ASC app id 6808028951, name "Gist Chat".
 
 ## Name / subtitle
-- **Name:** Newone Chat
+- **Name:** Gist Chat
 - **Subtitle (30 chars):** Chat in your language
 
 ## Promotional text (170 chars)
-Message anyone — in English, Spanish, or Korean. Newone translates as you chat, so every conversation stays in your language and the original is always one tap away.
+Message anyone — in English, Spanish, or Korean. Gist translates as you chat, so every conversation stays in your language and the original is always one tap away.
 
 ## Description
-Newone Chat is a private messenger built for people who don't share a language.
+Gist Chat is a private messenger built for people who don't share a language.
 
-Pick English, Spanish, or Korean when you sign up. When friends write in a different language, Newone translates their messages automatically — and keeps the original right there, so nothing is ever lost in translation.
+Pick English, Spanish, or Korean when you sign up. When friends write in a different language, Gist translates their messages automatically — and keeps the original right there, so nothing is ever lost in translation.
 
 **Find people, your way**
 Search by username to find friends. Anyone can send you a message request; you decide who gets through. Block and report tools are always one tap away.
@@ -30,7 +30,7 @@ Search by username to find friends. Anyone can send you a message request; you d
 - Translation runs under a zero-data-retention policy — your messages are never used to train anything.
 - Delete your account any time from Settings.
 
-Newone Chat works on iPhone and Android, so everyone you know can join.
+Gist Chat works on iPhone and Android, so everyone you know can join.
 
 ## Keywords (100 chars)
 messenger,chat,translate,translation,korean,spanish,english,friends,group chat,voice notes,private
@@ -44,7 +44,7 @@ First release: private chats and groups with automatic English/Spanish/Korean tr
 - Support: mailto:totallynotwoojin@gmail.com (a support page on newonechat.com can replace this)
 
 ## App Review information
-- Sign-in required: yes. Demo account: `review@newonechat.com` with the password in the owner's secrets store (`~/.config/newone/review-account-password.txt`, entered in the App Store Connect demo-account field). Since v3.2 the app signs in with email then password only ("Sign in" chip → email → Continue → password); "Forgot password?" emails a code. The fixed one-time code for the review account stays configured server-side for the web/admin route but is no longer offered in the app.
+- Sign-in required: yes. Demo account: `review@newonechat.com` with the password in the owner's secrets store (`~/.config/gist/review-account-password.txt`, entered in the App Store Connect demo-account field). Since v3.2 the app signs in with email then password only ("Sign in" chip → email → Continue → password); "Forgot password?" emails a code. The fixed one-time code for the review account stays configured server-side for the web/admin route but is no longer offered in the app.
 - Notes for reviewer: Messaging between users requires two accounts; the reviewer may create a second account with any email address to exercise message requests and translation. Translation of a message into the reader's language happens automatically within seconds.
 - Contact: Woojin Lee, +1 770 686 8414, totallynotwoojin@gmail.com
 

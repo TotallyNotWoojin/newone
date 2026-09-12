@@ -1,4 +1,11 @@
-# Newone platform architecture V2
+# Gist platform architecture V2
+
+> **Stale as of Sep 12 2026 — kept for history, not a description of the app.**
+> This document describes the workplace product that was removed on Sep 10
+> 2026: organizations, units, shifts, handoffs, announcements, admin roles and
+> the invitation flow no longer exist in the client, the API or the schema.
+> Gist is a consumer texting app whose distinguishing feature is translation.
+> See [CONSUMER_PIVOT_PLAN.md](CONSUMER_PIVOT_PLAN.md) for what replaced it.
 
 Status: target architecture for implementation
 Last updated: July 27, 2026
@@ -6,17 +13,17 @@ Companion requirements: [Full product requirements](FULL_PRODUCT_REQUIREMENTS.md
 
 ## 1. Architecture decision
 
-Newone V2 is a universal Expo application backed by Supabase and a Newone-controlled backend-for-frontend (BFF). It ships as native iOS and Android applications and a responsive web/PWA client. Supabase supplies company identity primitives, Postgres, member-authorized data access, private Realtime, and private object storage. The BFF owns command validation, abuse controls, privileged workflows, session-sensitive actions, and all AI-provider egress.
+Gist V2 is a universal Expo application backed by Supabase and a Gist-controlled backend-for-frontend (BFF). It ships as native iOS and Android applications and a responsive web/PWA client. Supabase supplies company identity primitives, Postgres, member-authorized data access, private Realtime, and private object storage. The BFF owns command validation, abuse controls, privileged workflows, session-sensitive actions, and all AI-provider egress.
 
-The current Vinext/Cloudflare D1 single-channel website is a **legacy prototype**. Newone V2 does not use its ChatGPT identity headers, ChatGPT Sites ingress, one-room schema, or UI. Git history can preserve the prototype for reference, but production traffic and live employee data must not straddle the old and new authorization systems.
+The current Vinext/Cloudflare D1 single-channel website is a **legacy prototype**. Gist V2 does not use its ChatGPT identity headers, ChatGPT Sites ingress, one-room schema, or UI. Git history can preserve the prototype for reference, but production traffic and live employee data must not straddle the old and new authorization systems.
 
 The replacement is ChatGPT-independent:
 
-- Newone accounts are Supabase Auth identities tied to organization memberships.
-- The web application is hosted on a Newone/company domain, not a `chatgpt.site` domain.
-- Native applications are signed and distributed through Newone/company Apple and Google accounts.
+- Gist accounts are Supabase Auth identities tied to organization memberships.
+- The web application is hosted on a Gist/company domain, not a `chatgpt.site` domain.
+- Native applications are signed and distributed through Gist/company Apple and Google accounts.
 - OpenRouter is an optional server-side processor. No OpenRouter or ChatGPT account is exposed to employees.
-- OpenRouter credentials, routing policy, prompts, and results stay behind Newone's BFF/worker boundary.
+- OpenRouter credentials, routing policy, prompts, and results stay behind Gist's BFF/worker boundary.
 
 ## 2. Goals and constraints
 
@@ -45,7 +52,7 @@ The replacement is ChatGPT-independent:
 ## 3. System context
 
 ```text
-                    Newone-controlled clients
+                    Gist-controlled clients
         +----------------+----------------+----------------+
         | iOS native     | Android native | Responsive web |
         | Expo Router    | Expo Router    | Expo Router/PWA|
@@ -62,7 +69,7 @@ The replacement is ChatGPT-independent:
                  commands    |          | auth, reads,
                              |          | private realtime
                     +--------v----+  +--v-----------------------+
-                    | Newone BFF  |  | Supabase                 |
+                    | Gist BFF  |  | Supabase                 |
                     | validation  |  | Auth                     |
                     | rate limits |  | Postgres + RLS           |
                     | policy      |  | Realtime Broadcast       |
@@ -98,7 +105,7 @@ The logical BFF and async worker may initially run as separate Supabase Edge Fun
 | Abuse limiting | Edge/WAF plus a Redis-compatible distributed limiter and database quotas | Independent per-IP, session, member, organization, and operation limits across replicas |
 | Push | Expo Push Service initially, with direct APNs/FCM fallback path | One cross-platform integration while preserving provider delivery receipts and migration path |
 | AI translation/summaries | Provider adapter; OpenRouter candidate route | Keeps model/vendor out of product contracts and supports a direct approved provider later |
-| Web hosting | Independent Newone/company domain through EAS Hosting or an approved CDN host | Static app shell and asset delivery without ChatGPT Sites dependency |
+| Web hosting | Independent Gist/company domain through EAS Hosting or an approved CDN host | Static app shell and asset delivery without ChatGPT Sites dependency |
 | Native delivery | EAS Build/Submit or equivalent signed CI | Repeatable iOS/Android builds with environment separation and over-the-air policy |
 
 No package is installed from an unpinned range in release branches. Dependency and lockfile review are part of CI.
@@ -123,7 +130,7 @@ Responsibilities:
 
 The client never contains the Supabase secret/service-role key, OpenRouter key, push provider server credentials, scanner key, or administrative signing secret. The Supabase publishable key is expected to be public and is safe only because every accessible resource is protected by grants and RLS.
 
-### 5.2 Newone BFF
+### 5.2 Gist BFF
 
 The BFF is a narrow command and policy boundary, not a second general database API.
 
@@ -171,7 +178,7 @@ Rules:
 
 ### 5.5 Realtime
 
-Newone uses private Broadcast topics such as:
+Gist uses private Broadcast topics such as:
 
 ```text
 org:{organization_id}:conversation:{conversation_id}
@@ -388,7 +395,7 @@ Each tier of that revocation contract must be demonstrated independently; it mus
 
 ### 8.3 Web session storage
 
-- The BFF performs the authorization-code/PKCE exchange and stores the refresh credential in a Secure, HttpOnly, SameSite cookie scoped to the Newone domain.
+- The BFF performs the authorization-code/PKCE exchange and stores the refresh credential in a Secure, HttpOnly, SameSite cookie scoped to the Gist domain.
 - The browser receives a short-lived access token in memory for authorized Data/Realtimes. Refresh occurs through a CSRF-protected BFF endpoint.
 - Content Security Policy, Trusted Types where supported, dependency pinning, output encoding, and no inline third-party scripts reduce token theft risk.
 - Service workers never cache tokens, authenticated HTML responses, message JSON, or signed file URLs.
@@ -544,7 +551,7 @@ API rules:
 - Cursor pagination uses opaque signed cursors, never caller-controlled offsets for message history.
 - Error bodies contain stable machine codes, localized-safe messages, correlation ID, and optional retry time.
 - Responses with employee data are `private, no-store`; sensitive state never appears in URL query strings.
-- CORS is an allowlist of Newone web origins. Native clients are authenticated, not trusted by origin.
+- CORS is an allowlist of Gist web origins. Native clients are authenticated, not trusted by origin.
 - Body/file sizes and decompression ratios are enforced before parsing or processing.
 
 ## 11. Search architecture
@@ -610,7 +617,7 @@ The authoritative initial numeric limits are defined in the [security architectu
 - Provider route allowlist, ZDR/data denial/cache denial, strict schemas, source validation, budget/backpressure, and kill switch.
 - Formal incident response, vulnerability handling, backup/restore tests, access review, and offboarding tests.
 
-Newone describes DMs as member-private within a company-governed service. It does not claim that servers technically cannot access content. Legal hold or designated investigation access must use a scoped, approved, audited workflow; an ordinary admin console never offers browse-all messages.
+Gist describes DMs as member-private within a company-governed service. It does not claim that servers technically cannot access content. Legal hold or designated investigation access must use a scoped, approved, audited workflow; an ordinary admin console never offers browse-all messages.
 
 ## 15. Retention, deletion, and legal hold
 
@@ -683,10 +690,10 @@ Production employee data is never copied into development. Staging uses syntheti
 Illustrative independent layout:
 
 ```text
-app.newone.company       web/PWA application
-api.newone.company       BFF commands and web session endpoints
-data.newone.company      optional custom Supabase API/Auth domain
-status.newone.company    service status and support instructions
+app.gist.company       web/PWA application
+api.gist.company       BFF commands and web session endpoints
+data.gist.company      optional custom Supabase API/Auth domain
+status.gist.company    service status and support instructions
 ```
 
 The exact company domain is a deployment decision. No production URL or auth trust depends on `chatgpt.site` or ChatGPT headers.
@@ -753,7 +760,7 @@ Tests cover Select, Insert, Update, Delete, RPC, Realtime subscribe/send, Storag
 ### Phase 0 — Foundation and decisions
 
 - Approve product requirements, identity source, workspace hierarchy, roles, DM policy, retention baseline, device policy, and support ownership.
-- Create isolated Supabase/Expo/BFF environments and Newone domains.
+- Create isolated Supabase/Expo/BFF environments and Gist domains.
 - Establish threat model, RLS conventions, audit events, release pipeline, a paid production PITR or equivalent continuous-backup path meeting the 15-minute RPO, a separate object-storage backup, recovery tests, and synthetic fixtures.
 - Keep AI egress disabled.
 
@@ -801,7 +808,7 @@ Exit evidence: production readiness review and signed owner acceptance for secur
 1. Freeze the legacy single-channel prototype as non-authoritative and clearly label any remaining preview.
 2. Do not copy fictional/demo content into production.
 3. If any legitimate records exist, inventory and classify them, obtain owner approval, map identities/conversations, and import through a one-time audited tool into isolated staging first.
-4. Run Newone V2 in parallel only for an explicitly bounded pilot window; never allow identity or authorization fallback between systems.
+4. Run Gist V2 in parallel only for an explicitly bounded pilot window; never allow identity or authorization fallback between systems.
 5. After acceptance, disable legacy writes, export approved records, revoke legacy secrets, remove ChatGPT identity trust and production routing, and retain/delete data according to policy.
 6. Verify that old origins, signed URLs, API keys, worker routes, and sessions no longer provide access.
 

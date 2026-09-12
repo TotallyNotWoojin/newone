@@ -1,10 +1,10 @@
-# Newone product research: WhatsApp and frontline communications
+# Gist product research: WhatsApp and frontline communications
 
 Research cut-off: July 27, 2026
 
 ## Executive conclusion
 
-Newone should copy WhatsApp's interaction model, not WhatsApp's identity or governance model.
+Gist should copy WhatsApp's interaction model, not WhatsApp's identity or governance model.
 
 The product pattern is:
 
@@ -32,7 +32,7 @@ Sources: [WhatsApp Messaging](https://www.whatsapp.com/messaging), [chat filters
 
 ### Interaction patterns worth adopting
 
-| WhatsApp pattern | Why it works | Newone treatment |
+| WhatsApp pattern | Why it works | Gist treatment |
 |---|---|---|
 | Mixed DM and group inbox | People scan one list instead of choosing a collaboration abstraction first | One Chats inbox, with optional filters for DMs, groups, announcements, unread, favorites, site, and shift |
 | Avatar, message preview, time, unread badge | High information density without opening a thread | Use the same scan hierarchy; add language/priority state only when action is required |
@@ -45,13 +45,13 @@ Sources: [WhatsApp Messaging](https://www.whatsapp.com/messaging), [chat filters
 | Per-chat mute and notification controls | Prevents overload | Add quiet hours, on-shift routing, mention-only mode, and a governed urgent override |
 | Multi-device continuity | Workers can move between phone, tablet, and desktop | iOS, Android, responsive web/PWA, device inventory, and remote revocation |
 
-WhatsApp also supports events and organized announcement replies, group member role tags, large file sharing, group voice chat, and group-history sharing for new members. These are useful references for later phases, but Newone should not copy public Status stories, public channel discovery, ads, commerce catalogs, creator tooling, or entertainment-first features. Sources: [events and announcement replies](https://about.fb.com/news/2024/05/events-in-whatsapp-communities/), [member tags and reminders](https://about.fb.com/news/2026/01/whatsapp-group-chats-member-tags-text-stickers-event-reminders/), and [group message history](https://blog.whatsapp.com/introducing-group-message-history-a-more-private-way-to-catch-up-in-group-chats).
+WhatsApp also supports events and organized announcement replies, group member role tags, large file sharing, group voice chat, and group-history sharing for new members. These are useful references for later phases, but Gist should not copy public Status stories, public channel discovery, ads, commerce catalogs, creator tooling, or entertainment-first features. Sources: [events and announcement replies](https://about.fb.com/news/2024/05/events-in-whatsapp-communities/), [member tags and reminders](https://about.fb.com/news/2026/01/whatsapp-group-chats-member-tags-text-stickers-event-reminders/), and [group message history](https://blog.whatsapp.com/introducing-group-message-history-a-more-private-way-to-catch-up-in-group-chats).
 
 ### Translation lesson
 
-WhatsApp introduced translation for DMs, groups, and Channels, and Android can automatically translate an entire conversation. Its privacy advantage is that translation runs on the device. Initial Android coverage included Spanish but not Korean, and platform coverage differs. Newone cannot depend on the operating system to provide reliable Korean-Spanish translation. [WhatsApp message translation](https://about.fb.com/news/2025/09/introducing-message-translations-whatsapp/)
+WhatsApp introduced translation for DMs, groups, and Channels, and Android can automatically translate an entire conversation. Its privacy advantage is that translation runs on the device. Initial Android coverage included Spanish but not Korean, and platform coverage differs. Gist cannot depend on the operating system to provide reliable Korean-Spanish translation. [WhatsApp message translation](https://about.fb.com/news/2025/09/introducing-message-translations-whatsapp/)
 
-Newone should therefore:
+Gist should therefore:
 
 - Store the original text as the canonical message.
 - Render a per-recipient translation beneath or in place of the original, with one-tap original reveal.
@@ -89,7 +89,7 @@ Companies do not use one giant room. They use different communication objects be
 
 ## What existing workplace products teach us
 
-| Product | Relevant strength | Lesson for Newone |
+| Product | Relevant strength | Lesson for Gist |
 |---|---|---|
 | Microsoft Teams | Shifts, shift-based tags, shared-device mode, conditional access, retention, legal hold, eDiscovery | Route by who is working; treat shared devices and governance as first-class |
 | Slack | Channels, DMs, search, workflows, retention, audit, DLP, legal hold | Make operational history searchable and integrations extensible without adopting its knowledge-worker density |
@@ -102,7 +102,7 @@ Official references: [Teams frontline overview](https://learn.microsoft.com/en-u
 
 ### Targeting by current work context
 
-Teams supports shift-based tags, Connecteam uses automatically maintained smart groups, and Beekeeper restricts Streams by site, team, or topic. Newone should model site, department, line, role, and scheduled shift as attributes, then use policy-controlled dynamic groups. Employees who change role or location should move automatically. Off-shift employees should not receive routine alerts.
+Teams supports shift-based tags, Connecteam uses automatically maintained smart groups, and Beekeeper restricts Streams by site, team, or topic. Gist should model site, department, line, role, and scheduled shift as attributes, then use policy-controlled dynamic groups. Employees who change role or location should move automatically. Off-shift employees should not receive routine alerts.
 
 ### Acknowledgement is not a read receipt
 
@@ -112,7 +112,7 @@ These are different facts:
 2. **Read:** the user opened the item.
 3. **Acknowledged:** the user deliberately confirmed understanding or receipt.
 
-Safety instructions, policy changes, and urgent operational notices require the third state. Connecteam, Beekeeper, Staffbase, and Workvivo all implement explicit acknowledgement and non-responder reporting. Newone needs a distinct critical-notice object instead of overloading a chat message.
+Safety instructions, policy changes, and urgent operational notices require the third state. Connecteam, Beekeeper, Staffbase, and Workvivo all implement explicit acknowledgement and non-responder reporting. Gist needs a distinct critical-notice object instead of overloading a chat message.
 
 ### Shift handoff is a signed record
 
@@ -120,13 +120,13 @@ A handoff should include production status, open issues, task status, deadlines,
 
 ### Offboarding must be immediate
 
-Deleting or disabling an identity provider account is not sufficient if an existing mobile session remains valid. Newone needs one action that suspends the membership, revokes all refresh tokens and device sessions, removes future group access, transfers ownership, and preserves prior company records according to policy. Relevant cautions: [Connecteam offboarding](https://help.connecteam.com/en/articles/8222038-what-happens-if-i-have-to-let-an-employee-go-will-they-still-have-access-to-the-chat) and [Beekeeper SSO lifecycle warning](https://help.beekeeper.io/hc/en-us/articles/26554133282972-Single-Sign-On-Overview).
+Deleting or disabling an identity provider account is not sufficient if an existing mobile session remains valid. Gist needs one action that suspends the membership, revokes all refresh tokens and device sessions, removes future group access, transfers ownership, and preserves prior company records according to policy. Relevant cautions: [Connecteam offboarding](https://help.connecteam.com/en/articles/8222038-what-happens-if-i-have-to-let-an-employee-go-will-they-still-have-access-to-the-chat) and [Beekeeper SSO lifecycle warning](https://help.beekeeper.io/hc/en-us/articles/26554133282972-Single-Sign-On-Overview).
 
 ## Why the WhatsApp Business products are not the backend
 
 The WhatsApp Business App serves small businesses talking to customers. The WhatsApp Business Platform serves programmatic customer engagement, support, marketing, commerce, notifications, and verification. Neither is an internal workforce identity and records system. Sources: [Business App](https://whatsappbusiness.com/products/business-app/) and [Business Platform](https://whatsappbusiness.com/products/business-platform/).
 
-Newone specifically needs:
+Gist specifically needs:
 
 - Employer-controlled identity and membership.
 - Joiner, mover, and leaver automation.
@@ -157,7 +157,7 @@ Examples: [Cladtek mobile-first manufacturing deployment](https://staffbase.com/
 
 ### Must exist before an employee pilot
 
-- Independent Newone identity, domain, and hosting with no ChatGPT dependency.
+- Independent Gist identity, domain, and hosting with no ChatGPT dependency.
 - Native iOS and Android app plus responsive web/PWA.
 - Company workspace, verified accounts, directory, contacts/connections, and role-scoped administration.
 - DMs, group DMs, persistent groups, and announcement-only spaces.
@@ -197,4 +197,4 @@ Examples: [Cladtek mobile-first manufacturing deployment](https://staffbase.com/
 
 ## Product positioning
 
-> Newone is the company-owned, WhatsApp-familiar communications system for multilingual frontline teams: private messaging, operational groups, verified shift handoffs, and critical notices that every employee can understand and acknowledge.
+> Gist is the company-owned, WhatsApp-familiar communications system for multilingual frontline teams: private messaging, operational groups, verified shift handoffs, and critical notices that every employee can understand and acknowledge.

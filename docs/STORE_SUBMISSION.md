@@ -6,10 +6,10 @@ Console; the answers to give are written out here.
 
 ## Shared facts
 
-- App name: Newone Chat. Bundle / package: `com.totallynotwoojin.newone`.
+- App name: Gist Chat. Bundle / package: `com.totallynotwoojin.newone`.
 - Category: Social Networking (secondary: Productivity). Age rating: 4+ (messaging and user-generated content declared; reporting and blocking exist).
 - Pricing: free, no in-app purchases, no ads.
-- Sign-in (v3.2): email, then password ("Sign in" chip → email → Continue → password → Sign in); "Forgot password?" emails a one-time code and then asks for a new password. Review account: `review@newonechat.com`; its password lives in `~/.config/newone/review-account-password.txt` on the owner's Mac (the App Store Connect demo-account field carries it; never commit it). The six-digit static code in `~/.config/newone/review-account-code.txt` still serves the server's web/admin code route but the app no longer offers a code sign-in.
+- Sign-in (v3.2): email, then password ("Sign in" chip → email → Continue → password → Sign in); "Forgot password?" emails a one-time code and then asks for a new password. Review account: `review@newonechat.com`; its password lives in `~/.config/gist/review-account-password.txt` on the owner's Mac (the App Store Connect demo-account field carries it; never commit it). The six-digit static code in `~/.config/gist/review-account-code.txt` still serves the server's web/admin code route but the app no longer offers a code sign-in.
 - Hosted pages: GitHub Pages from the `gist-legal` repo (https://totallynotwoojin.github.io/gist-legal/): index, privacy, terms, support. Switch to newonechat.com once DNS is set (see below). A copy also sits in the public Supabase storage bucket `site`.
 
 ## What the app collects (for both questionnaires)
@@ -84,4 +84,76 @@ Meanwhile the sideload APK and the internal track (up to 100 emailed testers) ke
 
 ## Android sideload distribution (Sep 5 2026)
 
-The APK is published as a GitHub Release asset on `TotallyNotWoojin/gist-legal` (GitHub Pages cannot host files over 100 MB). Stable link used on the site: https://github.com/TotallyNotWoojin/gist-legal/releases/latest/download/newone.apk — upload each new build as `newone.apk` on a new release tag (plus the versioned file name) so the link never changes. Sideloaded installs do not auto-update; if Play App Signing later signs the app with a different key, sideload users must uninstall before installing from Play.
+The APK is published as a GitHub Release asset on `TotallyNotWoojin/gist-legal` (GitHub Pages cannot host files over 100 MB). Stable link used on the site: https://github.com/TotallyNotWoojin/gist-legal/releases/latest/download/gist.apk — upload each new build as `gist.apk` on a new release tag (plus the versioned file name) so the link never changes. Sideloaded installs do not auto-update; if Play App Signing later signs the app with a different key, sideload users must uninstall before installing from Play.
+
+## Naming and identity: the windows that shut at first publish (Sep 11-12 2026)
+
+Renaming Newone to Gist taught this the expensive way. Everything below is
+cheap before the first public release and impossible or costly after.
+
+**Identifiers are permanent; names are not.**
+
+- A bundle ID is welded to an App Store record the moment a build is uploaded.
+  The old record is stuck on `com.totallynotwoojin.newone` for good, so the
+  rename needed a **new** record — and the App Store Connect API cannot create
+  app records, only a human in the web console can.
+- A Play package name can never change. A different package is a different
+  app: no installs, no reviews, no upgrade path for existing users.
+- Renaming a GitHub repository leaves **no** Pages redirect. `/newone-legal/`
+  began returning 404 the moment the repo became `gist-legal`, which matters
+  because the store listing links to privacy and support there. Re-check every
+  live URL after such a move; do not assume a redirect exists.
+
+**Check name availability against App Store Connect, never a store search.**
+The iTunes Search API only indexes *published* apps, so it reported Gist,
+Parlo, Habla, Dialect, Lango, Murmur, Weave, Agora, Aloud, Alba, Vela, Chorus,
+Sonder, Attune and Lingotalk as free. Every one was taken. Names are reserved
+when a record is created, held account-wide, and never expire, so bare
+dictionary words are effectively gone. The only real test:
+
+```
+PATCH /v1/appInfoLocalizations/{id}  {"attributes":{"name":"Candidate"}}
+  200 -> claimable (restore the original immediately)
+  409 ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.DIFFERENT_ACCOUNT -> taken
+```
+
+Compounds survive where bare words do not: `Gist Chat`, `Gist Messenger`,
+`Gisto`, `Gistr`, `Weave Chat` were all free the same afternoon. The store name
+and the home-screen name are separate fields with separate constraints — the
+phone says **Gist**, the store says **Gist Chat**.
+
+**A new App ID starts with no capabilities.** The first archive under
+`com.totallynotwoojin.gist` failed with "doesn't include the aps-environment
+entitlement", because push must be enabled on the bundle ID explicitly
+(`POST /v1/bundleIdCapabilities`, `PUSH_NOTIFICATIONS`). Provisioning profiles
+are immutable, so the profile then has to be **deleted and reissued** — editing
+it is not possible. Confirm the reissued profile really carries the
+entitlement before rebuilding:
+
+```
+security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/<uuid>.mobileprovision | grep aps-environment
+```
+
+Run `ios-archive-upload.sh <build> no` to archive and export **without**
+uploading. That dry run is what surfaced the missing capability, well before
+it could block a real submission.
+
+**Asset rules worth not rediscovering.**
+
+- The 1024px App Store icon must have **no alpha channel** at all. Composite
+  onto an opaque background and save as RGB.
+- Android needs a real adaptive icon — a transparent foreground with the mark
+  inside the inner ~66% safe zone, plus a background colour. Without one,
+  launchers mask the square artwork and crop it badly. Gist's Android config
+  had no `adaptiveIcon` for its entire life before this.
+- Service-worker cache names must be bumped on a rebrand **and** the activate
+  handler must keep sweeping the old prefixes, or a returning visitor holds the
+  previous shell and icons forever.
+- Screenshots contain the app's own wordmark, so a rename invalidates every
+  one of them. Apple rejects screenshots that do not match the build.
+
+**Before creating the new records**, export the old listing so the rebuild is a
+paste rather than a retype: per-locale name, subtitle, description, keywords,
+promotional text, URLs, plus every screenshot binary via
+`appScreenshots -> imageAsset.templateUrl` with `{w}/{h}/{f}` substituted.
+Ours landed in `~/.cache/newone-release/store-metadata/`.

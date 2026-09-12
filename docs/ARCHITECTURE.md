@@ -1,6 +1,6 @@
-# Newone architecture entrypoint
+# Gist architecture entrypoint
 
-Newone is an independent universal Expo application backed by Supabase. It has no ChatGPT identity, ChatGPT Sites runtime, D1 database, or legacy Relay authorization dependency.
+Gist is an independent universal Expo application backed by Supabase. It has no ChatGPT identity, ChatGPT Sites runtime, D1 database, or legacy Relay authorization dependency.
 
 The authoritative architecture is [PLATFORM_ARCHITECTURE_V2.md](PLATFORM_ARCHITECTURE_V2.md). The authoritative threat model and release gates are [SECURITY_ARCHITECTURE_V2.md](SECURITY_ARCHITECTURE_V2.md).
 
@@ -11,9 +11,9 @@ iOS / Android Expo app
   |  native PKCE session in OS secure storage
   |
 Responsive Expo web app
-  |  HttpOnly SameSite session through the Newone BFF
+  |  HttpOnly SameSite session through the Gist BFF
   v
-Newone /v2 command API and BFF (Supabase Edge Functions initially)
+Gist /v2 command API and BFF (Supabase Edge Functions initially)
   |-- active membership, current session, MFA, schema, quota, and idempotency checks
   |-- server-only OpenRouter, push, scanner, and administrative adapters
   v
