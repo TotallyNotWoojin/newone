@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 23): Settings → Appearance switches System / Light / Dark and
 # the app repaints before the sheet closes. Every state is photographed — the

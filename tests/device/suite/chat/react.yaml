@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Long-press TARGET → React 👍 → a 👍 chip appears under the message.
 # The composer keeps the keyboard up after a send; a long-press on a bubble that

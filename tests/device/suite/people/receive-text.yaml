@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Recipient opens the conversation with PEER and sees TEXT.
 - launchApp

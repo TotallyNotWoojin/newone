@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Switch UI language while a conversation exists: labels change, the
 # message original text does not.

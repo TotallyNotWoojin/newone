@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Fill the sign-up form with the given values and expect ERROR instead of
 # the code screen.

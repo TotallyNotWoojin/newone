@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Fallback after foreground-see.yaml: the message may have arrived while the
 # list sat at the top of the thread. Scroll down to find it, so the report can

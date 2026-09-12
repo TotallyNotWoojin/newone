@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # iOS asks "Open in “Newone”?" for a custom-scheme link opened from outside the
 # app (run-2026-09-04T09-40-33); confirm it when it appears.

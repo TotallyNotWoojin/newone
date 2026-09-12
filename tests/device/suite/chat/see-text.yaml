@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # TEXT must render within TIMEOUT ms (a message arriving on the other
 # device, or reappearing on this one after an edit/relaunch/foreground).

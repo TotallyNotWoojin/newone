@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # After the force-quit and relaunch (common/relaunch.yaml) the answered card
 # must not come back: the answer is stored on the device.

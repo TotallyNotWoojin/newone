@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The user taps "Resend code": the app confirms a new code was sent and the
 # link shows a cooldown countdown.

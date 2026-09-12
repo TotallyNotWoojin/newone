@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 - extendedWaitUntil:
     visible: "Open image full screen"

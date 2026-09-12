@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # With "Enter key sends" ON (the default) the keyboard return key sends: the
 # bubble appears and the composer empties without touching the send button.

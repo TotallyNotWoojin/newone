@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Android variant of common/returning-verify.yaml (v3.2 flow): the password
 # field does not expose its typed value as visible text on Android, so type the

@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Chats → the Pinned entry on the browsing row → pins from every chat, grouped
 # by the chat that holds them; tapping one opens that chat at the message.

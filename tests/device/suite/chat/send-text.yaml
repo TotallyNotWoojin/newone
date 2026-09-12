@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Inside an open conversation: type TEXT and send; it renders in the timeline.
 - extendedWaitUntil:

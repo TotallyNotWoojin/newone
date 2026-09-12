@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 47d): the quote on a reply is a way back. Tapping it scrolls to
 # the message the reply answers and centres it (scrollToIndex, viewPosition 0.5).

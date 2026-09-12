@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The revoked device must fall back to the sign-in screen: first on its
 # next action, at the latest after a relaunch.

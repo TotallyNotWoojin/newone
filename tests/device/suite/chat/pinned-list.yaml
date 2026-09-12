@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Controls → Pinned → the pinned message is listed → tapping it closes the sheet
 # and lands on the message in the conversation.

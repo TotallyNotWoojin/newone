@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # An existing member comes back (v3.2 flow): the "Sign in" mode chip, the
 # email, Continue. The service looks the account up; for an account with a

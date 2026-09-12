@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 - assertVisible: "Código de un solo uso"
 - scrollUntilVisible:

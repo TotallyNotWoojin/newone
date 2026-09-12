@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Type, tap send, and immediately force-quit: on relaunch the message must
 # be present (delivered from the outbox) rather than lost.

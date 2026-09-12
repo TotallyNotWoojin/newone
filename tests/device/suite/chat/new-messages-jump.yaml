@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Scrolled back through a conversation, a message that arrives shows a pill
 # instead of yanking the thread; tapping it returns to the newest message.

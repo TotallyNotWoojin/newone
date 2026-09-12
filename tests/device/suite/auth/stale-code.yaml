@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # After a resend, the superseded (old) code is entered. It must be refused.
 - assertVisible: "One-time code"

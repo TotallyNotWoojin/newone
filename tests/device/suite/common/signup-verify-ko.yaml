@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 - assertVisible: "일회용 코드"
 - scrollUntilVisible:

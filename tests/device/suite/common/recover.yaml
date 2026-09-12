@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Recovery after a failed step: a Message actions sheet or a dialog left open
 # would swallow the next step's long-press or tap, and a stuck keyboard hides

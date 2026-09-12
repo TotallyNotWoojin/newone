@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Add attachment → Choose file → the system document picker; pick the first
 # document if the simulator offers one, otherwise cancel (reported).

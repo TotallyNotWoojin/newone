@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Sign-in is email only (v3.2): on the "Sign in" step there are no Email/Phone
 # channel chips and no "Email me a code"/"Use password" method chips; the email

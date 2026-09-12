@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Force-quit and reopen: the session must persist straight into Chats.
 - stopApp

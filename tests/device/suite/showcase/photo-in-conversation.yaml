@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Relaunch, open the conversation, then send a photo from the library.
 - runFlow:

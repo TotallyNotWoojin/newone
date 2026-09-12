@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Returning sign-in ("Sign in" mode chip — "Returning member" on older builds)
 # with an email that has no account: the lookup says so plainly and offers to

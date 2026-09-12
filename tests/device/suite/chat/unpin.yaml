@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Long-press TARGET → Unpin; Pin is offered again afterwards.
 # The composer keeps the keyboard up after a send; a long-press on a bubble that

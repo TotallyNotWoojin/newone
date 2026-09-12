@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Add attachment → Photo library → first photo → Send; the bubble is the photo
 # itself: dimmed under a progress ring while uploading, then tappable with the

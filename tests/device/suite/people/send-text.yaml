@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Open the conversation with PEER and send TEXT; it must render as sent (no
 # failure marker).

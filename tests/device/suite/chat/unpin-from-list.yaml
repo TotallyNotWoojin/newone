@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 41): a pin can be taken back from the list it lives in.
 # Controls → Pinned → the row's "Unpin: <sender>" → the row goes and the list

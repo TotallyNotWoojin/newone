@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Right after launch the status pill ("Reconnecting…") can still be showing.
 # Since v3.1 it floats over the list instead of pushing it down, so the PEER

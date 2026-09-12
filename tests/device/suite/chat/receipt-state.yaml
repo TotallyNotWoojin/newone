@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The sender's own bubble exposes its receipt state through its meta row.
 - extendedWaitUntil:

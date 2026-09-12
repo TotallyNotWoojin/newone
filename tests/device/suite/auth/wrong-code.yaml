@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # On the code screen the user types a wrong six-digit code. The app must
 # show a visible, specific error and stay on the code screen.

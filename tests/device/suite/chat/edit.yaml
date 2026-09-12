@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Long-press own TARGET → edit field → Save edit → new text + "edited" label.
 # The composer keeps the keyboard up after a send; a long-press on a bubble that

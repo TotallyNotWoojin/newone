@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # From the password or code step, "Use a different email" (id different-email;
 # "Use a different email or phone" on older builds) returns to the email. The

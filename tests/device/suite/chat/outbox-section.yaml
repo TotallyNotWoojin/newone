@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Settings shows the message outbox section (queued/failed sends).
 - tapOn: "Back to chats"

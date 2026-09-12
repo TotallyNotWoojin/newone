@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The user types the code from their real inbox and expects to land in Chats.
 - assertVisible: "One-time code"

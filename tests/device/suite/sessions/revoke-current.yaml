@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Ending the current device's own session from Settings. Consumer accounts have
 # no "Revoke this session" control (settings.tsx renders that RowAction only

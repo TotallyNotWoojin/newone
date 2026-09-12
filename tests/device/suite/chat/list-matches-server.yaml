@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The Chats list shows every conversation the server says the user is in, with
 # the newest text as its preview. NAME_n/PREVIEW_n come from the server; HAS_2

@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Accept the Spanish label too, so a language step that ended mid-way does not
 # strand every later step.

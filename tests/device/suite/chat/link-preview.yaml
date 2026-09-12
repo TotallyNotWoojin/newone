@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 47g): a message holding a link grows a card saying what the page
 # calls itself. The phone never fetches the page — the gateway did, once — so

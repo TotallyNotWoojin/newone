@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 37): a group is its member set, so picking exactly the people
 # who are already in one does not make a second group. Create answers with

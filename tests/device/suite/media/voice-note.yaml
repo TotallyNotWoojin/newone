@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Mic button → (permission) → record ~2s → Send voice message → audio bubble.
 - extendedWaitUntil:

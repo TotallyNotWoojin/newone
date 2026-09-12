@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # With "Enter key sends" OFF the keyboard return key breaks the line: the draft
 # stays in the composer with its send button and nothing is sent (the area

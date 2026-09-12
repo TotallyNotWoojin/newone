@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The user force-quits and reopens the app: the session must persist and
 # land straight in Chats. Then they sign out from Settings like a human.

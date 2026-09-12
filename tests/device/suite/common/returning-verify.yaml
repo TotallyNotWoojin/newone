@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # The password step of the returning sign-in (v3.2): type the password (field
 # id "password"), Sign in, land on Chats. Follows common/returning-request.yaml.

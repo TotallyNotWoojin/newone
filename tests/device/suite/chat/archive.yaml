@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Controls → Archive conversation (groups only); the sheet closes.
 - tapOn: "Conversation settings"

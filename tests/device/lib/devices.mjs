@@ -3,9 +3,15 @@
 // 17 Pro Max are hard-excluded so a run can never touch them.
 import { execFileSync } from 'node:child_process';
 
-export const APP_ID = 'com.totallynotwoojin.newone';
+export const APP_ID = 'com.totallynotwoojin.gist';
+// The simulator build of the renamed app. Built with:
+//   xcodebuild -workspace ios/Gist.xcworkspace -scheme Gist -configuration Release \
+//     -sdk iphonesimulator -derivedDataPath ~/.cache/newone-release/sim build \
+//     CODE_SIGNING_ALLOWED=NO
+// The old default pointed into Xcode's DerivedData for the pre-rename project,
+// which still exists on disk and would silently install the wrong app.
 export const APP_PATH = process.env.NEWONE_APP_PATH
-  ?? '/Users/woojin/Library/Developer/Xcode/DerivedData/Newone-bncixaxagctigcezdsldwgsoxvsz/Build/Products/Release-iphonesimulator/Newone.app';
+  ?? `${process.env.HOME}/.cache/newone-release/sim3/Build/Products/Release-iphonesimulator/Gist.app`;
 export const OWNER_DEVICES = new Set([
   '084E6094-8685-40DA-AB64-9DF887F48842', // iPhone 17 Pro — owner uses by hand
   '74D8B645-02E0-4D3F-AEF2-1E8BB7813D7B', // iPhone 17 Pro Max — owner uses by hand

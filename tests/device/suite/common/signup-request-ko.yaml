@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # Same as common/signup-request.yaml, but the human picks 한국어 as their
 # language before filling the form; the server stores preferred_language=ko.

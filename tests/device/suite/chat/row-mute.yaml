@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # v3.3 (backlog 47b): mute from the chat row, then unmute from the same place.
 # The muted row draws a crossed-out bell rather than a word, so the proof the

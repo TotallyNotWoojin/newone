@@ -1,4 +1,4 @@
-appId: com.totallynotwoojin.newone
+appId: com.totallynotwoojin.gist
 ---
 # App was backgrounded (another app in front) for a minute, then brought
 # back: the message sent meanwhile must appear without a manual refresh.
