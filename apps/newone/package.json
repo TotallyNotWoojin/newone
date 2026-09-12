@@ -5,7 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.15",
     "@expo/vector-icons": "^15.0.2",
-    "@supabase/supabase-js": "^2.110.9",
+    "@supabase/supabase-js": "^2.116.0",
     "expo": "~57.0.19",
     "expo-asset": "~57.0.8",
     "expo-audio": "~57.0.4",
