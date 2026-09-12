@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const PACKAGE = 'com.totallynotwoojin.newone';
+const PACKAGE = 'com.totallynotwoojin.gist';
 
 export async function playEdit() {
   const key = JSON.parse(readFileSync(

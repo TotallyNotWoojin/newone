@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const PACKAGE = 'com.totallynotwoojin.newone';
+const PACKAGE = 'com.totallynotwoojin.gist';
 const account = JSON.parse(readFileSync(join(homedir(), '.config', 'newone', 'play-service-account.json'), 'utf8'));
 const [aabPath, track = 'internal', releaseName] = process.argv.slice(2);
 if (!aabPath) {

@@ -72,5 +72,7 @@ platinum-sorter-*.json
 # lives in ~/.config/newone/ and tools/release/sync-firebase-config.sh puts it
 # in place for a build; verify-repository-security.mjs fails if it is ever
 # tracked again.
-google-services.json
-GoogleService-Info.plist
+# Glob, not exact names: a second download lands as google-services-2.json,
+# which an exact-match rule does not cover (owner, Sep 12 2026).
+google-services*.json
+GoogleService-Info*.plist

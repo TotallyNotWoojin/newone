@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { createSign } from 'node:crypto';
 const [track, versionCode, releaseName = `newone build ${process.argv[3]}`] = process.argv.slice(2);
-const pkg = 'com.totallynotwoojin.newone';
+const pkg = 'com.totallynotwoojin.gist';
 const key = JSON.parse(readFileSync(`${process.env.HOME}/.config/newone/play-service-account.json`, 'utf8'));
 const now = Math.floor(Date.now() / 1000);
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
