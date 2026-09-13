@@ -84,7 +84,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Gist uses the microphone only when you record a voice message or a video to share."
+          "microphonePermission": "Gist uses the microphone only when you record a voice message or a video to share.",
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-video"
