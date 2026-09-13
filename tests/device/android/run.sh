@@ -1,6 +1,11 @@
 #!/bin/zsh
-# Android device check for Gist on the "Gist_Pixel" emulator (Pixel 7, Android
-# 15, three-button navigation -- the setup the first real Android user had).
+# Android device check for Gist on the "Gist_Flip" emulator: the SDK's
+# "6.7in Foldable" profile (1080x2636, horizontal fold-in), which is the Galaxy
+# Z Flip form factor the first real Android user had, on Android 15 with
+# three-button navigation. It matches the phone's geometry, not One UI: the
+# stock emulator has no Samsung system images, so Samsung's keyboard and
+# nav-bar behaviour still need a physical Galaxy or Samsung Remote Test Lab.
+# NEWONE_AVD=Gist_Pixel runs the same check on a Pixel 7 profile.
 #
 # Boots the emulator if it is not already running, signs in as the review
 # account, opens a conversation, focuses the composer and screenshots it with
@@ -11,7 +16,7 @@
 #   shot-dir  defaults to tests/device/.artifacts/android-<timestamp>
 #
 # Env (all optional):
-#   NEWONE_AVD            AVD name           (Gist_Pixel)
+#   NEWONE_AVD            AVD name           (Gist_Flip; or Gist_Pixel)
 #   NEWONE_SHOT_EMAIL     account email      (review@newonechat.com)
 #   NEWONE_SHOT_PASSWORD  account password   (~/.config/newone/review-account-password.txt)
 #   NEWONE_SHOT_PEER      chat to open       (Diego Ruiz)
@@ -30,7 +35,7 @@ EMU="$SDK/emulator/emulator"
 MAESTRO="$HOME/.maestro/bin/maestro"
 export MAESTRO_DRIVER_STARTUP_TIMEOUT=120000
 
-AVD="${NEWONE_AVD:-Gist_Pixel}"
+AVD="${NEWONE_AVD:-Gist_Flip}"
 APK="${1:-$(ls -t "$HOME"/.cache/newone-release/gist-*.apk 2>/dev/null | head -1)}"
 OUT="${2:-$ROOT/tests/device/.artifacts/android-$(date +%Y%m%dT%H%M%S)}"
 EMAIL="${NEWONE_SHOT_EMAIL:-review@newonechat.com}"
