@@ -58,9 +58,9 @@ beforeEach(() => {
 describe('what a chat row offers', () => {
   test('a one-to-one chat is deleted; a group is left, and it says so', () => {
     expect(conversationRowActions({ kind: 'direct' }).map((action) => action.key))
-      .toEqual(['markUnread', 'mute', 'archive', 'delete']);
+      .toEqual(['markUnread', 'mute', 'archive', 'bookmark', 'delete']);
     expect(conversationRowActions({ kind: 'group' }).map((action) => action.key))
-      .toEqual(['markUnread', 'mute', 'archive', 'leave']);
+      .toEqual(['markUnread', 'mute', 'archive', 'bookmark', 'leave']);
     expect(conversationRowActions({ kind: 'group' }).at(-1)).toMatchObject({
       labelKey: 'chat.leaveGroup',
       destructive: true,

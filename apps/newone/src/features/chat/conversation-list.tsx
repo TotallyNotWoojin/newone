@@ -46,6 +46,8 @@ const ACTION_WIDTH = 54;
 const SNAP = { duration: 160 };
 
 export type ConversationRowActionKey =
+  | 'bookmark'
+  | 'unbookmark'
   | 'markUnread'
   | 'markRead'
   | 'mute'
@@ -73,6 +75,7 @@ export function conversationRowActions(conversation: {
   unreadCount?: number;
   muted?: boolean;
   archivedByMe?: boolean;
+  favorite?: boolean;
 }): ConversationRowAction[] {
   const group = conversation.kind !== 'direct';
   return [
@@ -85,6 +88,12 @@ export function conversationRowActions(conversation: {
     conversation.archivedByMe
       ? { key: 'unarchive', labelKey: 'chat.unarchive', icon: 'arrow-undo-outline', destructive: false }
       : { key: 'archive', labelKey: 'chat.archive', icon: 'archive-outline', destructive: false },
+    // Bookmarking rides the same swipe and hover as the rest (owner request,
+    // Sep 14 2026); before, the only way was inside the chat's details. After
+    // archive so the first two, which answer the row's current state, stay put.
+    conversation.favorite
+      ? { key: 'unbookmark', labelKey: 'chat.unbookmark', icon: 'bookmark', destructive: false }
+      : { key: 'bookmark', labelKey: 'chat.bookmark', icon: 'bookmark-outline', destructive: false },
     group
       ? { key: 'leave', labelKey: 'chat.leaveGroup', icon: 'exit-outline', destructive: true }
       : { key: 'delete', labelKey: 'chat.deleteChat', icon: 'trash-outline', destructive: true },
@@ -621,13 +630,18 @@ function ConversationRow({
                 <Ionicons name="bookmark" size={12} color={colors.amber} />
               ) : null}
             </View>
-            <Text
-              style={[
-                styles.rowTime,
-                unreadCount > 0 && styles.rowTimeUnread,
-              ]}>
-              {conversation.lastActivity}
-            </Text>
+            {/* On the web the actions appear where the time and badge sit, so
+                the time yields while they show instead of being covered
+                (owner, Sep 14 2026: "the overlap looks clunky"). */}
+            {!(showActions && !slides) ? (
+              <Text
+                style={[
+                  styles.rowTime,
+                  unreadCount > 0 && styles.rowTimeUnread,
+                ]}>
+                {conversation.lastActivity}
+              </Text>
+            ) : null}
           </View>
           <View style={styles.rowPreviewLine}>
             <View style={styles.rowPreviewWrap}>
@@ -645,7 +659,7 @@ function ConversationRow({
                 {previewLine}
               </Text>
             </View>
-            {unreadCount ? (
+            {unreadCount && !(showActions && !slides) ? (
               <View
                 style={[
                   styles.unreadBadge,
