@@ -493,10 +493,11 @@ export function ConversationPane({
     const file = files[0];
     if (!file || composerDisabled) return;
     const video = file.type.startsWith('video/');
+    const image = file.type.startsWith('image/');
     const uri = URL.createObjectURL(file);
     let width: number | undefined;
     let height: number | undefined;
-    if (!video && typeof createImageBitmap === 'function') {
+    if (image && typeof createImageBitmap === 'function') {
       try {
         const bitmap = await createImageBitmap(file);
         width = bitmap.width;
@@ -506,14 +507,14 @@ export function ConversationPane({
         // Dimensions only size the preview; the upload measures again.
       }
     }
-    const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : 'png')).replace('jpeg', 'jpg');
+    const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : image ? 'png' : 'bin')).replace('jpeg', 'jpg');
     workspace.clearActionError();
     setAttachmentCaption('');
     setAttachmentImageMode('optimized');
     setSelectedAttachment({
       uri,
-      name: file.name || `${video ? 'video' : 'image'}-${Date.now()}.${extension}`,
-      mimeType: file.type || (video ? 'video/mp4' : 'image/png'),
+      name: file.name || `${video ? 'video' : image ? 'image' : 'file'}-${Date.now()}.${extension}`,
+      mimeType: file.type || (video ? 'video/mp4' : image ? 'image/png' : 'application/octet-stream'),
       size: file.size,
       width,
       height,
@@ -2123,8 +2124,12 @@ function Composer({
   useEffect(() => {
     if (Platform.OS !== 'web' || !onPickFiles || typeof document === 'undefined') return;
     const input = inputRef.current as unknown as HTMLElement | null;
-    const media = (list: FileList | null | undefined) => Array.from(list ?? [])
-      .filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    // Any file, not only a picture: a dropped PDF or document goes into the
+    // same attachment sheet as a photo and sends with Enter (owner's father,
+    // Sep 14 2026). A dropped folder arrives as an empty, typeless entry and
+    // is skipped; the sheet's own size limits judge the rest.
+    const droppable = (list: FileList | null | undefined) => Array.from(list ?? [])
+      .filter((file) => file.type !== '' || file.size > 0);
     // Page-wide, not input-wide. The first version listened on the message
     // box only, so Cmd+V did nothing unless the cursor was blinking in it --
     // which is not where people are when they paste (owner report, Sep 14
@@ -2135,7 +2140,7 @@ function Composer({
       const inOtherField = Boolean(target && target !== input
         && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable));
       if (inOtherField) return;
-      const files = media(event.clipboardData?.files);
+      const files = droppable(event.clipboardData?.files);
       if (!files.length) return;
       event.preventDefault();
       void onPickFiles(files);
@@ -2144,7 +2149,7 @@ function Composer({
       if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
     };
     const onDrop = (event: DragEvent) => {
-      const files = media(event.dataTransfer?.files);
+      const files = droppable(event.dataTransfer?.files);
       if (!files.length) return;
       event.preventDefault();
       void onPickFiles(files);

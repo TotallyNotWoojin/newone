@@ -310,3 +310,29 @@ test('a long unbroken word wraps inside its bubble instead of widening it', asyn
   expect(box.height).toBeGreaterThan(rulerBox.height * 2);
   expect(Math.round(listAfter.width)).toBe(Math.round(listBefore.width));
 });
+
+test('a dropped file of any kind lands in the attachment sheet, and Enter sends it', async ({
+  chats,
+  liveWorkspace,
+}) => {
+  // The drop used to keep only pictures and videos; the owner's father wants
+  // to drag a document in too and send it with Enter (Sep 14 2026). A real
+  // drop event with a real File, through the page-wide listener.
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  await expect(chats.getByTestId('composer-input')).toBeVisible();
+  const fileName = `notes-${Date.now()}.pdf`;
+  const dataTransfer = await chats.evaluateHandle((name) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['%PDF-1.4 the web suite dropped this'], name, { type: 'application/pdf' }));
+    return transfer;
+  }, fileName);
+  await chats.dispatchEvent('body', 'drop', { dataTransfer });
+
+  const send = chats.getByTestId('attachment-send');
+  await expect(send).toBeVisible({ timeout: 10_000 });
+  await expect(chats.getByText(fileName).first()).toBeVisible();
+  await chats.keyboard.press('Enter');
+  // The sheet goes once the upload is through, and the file is in the chat.
+  await expect(send).toHaveCount(0, { timeout: 45_000 });
+  await expect(chats.getByText(fileName).first()).toBeVisible({ timeout: 45_000 });
+});
