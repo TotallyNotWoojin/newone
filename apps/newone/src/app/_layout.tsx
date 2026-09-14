@@ -9,6 +9,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   AppState,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -71,7 +72,7 @@ function AppShell() {
           <Head>
             <title>Gist · Messages in any language</title>
             <meta
-              content="Private workplace messaging, company updates, contacts, and shift handoffs for multilingual teams."
+              content="Private messaging for people who do not share a language. Gist translates as you chat and keeps the original one tap away."
               name="description"
             />
           </Head>
@@ -88,9 +89,16 @@ function AppShell() {
           importantForAccessibility="yes"
           pointerEvents="auto"
           style={styles.privacyShield}>
-          <View style={styles.loadingMark}>
-            <Text style={styles.loadingMarkText}>n</Text>
-          </View>
+          {/* The third code-drawn Newone letterform: a literal "n" on the
+              loading screen and the privacy shield, which is the first thing a
+              person sees and the exact screen reported as still showing the old
+              logo (owner, Sep 14 2026). */}
+          <Image
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            source={require('../../assets/images/gist-splash.png')}
+            style={styles.loadingMark}
+          />
         </View>
       ) : null}
     </GestureHandlerRootView>
@@ -187,6 +195,12 @@ function NotificationAwareWorkspace({ children }: PropsWithChildren) {
     organizationId: workspace.organizationId || null,
     badgeCount,
   });
+  // The browser tab is the web app's only badge: "Gist (2)" while messages
+  // wait, the plain title once they are read (owner request, Sep 14 2026).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    document.title = badgeCount > 0 ? `Gist (${badgeCount})` : 'Gist · Messages in any language';
+  }, [badgeCount]);
   return children;
 }
 
@@ -195,9 +209,12 @@ function AuthLoadingScreen({ label }: { label: string }) {
   const styles = useThemedStyles(buildStyles);
   return (
     <View style={styles.loadingScreen}>
-      <View style={styles.loadingMark}>
-        <Text style={styles.loadingMarkText}>n</Text>
-      </View>
+      <Image
+        accessibilityIgnoresInvertColors
+        resizeMode="contain"
+        source={require('../../assets/images/gist-splash.png')}
+        style={styles.loadingMark}
+      />
       <ActivityIndicator color={colors.mint} />
       <Text style={styles.loadingText}>{label}</Text>
     </View>
@@ -224,16 +241,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   loadingMark: {
     width: 54,
     height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    backgroundColor: colors.mint,
-  },
-  loadingMarkText: {
-    color: colors.onAccent,
-    fontFamily: type.display,
-    fontSize: 31,
-    fontWeight: '900',
   },
   loadingText: {
     color: 'rgba(255,255,255,0.68)',
