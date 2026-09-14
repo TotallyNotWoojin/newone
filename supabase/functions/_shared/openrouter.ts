@@ -1208,7 +1208,14 @@ export class OpenRouterLanguageProcessor {
         (protectedSource.tokens.length > 0
           ? 'Copy each placeholder listed below exactly once, unchanged and untranslated; never invent placeholders. '
           : 'Do not output placeholder tokens of any kind. ') +
-        'Preserve line breaks and uncertainty. Return only the requested JSON object.',
+        'Preserve line breaks and uncertainty. ' +
+        // The model sees one message with no speaker or history, so an omitted
+        // Korean or Spanish subject is a guess it must not make: "아빠 kyle" from
+        // the father himself came back as "her dad Kyle" (owner report, Sep 14
+        // 2026). Laughter markers became emoji in the same message.
+        'When the source omits a subject or possessor, do not invent one: keep the reference as neutral as the source (write "Dad" rather than "her dad"), and use the first person only where the speaker plainly means themselves. ' +
+        'Render laughter markers such as ㅎㅎ, ㅋㅋ, jaja or lol as laughter words, never as emoji, and never add emoji the source does not contain. ' +
+        'Return only the requested JSON object.',
       user:
         `Source language: ${sourceLanguage === 'und' ? 'mixed or unknown; render every part in the target language' : sourceLanguage}\nTarget language: ${targetLanguage}\nSource fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
         (protectedSource.tokens.length > 0
