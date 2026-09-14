@@ -32,7 +32,10 @@ import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 
-const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements'];
+// Archived is a chip like the rest rather than a row of its own at the top
+// of the list (owner, Sep 14 2026); it sits last because it is the one you
+// reach for least.
+const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements', 'archived'];
 
 /** A row is dragged this far before its actions stay open. */
 const REVEAL_DISTANCE = 56;
@@ -253,9 +256,6 @@ export function ConversationList({
     () => filterConversations(conversations, filter, search, people, messageConversationIds, markedUnreadIds),
     [conversations, filter, markedUnreadIds, messageConversationIds, people, search],
   );
-  const archivedCount = conversations.filter(
-    (conversation) => conversation.archivedByMe && !conversation.managementOnly,
-  ).length;
   const visibleDiscoverableConversations = useMemo(() => {
     const managementOnlyIds = new Set(
       conversations.filter((conversation) => conversation.managementOnly).map((conversation) => conversation.id),
@@ -280,8 +280,7 @@ export function ConversationList({
     groups: t('chat.filterGroups'),
     announcements: t('chat.filterOfficial'),
     favorites: t('chat.filterFavorites'),
-    // Never a chip: the archive is reached from its own row.
-    archived: t('chat.archivedRow'),
+    archived: t('chat.filterArchived'),
   };
 
   return (
@@ -376,29 +375,6 @@ export function ConversationList({
         scrollEventThrottle={64}
         showsVerticalScrollIndicator={false}
         testID="conversation-list">
-        {/* Archived chats gather behind one row rather than sitting in the
-            list, and that row is also the only way back to them (v3.4). */}
-        {filter === 'archived' ? (
-          <Pressable
-            accessibilityLabel={t('chat.back')}
-            accessibilityRole="button"
-            onPress={() => onFilterChange('all')}
-            style={({ pressed }) => [styles.archiveRow, pressed && styles.rowPressed]}>
-            <Ionicons color={colors.mintDark} name="chevron-back" size={18} />
-            <Text style={styles.archiveRowText}>{t('chat.archivedRow')}</Text>
-          </Pressable>
-        ) : archivedCount && !search.trim() ? (
-          <Pressable
-            accessibilityLabel={`${t('chat.archivedRow')}: ${archivedCount}`}
-            accessibilityRole="button"
-            onPress={() => onFilterChange('archived')}
-            style={({ pressed }) => [styles.archiveRow, pressed && styles.rowPressed]}>
-            <Ionicons color={colors.inkSubtle} name="archive-outline" size={18} />
-            <Text style={styles.archiveRowText}>{t('chat.archivedRow')}</Text>
-            <Text style={styles.archiveRowCount}>{archivedCount}</Text>
-            <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
-          </Pressable>
-        ) : null}
         {filter === 'archived' && !visible.length ? (
           <Text style={styles.archiveEmpty}>{t('chat.archivedEmpty')}</Text>
         ) : null}
@@ -825,17 +801,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radii.pill,
   },
-  archiveRow: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
-  },
-  archiveRowText: { flex: 1, color: colors.ink, fontSize: 14, fontWeight: '700' },
-  archiveRowCount: { color: colors.inkSubtle, fontSize: 13, fontWeight: '700' },
   archiveEmpty: {
     color: colors.inkSubtle,
     fontSize: 13,

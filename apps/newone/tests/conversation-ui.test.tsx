@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { FlatList, Keyboard } from 'react-native';
+import { FlatList, Keyboard, Linking } from 'react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
@@ -613,6 +613,25 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.queryByLabelText('chat.completeAction')).toBeNull();
   });
 
+  test('a long press on a link opens the message actions, a tap opens the page', async () => {
+    // The link takes the touch, so before this a long press on one opened the
+    // page (Android, Sep 14 2026) and a link-only message could not be copied
+    // or replied to from its text at all.
+    const openURL = jest.spyOn(Linking, 'openURL').mockImplementation(async () => undefined);
+    mockWorkspace.loadLinkPreview = jest.fn(async () => null);
+    const message = incomingMessage({ originalText: 'https://example.com/story' });
+    await render(<ConversationPane conversation={conversation()} messages={[message]} onSend={noopSend} />);
+    const link = screen.getByRole('link');
+    await fireEvent(link, 'longPress');
+    expect(screen.getByLabelText('chat.copy')).toBeTruthy();
+    expect(openURL).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('chat.copy'));
+    await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledWith('https://example.com/story'));
+    await fireEvent.press(link);
+    expect(openURL).toHaveBeenCalledWith('https://example.com/story');
+    openURL.mockRestore();
+  });
+
   test('runs translation correction, message actions, and reply composition through the real pane', async () => {
     const onSend = jest.fn(async () => undefined);
     const message = translatedMessage({ isOwn: false });
@@ -727,6 +746,38 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByText('chat.requestToJoin'));
     expect(onRequestJoin).toHaveBeenCalledWith('discoverable-a');
     expect(screen.getByText('chat.notifications')).toBeTruthy();
+  });
+
+  test('Archived is a chip like the rest, and the only way into the archive', async () => {
+    // It used to be a row of its own at the top of the list (owner, Sep 14
+    // 2026: make it "another thing like all, unread, dm, group").
+    const onFilter = jest.fn();
+    const archived = conversation({ id: 'conversation-archived', title: 'Old thread', archivedByMe: true });
+    const listProps = {
+      desktop: true,
+      onCompose: jest.fn(),
+      onFilterChange: onFilter,
+      onSearchChange: jest.fn(),
+      onSelect: jest.fn(),
+      organizationName: 'Controlled Company',
+      search: '',
+      selectedId: 'conversation-main',
+    };
+    const view = await render(
+      <ConversationList {...listProps} conversations={[conversation(), archived]} filter="all" />,
+    );
+    expect(screen.queryByText('Old thread')).toBeNull();
+    expect(screen.queryByLabelText('chat.back')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.filterArchived'));
+    expect(onFilter).toHaveBeenCalledWith('archived');
+    await view.unmount();
+
+    await render(
+      <ConversationList {...listProps} conversations={[conversation(), archived]} filter="archived" />,
+    );
+    expect(screen.getByText('Old thread')).toBeTruthy();
+    expect(screen.queryByText('Plant Operations')).toBeNull();
+    expect(screen.queryByLabelText('chat.back')).toBeNull();
   });
 
   test('executes every mutable own-message action while preserving failures for retry', async () => {

@@ -393,7 +393,7 @@ interface WorkspaceState {
   ) => Promise<boolean>;
   updateConversationPreferences: (
     conversationId: string,
-    patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; manuallyUnread?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+    patch: ConversationPreferencePatch,
   ) => Promise<boolean>;
   updateProfile: (
     input: { displayName: string; statusMessage?: string | null },
@@ -732,6 +732,99 @@ function withTimeout<T>(promise: Promise<T>, ms: number, code: string): Promise<
 function describeError(error: unknown): string {
   if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 300);
   return String(error).slice(0, 300);
+}
+
+export type ConversationPreferencePatch = {
+  isFavorite?: boolean;
+  isPinned?: boolean;
+  isArchived?: boolean;
+  isHidden?: boolean;
+  manuallyUnread?: boolean;
+  notificationLevel?: 'all' | 'mentions' | 'none';
+  mutedUntil?: string | null;
+  translationMode?: 'automatic' | 'off';
+};
+
+/** The snapshot as the list shows it the moment a preference is tapped. */
+function applyConversationPreferences(
+  current: WorkspaceSnapshot,
+  conversationId: string,
+  patch: ConversationPreferencePatch,
+): WorkspaceSnapshot {
+  return {
+    ...current,
+    messages: patch.translationMode === 'off'
+      ? {
+          ...current.messages,
+          [conversationId]: (current.messages[conversationId] ?? []).map((message) => {
+            const { translatedText: _translatedText, targetLanguage: _targetLanguage, translation: _translation, outgoingTranslations: _outgoingTranslation, ...original } = message;
+            return { ...original, translationState: 'not_requested' as const };
+          }),
+        }
+      : current.messages,
+    // A one-to-one chat this reader is done with is gone from their list, which
+    // is what the next snapshot from the server says as well.
+    conversations: patch.isHidden
+      ? current.conversations.filter((conversation) => conversation.id !== conversationId)
+      : current.conversations.map((conversation) => {
+          if (conversation.id !== conversationId) return conversation;
+          const notificationLevel = patch.notificationLevel ?? conversation.notificationLevel ?? 'all';
+          const mutedUntil = activeMutedUntil(patch.mutedUntil !== undefined
+            ? patch.mutedUntil
+            : conversation.mutedUntil ?? null);
+          return {
+            ...conversation,
+            ...(patch.isFavorite !== undefined ? { favorite: patch.isFavorite } : {}),
+            ...(patch.isPinned !== undefined ? { pinned: patch.isPinned } : {}),
+            ...(patch.isArchived !== undefined ? { archivedByMe: patch.isArchived } : {}),
+            ...(patch.manuallyUnread !== undefined ? { manuallyUnread: patch.manuallyUnread } : {}),
+            notificationLevel,
+            mutedUntil,
+            ...(patch.translationMode !== undefined ? { translationMode: patch.translationMode } : {}),
+            muted: isConversationMuted(notificationLevel, mutedUntil),
+          };
+        }),
+  };
+}
+
+/**
+ * Undoes applyConversationPreferences after the server refused the change:
+ * only the preference fields go back, so a message that arrived meanwhile
+ * stays, and a chat that was taken out of the list returns to its place.
+ */
+function restoreConversationPreferences(
+  current: WorkspaceSnapshot,
+  previous: Conversation,
+  previousIndex: number,
+  patch: ConversationPreferencePatch,
+  previousMessages: WorkspaceSnapshot['messages'][string] | undefined,
+): WorkspaceSnapshot {
+  const at = Math.max(0, Math.min(previousIndex, current.conversations.length));
+  const conversations = current.conversations.some((conversation) => conversation.id === previous.id)
+    ? current.conversations.map((conversation) => (conversation.id !== previous.id ? conversation : {
+        ...conversation,
+        favorite: previous.favorite,
+        pinned: previous.pinned,
+        archivedByMe: previous.archivedByMe,
+        manuallyUnread: previous.manuallyUnread,
+        notificationLevel: previous.notificationLevel,
+        mutedUntil: previous.mutedUntil,
+        translationMode: previous.translationMode,
+        muted: previous.muted,
+      }))
+    : [...current.conversations.slice(0, at), previous, ...current.conversations.slice(at)];
+  return {
+    ...current,
+    conversations,
+    messages: patch.translationMode === 'off' && previousMessages
+      ? { ...current.messages, [previous.id]: previousMessages }
+      : current.messages,
+  };
+}
+
+/** Where the chat a reader last had open is kept between launches. */
+function rememberedConversationKey(userId: string) {
+  return `selected-conversation.${userId}`;
 }
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
@@ -1157,6 +1250,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
     const cacheKey = offlineWorkspaceCacheKey(userId);
     let storeInitialized = false;
+    let rememberedSelection: string | null = null;
     // A background reconciliation must not tear down Realtime. Loading is only
     // a launch state before an authoritative snapshot exists.
     if (!snapshotRef.current) setStatus('loading');
@@ -1164,6 +1258,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     try {
       await clientStore.initialize();
       storeInitialized = true;
+      // A launch reopens the chat this reader last had open, not the one that
+      // sorts first -- on the web that was the chat they last sent in (owner,
+      // Sep 14 2026). A remembered chat that is gone falls through to the
+      // first in the list below.
+      if (!selectedConversationIdRef.current) {
+        rememberedSelection = await clientStore.getCache(rememberedConversationKey(userId)).catch(() => null);
+      }
       if (!publicRuntimeConfig.offlineCacheEnabled && cacheKey) {
         await clientStore.removeCache(cacheKey);
       }
@@ -1266,7 +1367,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             || Object.prototype.hasOwnProperty.call(next.cursors, conversation.id),
         },
       ])));
-      const currentSelection = selectedConversationIdRef.current;
+      const currentSelection = selectedConversationIdRef.current || rememberedSelection;
       const nextSelection = currentSelection
         && next.conversations.some((item) => item.id === currentSelection)
         ? currentSelection
@@ -1322,7 +1423,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           } else {
             await hydrateOutbox(cached);
             if (!mountedRef.current || requestedIdentity !== refreshIdentityRef.current) return;
-            const currentSelection = selectedConversationIdRef.current;
+            const currentSelection = selectedConversationIdRef.current || rememberedSelection;
             const nextSelection = currentSelection
               && cached.conversations.some((item: Conversation) => item.id === currentSelection)
               ? currentSelection
@@ -1383,6 +1484,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     selectedConversationIdRef.current = selectedConversationId;
     loadWorkspaceOnceRef.current = loadWorkspaceOnce;
   }, [loadWorkspaceOnce, refreshIdentity, selectedConversationId]);
+
+  // Remember the open chat for the next launch (read in loadWorkspaceOnce).
+  // Only a chat the current snapshot knows is worth keeping: a stale id from
+  // a previous identity would otherwise be written under the new one.
+  const authUserId = auth.user?.id ?? null;
+  useEffect(() => {
+    if (!authUserId || !selectedConversationId) return;
+    if (!snapshotRef.current?.conversations.some((item) => item.id === selectedConversationId)) return;
+    void clientStore.putCache(rememberedConversationKey(authUserId), selectedConversationId).catch(() => undefined);
+  }, [authUserId, selectedConversationId]);
 
   useEffect(() => {
     const deadline = workspaceAccessDeadline ? Date.parse(workspaceAccessDeadline) : Number.NaN;
@@ -4232,9 +4343,22 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const updateConversationPreferences = useCallback(
     async (
       conversationId: string,
-      patch: { isFavorite?: boolean; isPinned?: boolean; isArchived?: boolean; isHidden?: boolean; manuallyUnread?: boolean; notificationLevel?: 'all' | 'mentions' | 'none'; mutedUntil?: string | null; translationMode?: 'automatic' | 'off' },
+      patch: ConversationPreferencePatch,
     ) => {
       if (!snapshot) return false;
+      // The row changes as it is tapped and the server hears afterwards; only
+      // a refusal puts it back. Waiting for the round trip first was what made
+      // bookmark, mute and archive feel slow, and a deleted one-to-one chat did
+      // not leave the list until the next refresh at all (owner, Sep 14 2026).
+      const before = snapshotRef.current ?? snapshot;
+      const previousIndex = before.conversations.findIndex((item) => item.id === conversationId);
+      const previous = before.conversations[previousIndex];
+      const previousMessages = before.messages[conversationId];
+      setSnapshot((current) => current ? applyConversationPreferences(current, conversationId, patch) : current);
+      if (patch.isHidden) {
+        const remaining = before.conversations.filter((item) => item.id !== conversationId && !item.managementOnly);
+        setSelectedConversationId((current) => current === conversationId ? remaining[0]?.id ?? '' : current);
+      }
       const result = await executeImmediate('conversation-preferences', () =>
         repositories.commands.updateConversationPreferences({
           organizationId: snapshot.organizationId,
@@ -4243,38 +4367,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           idempotencyKey: createClientId(),
         }),
       );
-      if (result === null) return false;
-      setSnapshot((current) => current ? {
-        ...current,
-        messages: patch.translationMode === 'off'
-          ? {
-              ...current.messages,
-              [conversationId]: (current.messages[conversationId] ?? []).map((message) => {
-                const { translatedText: _translatedText, targetLanguage: _targetLanguage, translation: _translation, outgoingTranslations: _outgoingTranslation, ...original } = message;
-                return { ...original, translationState: 'not_requested' as const };
-              }),
-            }
-          : current.messages,
-        conversations: current.conversations.map((conversation) => {
-          if (conversation.id !== conversationId) return conversation;
-          const notificationLevel = patch.notificationLevel ?? conversation.notificationLevel ?? 'all';
-          const mutedUntil = activeMutedUntil(patch.mutedUntil !== undefined
-            ? patch.mutedUntil
-            : conversation.mutedUntil ?? null);
-          return {
-            ...conversation,
-            ...(patch.isFavorite !== undefined ? { favorite: patch.isFavorite } : {}),
-            ...(patch.isPinned !== undefined ? { pinned: patch.isPinned } : {}),
-            ...(patch.isArchived !== undefined ? { archivedByMe: patch.isArchived } : {}),
-            ...(patch.manuallyUnread !== undefined ? { manuallyUnread: patch.manuallyUnread } : {}),
-            notificationLevel,
-            mutedUntil,
-            ...(patch.translationMode !== undefined ? { translationMode: patch.translationMode } : {}),
-            muted: isConversationMuted(notificationLevel, mutedUntil),
-          };
-        }),
-      } : current);
-      return true;
+      if (result !== null) return true;
+      if (previous) {
+        setSnapshot((current) => current
+          ? restoreConversationPreferences(current, previous, previousIndex, patch, previousMessages)
+          : current);
+      }
+      return false;
     },
     [executeImmediate, repositories.commands, snapshot],
   );

@@ -152,6 +152,7 @@ function secureCacheAdditionalData(input: {
 function cacheOwner(key: string) {
   return /^cursor\.([^.]+)\./.exec(key)?.[1]
     ?? /^workspace-snapshot\.([^.]+)$/.exec(key)?.[1]
+    ?? /^selected-conversation\.([^.]+)$/.exec(key)?.[1]
     ?? '';
 }
 

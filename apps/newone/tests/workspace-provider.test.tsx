@@ -2916,12 +2916,12 @@ describe('authoritative workspace provider', () => {
       </WorkspaceProvider>,
     );
     await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
-    await waitFor(() => expect(mockPutCache).toHaveBeenCalled(), { timeout: 1_000 });
-    expect(mockPutCache).toHaveBeenCalledWith(
-      expect.stringContaining(userId),
-      expect.any(String),
-      expect.any(String),
-    );
+    // The remembered-chat write lands first, so wait for this write in particular.
+    await waitFor(() => expect(mockPutCache).toHaveBeenCalledWith(
+        expect.stringContaining(userId),
+        expect.any(String),
+        expect.any(String),
+      ), { timeout: 1_000 });
     await view.unmount();
   });
 
@@ -3627,6 +3627,97 @@ describe('authoritative workspace provider', () => {
     expect(currentWorkspace().actionError).toBe('errors.action');
     expect(currentWorkspace().updates.find((item) => item.id === 'update-scheduled')?.acknowledged).toBe(false);
     await view.unmount();
+  });
+
+  test('a preference shows the moment it is tapped and goes back only when the server refuses', async () => {
+    // Bookmark, mute, archive and "done with this chat" waited for the round
+    // trip before the row changed, and a chat marked hidden stayed in the list
+    // until the next refresh (owner, Sep 14 2026: "a bit slow to change").
+    const snapshot = richWorkspaceSnapshot();
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    let settle: (value: unknown) => void = () => undefined;
+    mockCommand.mockImplementation(() => new Promise((resolve) => { settle = resolve; }));
+    await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    const [first, second] = currentWorkspace().conversations.filter((item) => !item.managementOnly);
+    const find = (id: string) => currentWorkspace().conversations.find((item) => item.id === id);
+    expect(find(first.id)?.favorite).toBe(false);
+    expect(find(second.id)?.muted).toBe(false);
+
+    let outcome: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      outcome = currentWorkspace().updateConversationPreferences(first.id, { isFavorite: true });
+    });
+    expect(find(first.id)?.favorite).toBe(true);
+    expect(mockCommand).toHaveBeenCalledWith(
+      'updateConversationPreferences',
+      expect.objectContaining({ conversationId: first.id, isFavorite: true }),
+    );
+    await act(async () => {
+      settle({});
+      expect(await outcome).toBe(true);
+    });
+    expect(find(first.id)?.favorite).toBe(true);
+
+    await act(async () => {
+      outcome = currentWorkspace().updateConversationPreferences(second.id, { notificationLevel: 'none' });
+    });
+    expect(find(second.id)?.muted).toBe(true);
+    await act(async () => {
+      settle(null);
+      expect(await outcome).toBe(false);
+    });
+    expect(find(second.id)?.muted).toBe(false);
+
+    const order = currentWorkspace().conversations.map((item) => item.id);
+    await act(async () => {
+      outcome = currentWorkspace().updateConversationPreferences(second.id, { isHidden: true });
+    });
+    expect(find(second.id)).toBeUndefined();
+    expect(currentWorkspace().conversations).toHaveLength(order.length - 1);
+    await act(async () => {
+      settle(null);
+      expect(await outcome).toBe(false);
+    });
+    expect(currentWorkspace().conversations.map((item) => item.id)).toEqual(order);
+  });
+
+  test('a launch reopens the chat that was open last, and a chat that is gone falls through', async () => {
+    // Without this the web reopened whichever chat sorted first, which was the
+    // one last sent in rather than the one last read (owner, Sep 14 2026).
+    const snapshot = richWorkspaceSnapshot();
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    const [first, second] = snapshot.conversations.filter((item) => !item.managementOnly);
+    const key = `selected-conversation.${userId}`;
+    mockGetCache.mockImplementation(async (cacheKey: unknown) => (cacheKey === key ? second.id : null));
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    expect(currentWorkspace().selectedConversationId).toBe(second.id);
+    await waitFor(() => expect(mockPutCache).toHaveBeenCalledWith(key, second.id));
+
+    await act(async () => {
+      currentWorkspace().selectConversation(first.id);
+    });
+    await waitFor(() => expect(mockPutCache).toHaveBeenCalledWith(key, first.id));
+    await view.unmount();
+
+    mockGetCache.mockImplementation(async (cacheKey: unknown) => (cacheKey === key ? 'conversation-gone' : null));
+    await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    expect(currentWorkspace().selectedConversationId).toBe(first.id);
+    expect(mockPutCache).not.toHaveBeenCalledWith(key, 'conversation-gone');
   });
 
   test('keeps local state fail-closed when authoritative command receipts are absent', async () => {

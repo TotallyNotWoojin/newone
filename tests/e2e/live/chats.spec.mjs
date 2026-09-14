@@ -275,3 +275,38 @@ test('Photos and files opens and asks the read function for the chat’s media',
   // real upload and a scan pass — see docs/WEB.md.
   await expect(chats.getByTestId('shared-media-tile')).toHaveCount(0);
 });
+
+test('a long unbroken word wraps inside its bubble instead of widening it', async ({
+  chats,
+  liveWorkspace,
+}, testInfo) => {
+  // A 200-character run with no space has no break opportunity, so the bubble
+  // grew to the word's width and ran off the pane (owner, Sep 14 2026, "the
+  // formatting on long messages"). Measured, not asserted from styles: the
+  // bubble's right edge stays inside the pane and the list keeps its width.
+  const list = chats.getByTestId('conversation-list');
+  const listBefore = await list.boundingBox();
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  const composer = chats.getByTestId('composer-input');
+  await composer.click();
+  const word = `overflow${'x'.repeat(180)}${Date.now()}`;
+  await chats.keyboard.type(word);
+  await chats.getByRole('button', { name: 'Send message', exact: true }).click();
+
+  // The row preview carries the same text; the pane's bubble comes after it.
+  const bubble = chats.getByText(word).last();
+  await expect(bubble).toBeVisible();
+  await expect(composer).toHaveValue('');
+  // Own messages share a right edge; a short one from the seed is the ruler.
+  // Both texts sit inside the same bubble padding, so their right edges match
+  // when the long one has stayed inside its bubble.
+  const ruler = chats.getByText('This one is only here to be hovered').last();
+  const box = await bubble.boundingBox();
+  const rulerBox = await ruler.boundingBox();
+  const listAfter = await list.boundingBox();
+  await chats.screenshot({ path: testInfo.outputPath('overflow-web.png') });
+  expect(box.x + box.width).toBeLessThanOrEqual(chats.viewportSize().width);
+  expect(box.x + box.width).toBeLessThanOrEqual(rulerBox.x + rulerBox.width + 1);
+  expect(box.height).toBeGreaterThan(rulerBox.height * 2);
+  expect(Math.round(listAfter.width)).toBe(Math.round(listBefore.width));
+});

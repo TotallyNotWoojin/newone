@@ -1530,25 +1530,25 @@ const MessageBubble = memo(function MessageBubble({
 
           {showTranslationOnly ? (
             <>
-              <LinkifiedText accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
+              <LinkifiedText onLongPress={() => onOpenActions(message)} accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
                 {message.translatedText ?? ''}
               </LinkifiedText>
               {originalOpen ? (
                 <View style={styles.translationBlock}>
-                  <LinkifiedText style={styles.secondaryText}>{message.originalText}</LinkifiedText>
+                  <LinkifiedText onLongPress={() => onOpenActions(message)} style={styles.secondaryText}>{message.originalText}</LinkifiedText>
                 </View>
               ) : null}
             </>
           ) : (
             <>
               {caption ? (
-                <LinkifiedText accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
+                <LinkifiedText onLongPress={() => onOpenActions(message)} accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
                   {message.originalText}
                 </LinkifiedText>
               ) : null}
               {hasTranslation ? (
                 <View style={styles.translationBlock}>
-                  <LinkifiedText style={styles.messageText}>{message.translatedText ?? ''}</LinkifiedText>
+                  <LinkifiedText onLongPress={() => onOpenActions(message)} style={styles.messageText}>{message.translatedText ?? ''}</LinkifiedText>
                 </View>
               ) : ownTranslations.length ? (
                 <View style={styles.translationBlock}>
@@ -1557,7 +1557,7 @@ const MessageBubble = memo(function MessageBubble({
                       {ownTranslations.length > 1 ? (
                         <Text style={styles.ownTranslationTag}>{entry.language.toUpperCase()}</Text>
                       ) : null}
-                      <LinkifiedText style={[styles.messageText, styles.ownTranslationText]}>{entry.text}</LinkifiedText>
+                      <LinkifiedText onLongPress={() => onOpenActions(message)} style={[styles.messageText, styles.ownTranslationText]}>{entry.text}</LinkifiedText>
                     </View>
                   ))}
                 </View>
@@ -1987,10 +1987,15 @@ function pastedLink(previous: string, next: string): string | null {
 }
 
 /** Message text with tappable links (owner request, Sep 14 2026, both platforms). */
-function LinkifiedText({ children, style, accessibilityHint }: {
+function LinkifiedText({ children, style, accessibilityHint, onLongPress }: {
   children: string | Array<string | null | undefined> | null | undefined;
   style: StyleProp<TextStyle>;
   accessibilityHint?: string;
+  /**
+   * A link takes the touch, so without this a long press on one opened the
+   * page instead of the message's actions (seen on Android, Sep 14 2026).
+   */
+  onLongPress?: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
   const text = Array.isArray(children) ? children.map((part) => part ?? '').join('') : children ?? '';
@@ -2001,6 +2006,7 @@ function LinkifiedText({ children, style, accessibilityHint }: {
         <Text
           accessibilityRole="link"
           key={`${index}-${part.text}`}
+          onLongPress={onLongPress}
           onPress={() => { void Linking.openURL(part.text); }}
           style={styles.messageLink}>
           {part.text}
