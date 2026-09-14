@@ -1872,19 +1872,25 @@ function Composer({
   const styles = useThemedStyles(buildStyles);
   const keyboardAppearance = useKeyboardAppearance();
   const inputRef = useRef<TextInput>(null);
-  const composerRef = useRef<View>(null);
   // Browser only: a screenshot pasted into the input or dropped onto the
   // composer row becomes an attachment. React Native's TextInput has no paste
   // or drop props, so the DOM nodes react-native-web renders are listened to
   // directly. Native platforms hand images over through the picker.
   useEffect(() => {
-    if (Platform.OS !== 'web' || !onPickFiles) return;
+    if (Platform.OS !== 'web' || !onPickFiles || typeof document === 'undefined') return;
     const input = inputRef.current as unknown as HTMLElement | null;
-    const row = composerRef.current as unknown as HTMLElement | null;
-    if (!input || !row) return;
     const media = (list: FileList | null | undefined) => Array.from(list ?? [])
       .filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    // Page-wide, not input-wide. The first version listened on the message
+    // box only, so Cmd+V did nothing unless the cursor was blinking in it --
+    // which is not where people are when they paste (owner report, Sep 14
+    // 2026, "still can't paste"). Another text field keeps its own paste;
+    // everything else on the page hands an image to the chat.
     const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const inOtherField = Boolean(target && target !== input
+        && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable));
+      if (inOtherField) return;
       const files = media(event.clipboardData?.files);
       if (!files.length) return;
       event.preventDefault();
@@ -1899,13 +1905,13 @@ function Composer({
       event.preventDefault();
       void onPickFiles(files);
     };
-    input.addEventListener('paste', onPaste);
-    row.addEventListener('dragover', onDragOver);
-    row.addEventListener('drop', onDrop);
+    document.addEventListener('paste', onPaste);
+    document.addEventListener('dragover', onDragOver);
+    document.addEventListener('drop', onDrop);
     return () => {
-      input.removeEventListener('paste', onPaste);
-      row.removeEventListener('dragover', onDragOver);
-      row.removeEventListener('drop', onDrop);
+      document.removeEventListener('paste', onPaste);
+      document.removeEventListener('dragover', onDragOver);
+      document.removeEventListener('drop', onDrop);
     };
   }, [onPickFiles]);
   const { t } = useI18n();
@@ -2007,7 +2013,7 @@ function Composer({
           />
         </View>
       ) : null}
-      {!disabled && !recording ? <View ref={composerRef} style={styles.composer}>
+      {!disabled && !recording ? <View style={styles.composer}>
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={36} />
         <TextInput
           ref={inputRef}
