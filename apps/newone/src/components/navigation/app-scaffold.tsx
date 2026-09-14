@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Href, useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import {
+  Image,
   Platform,
   Pressable,
   StyleSheet,
@@ -96,10 +97,18 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
   // the brand treatment for workspace organizations only.
   return (
     <View style={[styles.brand, compact && styles.brandCompact]}>
-      <View style={styles.logoMark}>
-        <View style={styles.logoStem} />
-        <View style={styles.logoDot} />
-      </View>
+      {/* The mark was drawn in code -- a tilted stem and a dot, the Newone
+          letterform. Like the hardcoded "N" below it, no grep for the product
+          name could ever find it, so it outlived the rebrand in the header of
+          every screen while the icon and splash were already the Gist bubble
+          (owner report, Sep 14 2026). Use the real mark instead of redrawing
+          it, so there is one source of truth for the logo. */}
+      <Image
+        accessibilityIgnoresInvertColors
+        resizeMode="contain"
+        source={require('../../../assets/images/gist-splash.png')}
+        style={styles.logoMark}
+      />
       {!compact ? (
         <View>
           <Text style={styles.brandName}>gist</Text>
@@ -337,29 +346,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   logoMark: {
     width: 36,
     height: 36,
-    borderRadius: 12,
-    backgroundColor: colors.mint,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  logoStem: {
-    position: 'absolute',
-    width: 9,
-    height: 23,
-    left: 9,
-    top: 7,
-    borderRadius: 5,
-    backgroundColor: colors.forest,
-    transform: [{ rotate: '-18deg' }],
-  },
-  logoDot: {
-    position: 'absolute',
-    width: 9,
-    height: 9,
-    right: 7,
-    top: 7,
-    borderRadius: 5,
-    backgroundColor: colors.white,
   },
   brandName: {
     color: colors.white,
