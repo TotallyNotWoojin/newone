@@ -299,7 +299,7 @@ export function ConversationList({
               {unread ? <StatusBadge label={`${unread} ${t('chat.unreadCount')}`} tone="success" /> : null}
             </View>
           </View>
-          <IconButton name="add" label={t('chat.newMenu')} onPress={onCompose} />
+          <IconButton name="add" label={t('chat.newMenu')} onPress={onCompose} tone="accent" />
         </View>
       ) : null}
 
@@ -509,7 +509,13 @@ function ConversationRow({
   const rowRef = useRef<View>(null);
   const openActions = useCallback(() => onToggleActions?.(true), [onToggleActions]);
   const actionable = Boolean(onAction);
+  const slides = Platform.OS !== 'web';
   const showActions = actionable && (actionsOpen || hovered);
+  // A mouse hovering gets one small ⋯, not the whole strip: five circles
+  // over the row made clicking the chat a gamble (owner, Sep 14 2026). The
+  // strip itself appears once the ⋯ is clicked or the row is right-clicked.
+  const compactHover = !slides && hovered && !actionsOpen;
+  const stripOpen = actionable && (slides ? showActions : actionsOpen);
   const unreadCount = markedUnread && !conversation.unreadCount ? 1 : conversation.unreadCount;
   // The row is one element to VoiceOver, so its label has to carry the preview
   // line as well as the name — otherwise the newest message, which is the whole
@@ -537,7 +543,6 @@ function ConversationRow({
   // sliding the row out from under the cursor made the click miss the chat it
   // was aimed at (live browser suite, Sep 8 2026). On the web the panel stays
   // an overlay at the right edge, which is what it has always been there.
-  const slides = Platform.OS !== 'web';
   useEffect(() => {
     openOffset.value = withTiming(slides && showActions ? -panelWidth : 0, SNAP);
   }, [openOffset, panelWidth, showActions, slides]);
@@ -633,7 +638,7 @@ function ConversationRow({
             {/* On the web the actions appear where the time and badge sit, so
                 the time yields while they show instead of being covered
                 (owner, Sep 14 2026: "the overlap looks clunky"). */}
-            {!(showActions && !slides) ? (
+            {!(actionsOpen && !slides) ? (
               <Text
                 style={[
                   styles.rowTime,
@@ -659,7 +664,7 @@ function ConversationRow({
                 {previewLine}
               </Text>
             </View>
-            {unreadCount && !(showActions && !slides) ? (
+            {unreadCount && !(actionsOpen && !slides) ? (
               <View
                 style={[
                   styles.unreadBadge,
@@ -676,7 +681,16 @@ function ConversationRow({
           row, or a click aimed at the chat lands on an action instead (live
           browser suite, Sep 8 2026). A finger gets full-height columns, which
           the row slides aside to uncover. */}
-      {actionable && (showActions || dragging) ? (
+      {actionable && compactHover ? (
+        <Pressable
+          accessibilityLabel={t('chat.rowActions')}
+          accessibilityRole="button"
+          onPress={openActions}
+          style={({ pressed }) => [styles.rowActionsHint, pressed && styles.rowActionPressed]}>
+          <Ionicons color={colors.ink} name="ellipsis-horizontal" size={16} />
+        </Pressable>
+      ) : null}
+      {actionable && (stripOpen || dragging) ? (
         <Animated.View
           accessibilityLabel={t('chat.rowActions')}
           accessible={false}
@@ -760,6 +774,20 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.paperMuted,
   },
   rowActionsOverlay: { right: spacing.sm, top: 0, bottom: 0, alignItems: 'center', gap: 4 },
+  rowActionsHint: {
+    position: 'absolute',
+    right: spacing.sm,
+    top: 0,
+    bottom: 0,
+    marginVertical: 'auto',
+    alignSelf: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.paper,
+  },
   rowActionCompact: {
     width: 30,
     height: 30,

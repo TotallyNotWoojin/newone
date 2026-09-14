@@ -371,7 +371,6 @@ export default function PeopleScreen() {
                       // Declining asks first; a mis-tap on a shifting list once
                       // declined a request outright.
                       onDecline={() => setDecliningPersonId(person.id)}
-                      onManage={() => openManage(person)}
                       onMessage={() => void openMessage(person)}
                       person={person}
                     />
