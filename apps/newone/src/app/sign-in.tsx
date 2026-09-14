@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -291,7 +292,13 @@ export default function SignInScreen() {
       return;
     }
     const normalizedDisplayName = displayName.trim();
-    if (signupMode && !SIGNUP_USERNAME_PATTERN.test(username)) {
+    // Lowercased here rather than on every keystroke. Rewriting a controlled
+    // TextInput mid-edit desynchronises it from the native field on Android:
+    // the EditText has already committed the capital when React pushes the
+    // lowercase back, and the two reconcile into a doubled letter, so typing
+    // a capital A produced "aa" (owner report, Sep 14 2026).
+    const normalizedUsername = username.trim().toLocaleLowerCase();
+    if (signupMode && !SIGNUP_USERNAME_PATTERN.test(normalizedUsername)) {
       setMessage(t('auth.usernameInvalid'));
       return;
     }
@@ -309,7 +316,7 @@ export default function SignInScreen() {
       if (signupMode) {
         await auth.requestSignup({
           destination: normalized,
-          username,
+          username: normalizedUsername,
           displayName: normalizedDisplayName,
           language: locale,
           password,
@@ -350,7 +357,7 @@ export default function SignInScreen() {
       if (signupMode) {
         await auth.requestSignup({
           destination: normalized,
-          username,
+          username: username.trim().toLocaleLowerCase(),
           displayName: displayName.trim(),
           language: locale,
           password,
@@ -498,10 +505,16 @@ export default function SignInScreen() {
           wide ? styles.brandColumn : styles.brandRow,
           wide ? styles.brandColumnWide : styles.fullWidth,
         ]}>
-          <View style={wide ? styles.logoMark : styles.logoMarkCompact}>
-            <View style={wide ? styles.logoStem : styles.logoStemCompact} />
-            <View style={wide ? styles.logoDot : styles.logoDotCompact} />
-          </View>
+          {/* The second code-drawn Newone letterform: app-scaffold had one for
+              the header, this one is what a signed-out person actually looks
+              at. Neither could be found by grepping the product name, so both
+              outlived the rename (owner report, Sep 14 2026). */}
+          <Image
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            source={require('../../assets/images/gist-splash.png')}
+            style={wide ? styles.logoMark : styles.logoMarkCompact}
+          />
           <Text style={wide ? styles.brand : styles.brandCompact}>gist</Text>
           {wide ? (
             <>
@@ -667,6 +680,17 @@ export default function SignInScreen() {
                   accessibilityLabel={t('auth.usernameLabel')}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  // The field lowercases as you type, which means React rewrites
+                  // a controlled TextInput mid-edit. On Android that fights the
+                  // IME's composing region: the EditText has already committed
+                  // the capital when the lowercase comes back, and the two
+                  // reconcile into a doubled letter -- a typed A produced "aa"
+                  // (owner report, Sep 14 2026). visible-password turns the
+                  // composing region off, so the rewrite lands cleanly. iOS has
+                  // no such region and keeps its ordinary keyboard.
+                  autoComplete="off"
+                  importantForAutofill="no"
+                  keyboardType={Platform.OS === 'android' ? 'visible-password' : 'default'}
                   maxLength={30}
                   onChangeText={(value) => setUsername(value.toLocaleLowerCase())}
                   placeholder={t('auth.usernamePlaceholder')}
@@ -809,58 +833,12 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   logoMark: {
     width: 58,
     height: 58,
-    borderRadius: 19,
-    backgroundColor: colors.mint,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  logoStem: {
-    position: 'absolute',
-    width: 13,
-    height: 37,
-    left: 15,
-    top: 11,
-    borderRadius: 7,
-    backgroundColor: colors.forest,
-    transform: [{ rotate: '-18deg' }],
-  },
-  logoDot: {
-    position: 'absolute',
-    width: 13,
-    height: 13,
-    right: 11,
-    top: 11,
-    borderRadius: 7,
-    backgroundColor: colors.white,
   },
   // A phone's brand: one line, so the form starts near the top.
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   logoMarkCompact: {
     width: 34,
     height: 34,
-    borderRadius: 11,
-    backgroundColor: colors.mint,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  logoStemCompact: {
-    position: 'absolute',
-    width: 8,
-    height: 22,
-    left: 9,
-    top: 6,
-    borderRadius: 4,
-    backgroundColor: colors.forest,
-    transform: [{ rotate: '-18deg' }],
-  },
-  logoDotCompact: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    right: 6,
-    top: 6,
-    borderRadius: 4,
-    backgroundColor: colors.white,
   },
   brandCompact: {
     color: colors.white,
