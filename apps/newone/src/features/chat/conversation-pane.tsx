@@ -20,6 +20,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Linking,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
@@ -30,6 +31,8 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
@@ -482,7 +485,95 @@ export function ConversationPane({
     setShowMentionPicker(false);
   };
 
+  // A screenshot pasted or dropped into the composer goes through the same
+  // sheet a picked photo does -- preview, caption, Send -- so it can still be
+  // looked at before it leaves (owner's father, Sep 14 2026).
+  const attachFiles = async (files: File[]) => {
+    const file = files[0];
+    if (!file || composerDisabled) return;
+    const video = file.type.startsWith('video/');
+    const uri = URL.createObjectURL(file);
+    let width: number | undefined;
+    let height: number | undefined;
+    if (!video && typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(file);
+        width = bitmap.width;
+        height = bitmap.height;
+        bitmap.close();
+      } catch {
+        // Dimensions only size the preview; the upload measures again.
+      }
+    }
+    const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : 'png')).replace('jpeg', 'jpg');
+    workspace.clearActionError();
+    setAttachmentCaption('');
+    setAttachmentImageMode('optimized');
+    setSelectedAttachment({
+      uri,
+      name: file.name || `${video ? 'video' : 'image'}-${Date.now()}.${extension}`,
+      mimeType: file.type || (video ? 'video/mp4' : 'image/png'),
+      size: file.size,
+      width,
+      height,
+    });
+    setShowAttachmentPicker(true);
+  };
+  // A link pasted on its own is offered as the image it points to. "Copy" on
+  // a picture in Safari often puts only the link on the clipboard, so pasting
+  // gave people a URL instead of the photo (owner report, Sep 14 2026). The
+  // clipboard image wins when there is one; otherwise the link is fetched, and
+  // if it is not an image the text simply stays.
+  const attachFromLink = async (url: string, fullDraft: string) => {
+    try {
+      if (Platform.OS !== 'web' && await Clipboard.hasImageAsync()) {
+        const image = await Clipboard.getImageAsync({ format: 'png' });
+        if (image?.data) {
+          const name = `paste-${Date.now()}.png`;
+          const uri = `${FileSystem.cacheDirectory ?? ''}${name}`;
+          await FileSystem.writeAsStringAsync(uri, image.data.replace(/^data:image\/\w+;base64,/, ''), { encoding: FileSystem.EncodingType.Base64 });
+          workspace.clearActionError();
+          setAttachmentCaption('');
+          setAttachmentImageMode('optimized');
+          setSelectedAttachment({ uri, name, mimeType: 'image/png', width: image.size?.width, height: image.size?.height });
+          setShowAttachmentPicker(true);
+          return;
+        }
+      }
+      if (Platform.OS === 'web') {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) throw new Error('not an image');
+        const extension = (blob.type.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
+        const file = new File([blob], `link-${Date.now()}.${extension}`, { type: blob.type });
+        await attachFiles([file]);
+        return;
+      }
+      const target = `${FileSystem.cacheDirectory ?? ''}link-${Date.now()}`;
+      const result = await FileSystem.downloadAsync(url, target);
+      const type = String(result.headers['content-type'] ?? result.headers['Content-Type'] ?? '').split(';')[0].trim();
+      if (!type.startsWith('image/')) {
+        await FileSystem.deleteAsync(target, { idempotent: true });
+        throw new Error('not an image');
+      }
+      const extension = (type.split('/')[1] ?? 'png').replace('jpeg', 'jpg');
+      workspace.clearActionError();
+      setAttachmentCaption('');
+      setAttachmentImageMode('optimized');
+      setSelectedAttachment({ uri: result.uri, name: `link-${Date.now()}.${extension}`, mimeType: type });
+      setShowAttachmentPicker(true);
+    } catch {
+      // Not an image after all: give the text back exactly as pasted.
+      setDraft(fullDraft);
+    }
+  };
   const handleChangeDraft = (value: string) => {
+    const link = composerDisabled ? null : pastedLink(draft, value);
+    if (link) {
+      setDraft(value.replace(link, '').replace(/[ \t]{2,}/g, ' ').trimStart());
+      void attachFromLink(link, value);
+      return;
+    }
     setDraft(value);
     if (value.trim()) notifyTyping();
     else notifyStopped();
@@ -636,41 +727,8 @@ export function ConversationPane({
         void workspace.sendAttachment(conversation.id, attachment, '');
       }}
       onCancelReply={() => setReplyingTo(null)}
-      onPickFiles={async (files) => {
-        // A screenshot pasted or dropped into the composer goes through the
-        // same sheet a picked photo does -- preview, caption, Send -- so it can
-        // still be looked at before it leaves (owner's father, Sep 14 2026:
-        // wanted to paste images on the web app).
-        const file = files[0];
-        if (!file || composerDisabled) return;
-        const video = file.type.startsWith('video/');
-        const uri = URL.createObjectURL(file);
-        let width: number | undefined;
-        let height: number | undefined;
-        if (!video && typeof createImageBitmap === 'function') {
-          try {
-            const bitmap = await createImageBitmap(file);
-            width = bitmap.width;
-            height = bitmap.height;
-            bitmap.close();
-          } catch {
-            // Dimensions only size the preview; the upload measures again.
-          }
-        }
-        const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : 'png')).replace('jpeg', 'jpg');
-        workspace.clearActionError();
-        setAttachmentCaption('');
-        setAttachmentImageMode('optimized');
-        setSelectedAttachment({
-          uri,
-          name: file.name || `${video ? 'video' : 'image'}-${Date.now()}.${extension}`,
-          mimeType: file.type || (video ? 'video/mp4' : 'image/png'),
-          size: file.size,
-          width,
-          height,
-        });
-        setShowAttachmentPicker(true);
-      }}
+      autoFocusKey={conversation.id}
+      onPickFiles={attachFiles}
       onAddAttachment={() => {
         if (composerDisabled) return;
         // A keyboard left up by the composer stays up under the sheet and
@@ -1472,25 +1530,25 @@ const MessageBubble = memo(function MessageBubble({
 
           {showTranslationOnly ? (
             <>
-              <Text accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
-                {message.translatedText}
-              </Text>
+              <LinkifiedText accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
+                {message.translatedText ?? ''}
+              </LinkifiedText>
               {originalOpen ? (
                 <View style={styles.translationBlock}>
-                  <Text style={styles.secondaryText}>{message.originalText}</Text>
+                  <LinkifiedText style={styles.secondaryText}>{message.originalText}</LinkifiedText>
                 </View>
               ) : null}
             </>
           ) : (
             <>
               {caption ? (
-                <Text accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
+                <LinkifiedText accessibilityHint={t('chat.longPressActions')} style={styles.messageText}>
                   {message.originalText}
-                </Text>
+                </LinkifiedText>
               ) : null}
               {hasTranslation ? (
                 <View style={styles.translationBlock}>
-                  <Text style={styles.messageText}>{message.translatedText}</Text>
+                  <LinkifiedText style={styles.messageText}>{message.translatedText ?? ''}</LinkifiedText>
                 </View>
               ) : ownTranslations.length ? (
                 <View style={styles.translationBlock}>
@@ -1499,7 +1557,7 @@ const MessageBubble = memo(function MessageBubble({
                       {ownTranslations.length > 1 ? (
                         <Text style={styles.ownTranslationTag}>{entry.language.toUpperCase()}</Text>
                       ) : null}
-                      <Text style={styles.messageText}>{entry.text}</Text>
+                      <LinkifiedText style={styles.messageText}>{entry.text}</LinkifiedText>
                     </View>
                   ))}
                 </View>
@@ -1893,6 +1951,59 @@ function foreignScriptPresent(text: string, readerLanguage: string): boolean {
   return hangul;
 }
 
+/** URLs in a message become links; trailing punctuation stays prose. */
+const LINK_PATTERN = /https?:\/\/[^\s<>"'`]+/gi;
+function splitLinks(text: string): { text: string; url: boolean }[] {
+  const parts: { text: string; url: boolean }[] = [];
+  let last = 0;
+  for (const match of text.matchAll(LINK_PATTERN)) {
+    let url = match[0];
+    const trailing = url.match(/[.,;:!?)\]]+$/)?.[0] ?? '';
+    url = url.slice(0, url.length - trailing.length);
+    const start = match.index ?? 0;
+    if (start > last) parts.push({ text: text.slice(last, start), url: false });
+    parts.push({ text: url, url: true });
+    last = start + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), url: false });
+  return parts;
+}
+
+/** A pasted chunk that is exactly one link, or null. */
+function pastedLink(previous: string, next: string): string | null {
+  if (next.length - previous.length < 12) return null;
+  let head = 0;
+  while (head < previous.length && previous[head] === next[head]) head += 1;
+  let tail = 0;
+  while (tail < previous.length - head && previous[previous.length - 1 - tail] === next[next.length - 1 - tail]) tail += 1;
+  const inserted = next.slice(head, next.length - tail).trim();
+  return /^https?:\/\/\S+$/i.test(inserted) ? inserted : null;
+}
+
+/** Message text with tappable links (owner request, Sep 14 2026, both platforms). */
+function LinkifiedText({ children, style, accessibilityHint }: {
+  children: string | Array<string | null | undefined> | null | undefined;
+  style: StyleProp<TextStyle>;
+  accessibilityHint?: string;
+}) {
+  const styles = useThemedStyles(buildStyles);
+  const text = Array.isArray(children) ? children.map((part) => part ?? '').join('') : children ?? '';
+  const parts = useMemo(() => splitLinks(text), [text]);
+  return (
+    <Text accessibilityHint={accessibilityHint} style={style}>
+      {parts.map((part, index) => part.url ? (
+        <Text
+          accessibilityRole="link"
+          key={`${index}-${part.text}`}
+          onPress={() => { void Linking.openURL(part.text); }}
+          style={styles.messageLink}>
+          {part.text}
+        </Text>
+      ) : part.text)}
+    </Text>
+  );
+}
+
 function useKeyboardVisible() {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -1942,6 +2053,7 @@ function Composer({
   onSend,
   onSendVoiceNote,
   onAddAttachment,
+  autoFocusKey,
   onPickFiles,
   replyingTo,
   onCancelReply,
@@ -1963,6 +2075,8 @@ function Composer({
   onSend: () => void;
   onSendVoiceNote: (attachment: SelectedAttachment) => void;
   onAddAttachment: () => void;
+  /** Web: changing this refocuses the message box (the open conversation). */
+  autoFocusKey?: string;
   /** Web only: files pasted into the input or dropped on the composer row. */
   onPickFiles?: (files: File[]) => void | Promise<void>;
   replyingTo: Message | null;
@@ -1972,6 +2086,14 @@ function Composer({
   const styles = useThemedStyles(buildStyles);
   const keyboardAppearance = useKeyboardAppearance();
   const inputRef = useRef<TextInput>(null);
+  // On the web, opening a chat puts the cursor in the message box so a person
+  // can start typing without a second click (owner request, Sep 14 2026). Not
+  // on the phones, where focusing would throw the keyboard up unasked.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || disabled) return;
+    const handle = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(handle);
+  }, [autoFocusKey, disabled]);
   // Browser only: a screenshot pasted into the input or dropped onto the
   // composer row becomes an attachment. React Native's TextInput has no paste
   // or drop props, so the DOM nodes react-native-web renders are listened to
@@ -3883,6 +4005,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.paper,
   },
   loadOlderText: { color: colors.mintDark, fontSize: 11, fontWeight: '700' },
+  messageLink: { color: colors.mintDark, textDecorationLine: 'underline' },
   messageRow: {
     alignSelf: 'stretch',
     flexDirection: 'row',

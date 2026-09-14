@@ -87,9 +87,15 @@ test('a hovered chat row holds its actions while the mouse reaches for them', as
     name: new RegExp(`^${liveWorkspace.friend.displayName}:`),
   });
   const archive = chats.getByRole('button', { name: 'Archive', exact: true });
+  const more = chats.getByRole('button', { name: 'Chat actions', exact: true });
   await expect(archive).toHaveCount(0);
 
   await row.hover();
+  // Hover shows one ⋯, not the strip: five circles over the row made the
+  // chat itself hard to click (owner, Sep 14 2026). The strip opens from it.
+  await expect(more).toBeVisible();
+  await expect(archive).toHaveCount(0);
+  await more.click();
   await expect(archive).toBeVisible();
 
   // The bug this pins: hover lived on the row, and the strip is drawn over it
@@ -126,6 +132,9 @@ test('the details pane folds away and hands the room to the conversation', async
 }) => {
   const pane = await openTheFriendChat(chats, liveWorkspace);
   const details = chats.getByTestId('conversation-details');
+  // Closed until asked for (owner, Sep 14 2026); the header opens it.
+  await expect(details).toHaveCount(0);
+  await chats.getByRole('button', { name: 'Show details' }).click();
   await expect(details).toBeVisible();
 
   // Translation is running; there is simply no second language in play here.

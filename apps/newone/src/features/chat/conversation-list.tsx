@@ -595,7 +595,12 @@ function ConversationRow({
     <View
       accessible={false}
       onPointerEnter={actionable ? () => setHovered(true) : undefined}
-      onPointerLeave={actionable ? () => setHovered(false) : undefined}
+      onPointerLeave={actionable ? () => {
+        setHovered(false);
+        // A strip opened from the ⋯ is still a hover affordance: leaving the
+        // row puts it away, as the hover-only strip always did.
+        if (!slides && actionsOpen) onToggleActions?.(false);
+      } : undefined}
       ref={rowRef}
       style={styles.rowShell}>
       <Animated.View style={[styles.rowSlide, rowStyle]}>
