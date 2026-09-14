@@ -475,8 +475,14 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
+      {/* Android needs a behavior too. `undefined` makes KeyboardAvoidingView
+          inert, which was survivable while Android resized the window for the
+          IME -- but from Expo SDK 54 edge-to-edge is always on and the window
+          no longer resizes, so `softwareKeyboardLayoutMode: "resize"` stops
+          lifting anything and a tapped field stays under the keyboard
+          (owner report, Sep 14 2026: the signup fields on a Z Flip). */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.keyboard}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, wide && styles.scrollContentWide]}
