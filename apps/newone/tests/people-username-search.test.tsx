@@ -370,7 +370,7 @@ describe('personal realm known-people list', () => {
   });
   const blocked = person({ id: 'user-blocked', displayName: 'Bailey Blocked', blockedByMe: true });
 
-  test('lists everyone known with one Message action each, whatever the connection state, on desktop', async () => {
+  test('lists everyone known with one Message action each, and answers an incoming request, on desktop', async () => {
     mockWorkspace = baseWorkspace({ people: [self, friend, incoming, stranger, blocked] });
     const view = await render(<PeopleScreen />);
 
@@ -389,18 +389,31 @@ describe('personal realm known-people list', () => {
       expect(screen.queryByText(absent)).toBeNull();
     }
     for (const gone of [
-      'people.accept', 'people.decline', 'people.cancelRequest', 'people.connect', 'people.removeConnection',
+      'people.cancelRequest', 'people.connect', 'people.removeConnection',
     ]) {
       expect(screen.queryByRole('button', { name: gone })).toBeNull();
     }
+    // An incoming request is answerable. Removing the workplace directory took
+    // the only Accept in the app with it -- respondConnection('accepted') was
+    // left with no caller at all -- so a request could be declined but never
+    // accepted (owner report, Sep 14 2026).
+    expect(screen.getByText('people.pending')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'people.accept' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'people.decline' })).toBeTruthy();
     expect(screen.queryByLabelText('people.search')).toBeNull();
     // A blocked person keeps only the manage control; Unblock lives there.
-    expect(screen.getAllByRole('button', { name: 'people.message' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'people.message' })).toHaveLength(2);
     expect(screen.getByText('people.blocked')).toBeTruthy();
+
+    // Ian is answered, not chatted with: his row is a request now, so Message
+    // belongs to the next person in the list.
+    await fireEvent.press(screen.getByRole('button', { name: 'people.accept' }));
+    await waitFor(() =>
+      expect(mockWorkspace.respondConnection).toHaveBeenCalledWith('user-incoming', 'accepted'));
 
     await fireEvent.press(screen.getAllByRole('button', { name: 'people.message' })[1]!);
     await waitFor(() =>
-      expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith('user-incoming'));
+      expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith('user-known-stranger'));
     expect(mockRouter.replace).toHaveBeenCalledWith('/');
 
     // v3.4: each manage control names its person, and saved contacts sort

@@ -196,6 +196,22 @@ export default function PeopleScreen() {
     });
   }, [consumerPeople, contactQuery]);
 
+  // Incoming requests had nowhere to live. The only component that rendered
+  // Accept was renderPersonCard, which nothing ever called, so a request could
+  // be declined but never accepted and never even be seen as a request
+  // (owner report, Sep 14 2026). Give them their own section above the list.
+  const isIncomingRequest = (person: Person) => (
+    person.connectionState === 'pending' && person.connectionRequestDirection === 'incoming'
+  );
+  const incomingRequests = useMemo(
+    () => contactMatches.filter(isIncomingRequest),
+    [contactMatches],
+  );
+  const contactRows = useMemo(
+    () => contactMatches.filter((person) => !isIncomingRequest(person)),
+    [contactMatches],
+  );
+
   const openConversation = (conversationId: string) => {
     if (desktop) {
       router.replace('/');
@@ -344,11 +360,30 @@ export default function PeopleScreen() {
                 tone="accent"
               />
             </View>
+            {incomingRequests.length ? (
+              <View style={styles.consumerSection}>
+                <Text style={styles.directoryEyebrow}>{t('people.pending')}</Text>
+                <View style={styles.rows}>
+                  {incomingRequests.map((person) => (
+                    <PersonRow
+                      key={person.id}
+                      onAccept={() => void workspace.respondConnection(person.id, 'accepted')}
+                      // Declining asks first; a mis-tap on a shifting list once
+                      // declined a request outright.
+                      onDecline={() => setDecliningPersonId(person.id)}
+                      onManage={() => openManage(person)}
+                      onMessage={() => void openMessage(person)}
+                      person={person}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
             <View style={styles.consumerSection}>
               <Text style={styles.directoryEyebrow}>{t('people.eyebrowConsumer')}</Text>
-              {contactMatches.length ? (
+              {contactRows.length ? (
                 <View style={styles.rows}>
-                  {contactMatches.map((person) => (
+                  {contactRows.map((person) => (
                     <PersonRow
                       key={person.id}
                       onManage={() => openManage(person)}
@@ -578,6 +613,8 @@ function PersonRow({
   onMessage,
   onManage,
   onAdd,
+  onAccept,
+  onDecline,
   requested = false,
 }: {
   person: Person;
@@ -585,6 +622,9 @@ function PersonRow({
   onManage?: () => void;
   /** Only the add-a-friend sheet offers this; Contacts never does. */
   onAdd?: () => void;
+  /** Set for an incoming request: answering it replaces the Message button. */
+  onAccept?: () => void;
+  onDecline?: () => void;
   requested?: boolean;
 }) {
   const styles = useThemedStyles(buildStyles);
@@ -628,7 +668,14 @@ function PersonRow({
           ) : requested ? (
             <StatusBadge icon="checkmark" label={t('people.addFriendSent')} tone="success" />
           ) : null}
-          <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+          {onAccept && onDecline ? (
+            <>
+              <PrimaryButton icon="checkmark" label={t('people.accept')} onPress={onAccept} tone="dark" />
+              <PrimaryButton icon="close" label={t('people.decline')} onPress={onDecline} tone="light" />
+            </>
+          ) : (
+            <PrimaryButton icon="chatbubble-outline" label={t('people.message')} onPress={onMessage} tone="light" />
+          )}
         </>
       )}
       {onManage ? (
