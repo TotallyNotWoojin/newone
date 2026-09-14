@@ -444,7 +444,7 @@ Deno.test('a weak new password after recovery is refused by name and leaves the 
   assertEquals(verified.status, 200);
   const accessToken = (await verified.json()).session.accessToken as string;
 
-  const short = await handler(nativeBearerPost('/v2/auth/password/set', { password: 'seven77' }, accessToken));
+  const short = await handler(nativeBearerPost('/v2/auth/password/set', { password: 'five5' }, accessToken));
   assertEquals(short.status, 400);
   assertEquals((await short.json()).error.code, 'weak_password');
   assertEquals(sets, 0);

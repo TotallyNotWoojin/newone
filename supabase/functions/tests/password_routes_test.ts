@@ -388,7 +388,7 @@ Deno.test('password set names the only rule, refuses extra keys, and never runs 
       },
     })
   );
-  const short = await handler(nativeBearerPost('/v2/auth/password/set', { password: 'seven77' }));
+  const short = await handler(nativeBearerPost('/v2/auth/password/set', { password: 'five5' }));
   assertEquals(short.status, 400);
   assertEquals((await short.json()).error.code, 'weak_password');
 

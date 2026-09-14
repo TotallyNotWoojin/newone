@@ -679,7 +679,7 @@ describe('returning sign-in', () => {
     await view.unmount();
   });
 
-  test('signup refuses to request a code until the password has at least 8 characters', async () => {
+  test('signup refuses to request a code until the password has at least 6 characters', async () => {
     mockTurnstileSiteKey = null;
     mockAuth = authState();
     const view = await render(<SignInScreen />);

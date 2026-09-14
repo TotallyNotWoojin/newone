@@ -36,7 +36,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 // The only password rule (owner decision, Sep 2026): at least eight characters.
 // GoTrue's minimum_password_length must agree or updateUserById rejects it.
-const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MIN_LENGTH = 6;
 const PASSWORD_MAX_LENGTH = 128;
 const USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
 const REFRESH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
@@ -629,9 +629,12 @@ export function defaultAuthDependencies(): AuthDependencies {
           app_metadata: passwordStamp,
         });
         if (updateError) {
-          if (updateError.code === 'weak_password' || updateError.status === 422) {
+          if (isWeakPasswordFailure(updateError.code, updateError.status, updateError.message)) {
             throw new ApiError(400, 'weak_password');
           }
+          // A 422 that never mentions the password is a rejected field, not a
+          // weak secret. Say that, instead of blaming the password.
+          if (updateError.status === 422) throw new ApiError(400, 'bad_request');
           throw new ApiError(503, 'dependency_unavailable', undefined, 5);
         }
       }
@@ -821,13 +824,19 @@ export function defaultAuthDependencies(): AuthDependencies {
         const detail = (await response.json().catch(() => ({}))) as {
           error_code?: unknown;
           code?: unknown;
+          msg?: unknown;
+          message?: unknown;
         };
         const code = typeof detail.error_code === 'string' ? detail.error_code : detail.code;
         if (code !== 'same_password') {
-          if (code === 'weak_password' || response.status === 422) {
+          const message = typeof (detail as { msg?: unknown }).msg === 'string'
+            ? (detail as { msg?: string }).msg
+            : (detail as { message?: unknown }).message;
+          if (isWeakPasswordFailure(code, response.status, message)) {
             throw new ApiError(400, 'weak_password');
           }
           if (response.status === 401) throw new ApiError(401, 'unauthorized');
+          if (response.status === 422) throw new ApiError(400, 'bad_request');
           throw new ApiError(503, 'dependency_unavailable', undefined, 5);
         }
       }
@@ -1093,6 +1102,20 @@ function publicUser(userId: string, identity: AuthIdentity): Record<string, unkn
     phone: identity.phone,
     hasPassword: identity.hasPassword === true,
   };
+}
+
+/**
+ * GoTrue answers 422 for every rejected field, not only a weak password, and
+ * older releases did not always set a code. Treating a bare 422 as
+ * `weak_password` told members their password was too short when what the
+ * server actually refused was something else entirely -- an address with a
+ * space in it was reported as a password problem (owner report, Sep 14 2026).
+ * Claim the password only when the failure names it.
+ */
+function isWeakPasswordFailure(code: unknown, status: unknown, message: unknown): boolean {
+  if (code === 'weak_password') return true;
+  if (status !== 422) return false;
+  return typeof message === 'string' && /password/i.test(message);
 }
 
 function parsePassword(value: unknown, tooShort: 'unauthorized' | 'weak_password'): string {

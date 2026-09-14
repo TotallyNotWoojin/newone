@@ -15,9 +15,11 @@ import { useI18n } from '@/i18n/provider';
 import { radii, spacing } from '@/theme/tokens';
 import { useKeyboardAppearance, useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
-// The only password rule (owner decision, Sep 2026). The gateway enforces the
-// same bounds; GoTrue's minimum_password_length must be set to match.
-export const PASSWORD_MIN_LENGTH = 8;
+// The only password rule (owner decision; lowered 8 -> 6 on Sep 14 2026 so
+// less confident typists can pick something they will remember). The gateway
+// enforces the same bounds; GoTrue's password_min_length must be set to match,
+// and 6 is the floor GoTrue itself accepts.
+export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MAX_LENGTH = 128;
 
 /** Labelled password input with a show/hide toggle; the label doubles as the accessibility name. */

@@ -65,7 +65,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   attachment_not_ready: 'The attachment upload is not ready.',
   attachment_integrity_failed: 'The uploaded attachment failed integrity verification.',
   rate_limited: 'Too many requests. Try again later.',
-  weak_password: 'Passwords must be at least 8 characters.',
+  weak_password: 'Passwords must be at least 6 characters.',
   delivery_channel_unavailable: 'That verification channel is not configured.',
   dependency_unavailable: 'A required service is temporarily unavailable.',
   code_delivery_failed: 'We could not send your code. Try again.',
