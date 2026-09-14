@@ -165,9 +165,17 @@ export function filterConversations(
   // Ask for a person and the chat with that person is what you meant; the
   // groups you also share with them come after (owner, Sep 10 2026). Sort is
   // stable, so within each half the server's newest-first order survives.
-  if (!parsed.chips.some((chip) => chip.personId)) return matched;
-  return [...matched].sort((left, right) =>
-    (left.kind === 'direct' ? 0 : 1) - (right.kind === 'direct' ? 0 : 1));
+  const byPerson = parsed.chips.some((chip) => chip.personId)
+    ? [...matched].sort((left, right) =>
+      (left.kind === 'direct' ? 0 : 1) - (right.kind === 'direct' ? 0 : 1))
+    : matched;
+  // Unread chats first (owner, Sep 14 2026): the list used to keep the
+  // server's newest-first order only, so a chat waiting to be read could sit
+  // under three you had already seen. Stable again, so the newest-first order
+  // -- and the person ordering above -- survive inside each half.
+  const unread = (conversation: Conversation) =>
+    conversation.unreadCount > 0 || markedUnread.has(conversation.id);
+  return [...byPerson].sort((left, right) => (unread(left) ? 0 : 1) - (unread(right) ? 0 : 1));
 }
 
 export function ConversationList({
