@@ -303,27 +303,27 @@ describe('conversation typing indicators over the private broadcast channel', ()
     await act(async () => broadcasts.get(`${TOPIC}:typing`)?.({
       payload: { userId: self.id, displayName: self.displayName },
     }));
-    expect(screen.queryByText('chat.typingSingle')).toBeNull();
+    expect(screen.queryByLabelText('chat.typingSingle')).toBeNull();
 
     await act(async () => broadcasts.get(`${TOPIC}:typing`)?.({
       payload: { userId: colleague.id, displayName: colleague.displayName },
     }));
-    expect(screen.getByText('chat.typingSingle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSingle')).toBeTruthy();
 
     await act(async () => broadcasts.get(`${TOPIC}:typing`)?.({
       payload: { userId: candidate.id, displayName: candidate.displayName },
     }));
-    expect(screen.getByText('chat.typingSeveral')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSeveral')).toBeTruthy();
 
     // A stopped event removes only that peer; invalid stopped payloads are ignored.
     await act(async () => broadcasts.get(`${TOPIC}:stopped`)?.({
       payload: { userId: self.id, displayName: self.displayName },
     }));
-    expect(screen.getByText('chat.typingSeveral')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSeveral')).toBeTruthy();
     await act(async () => broadcasts.get(`${TOPIC}:stopped`)?.({
       payload: { userId: candidate.id, displayName: candidate.displayName },
     }));
-    expect(screen.getByText('chat.typingSingle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSingle')).toBeTruthy();
 
     // A repeated event extends the peer's expiry window.
     await act(async () => jest.advanceTimersByTime(TYPING_EXPIRY_MS - 1000));
@@ -331,9 +331,9 @@ describe('conversation typing indicators over the private broadcast channel', ()
       payload: { userId: colleague.id, displayName: colleague.displayName },
     }));
     await act(async () => jest.advanceTimersByTime(TYPING_EXPIRY_MS - 1000));
-    expect(screen.getByText('chat.typingSingle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSingle')).toBeTruthy();
     await act(async () => jest.advanceTimersByTime(1000));
-    expect(screen.queryByText('chat.typingSingle')).toBeNull();
+    expect(screen.queryByLabelText('chat.typingSingle')).toBeNull();
   });
 
   test('tears down and rejoins when the open conversation changes', async () => {
@@ -343,7 +343,7 @@ describe('conversation typing indicators over the private broadcast channel', ()
     await act(async () => broadcasts.get(`${TOPIC}:typing`)?.({
       payload: { userId: colleague.id, displayName: colleague.displayName },
     }));
-    expect(screen.getByText('chat.typingSingle')).toBeTruthy();
+    expect(screen.getByLabelText('chat.typingSingle')).toBeTruthy();
 
     const nextConversation = conversation({ id: 'conversation-two', title: 'Maintenance', initials: 'MT' });
     await view.rerender(<ConversationPane conversation={nextConversation} messages={[]} onSend={noopSend} />);
@@ -353,7 +353,7 @@ describe('conversation typing indicators over the private broadcast channel', ()
     const nextTopic = 'org:organization-a:conversation:conversation-two:typing';
     expect(channels.has(nextTopic)).toBe(true);
     // Peers from the previous conversation are dropped with the old channel.
-    expect(screen.queryByText('chat.typingSingle')).toBeNull();
+    expect(screen.queryByLabelText('chat.typingSingle')).toBeNull();
   });
 
   test('stays inert without a realtime client, without a token, and after auth rejection', async () => {

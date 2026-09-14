@@ -10,10 +10,13 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   FlatList,
   Image,
   Keyboard,
@@ -134,6 +137,7 @@ export function ConversationPane({
   const [conversationName, setConversationName] = useState('');
   const [conversationDescription, setConversationDescription] = useState('');
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
   const [selectedAttachment, setSelectedAttachment] = useState<SelectedAttachment | null>(null);
   const [attachmentCaption, setAttachmentCaption] = useState('');
   const [attachmentImageMode, setAttachmentImageMode] = useState<'optimized' | 'original'>('optimized');
@@ -585,11 +589,26 @@ export function ConversationPane({
         ) : null}
       </View>
 
-      {typingLabel ? (
-        // Who is typing belongs where the reply will appear, next to the
-        // composer, not in the header (owner request, Sep 14 2026).
-        <View style={styles.typingRow}>
-          <Text numberOfLines={1} style={styles.typingRowText}>{typingLabel}</Text>
+      {typingPeers.length ? (
+        // Who is typing appears as the next message would: their avatar and
+        // name, then an empty incoming bubble with three moving dots (backlog
+        // 81, owner's father, Sep 14 2026). The label still reaches screen
+        // readers; dots read as nothing.
+        <View accessibilityLabel={typingLabel} accessibilityRole="text" style={styles.typingRow}>
+          {typingPeers.slice(0, 3).map((peer) => {
+            const person = workspace.people.find((candidate) => candidate.id === peer.userId);
+            return (
+              <View key={peer.userId} style={styles.typingBubbleRow}>
+                <Avatar color={person?.avatarColor ?? colors.mintDark} initials={person?.initials ?? peer.displayName.slice(0, 1).toUpperCase()} size={28} />
+                <View>
+                  <Text numberOfLines={1} style={styles.senderName}>{peer.displayName}</Text>
+                  <View style={[styles.bubble, styles.bubbleIncoming, styles.typingBubble]}>
+                    <TypingDots color={colors.inkSubtle} />
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       ) : null}
       <Composer
@@ -732,8 +751,9 @@ export function ConversationPane({
         onTranslate={selectedMessage && selectedMessage.isOwn && selectedMessage.serverId
           && workspace.messageDisplayLanguage
           && selectedMessage.languageDetection?.state === 'completed'
-          && (selectedMessage.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage
-            || Boolean(selectedMessage.languageDetection.method?.endsWith(':sender-language')))
+          && (selectedMessage.languageDetection.method?.endsWith(':sender-language')
+            ? foreignScriptPresent(selectedMessage.originalText, workspace.messageDisplayLanguage)
+            : selectedMessage.languageDetection.detectedLanguage !== workspace.messageDisplayLanguage)
           && !(selectedMessage.translatedText && selectedMessage.translation?.status === 'completed')
           ? () => {
             // Owner request: a sender can ask for their own message in their
@@ -837,9 +857,39 @@ export function ConversationPane({
       <AttachmentPickerModal
         busy={workspace.actionBusy === 'attachment-upload'}
         caption={attachmentCaption}
-        error={workspace.actionError}
+        error={workspace.actionError ?? pasteNotice}
         onChangeCaption={setAttachmentCaption}
-        onClose={() => setShowAttachmentPicker(false)}
+        onClose={() => { setPasteNotice(null); setShowAttachmentPicker(false); }}
+        onPasteImage={async () => {
+          // iOS and Android: a TextInput cannot receive an image paste, so the
+          // sheet reads the clipboard itself (owner report, Sep 14 2026: paste
+          // worked on the web app, not on the phones). The image is written to
+          // the cache first so it reaches the uploader as a file URI, the same
+          // shape the camera and the library hand over.
+          setPasteNotice(null);
+          if (!(await Clipboard.hasImageAsync())) {
+            setPasteNotice(t('chat.pasteNothing'));
+            return;
+          }
+          const image = await Clipboard.getImageAsync({ format: 'png' });
+          if (!image?.data) {
+            setPasteNotice(t('chat.pasteNothing'));
+            return;
+          }
+          const name = `paste-${Date.now()}.png`;
+          const uri = `${FileSystem.cacheDirectory ?? ''}${name}`;
+          await FileSystem.writeAsStringAsync(uri, image.data.replace(/^data:image\/\w+;base64,/, ''), {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          workspace.clearActionError();
+          setSelectedAttachment({
+            uri,
+            name,
+            mimeType: 'image/png',
+            width: image.size?.width,
+            height: image.size?.height,
+          });
+        }}
         onPickCamera={async () => {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
           if (!permission.granted) return;
@@ -1142,8 +1192,13 @@ const MessageBubble = memo(function MessageBubble({
   // sender's language (method suffixed ':sender-language'); it may hold other
   // languages, so a reader who shares that language can still ask for it in
   // their own (owner request, mixed-language messages).
-  const mixedLanguage = detectionState === 'completed'
+  const guessedFromSender = detectionState === 'completed'
     && Boolean(message.languageDetection?.method?.endsWith(':sender-language'));
+  // A sender-language guess counts only when the text actually shows another
+  // script; otherwise the message is taken to be in the reader's language.
+  const mixedLanguage = guessedFromSender
+    && workspace.messageDisplayLanguage !== null
+    && foreignScriptPresent(message.originalText, workspace.messageDisplayLanguage);
   const canRequestTranslation = Boolean(
     translationEnabled
       && message.serverId
@@ -1153,6 +1208,7 @@ const MessageBubble = memo(function MessageBubble({
         detectionState === 'failed'
         || mixedLanguage
         || (detectionState === 'completed'
+          && !guessedFromSender
           && message.languageDetection?.detectedLanguage !== workspace.messageDisplayLanguage)
       )
       && (!translation || translation.status === 'failed' || translation.status === 'blocked'),
@@ -1791,6 +1847,50 @@ function AttachmentCard({ message, onDownload }: { message: Message; onDownload:
       ) : null}
     </View>
   );
+}
+
+/** Three dots that pulse in turn -- the typing bubble's only content. */
+function TypingDots({ color }: { color: string }) {
+  const phase = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(phase, { toValue: 3, duration: 1200, easing: Easing.linear, useNativeDriver: false }));
+    loop.start();
+    return () => loop.stop();
+  }, [phase]);
+  return (
+    <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
+      {[0, 1, 2].map((index) => (
+        <Animated.View
+          key={index}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: color,
+            opacity: phase.interpolate({
+              inputRange: [0, 1, 2, 3],
+              outputRange: [index === 0 ? 1 : 0.3, index === 1 ? 1 : 0.3, index === 2 ? 1 : 0.3, index === 0 ? 1 : 0.3],
+            }),
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Whether the text carries a script the reader's language does not use. A
+ * message too short to detect completes as the *sender's* language, so a
+ * Korean friend typing "bro" arrives tagged Korean and was offered a
+ * translation into English (owner report, Sep 14 2026). Hangul in an English
+ * reader's message, or Latin letters in a Korean reader's, is real evidence
+ * of another language; a tag alone is not.
+ */
+function foreignScriptPresent(text: string, readerLanguage: string): boolean {
+  const hangul = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(text);
+  const latin = /[A-Za-z\u00C0-\u024F]/.test(text);
+  if (readerLanguage === 'ko') return latin;
+  return hangul;
 }
 
 function useKeyboardVisible() {
@@ -3097,6 +3197,7 @@ function AttachmentPickerModal({
   onPickLibrary,
   onPickCamera,
   onPickFile,
+  onPasteImage,
   onChangeCaption,
   onSend,
   imageMode,
@@ -3111,6 +3212,8 @@ function AttachmentPickerModal({
   onPickLibrary: () => void;
   onPickCamera: () => void;
   onPickFile: () => void;
+  /** Native only: read an image from the clipboard. Web pastes into the page. */
+  onPasteImage?: () => void | Promise<void>;
   onChangeCaption: (value: string) => void;
   onSend: () => void;
   imageMode: 'optimized' | 'original';
@@ -3130,6 +3233,9 @@ function AttachmentPickerModal({
         <PrimaryButton icon="images-outline" label={t('chat.photoLibrary')} onPress={onPickLibrary} tone="light" />
         <PrimaryButton icon="camera-outline" label={t('chat.camera')} onPress={onPickCamera} tone="light" />
         <PrimaryButton icon="document-outline" label={t('chat.chooseFile')} onPress={onPickFile} tone="light" />
+        {Platform.OS !== 'web' && onPasteImage ? (
+          <PrimaryButton icon="clipboard-outline" label={t('chat.pasteImage')} onPress={() => void onPasteImage()} tone="light" />
+        ) : null}
       </View>
       {selected ? (
         <View style={styles.selectedFile}>
@@ -3881,11 +3987,18 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   typingRow: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxs,
+    gap: spacing.xs,
   },
-  typingRowText: {
-    color: colors.mintDark,
-    fontSize: 12,
-    fontStyle: 'italic',
+  typingBubbleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  typingBubble: {
+    alignSelf: 'flex-start',
+    minWidth: 0,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   composer: {
     minHeight: 46,
