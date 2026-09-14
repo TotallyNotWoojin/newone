@@ -32,10 +32,20 @@ import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
 
-// Archived is a chip like the rest rather than a row of its own at the top
-// of the list (owner, Sep 14 2026); it sits last because it is the one you
-// reach for least.
-const filters: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'announcements', 'archived'];
+// Bookmarked sits next to Unread because both answer "what did I set aside".
+// Each chip carries the icon of the action that feeds it -- the same mark the
+// row's swipe and hover and the chat's controls use -- so a bookmark set in
+// one place is found again under the same symbol (owner, Sep 14 2026).
+// Archive went the same day: nobody used it, and every archived chat came
+// back into the list.
+const filters: InboxFilter[] = ['all', 'unread', 'favorites', 'direct', 'groups', 'announcements'];
+const filterIcons: Partial<Record<InboxFilter, ComponentProps<typeof Ionicons>['name']>> = {
+  unread: 'mail-unread-outline',
+  favorites: 'bookmark-outline',
+  direct: 'person-outline',
+  groups: 'people-outline',
+  announcements: 'megaphone-outline',
+};
 
 /** A row is dragged this far before its actions stay open. */
 const REVEAL_DISTANCE = 56;
@@ -55,8 +65,6 @@ export type ConversationRowActionKey =
   | 'markRead'
   | 'mute'
   | 'unmute'
-  | 'archive'
-  | 'unarchive'
   | 'delete'
   | 'leave';
 
@@ -77,7 +85,6 @@ export function conversationRowActions(conversation: {
   kind?: string;
   unreadCount?: number;
   muted?: boolean;
-  archivedByMe?: boolean;
   favorite?: boolean;
 }): ConversationRowAction[] {
   const group = conversation.kind !== 'direct';
@@ -88,12 +95,9 @@ export function conversationRowActions(conversation: {
     conversation.muted
       ? { key: 'unmute', labelKey: 'chat.unmute', icon: 'notifications-outline', destructive: false }
       : { key: 'mute', labelKey: 'chat.mute', icon: 'notifications-off-outline', destructive: false },
-    conversation.archivedByMe
-      ? { key: 'unarchive', labelKey: 'chat.unarchive', icon: 'arrow-undo-outline', destructive: false }
-      : { key: 'archive', labelKey: 'chat.archive', icon: 'archive-outline', destructive: false },
     // Bookmarking rides the same swipe and hover as the rest (owner request,
     // Sep 14 2026); before, the only way was inside the chat's details. After
-    // archive so the first two, which answer the row's current state, stay put.
+    // mute so the first two, which answer the row's current state, stay put.
     conversation.favorite
       ? { key: 'unbookmark', labelKey: 'chat.unbookmark', icon: 'bookmark', destructive: false }
       : { key: 'bookmark', labelKey: 'chat.bookmark', icon: 'bookmark-outline', destructive: false },
@@ -156,16 +160,8 @@ export function filterConversations(
   const markedUnread = new Set(markedUnreadIds);
   const matched = conversations.filter((conversation) => {
     if (conversation.managementOnly) return false;
-    // An archived chat is out of the way until you go looking for it, which is
-    // the whole point of archiving; before v3.4 it stayed in the list and the
-    // flag only removed it from the phone entirely.
-    if (filter === 'archived') {
-      if (!conversation.archivedByMe) return false;
-    } else if (conversation.archivedByMe) {
-      return false;
-    }
     if (!conversationMatchesSearch(conversation, parsed, messageConversationIds)) return false;
-    if (filter === 'archived') return true;
+    if (filter === 'favorites') return conversation.favorite;
     if (filter === 'unread') return conversation.unreadCount > 0 || markedUnread.has(conversation.id);
     if (filter === 'direct') return conversation.kind === 'direct';
     if (filter === 'groups') {
@@ -280,7 +276,6 @@ export function ConversationList({
     groups: t('chat.filterGroups'),
     announcements: t('chat.filterOfficial'),
     favorites: t('chat.filterFavorites'),
-    archived: t('chat.filterArchived'),
   };
 
   return (
@@ -337,6 +332,7 @@ export function ConversationList({
                 : undefined
             }
             key={item}
+            icon={filterIcons[item]}
             label={filterLabels[item]}
             onPress={() => onFilterChange(item)}
             selected={filter === item}
@@ -375,9 +371,6 @@ export function ConversationList({
         scrollEventThrottle={64}
         showsVerticalScrollIndicator={false}
         testID="conversation-list">
-        {filter === 'archived' && !visible.length ? (
-          <Text style={styles.archiveEmpty}>{t('chat.archivedEmpty')}</Text>
-        ) : null}
         {visibleDiscoverableConversations.length ? (
           <View style={styles.discoverySection}>
             <View style={styles.sectionDivider}>
@@ -498,7 +491,7 @@ function ConversationRow({
   // point of the row, is read out by nobody and seen by no test driver.
   const previewLine = conversation.lastMessage
     || attachmentPreviewLine(conversation, t)
-    || t(conversation.archived ? 'chat.archivedChat' : 'chat.noMessagesYet');
+    || t('chat.noMessagesYet');
   const actions = useMemo(
     () => conversationRowActions({ ...conversation, unreadCount }),
     [conversation, unreadCount],
@@ -800,13 +793,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.pill,
-  },
-  archiveEmpty: {
-    color: colors.inkSubtle,
-    fontSize: 13,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
-    textAlign: 'center',
   },
   discoverySection: {
     gap: spacing.xs,

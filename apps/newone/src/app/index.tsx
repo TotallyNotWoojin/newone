@@ -148,12 +148,6 @@ export default function ChatsScreen() {
         : { notificationLevel: 'all', mutedUntil: null });
       return;
     }
-    if (action === 'archive' || action === 'unarchive') {
-      void workspace.updateConversationPreferences(conversation.id, {
-        isArchived: action === 'archive',
-      });
-      return;
-    }
     // Bookmarking joins the swipe (phone) and hover (web) actions, so it is
     // reachable without opening the chat (owner request, Sep 14 2026).
     if (action === 'bookmark' || action === 'unbookmark') {
@@ -177,9 +171,7 @@ export default function ChatsScreen() {
     setDeparting(null);
     setMarkedUnread(id, false);
     if (group) void workspace.leaveConversation(id);
-    // Being done with a one-to-one chat hides it for this person only. That is
-    // a different flag from archiving, which merely moves it out of the way
-    // (v3.4): before, both wrote the same one and neither could be undone.
+    // Being done with a one-to-one chat hides it for this person only (v3.4).
     else void workspace.updateConversationPreferences(id, { isHidden: true });
   };
 

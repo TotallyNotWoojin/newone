@@ -517,11 +517,6 @@
         "chat-40-row-mute"
       ]
     },
-    "chat.archive": {
-      "actions": [
-        "chat-43-row-archive"
-      ]
-    },
     "chat.deleteChat": {
       "actions": [
         "chat-41-row-delete-confirmation"

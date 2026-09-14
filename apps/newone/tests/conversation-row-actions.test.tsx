@@ -58,9 +58,9 @@ beforeEach(() => {
 describe('what a chat row offers', () => {
   test('a one-to-one chat is deleted; a group is left, and it says so', () => {
     expect(conversationRowActions({ kind: 'direct' }).map((action) => action.key))
-      .toEqual(['markUnread', 'mute', 'archive', 'bookmark', 'delete']);
+      .toEqual(['markUnread', 'mute', 'bookmark', 'delete']);
     expect(conversationRowActions({ kind: 'group' }).map((action) => action.key))
-      .toEqual(['markUnread', 'mute', 'archive', 'bookmark', 'leave']);
+      .toEqual(['markUnread', 'mute', 'bookmark', 'leave']);
     expect(conversationRowActions({ kind: 'group' }).at(-1)).toMatchObject({
       labelKey: 'chat.leaveGroup',
       destructive: true,
@@ -141,15 +141,15 @@ describe('the row on screen', () => {
   test('hovering shows the actions and moving away puts them back', async () => {
     const onRowAction = jest.fn();
     await render(<ConversationList {...listProps({ onRowAction })} />);
-    expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'chat.mute' })).toBeNull();
 
     const row = hoverTarget(screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' }));
     await fireEvent(row, 'pointerEnter');
-    expect(screen.getByRole('button', { name: 'chat.archive' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'chat.mute' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'chat.leaveGroup' })).toBeTruthy();
 
     await fireEvent(row, 'pointerLeave');
-    expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'chat.mute' })).toBeNull();
   });
 
   test('a long press opens them on a phone, and one tap runs the action and closes', async () => {
@@ -191,7 +191,7 @@ describe('the row on screen', () => {
     await render(<ConversationList {...listProps({ onSelect })} />);
     const row = screen.getByRole('button', { name: 'Beach trip: Bring the umbrella' });
     await fireEvent(row, 'longPress');
-    expect(screen.queryByRole('button', { name: 'chat.archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'chat.mute' })).toBeNull();
     await fireEvent.press(row);
     expect(onSelect).toHaveBeenCalledWith('conversation-beach');
   });

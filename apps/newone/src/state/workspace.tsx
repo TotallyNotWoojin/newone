@@ -389,7 +389,7 @@ interface WorkspaceState {
   loadAttachmentPreview: (message: Message) => Promise<void>;
   updateConversation: (
     conversationId: string,
-    patch: { name?: string | null; description?: string | null; isArchived?: boolean },
+    patch: { name?: string | null; description?: string | null },
   ) => Promise<boolean>;
   updateConversationPreferences: (
     conversationId: string,
@@ -737,7 +737,6 @@ function describeError(error: unknown): string {
 export type ConversationPreferencePatch = {
   isFavorite?: boolean;
   isPinned?: boolean;
-  isArchived?: boolean;
   isHidden?: boolean;
   manuallyUnread?: boolean;
   notificationLevel?: 'all' | 'mentions' | 'none';
@@ -776,7 +775,6 @@ function applyConversationPreferences(
             ...conversation,
             ...(patch.isFavorite !== undefined ? { favorite: patch.isFavorite } : {}),
             ...(patch.isPinned !== undefined ? { pinned: patch.isPinned } : {}),
-            ...(patch.isArchived !== undefined ? { archivedByMe: patch.isArchived } : {}),
             ...(patch.manuallyUnread !== undefined ? { manuallyUnread: patch.manuallyUnread } : {}),
             notificationLevel,
             mutedUntil,
@@ -805,7 +803,6 @@ function restoreConversationPreferences(
         ...conversation,
         favorite: previous.favorite,
         pinned: previous.pinned,
-        archivedByMe: previous.archivedByMe,
         manuallyUnread: previous.manuallyUnread,
         notificationLevel: previous.notificationLevel,
         mutedUntil: previous.mutedUntil,
@@ -2840,7 +2837,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       || !conversation?.canManageConversation
       || !['group', 'team', 'shift', 'incident'].includes(conversation.kind)
       || conversation.policyManaged
-      || conversation.archived
       || conversation.isReadOnly
     ) return null;
     setActionError(null);
@@ -4299,7 +4295,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const updateConversation = useCallback(
     async (
       conversationId: string,
-      patch: { name?: string | null; description?: string | null; isArchived?: boolean },
+      patch: { name?: string | null; description?: string | null },
     ) => {
       const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
       if (!snapshot || !conversation?.canManageConversation || conversation.kind === 'direct') return false;
@@ -4327,11 +4323,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
                         ...(patch.description !== undefined
                           ? { description: patch.description ?? undefined, subtitle: patch.description || item.subtitle }
                           : {}),
-                        ...(patch.isArchived !== undefined ? { archived: patch.isArchived } : {}),
                       }
                     : item,
-                )
-                .filter((item) => !item.archived),
+                ),
             }
           : current,
       );
@@ -4348,7 +4342,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!snapshot) return false;
       // The row changes as it is tapped and the server hears afterwards; only
       // a refusal puts it back. Waiting for the round trip first was what made
-      // bookmark, mute and archive feel slow, and a deleted one-to-one chat did
+      // bookmark and mute feel slow, and a deleted one-to-one chat did
       // not leave the list until the next refresh at all (owner, Sep 14 2026).
       const before = snapshotRef.current ?? snapshot;
       const previousIndex = before.conversations.findIndex((item) => item.id === conversationId);

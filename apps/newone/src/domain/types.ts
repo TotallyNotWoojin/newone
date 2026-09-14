@@ -749,7 +749,7 @@ export interface AuditExportReceipt {
   payload: string;
 }
 
-export type InboxFilter = 'all' | 'unread' | 'direct' | 'groups' | 'announcements' | 'favorites' | 'archived';
+export type InboxFilter = 'all' | 'unread' | 'direct' | 'groups' | 'announcements' | 'favorites';
 
 export type ResourceStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 export type ConnectivityState = 'online' | 'offline' | 'unknown';

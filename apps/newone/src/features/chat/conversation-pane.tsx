@@ -13,6 +13,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { ComponentProps } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -836,9 +837,6 @@ export function ConversationPane({
         error={workspace.actionError}
         name={conversationName}
         onAddMember={workspace.addConversationMember}
-        onArchive={async () => {
-          if (await workspace.updateConversation(conversation.id, { isArchived: true })) setShowControls(false);
-        }}
         onChangeDescription={setConversationDescription}
         onChangeName={setConversationName}
         onClose={() => setShowControls(false)}
@@ -872,6 +870,11 @@ export function ConversationPane({
           setShowMedia(true);
         }}
         onToggleFavorite={() => void workspace.updateConversationPreferences(conversation.id, { isFavorite: !conversation.favorite })}
+        onMarkUnread={(unread) => {
+          void workspace.updateConversationPreferences(conversation.id, { manuallyUnread: unread });
+          if (!unread) void workspace.markConversationRead(conversation.id);
+          setShowControls(false);
+        }}
         onUpdateNotificationSettings={(notificationLevel, mutedUntil) =>
           workspace.updateConversationPreferences(conversation.id, { notificationLevel, mutedUntil })}
         onUpdateTranslationMode={(translationMode) =>
@@ -1086,7 +1089,7 @@ function ConversationHeader({
       </View>
       <View style={styles.headerActions}>
         {onOpenSummary ? (
-          <IconButton name="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} size={36} />
+          <IconButton name="sparkles-outline" tone="accent" label={t('chat.summarize')} onPress={onOpenSummary} size={36} />
         ) : null}
         {onToggleDetails ? (
           <IconButton
@@ -1116,10 +1119,13 @@ function SettingRow({
   label,
   value,
   onPress,
+  icon,
 }: {
   label: string;
   value?: string;
   onPress: () => void;
+  /** The mark the same action wears on the row and on its chip. */
+  icon?: ComponentProps<typeof Ionicons>['name'];
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -1129,6 +1135,7 @@ function SettingRow({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.settingRow, pressed && styles.pressed]}>
+      {icon ? <Ionicons color={colors.inkMuted} name={icon} size={18} style={styles.settingRowIcon} /> : null}
       <Text numberOfLines={1} style={styles.settingRowLabel}>{label}</Text>
       {value ? <Text numberOfLines={1} style={styles.settingRowValue}>{value}</Text> : null}
       <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
@@ -2559,8 +2566,7 @@ function MessageActionsModal({
               <View style={styles.modalRow}>
                 {conversations
                   .filter((conversation) => (
-                    !conversation.archived
-                    && !conversation.managementOnly
+                    !conversation.managementOnly
                     && conversation.id !== message.conversationId
                   ))
                   .slice(0, 20)
@@ -2603,12 +2609,12 @@ function ConversationControlsModal({
   onChangeName,
   onChangeDescription,
   onSave,
-  onArchive,
   onAddMember,
   onRemoveMember,
   onUpdateMemberRole,
   onLeave,
   onToggleFavorite,
+  onMarkUnread,
   onOpenSummary,
   onOpenPinned,
   onOpenSharedMedia,
@@ -2628,7 +2634,6 @@ function ConversationControlsModal({
   onChangeName: (value: string) => void;
   onChangeDescription: (value: string) => void;
   onSave: () => void;
-  onArchive: () => void;
   onAddMember: (conversationId: string, personId: string, role: 'member' | 'admin') => Promise<boolean>;
   onRemoveMember: (conversationId: string, personId: string) => Promise<boolean>;
   onUpdateMemberRole: (
@@ -2639,6 +2644,7 @@ function ConversationControlsModal({
   ) => Promise<boolean>;
   onLeave: (replacementOwnerPersonId?: string) => Promise<void>;
   onToggleFavorite: () => void;
+  onMarkUnread: (unread: boolean) => void;
   onOpenSummary?: () => void;
   onOpenPinned: () => void;
   onOpenSharedMedia: () => void;
@@ -2659,6 +2665,7 @@ function ConversationControlsModal({
   const notification = notificationCopy(locale);
   const translationPreference = translationPreferenceCopy(locale);
   const departureCopy = conversationDepartureCopy(locale);
+  const unreadNow = conversation.unreadCount > 0 || conversation.manuallyUnread === true;
   const [candidateId, setCandidateId] = useState('');
   const [candidateRole, setCandidateRole] = useState<'member' | 'admin'>('member');
   const [candidateQuery, setCandidateQuery] = useState('');
@@ -2836,7 +2843,7 @@ function ConversationControlsModal({
           <IconButton label={t('chat.pinnedTitle')} name="pin-outline" onPress={onOpenPinned} size={44} />
           <IconButton label={t('chat.sharedMediaTitle')} name="images-outline" onPress={onOpenSharedMedia} size={44} />
           {onOpenSummary ? (
-            <IconButton label={t('chat.summarize')} name="sparkles-outline" onPress={onOpenSummary} size={44} />
+            <IconButton label={t('chat.summarize')} name="sparkles-outline" tone="accent" onPress={onOpenSummary} size={44} />
           ) : null}
         </View>
       ) : null}
@@ -3105,7 +3112,6 @@ function ConversationControlsModal({
       {conversation.canManageConversation
         && ['group', 'team', 'shift', 'incident'].includes(conversation.kind)
         && !conversation.policyManaged
-        && !conversation.archived
         && !conversation.isReadOnly ? (
         <View style={styles.settingRows}>
           <SettingRow label={t('chat.addMember')} onPress={() => setSheetPicker('addPeople')} />
@@ -3198,9 +3204,23 @@ function ConversationControlsModal({
           />
       </ActionModal>
 
+      {/* What the row's swipe and hover offer, written out with the same icons:
+          the icons alone said nothing to a reader who had never swiped, and
+          the words are what a person looks for (owner, Sep 14 2026). */}
       {!conversation.managementOnly ? (
         <View style={styles.settingRows}>
           <SettingRow
+            icon={conversation.favorite ? 'bookmark' : 'bookmark-outline'}
+            label={conversation.favorite ? t('chat.unbookmark') : t('chat.bookmark')}
+            onPress={onToggleFavorite}
+          />
+          <SettingRow
+            icon={unreadNow ? 'mail-open-outline' : 'mail-unread-outline'}
+            label={unreadNow ? t('chat.markRead') : t('chat.markUnread')}
+            onPress={() => onMarkUnread(!unreadNow)}
+          />
+          <SettingRow
+            icon={notificationLevel === 'none' || mutedUntil ? 'notifications-off-outline' : 'notifications-outline'}
             label={notification.title}
             onPress={() => setSheetPicker('notifications')}
             value={mutedUntil
@@ -3212,6 +3232,7 @@ function ConversationControlsModal({
                   : notification.all}
           />
           <SettingRow
+            icon="language-outline"
             label={translationPreference.title}
             onPress={() => setSheetPicker('translation')}
             value={conversation.translationMode === 'off'
@@ -3226,7 +3247,11 @@ function ConversationControlsModal({
           everything (groups-18, three runs on Sep 9 2026). */}
       {conversationDepartureSectionVisible(conversation) && conversation.departure ? (
         <View style={styles.settingRows}>
-          <SettingRow label={departureCopy.title} onPress={() => setSheetPicker('leave')} />
+          <SettingRow
+            icon={conversation.kind === 'direct' ? 'trash-outline' : 'exit-outline'}
+            label={departureCopy.title}
+            onPress={() => setSheetPicker('leave')}
+          />
         </View>
       ) : null}
       <ActionModal
@@ -3304,18 +3329,6 @@ function ConversationControlsModal({
         ) : null}
       </ActionModal>
 
-      {conversation.canManageConversation
-        && conversation.kind !== 'direct'
-        && !conversation.archived
-        && !conversation.isReadOnly ? (
-        <PrimaryButton
-          icon="archive-outline"
-          label={t('chat.archiveConversation')}
-          loading={busy === 'conversation-update'}
-          onPress={onArchive}
-          tone="danger"
-        />
-      ) : null}
       <ActionError message={error} />
     </ActionModal>
   );
@@ -3357,6 +3370,20 @@ function AttachmentPickerModal({
   const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const { t } = useI18n();
+  // Web: Enter sends once something is attached, so a photo, a file, a paste
+  // or a drop goes out the way a typed message does -- the sheet's own Send
+  // button was the only way before (owner's father, Sep 14 2026). Shift+Enter
+  // still breaks a line in the caption; the capture phase gets there first.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !visible || !selected || busy) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+      event.preventDefault();
+      onSend();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [busy, onSend, selected, visible]);
   return (
     <ActionModal
       onClose={onClose}
@@ -3917,6 +3944,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
   },
+  settingRowIcon: { width: 22, textAlign: 'center' },
   settingRowLabel: { flex: 1, minWidth: 0, color: colors.ink, fontSize: 14, fontWeight: '700' },
   settingRowValue: { color: colors.inkSubtle, fontSize: 13, maxWidth: '52%' },
   disclosureRow: {

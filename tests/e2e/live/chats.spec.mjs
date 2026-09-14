@@ -86,17 +86,17 @@ test('a hovered chat row holds its actions while the mouse reaches for them', as
   const row = chats.getByRole('button', {
     name: new RegExp(`^${liveWorkspace.friend.displayName}:`),
   });
-  const archive = chats.getByRole('button', { name: 'Archive', exact: true });
+  const mute = chats.getByRole('button', { name: 'Mute', exact: true });
   const more = chats.getByRole('button', { name: 'Chat actions', exact: true });
-  await expect(archive).toHaveCount(0);
+  await expect(mute).toHaveCount(0);
 
   await row.hover();
   // Hover shows one ⋯, not the strip: five circles over the row made the
   // chat itself hard to click (owner, Sep 14 2026). The strip opens from it.
   await expect(more).toBeVisible();
-  await expect(archive).toHaveCount(0);
+  await expect(mute).toHaveCount(0);
   await more.click();
-  await expect(archive).toBeVisible();
+  await expect(mute).toBeVisible();
 
   // The bug this pins: hover lived on the row, and the strip is drawn over it
   // rather than inside it, so moving the mouse onto an action counted as
@@ -108,22 +108,22 @@ test('a hovered chat row holds its actions while the mouse reaches for them', as
   // element that is only *sometimes* there and cannot see a flicker at all.
   // Park the mouse on the action and sample the DOM directly instead: with the
   // loop running the samples alternate, and only a steady strip is all true.
-  const box = await archive.boundingBox();
+  const box = await mute.boundingBox();
   await chats.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   const samples = await chats.evaluate(async () => {
     const seen = [];
     for (let index = 0; index < 24; index += 1) {
-      seen.push(Boolean(document.querySelector('[aria-label="Archive"]')));
+      seen.push(Boolean(document.querySelector('[aria-label="Mute"]')));
       await new Promise((resolve) => { setTimeout(resolve, 25); });
     }
     return seen;
   });
   expect(samples.filter(Boolean)).toHaveLength(samples.length);
-  await expect(archive).toBeEnabled();
+  await expect(mute).toBeEnabled();
 
   // Leaving the row for good still puts them away.
   await chats.getByTestId('chat-search-field').hover();
-  await expect(archive).toHaveCount(0);
+  await expect(mute).toHaveCount(0);
 });
 
 test('the details pane folds away and hands the room to the conversation', async ({

@@ -55,7 +55,9 @@ export async function createLiveWorkspace() {
   const password = `Web-${randomUUID().slice(0, 12)}!`;
 
   const owner = await signupUser(keys, { runId, label: 'owner', language: 'en', password });
-  const friend = await signupUser(keys, { runId, label: 'friend', language: 'en' });
+  // The friend signs in too, on a second browser, when a test needs both ends
+  // of a conversation (typing, Sep 14 2026).
+  const friend = await signupUser(keys, { runId, label: 'friend', language: 'en', password });
   const third = await signupUser(keys, { runId, label: 'third', language: 'en' });
 
   const connect = async (target, label, body) => {
@@ -101,7 +103,7 @@ export async function createLiveWorkspace() {
     runId,
     projectUrl: PROJECT_URL,
     owner: { email: owner.email, username: owner.username, password, userId: owner.userId },
-    friend: { displayName: 'Smoke friend', username: friend.username, userId: friend.userId },
+    friend: { displayName: 'Smoke friend', username: friend.username, userId: friend.userId, email: friend.email, password },
     third: { displayName: 'Smoke third', username: third.username, userId: third.userId },
     conversationId,
     pinnedBody,

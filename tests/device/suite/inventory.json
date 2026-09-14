@@ -442,7 +442,7 @@
           "kind": "button",
           "gating": "after a one-to-one row action; ActionModal titled \"Delete this chat?\"",
           "consumerIosReachable": true,
-          "note": "Confirms archiving the reader's copy (chat.deleteChatBody names the other person). \"Keep it\" cancels.",
+          "note": "Confirms hiding the reader's copy (chat.deleteChatBody names the other person). \"Keep it\" cancels.",
           "sourceLine": 266
         },
         {
@@ -679,7 +679,7 @@
           "kind": "list-item",
           "gating": "a long press on a row, a short drag left, or hover/right-click on web",
           "consumerIosReachable": true,
-          "note": "Four icon buttons over the row: mark unread/read, mute/unmute, archive, and leave (group) or delete (one-to-one).",
+          "note": "Four icon buttons over the row: mark unread/read, mute/unmute, bookmark, and leave (group) or delete (one-to-one).",
           "sourceLine": 489
         },
         {
@@ -723,16 +723,6 @@
           "sourceLine": 70
         },
         {
-          "id": "conversation-list.row-archive",
-          "label": "Archive",
-          "catalogKey": "chat.archive",
-          "kind": "button",
-          "gating": "none",
-          "consumerIosReachable": true,
-          "note": "Writes isArchived; the row leaves the list at once.",
-          "sourceLine": 72
-        },
-        {
           "id": "conversation-list.row-leave",
           "label": "Leave",
           "catalogKey": "chat.leaveGroup",
@@ -749,7 +739,7 @@
           "kind": "button",
           "gating": "conversation.kind === 'direct'",
           "consumerIosReachable": true,
-          "note": "Opens the delete confirmation. Backlog 53: archive and delete set the same flag for a direct chat.",
+          "note": "Opens the delete confirmation.",
           "sourceLine": 75
         },
         {
@@ -1428,7 +1418,7 @@
           "label": "{conversation.title}",
           "catalogKey": null,
           "kind": "chip",
-          "gating": "message.serverId && !message.deleted (server-confirmed message) && !message.attachment; up to 20 non-archived, non-managementOnly other conversations",
+          "gating": "message.serverId && !message.deleted (server-confirmed message) && !message.attachment; up to 20 non-managementOnly other conversations",
           "consumerIosReachable": "conditional",
           "note": "'Forward to a chat' chips (chat.forwardTo; was 'Forward to a conversation'); attachments show 'Forward · unavailable' (chat.forwardUnavailable) instead",
           "sourceLine": 2773
@@ -2076,7 +2066,7 @@
           "label": "Name or @username",
           "catalogKey": "chat.memberSearchLabel",
           "kind": "input",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly",
           "consumerIosReachable": "conditional",
           "note": "'Add people' section (chat.addMember; was 'Add a member'); SearchField placeholder/a11y 'Name or @username' (was 'Search the company directory'); onSubmitEditing runs the search",
           "sourceLine": 2922
@@ -2086,7 +2076,7 @@
           "label": "Search people",
           "catalogKey": "chat.memberSearchAction",
           "kind": "button",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly; disabled while loading",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly; disabled while loading",
           "consumerIosReachable": "conditional",
           "note": "workspace.queryConversationMemberCandidates; 'Search people' was 'Search members'",
           "sourceLine": 2928
@@ -2096,7 +2086,7 @@
           "label": "{person.displayName}",
           "catalogKey": null,
           "kind": "picker",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && candidates.length",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly && candidates.length",
           "consumerIosReachable": "conditional",
           "note": "Radio row (accessibilityRole radio); 'No one matched that search.' (chat.memberSearchEmpty) when empty; consumers can add anyone found by name or @username",
           "sourceLine": 3424
@@ -2106,7 +2096,7 @@
           "label": "Show more",
           "catalogKey": "chat.loadMoreMembers",
           "kind": "button",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && memberCandidateCursor",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly && memberCandidateCursor",
           "consumerIosReachable": "conditional",
           "note": "Appends the next page; 'Show more' was 'Load more members'",
           "sourceLine": 2966
@@ -2116,7 +2106,7 @@
           "label": "Member",
           "catalogKey": "chat.memberRole",
           "kind": "chip",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && conversation.canManage (delegated managers see 'Delegated additions always use the member role.')",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly && conversation.canManage (delegated managers see 'Delegated additions always use the member role.')",
           "consumerIosReachable": "conditional",
           "note": "setCandidateRole('member')",
           "sourceLine": 2974
@@ -2126,7 +2116,7 @@
           "label": "Admin",
           "catalogKey": "chat.adminRole",
           "kind": "chip",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && conversation.canManage",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly && conversation.canManage",
           "consumerIosReachable": "conditional",
           "note": "setCandidateRole('admin')",
           "sourceLine": 2975
@@ -2136,7 +2126,7 @@
           "label": "Add to group",
           "catalogKey": "chat.addSelectedMember",
           "kind": "button",
-          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly; disabled !selectedCandidateId",
+          "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly; disabled !selectedCandidateId",
           "consumerIosReachable": "conditional",
           "note": "onAddMember(conversationId, userId, role); 'Add to group' was 'Add selected member'; the thread then shows '{name} was added to the group.'",
           "sourceLine": 2982
@@ -2170,16 +2160,6 @@
           "consumerIosReachable": "conditional",
           "note": "departure-copy.confirm; onLeave(replacementOwnerId); direct threads show 'You can’t leave a one-to-one chat.'",
           "sourceLine": 3535
-        },
-        {
-          "id": "pane.controls-archive",
-          "label": "Archive conversation",
-          "catalogKey": "chat.archiveConversation",
-          "kind": "button",
-          "gating": "conversation.canManageConversation && kind !== 'direct' && !archived && !isReadOnly",
-          "consumerIosReachable": "conditional",
-          "note": "updateConversation({isArchived: true}) (danger)",
-          "sourceLine": 3077
         },
         {
           "id": "pane.attach-photo-library",
@@ -5099,7 +5079,7 @@
         "features/chat/conversation-pane.tsx:2917"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly"
+      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly"
     },
     {
       "key": "chat.addSelectedMember",
@@ -5108,7 +5088,7 @@
         "features/chat/conversation-pane.tsx:2982"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly"
+      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly"
     },
     {
       "key": "chat.adminRole",
@@ -5163,24 +5143,6 @@
       ],
       "consumerIosReachable": "conditional",
       "gating": "conversation.canManageConversation && !conversation.policyManaged && kind in ['group','team'] && joinRequests"
-    },
-    {
-      "key": "chat.archive",
-      "en": "Archive",
-      "usedIn": [
-        "features/chat/conversation-list.tsx:72"
-      ],
-      "consumerIosReachable": true,
-      "gating": "none"
-    },
-    {
-      "key": "chat.archiveConversation",
-      "en": "Archive conversation",
-      "usedIn": [
-        "features/chat/conversation-pane.tsx:3077"
-      ],
-      "consumerIosReachable": "conditional",
-      "gating": "canManageConversation && kind !== 'direct' && !archived && !isReadOnly"
     },
     {
       "key": "chat.assignTo",
@@ -5763,7 +5725,7 @@
         "features/chat/conversation-pane.tsx:2966"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly && cursor"
+      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly && cursor"
     },
     {
       "key": "chat.loadOlder",
@@ -5838,7 +5800,7 @@
         "features/chat/conversation-pane.tsx:2928"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly"
+      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly"
     },
     {
       "key": "chat.memberSearchLabel",
@@ -5847,7 +5809,7 @@
         "features/chat/conversation-pane.tsx:2922"
       ],
       "consumerIosReachable": "conditional",
-      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !archived && !isReadOnly"
+      "gating": "conversation.canManageConversation && kind in ['group','team','shift','incident'] && !policyManaged && !isReadOnly"
     },
     {
       "key": "chat.message",

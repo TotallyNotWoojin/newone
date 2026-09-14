@@ -125,7 +125,7 @@ jest.mock('@/features/chat/conversation-list', () => {
             onPress={props.onOpenPinned}
           />
           <ReactNative.Text>{`controlled-unread:${(props.markedUnreadIds ?? []).join('|')}`}</ReactNative.Text>
-          {['markUnread', 'markRead', 'mute', 'unmute', 'archive', 'delete', 'leave'].map((action) => (
+          {['markUnread', 'markRead', 'mute', 'unmute', 'delete', 'leave'].map((action) => (
             <ReactNative.Pressable
               accessibilityLabel={`controlled row ${action}`}
               accessibilityRole="button"
@@ -442,10 +442,6 @@ describe('chats index route', () => {
     expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
       'conversation-primary', { notificationLevel: 'all', mutedUntil: null },
     );
-    await fireEvent.press(screen.getByRole('button', { name: 'controlled row archive' }));
-    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
-      'conversation-primary', { isArchived: true },
-    );
 
     await again.unmount();
   });
@@ -470,8 +466,7 @@ describe('chats index route', () => {
     expect(screen.getByText('chat.deleteChatTitle')).toBeTruthy();
     expect(screen.getByText('chat.deleteChatBody')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'chat.deleteChat' }));
-    // v3.4: being done with a chat hides it; archiving only moves it aside,
-    // and the two used to write the same flag.
+    // v3.4: being done with a chat hides it for this reader only.
     expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(
       'conversation-primary', { isHidden: true },
     );

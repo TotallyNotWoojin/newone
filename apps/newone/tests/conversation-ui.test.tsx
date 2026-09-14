@@ -748,11 +748,11 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('chat.notifications')).toBeTruthy();
   });
 
-  test('Archived is a chip like the rest, and the only way into the archive', async () => {
-    // It used to be a row of its own at the top of the list (owner, Sep 14
-    // 2026: make it "another thing like all, unread, dm, group").
+  test('Bookmarked is a chip with the bookmark mark; Archived is gone', async () => {
+    // Archive left on Sep 14 2026 (owner: not useful here). Bookmarked takes
+    // the slot beside Unread, wearing the icon its row action uses.
     const onFilter = jest.fn();
-    const archived = conversation({ id: 'conversation-archived', title: 'Old thread', archivedByMe: true });
+    const kept = conversation({ id: 'conversation-kept', title: 'Kept thread', favorite: true });
     const listProps = {
       desktop: true,
       onCompose: jest.fn(),
@@ -764,20 +764,41 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       selectedId: 'conversation-main',
     };
     const view = await render(
-      <ConversationList {...listProps} conversations={[conversation(), archived]} filter="all" />,
+      <ConversationList {...listProps} conversations={[conversation(), kept]} filter="all" />,
     );
-    expect(screen.queryByText('Old thread')).toBeNull();
-    expect(screen.queryByLabelText('chat.back')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('chat.filterArchived'));
-    expect(onFilter).toHaveBeenCalledWith('archived');
+    expect(screen.getByText('Kept thread')).toBeTruthy();
+    expect(screen.queryByLabelText('chat.filterArchived')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.filterFavorites'));
+    expect(onFilter).toHaveBeenCalledWith('favorites');
     await view.unmount();
 
     await render(
-      <ConversationList {...listProps} conversations={[conversation(), archived]} filter="archived" />,
+      <ConversationList {...listProps} conversations={[conversation(), kept]} filter="favorites" />,
     );
-    expect(screen.getByText('Old thread')).toBeTruthy();
+    expect(screen.getByText('Kept thread')).toBeTruthy();
     expect(screen.queryByText('Plant Operations')).toBeNull();
-    expect(screen.queryByLabelText('chat.back')).toBeNull();
+  });
+
+  test('the controls sheet spells out bookmark and mark unread with the row actions\' icons', async () => {
+    // The swipe and hover icons said nothing to a reader who had never swiped
+    // (owner, Sep 14 2026); the same actions are rows with words here.
+    mockWorkspace.markConversationRead = jest.fn(async () => undefined);
+    const unread = conversation({ unreadCount: 2 });
+    const view = await render(<ConversationPane conversation={unread} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    expect(screen.getByLabelText('chat.bookmark')).toBeTruthy();
+    expect(screen.queryByLabelText('chat.archiveConversation')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('chat.markRead'));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(unread.id, { manuallyUnread: false });
+    expect(mockWorkspace.markConversationRead).toHaveBeenCalledWith(unread.id);
+    await view.unmount();
+
+    const read = conversation({ unreadCount: 0, favorite: true });
+    await render(<ConversationPane conversation={read} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.conversationSettings'));
+    expect(screen.getByLabelText('chat.unbookmark')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('chat.markUnread'));
+    expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalledWith(read.id, { manuallyUnread: true });
   });
 
   test('executes every mutable own-message action while preserving failures for retry', async () => {
@@ -948,8 +969,6 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.loadMoreMembers'));
     await waitFor(() => expect(screen.getByText('Riley Chen')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('chat.addSelectedMember'));
-
-    await fireEvent.press(screen.getByLabelText('chat.archiveConversation'));
 
     await waitFor(() => {
       expect(mockWorkspace.updateConversationPreferences).toHaveBeenCalled();
