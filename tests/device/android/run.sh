@@ -7,9 +7,13 @@
 # nav-bar behaviour still need a physical Galaxy or Samsung Remote Test Lab.
 # NEWONE_AVD=Gist_Pixel runs the same check on a Pixel 7 profile.
 #
-# Boots the emulator if it is not already running, signs in as the review
-# account, opens a conversation, focuses the composer and screenshots it with
-# the keyboard up -- the exact spot Android 15's edge-to-edge broke once.
+# Boots the emulator if it is not already running, signs in, opens a
+# conversation, focuses the composer and screenshots it with the keyboard up --
+# the exact spot Android 15's edge-to-edge broke once.
+#
+# The composer step needs an account that HAS a conversation. The review
+# account does not, so seed a showcase account first and export what it prints:
+#   node tests/device/lib/showcase-account.mjs
 #
 # Usage:  tests/device/android/run.sh [apk] [shot-dir]
 #   apk       defaults to the newest ~/.cache/newone-release/gist-*.apk
@@ -19,7 +23,7 @@
 #   NEWONE_AVD            AVD name           (Gist_Flip; or Gist_Pixel)
 #   NEWONE_SHOT_EMAIL     account email      (review@newonechat.com)
 #   NEWONE_SHOT_PASSWORD  account password   (~/.config/newone/review-account-password.txt)
-#   NEWONE_SHOT_PEER      chat to open       (Diego Ruiz)
+#   NEWONE_SHOT_PEER      chat to open       (none; required for composer)
 #   NEWONE_HEADLESS       1 = no window      (1)
 #   NEWONE_STOP_EMULATOR  1 = kill it after  (0; leave it up for the next run)
 #
@@ -33,14 +37,18 @@ SDK="$HOME/Library/Android/sdk"
 ADB="$SDK/platform-tools/adb"
 EMU="$SDK/emulator/emulator"
 MAESTRO="$HOME/.maestro/bin/maestro"
-export MAESTRO_DRIVER_STARTUP_TIMEOUT=120000
+export MAESTRO_DRIVER_STARTUP_TIMEOUT=240000
 
 AVD="${NEWONE_AVD:-Gist_Flip}"
 APK="${1:-$(ls -t "$HOME"/.cache/newone-release/gist-*.apk 2>/dev/null | head -1)}"
 OUT="${2:-$ROOT/tests/device/.artifacts/android-$(date +%Y%m%dT%H%M%S)}"
 EMAIL="${NEWONE_SHOT_EMAIL:-review@newonechat.com}"
 PASSWORD="${NEWONE_SHOT_PASSWORD:-$(cat "$HOME/.config/newone/review-account-password.txt" 2>/dev/null)}"
-PEER="${NEWONE_SHOT_PEER:-Diego Ruiz}"
+# No default peer. "Diego Ruiz" is a *showcase* fixture that
+# lib/showcase-account.mjs creates; the review account has no conversations at
+# all, so the old default could never open a chat and the composer step -- the
+# whole point of this check -- was unreachable by construction.
+PEER="${NEWONE_SHOT_PEER:-}"
 PKG=com.totallynotwoojin.gist
 
 [[ -f "$APK" ]] || { echo "no APK at '$APK' -- build one with tools/release/android-build.sh" >&2; exit 2; }
@@ -99,19 +107,54 @@ sleep 15
 
 # --- drive it --------------------------------------------------------------
 FAILED=0
+
+# Screenshots are taken from the host with adb, never with Maestro's
+# takeScreenshot: Maestro resolves that path against its own debug directory,
+# so an absolute path gets concatenated onto it and the write dies with
+# FileNotFoundException. The iOS suite screenshots with `simctl io screenshot`
+# (lib/devices.mjs) for the same reason; this is the adb equivalent.
+shot() {
+  "$ADB" -s "$DEV" exec-out screencap -p > "$OUT/$1.png"
+}
+
 run() {
   local label="$1"; shift
   local log="$OUT/$label.log"
-  "$MAESTRO" --device "$DEV" test "$@" > "$log" 2>&1
-  local rc=$?
+  local rc=0
+  # Each `maestro test` starts its own on-device driver, and the third one in a
+  # row sometimes never comes up. That is a harness fault, not a product
+  # failure, so clear the driver and give it one more go.
+  for attempt in 1 2; do
+    "$MAESTRO" --device "$DEV" test "$@" > "$log" 2>&1
+    rc=$?
+    if [[ $rc -ne 0 ]] && grep -q "did not start up in time" "$log"; then
+      echo "  driver did not start for $label; clearing it and retrying"
+      "$ADB" -s "$DEV" shell am force-stop dev.mobile.maestro >/dev/null 2>&1
+      "$ADB" -s "$DEV" shell am force-stop dev.mobile.maestro.test >/dev/null 2>&1
+      sleep 8
+      continue
+    fi
+    break
+  done
   sed -e 's/\x1b\[[0-9;]*m//g' "$log" | grep -E "COMPLETED|FAILED" | tail -3
   if [[ $rc -ne 0 ]]; then echo "  ✗ $label (see $log)"; FAILED=1; else echo "  ✓ $label"; fi
 }
 
 run sign-in-email -e EMAIL="$EMAIL" "$HERE/returning-request.yaml"
-run sign-in-password -e PASSWORD="$PASSWORD" -e SHOT="$OUT/shot" "$HERE/returning-verify.yaml"
+run sign-in-password -e PASSWORD="$PASSWORD" "$HERE/returning-verify.yaml"
+shot after-sign-in
 
-cat > "$OUT/open-and-focus.yaml" <<YAML
+if [[ -z "$PEER" ]]; then
+  # Do not pass silently. The composer is the only reason this check exists,
+  # and a run that skips it while reporting success is worse than a failure.
+  echo "  ✗ composer NOT CHECKED: no peer set."
+  echo "    This step needs an account that actually has a conversation; the"
+  echo "    review account has none. Seed a showcase account and re-run with"
+  echo "    the environment it prints:"
+  echo "      node tests/device/lib/showcase-account.mjs"
+  FAILED=1
+else
+  cat > "$OUT/open-and-focus.yaml" <<YAML
 appId: $PKG
 ---
 - tapOn:
@@ -124,10 +167,10 @@ appId: $PKG
 - tapOn: ".*Write a message.*"
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: $OUT/composer-keyboard
 YAML
-run composer "$OUT/open-and-focus.yaml"
-"$ADB" -s "$DEV" exec-out screencap -p > "$OUT/composer-keyboard-adb.png"
+  run composer "$OUT/open-and-focus.yaml"
+  shot composer-keyboard
+fi
 
 if [[ "${NEWONE_STOP_EMULATOR:-0}" == "1" ]]; then
   "$ADB" -s "$DEV" emu kill >/dev/null 2>&1

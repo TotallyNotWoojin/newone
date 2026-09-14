@@ -3,6 +3,8 @@ appId: com.totallynotwoojin.gist
 # Android variant of common/returning-verify.yaml (v3.2 flow): the password
 # field does not expose its typed value as visible text on Android, so type the
 # password, tap Sign in, and let the Chats screen prove the sign-in. Env: PASSWORD.
+# Screenshots are taken by run.sh with adb, not with takeScreenshot: Maestro
+# resolves that path against its own debug dir, so an absolute path fails.
 - extendedWaitUntil:
     visible:
       id: "password"
@@ -20,7 +22,6 @@ appId: com.totallynotwoojin.gist
 - tapOn: "Sign in"
 - waitForAnimationToEnd:
     timeout: 4000
-- takeScreenshot: ${SHOT}-android-after-sign-in
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 60000
