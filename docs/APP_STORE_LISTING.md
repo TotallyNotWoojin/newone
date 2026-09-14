@@ -1,6 +1,6 @@
 # App Store listing — Gist Chat
 
-Status: draft for the 1.0 submission (owner review pending). Bundle `com.totallynotwoojin.newone`, ASC app id 6808028951, name "Gist Chat".
+Status: draft for the 1.0 submission (owner review pending). Bundle `com.totallynotwoojin.gist`, ASC app id 6811375129, name "Gist Chat". (The earlier record, `com.totallynotwoojin.newone` / 6808028951, is retired and cannot be renamed.)
 
 ## Name / subtitle
 - **Name:** Gist Chat

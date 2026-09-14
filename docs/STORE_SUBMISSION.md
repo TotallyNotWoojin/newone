@@ -6,7 +6,7 @@ Console; the answers to give are written out here.
 
 ## Shared facts
 
-- App name: Gist Chat. Bundle / package: `com.totallynotwoojin.newone`.
+- App name: Gist Chat. Bundle / package: `com.totallynotwoojin.gist` (the `com.totallynotwoojin.newone` record is retired; a package name cannot change, so it is a different app with no upgrade path).
 - Category: Social Networking (secondary: Productivity). Age rating: 4+ (messaging and user-generated content declared; reporting and blocking exist).
 - Pricing: free, no in-app purchases, no ads.
 - Sign-in (v3.2): email, then password ("Sign in" chip → email → Continue → password → Sign in); "Forgot password?" emails a one-time code and then asks for a new password. Review account: `review@newonechat.com`; its password lives in `~/.config/gist/review-account-password.txt` on the owner's Mac (the App Store Connect demo-account field carries it; never commit it). The six-digit static code in `~/.config/gist/review-account-code.txt` still serves the server's web/admin code route but the app no longer offers a code sign-in.
@@ -78,7 +78,7 @@ After DNS resolves, enable "Enforce HTTPS" in the Pages settings and switch the 
 
 Google requires a closed test with at least 12 testers opted in for 14 continuous days before a personal account (created after Nov 13, 2023) can apply for production. There is no API or policy exception. Fastest path:
 1. Play Console → Testing → Closed testing → create a track (or use "alpha"), add an email list with 12+ Google accounts (friends, family, classmates), and roll out version code 14 to it.
-2. Send testers the opt-in link https://play.google.com/apps/testing/com.totallynotwoojin.newone; they must accept and install once and stay opted in for 14 days.
+2. Send testers the opt-in link https://play.google.com/apps/testing/com.totallynotwoojin.gist; they must accept and install once and stay opted in for 14 days.
 3. On day 14, Dashboard → "Apply for production access", answer the short questionnaire, then promote the release to Production.
 Meanwhile the sideload APK and the internal track (up to 100 emailed testers) keep working.
 

@@ -1,11 +1,12 @@
 // Set TestFlight "What to test" for a build (waits for processing). Usage: node asc-build-notes.mjs <buildNumber> <copy.en.json> [copy.es.json ...]
 import { readFileSync } from 'node:fs';
-import { asc } from './asc.mjs';
+import { asc, ascConfig } from './asc.mjs';
+const APP_ID = ascConfig().appId;
 const [buildNumber, ...files] = process.argv.slice(2);
 const notes = files.map((f) => { const c = JSON.parse(readFileSync(f, 'utf8')); return { locale: c.locale.asc, whatsNew: c.whatsNew.slice(0, 4000) }; });
 let build = null;
 for (let i = 0; i < 60 && !build; i++) {
-  const r = await asc('GET', `/builds?filter[app]=6808028951&filter[version]=${buildNumber}&limit=1`);
+  const r = await asc('GET', `/builds?filter[app]=${APP_ID}&filter[version]=${buildNumber}&limit=1`);
   const b = r.json?.data?.[0]; if (b && b.attributes.processingState === 'VALID') build = b; else await new Promise((res) => setTimeout(res, 60_000));
 }
 if (!build) { console.log('build not processed'); process.exit(1); }
