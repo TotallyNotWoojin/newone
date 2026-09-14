@@ -163,4 +163,6 @@ Chats.
 
 ## Dropped
 
+81. **Typing indicator as a bubble in the stream** (owner, Sep 14 2026, with a screenshot from another messenger, queued after the v3.10 release). Today the label sits as one italic line above the composer. Wanted: the typing peer appears as the *next message* — their avatar and name at the left, then an empty incoming bubble holding three animated dots — so the eye is already on the spot the reply will land in. In a group, one such row per typing member, the same 6-second local expiry the header label used. On web the same row, sized to the bubble column. Keep the screen-reader announcement as text ("{name} is typing…") since dots read as nothing.
+
 34. ~~Bridging WhatsApp / iMessage / SMS into Gist~~ — dropped by the owner Sep 6 2026 after the constraints were laid out (no third-party iMessage API at all; WhatsApp only through its business platform, which cannot read personal chats; SMS/RCS bridging possible on Android only).
