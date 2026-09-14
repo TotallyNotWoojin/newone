@@ -1213,8 +1213,8 @@ export class OpenRouterLanguageProcessor {
         // Korean or Spanish subject is a guess it must not make: "아빠 kyle" from
         // the father himself came back as "her dad Kyle" (owner report, Sep 14
         // 2026). Laughter markers became emoji in the same message.
-        'When the source omits a subject or possessor, do not invent one: keep the reference as neutral as the source (write "Dad" rather than "her dad"), and use the first person only where the speaker plainly means themselves. ' +
-        'Render laughter markers such as ㅎㅎ, ㅋㅋ, jaja or lol as laughter words, never as emoji, and never add emoji the source does not contain. ' +
+        'Never add a possessive pronoun (my, your, his, her, their) or a subject that the source does not contain: an omitted Korean or Spanish possessor stays omitted in the target ("couldn\'t find Dad Kyle", not "her dad Kyle"). Use the first person only where the speaker plainly means themselves. ' +
+        'Render laughter markers such as ㅎㅎ, ㅋㅋ, jaja or lol as one natural laugh in the target language ("haha"), never as emoji, never repeated per character, and never add emoji the source does not contain. ' +
         'Return only the requested JSON object.',
       user:
         `Source language: ${sourceLanguage === 'und' ? 'mixed or unknown; render every part in the target language' : sourceLanguage}\nTarget language: ${targetLanguage}\nSource fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
