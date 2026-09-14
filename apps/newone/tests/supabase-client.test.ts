@@ -182,6 +182,7 @@ describe('Supabase client boundaries', () => {
       configured.url,
       configured.publishableKey,
       {
+        accessToken: expect.any(Function),
         auth: {
           autoRefreshToken: false,
           persistSession: false,
@@ -190,5 +191,25 @@ describe('Supabase client boundaries', () => {
         global: { headers: { 'x-client-info': 'newone-expo/web-realtime-only' } },
       },
     );
+  });
+
+  test('the web realtime socket asks for the session token whenever it re-authenticates by itself', async () => {
+    // realtime-js calls the client's token callback after every join and on
+    // every reconnect, ignoring the token set by hand. supabase-js's default
+    // callback answered with the publishable key for this session-less client,
+    // so channels rejoined as anonymous and were refused (Sep 14 2026).
+    const { createClient, supabase } = loadSupabase({
+      platform: 'web',
+      nativeConfigured: false,
+      apiConfigured: true,
+      supabase: configured,
+    });
+    supabase.getRealtimeClient();
+    const options = createClient.mock.calls[0][2] as { accessToken: () => Promise<string | null> };
+    await expect(options.accessToken()).resolves.toBeNull();
+    supabase.setRealtimeAccessToken('session-token-1');
+    await expect(options.accessToken()).resolves.toBe('session-token-1');
+    supabase.setRealtimeAccessToken(null);
+    await expect(options.accessToken()).resolves.toBeNull();
   });
 });

@@ -20,6 +20,23 @@ export const isWebAuthBlocked = Platform.OS === 'web' && !isApiConfigured;
 
 let client: SupabaseClient<Database> | null = null;
 let webRealtimeClient: SupabaseClient<Database> | null = null;
+let realtimeAccessToken: string | null = null;
+
+/**
+ * The token the browser's realtime socket presents when it re-authenticates
+ * on its own. supabase-js always hands realtime-js a token callback, and
+ * realtime-js calls that callback -- not the token set by hand -- after every
+ * channel join and on every reconnect. For this session-less client the
+ * default callback answered with the publishable key, so seconds after
+ * joining, every private channel was downgraded to anonymous and refused
+ * ("Unauthorized: You do not have permissions to read from this Channel
+ * topic"; Sep 14 2026, typing never reached the phone from the web). The
+ * signed-in native client's callback answers with its session, so only the
+ * web socket needs feeding; the auth provider does it as the token changes.
+ */
+export function setRealtimeAccessToken(token: string | null) {
+  realtimeAccessToken = token;
+}
 
 export function getSupabaseClient() {
   // Native sessions come only from Gist's bounded OTP gateway and are kept
@@ -59,6 +76,7 @@ export function getRealtimeClient() {
     publicRuntimeConfig.supabase.url,
     publicRuntimeConfig.supabase.publishableKey,
     {
+      accessToken: async () => realtimeAccessToken,
       auth: {
         autoRefreshToken: false,
         persistSession: false,

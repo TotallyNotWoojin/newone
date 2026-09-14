@@ -53,6 +53,7 @@ jest.mock('@/i18n/provider', () => ({
 }));
 
 jest.mock('@/lib/supabase', () => ({
+  setRealtimeAccessToken: jest.fn(),
   getRealtimeClient: () => mockRealtimeClient,
   getSupabaseClient: () => null,
   isNativeSupabaseConfigured: false,

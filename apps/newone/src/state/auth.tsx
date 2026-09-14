@@ -20,6 +20,7 @@ import {
   getSupabaseClient,
   getRealtimeClient,
   isNativeSupabaseConfigured,
+  setRealtimeAccessToken,
 } from '@/lib/supabase';
 import {
   deleteNativeAccount,
@@ -220,6 +221,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(isNativeSupabaseConfigured || runtimeMode === 'web');
   const [error, setError] = useState<string | null>(null);
   const lastUserId = useRef<string | null>(null);
+  // The realtime socket re-authenticates by itself and asks for this token
+  // (see setRealtimeAccessToken); it is the same value the context publishes
+  // as realtimeToken, kept current here so a refreshed session reaches the
+  // socket before its next join.
+  const realtimeToken = cookieSession ? webRealtimeToken : session?.access_token ?? null;
+  useEffect(() => {
+    setRealtimeAccessToken(realtimeToken);
+  }, [realtimeToken]);
   const activationInFlight = useRef(false);
   // A verified forgot-password code whose session waits for the new password.
   const pendingRecovery = useRef<PendingRecovery | null>(null);
@@ -534,7 +543,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       user: cookieSession ? webUser : session?.user ?? null,
       authenticated: Boolean(cookieSession ? webUser : session),
-      realtimeToken: cookieSession ? webRealtimeToken : session?.access_token ?? null,
+      realtimeToken,
       sessionId: cookieSession ? webSessionId : claims.sessionId,
       assuranceLevel: cookieSession ? webAal : claims.assuranceLevel,
       loading,
