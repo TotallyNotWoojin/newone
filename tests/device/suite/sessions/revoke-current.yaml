@@ -3,7 +3,7 @@ appId: com.totallynotwoojin.gist
 # Ending the current device's own session from Settings. Consumer accounts have
 # no "Revoke this session" control (settings.tsx renders that RowAction only
 # for workplace organizations, !personalRealm); the consumer path is
-# "Sign out of Newone", which revokes this session on the server before
+# "Sign out of Gist", which revokes this session on the server before
 # signing out locally.
 - launchApp
 # A previous step may have left Settings open, and its "CHATS" section header
@@ -30,10 +30,10 @@ appId: com.totallynotwoojin.gist
 - takeScreenshot: ${SHOT}-devices
 - scrollUntilVisible:
     element:
-      text: "Sign out of Newone"
+      text: "Sign out of Gist"
     direction: DOWN
     timeout: 45000
-- tapOn: "Sign out of Newone"
+- tapOn: "Sign out of Gist"
 - extendedWaitUntil:
     visible: "Create account"
     timeout: 40000

@@ -20,10 +20,10 @@ appId: com.totallynotwoojin.gist
           timeout: 45000
       - scrollUntilVisible:
           element:
-            text: "Sign out of Newone"
+            text: "Sign out of Gist"
           direction: DOWN
           timeout: 45000
-      - tapOn: "Sign out of Newone"
+      - tapOn: "Sign out of Gist"
 - extendedWaitUntil:
     visible: "Create account"
     timeout: 30000

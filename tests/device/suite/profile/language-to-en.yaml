@@ -26,7 +26,7 @@ appId: com.totallynotwoojin.gist
 - assertVisible: "Language"
 - scrollUntilVisible:
     element:
-      text: "Sign out of Newone"
+      text: "Sign out of Gist"
     direction: DOWN
     timeout: 30000
 - takeScreenshot: ${SHOT}-english-settings

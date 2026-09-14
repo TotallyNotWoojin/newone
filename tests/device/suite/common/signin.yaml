@@ -24,7 +24,7 @@ appId: com.totallynotwoojin.gist
     optional: true
 # Signed in as the wrong person: leave, so the sign-in below can happen. The
 # same steps common/signout.yaml uses — the control is "Settings", the row is
-# "Sign out of Newone".
+# "Sign out of Gist".
 - runFlow:
     when:
       visible: "Chats"
@@ -36,10 +36,10 @@ appId: com.totallynotwoojin.gist
           timeout: 15000
       - scrollUntilVisible:
           element:
-            text: "Sign out of Newone"
+            text: "Sign out of Gist"
           direction: DOWN
           timeout: 45000
-      - tapOn: "Sign out of Newone"
+      - tapOn: "Sign out of Gist"
       - extendedWaitUntil:
           visible: "Create account"
           timeout: 30000

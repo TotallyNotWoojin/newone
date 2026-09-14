@@ -35,7 +35,7 @@ appId: com.totallynotwoojin.gist
 - assertVisible: "Idioma"
 - scrollUntilVisible:
     element:
-      text: "Cerrar sesión en Newone"
+      text: "Cerrar sesión en Gist"
     direction: DOWN
     timeout: 30000
 - takeScreenshot: ${SHOT}-spanish-settings
