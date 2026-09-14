@@ -39,6 +39,11 @@ function normalizeEmail(value: string) {
 
 // Mirrors the server-side consumer username contract exactly.
 const SIGNUP_USERNAME_PATTERN = /^[a-z0-9][a-z0-9_]{2,28}[a-z0-9]$/;
+// What the username field keeps as it is typed: the pattern's alphabet, so a
+// space, an @ or a capital never sits in the field waiting to be rejected at
+// submit (owner, Sep 14 2026). Length and the edge rule are still checked on
+// submit, since a half-typed name is allowed to be short.
+const USERNAME_STRAY_CHARACTERS = /[^a-z0-9_]/g;
 
 // Every code delivery (arrival on the verify step and each resend) closes the
 // resend window for this long.
@@ -692,7 +697,7 @@ export default function SignInScreen() {
                   importantForAutofill="no"
                   keyboardType={Platform.OS === 'android' ? 'visible-password' : 'default'}
                   maxLength={30}
-                  onChangeText={(value) => setUsername(value.toLocaleLowerCase())}
+                  onChangeText={(value) => setUsername(value.toLocaleLowerCase().replace(USERNAME_STRAY_CHARACTERS, ''))}
                   placeholder={t('auth.usernamePlaceholder')}
                   placeholderTextColor={colors.inkSubtle}
                   style={styles.input}

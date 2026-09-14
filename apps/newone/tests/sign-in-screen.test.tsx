@@ -223,6 +223,11 @@ describe('sign-in and account recovery screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     expect(screen.getByText('auth.usernameInvalid')).toBeTruthy();
 
+    // Anything outside a-z, 0-9 and underscore never lands in the field: a
+    // space, an @ or a dot is dropped as typed rather than rejected on submit.
+    await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'Jo hn@Doe.1!');
+    expect(screen.getByLabelText('auth.usernameLabel').props.value).toBe('johndoe1');
+
     await fireEvent.changeText(screen.getByLabelText('auth.usernameLabel'), 'ab');
     await fireEvent.press(screen.getByRole('button', { name: 'auth.continue' }));
     expect(screen.getByText('auth.usernameInvalid')).toBeTruthy();
