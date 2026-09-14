@@ -1559,6 +1559,7 @@ const MessageBubble = memo(function MessageBubble({
                 maxWidth={maxMedia}
                 message={message}
                 onDownload={() => onDownload(message)}
+                onLongPress={() => onOpenActions(message)}
               />
             ) : inlineVideo ? (
               <VideoMessageAttachment maxWidth={maxMedia} message={message} onDownload={() => onDownload(message)} />

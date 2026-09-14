@@ -1496,6 +1496,14 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     expect(screen.getByText('chat.attachmentCleanupBody')).toBeTruthy();
     expect(screen.getByLabelText('chat.attachmentProgress 35%')).toBeTruthy();
     expect(screen.getByLabelText('1/2 chat.receiptDelivered · chat.receiptReadPrivate')).toBeTruthy();
+    // A long press on the photo reaches the message's actions, the same as on
+    // text; the photo used to take the touch and do nothing (owner, Sep 14 2026).
+    await fireEvent(screen.getByLabelText('chat.imageOpen'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.react 👍'));
+    await waitFor(() => expect(mockWorkspace.toggleReaction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'own-uploaded' }),
+      '👍',
+    ));
     await fireEvent(screen.getByText('Nullable translation provenance.'), 'longPress');
     expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
   });

@@ -3456,34 +3456,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [connectivity, refresh, synchronizeMessageOutbox, t]);
 
-  const watchAttachmentScan = useCallback((operation: AttachmentUploadOperation, attachmentId: string) => {
-    const delays = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
-    const poll = (index: number) => {
-      if (index >= delays.length) return;
-      const timer = setTimeout(() => {
-        attachmentScanTimersRef.current.delete(timer);
-        if (!mountedRef.current || refreshIdentityRef.current !== refreshIdentity) return;
-        void repositories.commands.getAttachmentState({
-          organizationId: operation.organizationId,
-          attachmentId,
-          idempotencyKey: createClientId(),
-        }).then((state) => {
-          if (state.scanStatus === 'pending') {
-            poll(index + 1);
-            return;
-          }
-          patchLocalAttachment(operation.clientMessageId, {
-            status: state.scanStatus === 'clean' ? 'clean' : 'blocked',
-          });
-        }).catch((scanError) => {
-          if (scanError instanceof RepositoryError && scanError.retryable) poll(index + 1);
-        });
-      }, delays[index]);
-      attachmentScanTimersRef.current.add(timer);
-    };
-    poll(0);
-  }, [patchLocalAttachment, refreshIdentity, repositories.commands]);
-
   const performAttachmentUpload = useCallback(async (operation: AttachmentUploadOperation) => {
     const complete = async (grant: AttachmentUploadGrant) => {
       await repositories.commands.completeAttachmentUpload({
@@ -3495,16 +3467,20 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         sha256Hex: operation.prepared.sha256Hex,
         idempotencyKey: operation.completionIdempotencyKey,
       });
+      // The row is clean the moment finalize returns: the server marks a
+      // consumer attachment clean itself (migration 20260904170100). The photo
+      // used to sit in "scanning" while a 1 s, 2 s, 4 s... poll went to ask
+      // (owner, Sep 14 2026: "images take forever to send"). A reconcile
+      // still corrects the rare row the server judged otherwise.
       patchLocalAttachment(operation.clientMessageId, {
         id: grant.attachmentId,
-        status: 'scanning',
+        status: 'clean',
         transfer: { state: 'uploaded', progress: 1 },
       });
       markMessage(operation.clientMessageId, { failureReason: undefined });
       attachmentUploadsRef.current.delete(operation.clientMessageId);
       attachmentCancellationsRef.current.delete(operation.clientMessageId);
       await cleanupPreparedAttachment(operation.prepared);
-      watchAttachmentScan(operation, grant.attachmentId);
     };
 
     const controller = new AbortController();
@@ -3559,7 +3535,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       if (operation.controller === controller) operation.controller = null;
     }
-  }, [markMessage, patchLocalAttachment, repositories.commands, watchAttachmentScan]);
+  }, [markMessage, patchLocalAttachment, repositories.commands]);
 
   const handleAttachmentUploadFailure = useCallback(async (
     operation: AttachmentUploadOperation,

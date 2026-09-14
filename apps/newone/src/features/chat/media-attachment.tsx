@@ -61,11 +61,18 @@ export function ImageAttachment({
   message,
   maxWidth,
   onDownload,
+  onLongPress,
   footer,
 }: {
   message: Message;
   maxWidth: number;
   onDownload: () => void;
+  /**
+   * The photo takes the touch, so without this a long press on it did nothing
+   * and the message's actions -- react, reply, forward -- were unreachable
+   * from a picture (owner, Sep 14 2026). A tap still opens the viewer.
+   */
+  onLongPress?: () => void;
   footer?: ReactNode;
 }) {
   const { colors } = useTheme();
@@ -93,6 +100,7 @@ export function ImageAttachment({
             accessibilityLabel={ready ? t('chat.imageOpen') : t('chat.attachmentUploading')}
             accessibilityRole={ready ? 'imagebutton' : 'image'}
             disabled={!ready}
+            onLongPress={onLongPress}
             onPress={() => setViewerOpen(true)}
             style={styles.fill}>
             <Image

@@ -3055,7 +3055,7 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
-  test('replays ambiguous attachment completion without duplicate upload and follows scan backoff', async () => {
+  test('replays ambiguous attachment completion without duplicate upload, and the photo is clean the moment finalize returns', async () => {
     const snapshot = richWorkspaceSnapshot();
     snapshot.conversations = snapshot.conversations.map((item) => ({ ...item, avatarPath: null }));
     mockLoadWorkspace.mockImplementation(async () => snapshot);
@@ -3117,24 +3117,9 @@ describe('authoritative workspace provider', () => {
       expect(mockCommand.mock.calls.filter(([method]) => method === 'createAttachmentUploadGrant'))
         .toHaveLength(1);
 
-      await act(async () => {
-        jest.advanceTimersByTime(1_000);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(scanCalls).toBe(1);
-      await act(async () => {
-        jest.advanceTimersByTime(2_000);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(scanCalls).toBe(2);
-      await act(async () => {
-        jest.advanceTimersByTime(4_000);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(scanCalls).toBe(3);
+      // No scan poll: the server marks a consumer attachment clean at finalize,
+      // so the photo is clean at once and nothing asks getAttachmentState.
+      expect(scanCalls).toBe(0);
       expect(currentWorkspace().messages['conversation-a'].find(
         (message) => message.clientMessageId === failed.clientMessageId,
       )?.attachment?.status).toBe('clean');
@@ -3162,10 +3147,10 @@ describe('authoritative workspace provider', () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(scanCalls).toBe(4);
+      expect(scanCalls).toBe(0);
       expect(currentWorkspace().messages['conversation-a'].find(
         (message) => message.clientMessageId === '50000000-0000-4000-8000-000000000005',
-      )?.attachment?.status).toBe('blocked');
+      )?.attachment?.status).toBe('clean');
       await view.unmount();
     } finally {
       jest.clearAllTimers();
