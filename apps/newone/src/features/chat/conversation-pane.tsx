@@ -1557,7 +1557,7 @@ const MessageBubble = memo(function MessageBubble({
                       {ownTranslations.length > 1 ? (
                         <Text style={styles.ownTranslationTag}>{entry.language.toUpperCase()}</Text>
                       ) : null}
-                      <LinkifiedText style={styles.messageText}>{entry.text}</LinkifiedText>
+                      <LinkifiedText style={[styles.messageText, styles.ownTranslationText]}>{entry.text}</LinkifiedText>
                     </View>
                   ))}
                 </View>
@@ -1952,6 +1952,12 @@ function foreignScriptPresent(text: string, readerLanguage: string): boolean {
 }
 
 /** URLs in a message become links; trailing punctuation stays prose. */
+// Native Text breaks a word that cannot fit; the browser needs telling, and
+// `anywhere` also lets the flex item's minimum width ignore the long word.
+const breakAnywhere = Platform.OS === 'web'
+  ? ({ wordBreak: 'break-word', overflowWrap: 'anywhere' } as unknown as TextStyle)
+  : {};
+
 const LINK_PATTERN = /https?:\/\/[^\s<>"'`]+/gi;
 function splitLinks(text: string): { text: string; url: boolean }[] {
   const parts: { text: string; url: boolean }[] = [];
@@ -4018,7 +4024,11 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   messageStack: { maxWidth: '80%', alignItems: 'flex-start' },
   messageStackOwn: { alignItems: 'flex-end' },
   senderName: { color: colors.mintDark, fontSize: 11, fontWeight: '700', marginLeft: 6, marginBottom: 2 },
-  bubble: { minWidth: 72, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 14 },
+  // maxWidth + flexShrink: a 200-character word has no break opportunity, so
+  // without these the bubble grew to the word's width and ran off the pane on
+  // the web, and the own-translation rows overflowed on iOS (owner, Sep 14
+  // 2026, both platforms).
+  bubble: { minWidth: 72, maxWidth: '100%', flexShrink: 1, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 14 },
   bubbleIncoming: { backgroundColor: colors.paper, borderBottomLeftRadius: 4 },
   bubbleOwn: { backgroundColor: colors.mintSoft, borderBottomRightRadius: 4 },
   bubbleMedia: { padding: 3, minWidth: 0 },
@@ -4040,8 +4050,9 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   replyPreview: { color: colors.inkMuted, fontSize: 12, marginTop: 1 },
   messageMentions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginBottom: 3 },
   messageMentionsText: { flexShrink: 1, color: colors.mintDark, fontSize: 11, lineHeight: 15, fontWeight: '700' },
-  messageText: { color: colors.ink, fontSize: 15, lineHeight: 21 },
-  secondaryText: { color: colors.inkMuted, fontSize: 14, lineHeight: 20 },
+  messageText: { color: colors.ink, fontSize: 15, lineHeight: 21, flexShrink: 1, ...breakAnywhere },
+  secondaryText: { color: colors.inkMuted, fontSize: 14, lineHeight: 20, flexShrink: 1, ...breakAnywhere },
+  ownTranslationText: { flex: 1, minWidth: 0 },
   translationBlock: {
     marginTop: 6,
     paddingTop: 6,
