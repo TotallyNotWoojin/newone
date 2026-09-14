@@ -425,14 +425,32 @@ export default function PeopleScreen() {
             <View style={styles.rows}>
               {peopleResults.map((result) => {
                 const known = workspace.people.find((person) => person.id === result.userId);
-                const alreadyAsked = result.connectionState !== 'none'
+                // A friend used to fall into "already asked" and wear the
+                // "Request sent" badge -- searching for someone you are already
+                // connected to said a request was pending (owner report, Sep 14
+                // 2026). Friends get their own badge; only a live request is a
+                // request.
+                const connected = result.connectionState === 'accepted'
+                  || known?.connectionState === 'connected';
+                // Only a request *I* sent is "sent"; one they sent me is
+                // answered from Contacts, not from here.
+                const alreadyAsked = !connected && (
+                  result.connectionState === 'pending_outgoing'
                   || requestedIds.includes(result.userId)
-                  || known?.connectionState === 'connected'
-                  || known?.connectionState === 'pending';
+                  || (known?.connectionState === 'pending' && known.connectionRequestDirection !== 'incoming')
+                );
+                // They asked first: nothing to send, and the answer lives in
+                // Contacts, so the row says a request is pending and stops there.
+                const awaitingMe = !connected && !alreadyAsked && (
+                  result.connectionState === 'pending_incoming'
+                  || (known?.connectionState === 'pending' && known.connectionRequestDirection === 'incoming')
+                );
                 return (
                   <PersonRow
                     key={result.userId}
-                    onAdd={alreadyAsked ? undefined : async () => {
+                    awaitingMe={awaitingMe}
+                    connected={connected}
+                    onAdd={connected || alreadyAsked || awaitingMe ? undefined : async () => {
                       if (await workspace.updateConnection(result.userId)) {
                         setRequestedIds((current) => [...current, result.userId]);
                       }
@@ -616,6 +634,8 @@ function PersonRow({
   onAccept,
   onDecline,
   requested = false,
+  connected = false,
+  awaitingMe = false,
 }: {
   person: Person;
   onMessage: () => void;
@@ -626,6 +646,10 @@ function PersonRow({
   onAccept?: () => void;
   onDecline?: () => void;
   requested?: boolean;
+  /** Already a friend: shown as such, never as a pending request. */
+  connected?: boolean;
+  /** They sent the request: no Add, and it is answered from Contacts. */
+  awaitingMe?: boolean;
 }) {
   const styles = useThemedStyles(buildStyles);
   const { colors } = useTheme();
@@ -665,6 +689,10 @@ function PersonRow({
         <>
           {onAdd ? (
             <PrimaryButton icon="person-add-outline" label={t('people.addFriendAction')} onPress={onAdd} tone="dark" />
+          ) : connected ? (
+            <StatusBadge icon="people-outline" label={t('people.alreadyFriends')} tone="success" />
+          ) : awaitingMe ? (
+            <StatusBadge icon="time-outline" label={t('people.requestPending')} tone="neutral" />
           ) : requested ? (
             <StatusBadge icon="checkmark" label={t('people.addFriendSent')} tone="success" />
           ) : null}

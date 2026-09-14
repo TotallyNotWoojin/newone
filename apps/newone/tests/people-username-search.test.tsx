@@ -195,12 +195,19 @@ describe('adding a friend from Contacts', () => {
     // Only somebody with no connection yet can be asked; the other two are
     // already answered.
     expect(screen.getAllByRole('button', { name: 'people.addFriendAction' })).toHaveLength(1);
-    expect(screen.getAllByText('people.addFriendSent')).toHaveLength(2);
+    // A friend is a friend and someone who asked us is pending -- neither is a
+    // request we sent. Both used to read "Request sent" (owner report, Sep 14
+    // 2026: searching for an existing friend said a request was pending).
+    expect(screen.queryByText('people.addFriendSent')).toBeNull();
+    expect(screen.getByText('people.alreadyFriends')).toBeTruthy();
+    expect(screen.getByText('people.requestPending')).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'people.message' })).toHaveLength(3);
 
     await fireEvent.press(screen.getByRole('button', { name: 'people.addFriendAction' }));
     await waitFor(() => expect(mockWorkspace.updateConnection).toHaveBeenCalledWith('user-stranger'));
-    await waitFor(() => expect(screen.getAllByText('people.addFriendSent')).toHaveLength(3));
+    // Only the stranger's request is "sent"; the friend and the person who
+    // asked us keep their own badges.
+    await waitFor(() => expect(screen.getAllByText('people.addFriendSent')).toHaveLength(1));
 
     await fireEvent.press(screen.getAllByRole('button', { name: 'people.message' })[0]!);
     await waitFor(() => expect(mockWorkspace.openOrCreateDirectConversation).toHaveBeenCalledWith(
