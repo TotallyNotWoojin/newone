@@ -417,8 +417,11 @@ Deno.test('translation of text with nothing to protect drops an echoed placehold
         model: policyValue.model,
         choices: [{
           message: {
+            // The source has three lines, so the model answers one entry per
+            // line (blank kept blank); a fourth, empty entry past the source's
+            // last line is trimmed away rather than becoming a stray newline.
             content: JSON.stringify({
-              translatedText: '우리 침식 상황의 날씨는 어떤가요? __NEWONE_PROTECTED_0000__ 침식',
+              translatedLines: ['우리 침식 상황의 날씨는 어떤가요?__NEWONE_PROTECTED_0000__', '', '침식', ''],
               sourceFingerprint: (sent?.messages as Array<Record<string, string>>)[1]?.content?.match(/Source fingerprint: ([0-9a-f]{16})/)?.[1],
             }),
           },
@@ -439,10 +442,13 @@ Deno.test('translation of text with nothing to protect drops an echoed placehold
     sourceSha256,
     correlationId: '00000000-0000-4000-8000-000000000004',
   });
-  assertEquals(result.translatedText, '우리 침식 상황의 날씨는 어떤가요? 침식');
+  assertEquals(result.translatedText, '우리 침식 상황의 날씨는 어떤가요?\n\n침식');
   const messages = sent?.messages as Array<Record<string, string>>;
   assert(!String(messages[0]?.content ?? '').includes('__NEWONE_PROTECTED_'));
   assert(!String(messages[1]?.content ?? '').includes('Placeholders in the source'));
+  // A multi-line source asks for one entry per line, and says how many.
+  assert(String(messages[0]?.content ?? '').includes('The source has 3 lines'));
+  assert(JSON.stringify(sent?.response_format ?? {}).includes('translatedLines'));
 });
 
 Deno.test('summary output is evidence-linked and restores only protected source values', async () => {

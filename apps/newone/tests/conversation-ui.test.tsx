@@ -72,8 +72,18 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
+const mockClipboardImage = jest.fn<(_base64: string) => Promise<void>>(async () => undefined);
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (value: string) => mockClipboardWrite(value),
+  setImageAsync: (value: string) => mockClipboardImage(value),
+}));
+jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
+  EncodingType: { Base64: 'base64' },
+  downloadAsync: async (_url: string, target: string) => ({ uri: target }),
+  readAsStringAsync: async () => 'aW1hZ2UtYnl0ZXM=',
+  writeAsStringAsync: async () => undefined,
+  deleteAsync: async () => undefined,
 }));
 
 jest.mock('expo-file-system', () => ({
@@ -1504,6 +1514,14 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
       expect.objectContaining({ id: 'own-uploaded' }),
       '👍',
     ));
+    // Copying a picture copies the picture: the bytes go to the clipboard as
+    // an image, never the link (owner, Sep 14 2026).
+    mockWorkspace.attachmentUrlForCopy = jest.fn(async () => 'https://example.invalid/signed.png');
+    await fireEvent(screen.getByLabelText('chat.imageOpen'), 'longPress');
+    await fireEvent.press(screen.getByLabelText('chat.copyImage'));
+    await waitFor(() => expect(mockClipboardImage).toHaveBeenCalledWith('aW1hZ2UtYnl0ZXM='));
+    expect(mockWorkspace.attachmentUrlForCopy).toHaveBeenCalledWith(expect.objectContaining({ id: 'own-uploaded' }));
+    expect(mockClipboardWrite).not.toHaveBeenCalledWith('https://example.invalid/signed.png');
     await fireEvent(screen.getByText('Nullable translation provenance.'), 'longPress');
     expect(screen.queryByLabelText('chat.showProvenance')).toBeNull();
   });

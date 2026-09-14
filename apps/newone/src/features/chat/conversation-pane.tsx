@@ -793,6 +793,14 @@ export function ConversationPane({
         }}
         onCopy={async () => {
           if (!selectedMessage) return;
+          // A picture copies as a picture, ready to paste into another app
+          // (owner, Sep 14 2026: copying gave people a link, not the image).
+          if (selectedMessage.attachment?.kind === 'image' && selectedMessage.attachment.status === 'clean') {
+            const url = await workspace.attachmentUrlForCopy(selectedMessage);
+            if (url) await copyImageToClipboard(url);
+            setSelectedMessage(null);
+            return;
+          }
           // Copy what the reader is looking at. A translated incoming message
           // shows its translation, so that is what "copy" means to them; the
           // original stays one tap away in the bubble (owner report, Sep 14
@@ -2027,6 +2035,37 @@ function pastedLink(previous: string, next: string): string | null {
 }
 
 /** Message text with tappable links (owner request, Sep 14 2026, both platforms). */
+/**
+ * Puts the picture itself on the clipboard. Browsers take a PNG blob through
+ * the async clipboard API (Chrome accepts only PNG, so other formats are
+ * redrawn); the phones take the bytes as base64 through expo-clipboard.
+ */
+async function copyImageToClipboard(url: string) {
+  if (Platform.OS === 'web') {
+    const png = (async () => {
+      const blob = await (await fetch(url)).blob();
+      if (blob.type === 'image/png' || typeof createImageBitmap !== 'function' || typeof document === 'undefined') return blob;
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((out) => (out ? resolve(out) : reject(new Error('image could not be redrawn'))), 'image/png');
+      });
+    })();
+    // The promise form keeps the write inside the user's gesture in Safari.
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    return;
+  }
+  const target = `${FileSystem.cacheDirectory ?? ''}copy-${Date.now()}`;
+  const downloaded = await FileSystem.downloadAsync(url, target);
+  const base64 = await FileSystem.readAsStringAsync(downloaded.uri, { encoding: FileSystem.EncodingType.Base64 });
+  await Clipboard.setImageAsync(base64);
+  await FileSystem.deleteAsync(downloaded.uri, { idempotent: true }).catch(() => undefined);
+}
+
 function LinkifiedText({ children, style, accessibilityHint, onLongPress }: {
   children: string | Array<string | null | undefined> | null | undefined;
   style: StyleProp<TextStyle>;
@@ -2547,7 +2586,7 @@ function MessageActionsModal({
       {message ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon="arrow-undo-outline" label={t('chat.reply')} onPress={onReply} tone="light" />
-          <PrimaryButton icon="copy-outline" label={t('chat.copy')} onPress={onCopy} tone="light" />
+          <PrimaryButton icon="copy-outline" label={t(message.attachment?.kind === 'image' ? 'chat.copyImage' : 'chat.copy')} onPress={onCopy} tone="light" />
           <PrimaryButton icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? t('chat.unpin') : t('chat.pin')} loading={busy === 'message-pin'} onPress={onPin} tone="light" />
           {live ? (
             <PrimaryButton

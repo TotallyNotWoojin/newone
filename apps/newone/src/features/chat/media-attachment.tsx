@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Attachment, Message } from '@/domain/types';
@@ -36,18 +36,27 @@ function useAttachmentSource(message: Message) {
   const ready = attachment ? attachmentReady(attachment) : false;
   const remote = attachment?.downloadUrl ?? granted;
   const uri = remote ?? attachment?.localUri;
-  const wantsGrant = ready && !remote && Boolean(loadPreview);
+  // Ask on every mount, not only when no URL is known: the workspace answers
+  // from its hold while the URL is fresh and fetches a new grant once the old
+  // one is near its end, so a chat reopened after a while paints straight
+  // away instead of failing first (owner, Sep 14 2026: photos flaky after
+  // switching screens).
   useEffect(() => {
-    if (wantsGrant) void loadPreview?.(message);
-  }, [loadPreview, message, wantsGrant]);
+    if (ready && !attachment?.downloadUrl) void loadPreview?.(message);
+  }, [attachment?.downloadUrl, loadPreview, message, ready]);
   const [shown, setShown] = useState<string | undefined>(uri);
   useEffect(() => {
     if (uri) setShown(uri);
   }, [uri]);
   // A signed URL that has lapsed loads nothing and looks like a broken photo.
-  // Asking again is the whole recovery: the workspace hands out a fresh grant.
+  // Asking again -- past the hold, since the held URL is the one that failed
+  // -- is the whole recovery. Twice at most, so a photo the server cannot
+  // serve does not loop.
+  const retriesRef = useRef(0);
   const retry = useCallback(() => {
-    if (ready) void loadPreview?.(message);
+    if (!ready || retriesRef.current >= 2) return;
+    retriesRef.current += 1;
+    void loadPreview?.(message, { force: true });
   }, [loadPreview, message, ready]);
   return { uri: uri ?? shown, ready, retry };
 }

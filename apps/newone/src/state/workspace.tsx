@@ -386,7 +386,9 @@ interface WorkspaceState {
   ) => Promise<boolean>;
   downloadAttachment: (message: Message) => Promise<boolean>;
   attachmentPreviewUrls: Record<string, string>;
-  loadAttachmentPreview: (message: Message) => Promise<void>;
+  loadAttachmentPreview: (message: Message, options?: { force?: boolean }) => Promise<void>;
+  /** A fresh signed URL for an attachment, for copying its bytes. */
+  attachmentUrlForCopy: (message: Message) => Promise<string | null>;
   updateConversation: (
     conversationId: string,
     patch: { name?: string | null; description?: string | null },
@@ -4215,15 +4217,19 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   // request goes out again a minute before it lapses.
   const previewRequestsRef = useRef<Map<string, number>>(new Map());
   const loadAttachmentPreview = useCallback(
-    async (message: Message) => {
+    async (message: Message, options?: { force?: boolean }) => {
       const attachment = message.attachment;
       // Images get an inline preview; audio and video get a playable source.
       const previewable = attachment?.kind === 'image'
         || attachment?.mimeType?.startsWith('audio/') === true
         || attachment?.mimeType?.startsWith('video/') === true;
       if (!snapshot || !attachment || attachment.status !== 'clean' || !previewable) return;
+      // The hold keeps a fresh URL from being asked for twice; a photo that
+      // actually failed to load asks past it (force), since the URL it holds
+      // is the one that just failed (owner, Sep 14 2026: photos sometimes
+      // never load after switching screens).
       const heldUntil = previewRequestsRef.current.get(attachment.id);
-      if (heldUntil !== undefined && Date.now() < heldUntil) return;
+      if (!options?.force && heldUntil !== undefined && Date.now() < heldUntil) return;
       previewRequestsRef.current.set(attachment.id, Date.now() + 30_000);
       try {
         const grant = await repositories.commands.createAttachmentDownloadGrant({
@@ -4244,6 +4250,21 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     },
     [repositories.commands, snapshot],
   );
+
+  const attachmentUrlForCopy = useCallback(async (message: Message) => {
+    if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return null;
+    try {
+      const grant = await repositories.commands.createAttachmentDownloadGrant({
+        organizationId: snapshot.organizationId,
+        conversationId: message.conversationId,
+        attachmentId: message.attachment.id,
+        idempotencyKey: createClientId(),
+      });
+      return grant.signedUrl;
+    } catch {
+      return null;
+    }
+  }, [repositories.commands, snapshot]);
 
   const downloadAttachment = useCallback(
     async (message: Message) => {
@@ -6272,6 +6293,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       downloadAttachment,
       attachmentPreviewUrls,
       loadAttachmentPreview,
+      attachmentUrlForCopy,
       updateConversation,
       updateConversationPreferences,
       updateConversationControls,
@@ -6359,6 +6381,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       downloadAttachment,
       attachmentPreviewUrls,
       loadAttachmentPreview,
+      attachmentUrlForCopy,
       editMessage,
       editOutboxMessage,
       ensureMessageLoaded,

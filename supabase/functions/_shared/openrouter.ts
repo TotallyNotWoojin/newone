@@ -1193,18 +1193,29 @@ export class OpenRouterLanguageProcessor {
       throw error;
     }
 
+    // Line structure is kept mechanically. Asked in prose to keep the lines,
+    // the model still merged a seven-line list into one paragraph (owner's
+    // father, Sep 14 2026); asked for one array entry per source line, it
+    // cannot. Single-line sources keep the plain string shape.
+    const sourceLines = protectedSource.text.split('\n');
+    const lineMode = sourceLines.length > 1;
     const completion = await structuredCompletion(this.environment, this.fetcher, {
       correlationId: request.correlationId,
-      schemaName: 'newone_translation',
-      maxTokens: Math.min(8192, Math.max(128, protectedSource.text.length * 2)),
+      schemaName: lineMode ? 'newone_translation_lines' : 'newone_translation',
+      maxTokens: Math.min(8192, Math.max(128, protectedSource.text.length * 2 + sourceLines.length * 8)),
       schema: {
         type: 'object',
         additionalProperties: false,
-        properties: {
-          translatedText: { type: 'string', minLength: 1, maxLength: 20000 },
-          sourceFingerprint: { type: 'string', pattern: '^[0-9a-f]{16}$' },
-        },
-        required: ['translatedText', 'sourceFingerprint'],
+        properties: lineMode
+          ? {
+              translatedLines: { type: 'array', items: { type: 'string', maxLength: 20000 } },
+              sourceFingerprint: { type: 'string', pattern: '^[0-9a-f]{16}$' },
+            }
+          : {
+              translatedText: { type: 'string', minLength: 1, maxLength: 20000 },
+              sourceFingerprint: { type: 'string', pattern: '^[0-9a-f]{16}$' },
+            },
+        required: lineMode ? ['translatedLines', 'sourceFingerprint'] : ['translatedText', 'sourceFingerprint'],
       },
       // The placeholder format is named only when the source carries
       // placeholders; a literal example made the model emit one into a
@@ -1215,7 +1226,13 @@ export class OpenRouterLanguageProcessor {
         (protectedSource.tokens.length > 0
           ? 'Copy each placeholder listed below exactly once, unchanged and untranslated; never invent placeholders. '
           : 'Do not output placeholder tokens of any kind. ') +
-        'Preserve line breaks and uncertainty. ' +
+        // A numbered list came back as one paragraph ("...at the top: 1. Date
+        // and time 2. Names...") -- the reader's father wanted his lines back
+        // (owner, Sep 14 2026). Structure is part of the message.
+        'Keep the source\'s line structure exactly: the same number of lines in the same order, a numbered or bulleted line kept as its own line with its own number or bullet, and blank lines kept blank. Never merge lines into a paragraph or split one line into several. Preserve uncertainty. ' +
+        (lineMode
+          ? `The source has ${sourceLines.length} lines. Return translatedLines with exactly ${sourceLines.length} entries: entry N is the translation of source line N alone, an empty source line is an empty string, and nothing moves from one line to another. `
+          : '') +
         // The model sees one message with no speaker or history, so an omitted
         // Korean or Spanish subject is a guess it must not make: "아빠 kyle" from
         // the father himself came back as "her dad Kyle" (owner report, Sep 14
@@ -1241,9 +1258,22 @@ export class OpenRouterLanguageProcessor {
     });
     const output = completion.output;
     try {
-      onlyKeys(output, ['translatedText', 'sourceFingerprint']);
+      onlyKeys(output, lineMode ? ['translatedLines', 'sourceFingerprint'] : ['translatedText', 'sourceFingerprint']);
     } catch {
       throw new ApiError(503, 'provider_unavailable', undefined, 5);
+    }
+    if (lineMode) {
+      const lines = Array.isArray(output.translatedLines)
+        && output.translatedLines.every((line) => typeof line === 'string')
+        ? output.translatedLines as string[]
+        : null;
+      if (!lines || lines.length === 0) throw new ApiError(503, 'provider_unavailable', undefined, 5);
+      // The entry count is the guarantee. A model that appends an empty entry
+      // past the source's last line is trimmed back to it; a different count
+      // otherwise is the model's paragraph again, kept as it came rather than
+      // failed, since a flat translation still beats none.
+      while (lines.length > sourceLines.length && (lines.at(-1) ?? '').trim() === '') lines.pop();
+      output.translatedText = lines.join('\n');
     }
     let protectedTranslation = normalizedString(output.translatedText, {
       min: 1,
