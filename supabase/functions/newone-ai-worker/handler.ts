@@ -59,6 +59,8 @@ interface TranslationSource extends PolicyResolution {
   sourceLanguage: string;
   targetLanguage: string;
   sourceSha256: string;
+  /** The sender's display name, when the resolution carries one. */
+  speakerName?: string;
 }
 
 export interface SummarySourceResolution extends PolicyResolution {
@@ -250,10 +252,15 @@ function parseTranslationResolution(
   if (sourceLanguage === targetLanguage) {
     throw new ApiError(503, 'dependency_unavailable', undefined, 30);
   }
+  // Optional: older resolutions carry no name, and a blank one is no name.
+  const speakerName = typeof row.sender_display_name === 'string' && row.sender_display_name.trim().length > 0
+    ? normalizedString(row.sender_display_name, { min: 1, max: 80 }) as string
+    : undefined;
   return {
     authorized: true,
     source: {
       ...resolved.policy,
+      ...(speakerName ? { speakerName } : {}),
       sourceBody: normalizedString(row.source_body, {
         min: 1,
         max: 20_000,
@@ -683,6 +690,7 @@ async function processJob(
       const resolvedAt = Date.now();
       const result = await processor.translate({
         sourceBody: resolution.source.sourceBody,
+        ...(resolution.source.speakerName ? { speakerName: resolution.source.speakerName } : {}),
         sourceLanguage: resolution.source.sourceLanguage,
         targetLanguage: resolution.source.targetLanguage,
         sourceSha256: resolution.source.sourceSha256,

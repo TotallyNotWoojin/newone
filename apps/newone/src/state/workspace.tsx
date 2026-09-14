@@ -2925,7 +2925,11 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           await completion();
         }
         let clean = false;
-        for (const delay of [0, 1_000, 2_000, 4_000, 8_000, 15_000, 30_000]) {
+        // Scans finish 1.6 s median, 3.3 s worst (production, Sep 14 2026), so
+        // the old 0/1/3/7 s checkpoints left the sender's own image blank until
+        // the 7 s tick more often than not. Checks now land every second or two
+        // through the window a scan actually takes, then back off.
+        for (const delay of [0, 1_000, 1_000, 1_000, 1_000, 2_000, 2_000, 4_000, 8_000, 15_000, 30_000]) {
           if (delay) await waitFor(delay);
           const state = await repositories.commands.getAttachmentState({
             organizationId: snapshot.organizationId,

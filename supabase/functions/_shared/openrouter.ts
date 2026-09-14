@@ -57,6 +57,13 @@ export interface TranslationRequest {
    * chats "a las 10" → "at 10:00" is a faithful translation, not a leak.
    */
   introducedTokenPolicy?: 'reject' | 'allow';
+  /**
+   * The sender's display name. Without it the model reads a message blind:
+   * the father's "아빠 kyle" came back as "her dad Kyle" and "써머리" (summary)
+   * as a person called Summer (owner reports, Sep 14 2026). Sent only when
+   * the resolution carries it; the ZDR route already receives the body.
+   */
+  speakerName?: string;
 }
 
 export interface TranslationResult {
@@ -1215,9 +1222,18 @@ export class OpenRouterLanguageProcessor {
         // 2026). Laughter markers became emoji in the same message.
         'Never add a possessive pronoun (my, your, his, her, their) or a subject that the source does not contain: an omitted Korean or Spanish possessor stays omitted in the target ("couldn\'t find Dad Kyle", not "her dad Kyle"). Use the first person only where the speaker plainly means themselves. ' +
         'Render laughter markers such as ㅎㅎ, ㅋㅋ, jaja or lol as one natural laugh in the target language ("haha"), never as emoji, never repeated per character, and never add emoji the source does not contain. ' +
+        // "써머리" (summary, spelled as it sounds) came back as the name "Summer"
+        // (owner report, Sep 14 2026). The messages are chat in the Gist app,
+        // whose features are called summary and translation.
+        'The text is a chat message in Gist, a messaging app whose features are called summary and translation. Every noun in the source appears in the translation; never drop a word you cannot place. A Korean or Spanish loanword written phonetically is rendered as its English source word (써머리 = summary, 채팅 = chat, 메세지 = message), not as a person\'s name, unless the source marks a person with an honorific or the speaker names someone. ' +
+        (request.speakerName
+          ? 'The speaker is named below; when the source mentions that name, it is the speaker talking about themselves -- keep it as the source does, never turn it into a third person. '
+          : '') +
         'Return only the requested JSON object.',
       user:
-        `Source language: ${sourceLanguage === 'und' ? 'mixed or unknown; render every part in the target language' : sourceLanguage}\nTarget language: ${targetLanguage}\nSource fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
+        `Source language: ${sourceLanguage === 'und' ? 'mixed or unknown; render every part in the target language' : sourceLanguage}\nTarget language: ${targetLanguage}\n` +
+        (request.speakerName ? `Speaker: ${request.speakerName.replace(/[\r\n<>]/g, ' ').slice(0, 80)}\n` : '') +
+        `Source fingerprint: ${sourceFingerprint(request.sourceSha256)}\n` +
         (protectedSource.tokens.length > 0
           ? `Placeholders in the source: ${protectedSource.tokens.map((token) => token.placeholder).join(', ')}\n`
           : '') +
