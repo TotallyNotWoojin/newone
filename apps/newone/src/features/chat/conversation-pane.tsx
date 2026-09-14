@@ -142,7 +142,15 @@ export function ConversationPane({
   const [conversationDescription, setConversationDescription] = useState('');
   const [showAttachmentPicker, setShowAttachmentPicker] = useState(false);
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
-  const [selectedAttachment, setSelectedAttachment] = useState<SelectedAttachment | null>(null);
+  // Several files travel together and each becomes its own message, sent in
+  // order (owner, Sep 14 2026: choose or drag many pictures or files at once).
+  const [selectedAttachments, setSelectedAttachments] = useState<SelectedAttachment[]>([]);
+  const addAttachments = useCallback((items: SelectedAttachment[]) => {
+    setSelectedAttachments((current) => {
+      const known = new Set(current.map((item) => item.uri));
+      return [...current, ...items.filter((item) => !known.has(item.uri))];
+    });
+  }, []);
   const [attachmentCaption, setAttachmentCaption] = useState('');
   const [attachmentImageMode, setAttachmentImageMode] = useState<'optimized' | 'original'>('optimized');
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -490,35 +498,42 @@ export function ConversationPane({
   // sheet a picked photo does -- preview, caption, Send -- so it can still be
   // looked at before it leaves (owner's father, Sep 14 2026).
   const attachFiles = async (files: File[]) => {
-    const file = files[0];
-    if (!file || composerDisabled) return;
-    const video = file.type.startsWith('video/');
-    const image = file.type.startsWith('image/');
-    const uri = URL.createObjectURL(file);
-    let width: number | undefined;
-    let height: number | undefined;
-    if (image && typeof createImageBitmap === 'function') {
-      try {
-        const bitmap = await createImageBitmap(file);
-        width = bitmap.width;
-        height = bitmap.height;
-        bitmap.close();
-      } catch {
-        // Dimensions only size the preview; the upload measures again.
+    if (!files.length || composerDisabled) return;
+    const items: SelectedAttachment[] = [];
+    for (const file of files) {
+      const video = file.type.startsWith('video/');
+      const image = file.type.startsWith('image/');
+      const uri = URL.createObjectURL(file);
+      let width: number | undefined;
+      let height: number | undefined;
+      if (image && typeof createImageBitmap === 'function') {
+        try {
+          const bitmap = await createImageBitmap(file);
+          width = bitmap.width;
+          height = bitmap.height;
+          bitmap.close();
+        } catch {
+          // Dimensions only size the preview; the upload measures again.
+        }
       }
+      const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : image ? 'png' : 'bin')).replace('jpeg', 'jpg');
+      items.push({
+        uri,
+        name: file.name || `${video ? 'video' : image ? 'image' : 'file'}-${Date.now()}.${extension}`,
+        mimeType: file.type || (video ? 'video/mp4' : image ? 'image/png' : 'application/octet-stream'),
+        size: file.size,
+        width,
+        height,
+      });
     }
-    const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : image ? 'png' : 'bin')).replace('jpeg', 'jpg');
     workspace.clearActionError();
-    setAttachmentCaption('');
-    setAttachmentImageMode('optimized');
-    setSelectedAttachment({
-      uri,
-      name: file.name || `${video ? 'video' : image ? 'image' : 'file'}-${Date.now()}.${extension}`,
-      mimeType: file.type || (video ? 'video/mp4' : image ? 'image/png' : 'application/octet-stream'),
-      size: file.size,
-      width,
-      height,
-    });
+    // More files dropped onto an open sheet join the ones already there and
+    // keep the caption; a fresh sheet starts clean.
+    if (!showAttachmentPicker) {
+      setAttachmentCaption('');
+      setAttachmentImageMode('optimized');
+    }
+    addAttachments(items);
     setShowAttachmentPicker(true);
   };
   // A link pasted on its own is offered as the image it points to. "Copy" on
@@ -537,7 +552,7 @@ export function ConversationPane({
           workspace.clearActionError();
           setAttachmentCaption('');
           setAttachmentImageMode('optimized');
-          setSelectedAttachment({ uri, name, mimeType: 'image/png', width: image.size?.width, height: image.size?.height });
+          addAttachments([{ uri, name, mimeType: 'image/png', width: image.size?.width, height: image.size?.height }]);
           setShowAttachmentPicker(true);
           return;
         }
@@ -562,7 +577,7 @@ export function ConversationPane({
       workspace.clearActionError();
       setAttachmentCaption('');
       setAttachmentImageMode('optimized');
-      setSelectedAttachment({ uri: result.uri, name: `link-${Date.now()}.${extension}`, mimeType: type });
+      addAttachments([{ uri: result.uri, name: `link-${Date.now()}.${extension}`, mimeType: type }]);
       setShowAttachmentPicker(true);
     } catch {
       // Not an image after all: give the text back exactly as pasted.
@@ -737,7 +752,7 @@ export function ConversationPane({
         // hides its Send button, so the sheet opens with the keyboard away.
         Keyboard.dismiss();
         workspace.clearActionError();
-        setSelectedAttachment(null);
+        setSelectedAttachments([]);
         setAttachmentCaption('');
         setAttachmentImageMode('optimized');
         setShowAttachmentPicker(true);
@@ -944,13 +959,13 @@ export function ConversationPane({
             encoding: FileSystem.EncodingType.Base64,
           });
           workspace.clearActionError();
-          setSelectedAttachment({
+          addAttachments([{
             uri,
             name,
             mimeType: 'image/png',
             width: image.size?.width,
             height: image.size?.height,
-          });
+          }]);
         }}
         onPickCamera={async () => {
           const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -959,54 +974,67 @@ export function ConversationPane({
           const asset = result.assets?.[0];
           if (asset) {
             const video = asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
-            setSelectedAttachment({
+            addAttachments([{
               uri: asset.uri,
               name: asset.fileName ?? (video ? `video-${Date.now()}.mp4` : `photo-${Date.now()}.jpg`),
               mimeType: asset.mimeType ?? (video ? 'video/mp4' : 'image/jpeg'),
               size: asset.fileSize,
               width: asset.width,
               height: asset.height,
-            });
+            }]);
           }
         }}
         onPickFile={async () => {
           const result = await DocumentPicker.getDocumentAsync({
             type: [...attachmentMimeTypes],
             copyToCacheDirectory: true,
-            multiple: false,
+            multiple: true,
           });
-          const asset = result.assets?.[0];
-          if (asset) setSelectedAttachment({
+          addAttachments((result.assets ?? []).map((asset) => ({
             uri: asset.uri,
             name: asset.name,
             mimeType: asset.mimeType ?? 'application/octet-stream',
             size: asset.size,
-          });
+          })));
         }}
         onPickLibrary={async () => {
           const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!permission.granted) return;
-          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.9 });
-          const asset = result.assets?.[0];
-          if (asset) {
+          // Several pictures in one go, on the phone as on the web.
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images', 'videos'],
+            quality: 0.9,
+            allowsMultipleSelection: true,
+            selectionLimit: 20,
+          });
+          addAttachments((result.assets ?? []).map((asset, index) => {
             const video = asset.type === 'video' || asset.mimeType?.startsWith('video/') === true;
-            setSelectedAttachment({
+            return {
               uri: asset.uri,
-              name: asset.fileName ?? (video ? `video-${Date.now()}.mp4` : `media-${Date.now()}`),
+              name: asset.fileName ?? (video ? `video-${Date.now()}-${index}.mp4` : `media-${Date.now()}-${index}`),
               mimeType: asset.mimeType ?? (video ? 'video/mp4' : 'image/jpeg'),
               size: asset.fileSize,
               width: asset.width,
               height: asset.height,
-            });
-          }
+            };
+          }));
         }}
+        onRemove={(uri) => setSelectedAttachments((current) => current.filter((item) => item.uri !== uri))}
         onSend={async () => {
-          if (!selectedAttachment) return;
-          if (await workspace.sendAttachment(conversation.id, { ...selectedAttachment, imageMode: attachmentImageMode }, attachmentCaption)) {
-            setShowAttachmentPicker(false);
+          // One message per file, in the order they were added; the caption
+          // rides with the first. A refusal stops the run and leaves the rest
+          // in the sheet beside the error, so nothing is sent twice.
+          let caption = attachmentCaption;
+          for (const item of selectedAttachments) {
+            const sent = await workspace.sendAttachment(conversation.id, { ...item, imageMode: attachmentImageMode }, caption);
+            if (!sent) return;
+            caption = '';
+            setAttachmentCaption('');
+            setSelectedAttachments((current) => current.filter((entry) => entry.uri !== item.uri));
           }
+          setShowAttachmentPicker(false);
         }}
-        selected={selectedAttachment}
+        selected={selectedAttachments}
         imageMode={attachmentImageMode}
         onChangeImageMode={setAttachmentImageMode}
         visible={showAttachmentPicker}
@@ -3343,12 +3371,13 @@ function AttachmentPickerModal({
   onPickFile,
   onPasteImage,
   onChangeCaption,
+  onRemove,
   onSend,
   imageMode,
   onChangeImageMode,
 }: {
   visible: boolean;
-  selected: SelectedAttachment | null;
+  selected: SelectedAttachment[];
   caption: string;
   error: string | null;
   busy: boolean;
@@ -3359,6 +3388,7 @@ function AttachmentPickerModal({
   /** Native only: read an image from the clipboard. Web pastes into the page. */
   onPasteImage?: () => void | Promise<void>;
   onChangeCaption: (value: string) => void;
+  onRemove: (uri: string) => void;
   onSend: () => void;
   imageMode: 'optimized' | 'original';
   onChangeImageMode: (value: 'optimized' | 'original') => void;
@@ -3372,7 +3402,7 @@ function AttachmentPickerModal({
   // button was the only way before (owner's father, Sep 14 2026). Shift+Enter
   // still breaks a line in the caption; the capture phase gets there first.
   useEffect(() => {
-    if (Platform.OS !== 'web' || !visible || !selected || busy) return;
+    if (Platform.OS !== 'web' || !visible || !selected.length || busy) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
       event.preventDefault();
@@ -3395,26 +3425,33 @@ function AttachmentPickerModal({
           <PrimaryButton icon="clipboard-outline" label={t('chat.pasteImage')} onPress={() => void onPasteImage()} tone="light" />
         ) : null}
       </View>
-      {selected ? (
-        <View style={styles.selectedFile}>
-          {selected.mimeType.startsWith('image/') ? (
-            <Image accessibilityLabel={t('chat.imagePreview')} resizeMode="cover" source={{ uri: selected.uri }} style={styles.imagePreview} />
+      {selected.map((item) => (
+        <View key={item.uri} style={styles.selectedFile}>
+          {item.mimeType.startsWith('image/') ? (
+            <Image accessibilityLabel={t('chat.imagePreview')} resizeMode="cover" source={{ uri: item.uri }} style={styles.imagePreview} />
           ) : (
-          <Ionicons
-            name={selected.mimeType.startsWith('video/') ? 'videocam-outline' : 'document-attach-outline'}
-            color={colors.mintDark}
-            size={22}
-          />
+            <Ionicons
+              name={item.mimeType.startsWith('video/') ? 'videocam-outline' : 'document-attach-outline'}
+              color={colors.mintDark}
+              size={22}
+            />
           )}
           <View style={styles.selectedFileCopy}>
-            <Text numberOfLines={1} style={styles.selectedFileName}>{selected.name}</Text>
+            <Text numberOfLines={1} style={styles.selectedFileName}>{item.name}</Text>
             <Text style={styles.selectedFileMeta}>
-              {selected.mimeType} · {selected.mimeType.startsWith('video/') ? t('chat.videoFileLimit') : t('chat.fileLimit')}
+              {item.mimeType} · {item.mimeType.startsWith('video/') ? t('chat.videoFileLimit') : t('chat.fileLimit')}
             </Text>
           </View>
+          <IconButton
+            accessibilityLabel={`${t('chat.removeAttachment')}: ${item.name}`}
+            label={t('chat.removeAttachment')}
+            name="close"
+            onPress={() => onRemove(item.uri)}
+            size={32}
+          />
         </View>
-      ) : null}
-      {selected?.mimeType.startsWith('image/') ? (
+      ))}
+      {selected.some((item) => item.mimeType.startsWith('image/')) ? (
         <View style={styles.modalSection}>
           <Text style={styles.modalLabel}>{t('chat.imageQuality')}</Text>
           <View style={styles.modalRow}>
@@ -3427,10 +3464,14 @@ function AttachmentPickerModal({
       <FormField label={t('chat.captionOptional')} multiline onChangeText={onChangeCaption} value={caption} />
       <ActionError message={error} />
       <PrimaryButton
-        disabled={!selected}
+        disabled={!selected.length}
         icon="shield-checkmark-outline"
         testID="attachment-send"
-        label={busy ? t('chat.uploading') : t('chat.sendAttachment')}
+        label={busy
+          ? t('chat.uploading')
+          : selected.length > 1
+            ? t('chat.sendAttachments').replace('{count}', String(selected.length))
+            : t('chat.sendAttachment')}
         loading={busy}
         onPress={onSend}
       />

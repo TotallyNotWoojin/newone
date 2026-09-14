@@ -1106,10 +1106,23 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.imageOptimized'));
     await fireEvent.press(screen.getByLabelText('chat.chooseFile'));
     await waitFor(() => expect(screen.getByText('controlled-document.pdf')).toBeTruthy());
+    // Both stay in the sheet: several files travel together and each becomes
+    // its own message, in order, with the caption on the first (owner, Sep 14
+    // 2026). The photo is still listed beside the document.
+    expect(screen.getByText('controlled-camera.jpg')).toBeTruthy();
+    expect(mockDocumentPicker).toHaveBeenCalledWith(expect.objectContaining({ multiple: true }));
     await fireEvent.changeText(screen.getByLabelText('chat.captionOptional'), 'Controlled document evidence');
-    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachments'));
 
-    await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledTimes(2));
+    expect(mockWorkspace.sendAttachment).toHaveBeenNthCalledWith(
+      1,
+      'conversation-main',
+      expect.objectContaining({ name: 'controlled-camera.jpg', imageMode: 'optimized' }),
+      'Controlled document evidence',
+    );
+    expect(mockWorkspace.sendAttachment).toHaveBeenNthCalledWith(
+      2,
       'conversation-main',
       expect.objectContaining({
         uri: 'file://controlled-document.pdf',
@@ -1117,8 +1130,27 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
         mimeType: 'application/pdf',
         imageMode: 'optimized',
       }),
-      'Controlled document evidence',
-    ));
+      '',
+    );
+  });
+
+  test('a file taken out of the sheet is not sent, and one file sends with the caption', async () => {
+    await render(<ConversationPane conversation={conversation()} messages={[]} onSend={noopSend} />);
+    await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
+    await fireEvent.press(screen.getByLabelText('chat.camera'));
+    await waitFor(() => expect(screen.getByText('controlled-camera.jpg')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('chat.chooseFile'));
+    await waitFor(() => expect(screen.getByText('controlled-document.pdf')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('chat.removeAttachment: controlled-camera.jpg'));
+    expect(screen.queryByText('controlled-camera.jpg')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('chat.captionOptional'), 'Only the document');
+    await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
+    await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(
+      'conversation-main',
+      expect.objectContaining({ name: 'controlled-document.pdf' }),
+      'Only the document',
+    );
   });
 
   test('keeps the inverted timeline pinned to the newest message and counts arrivals while scrolled up', async () => {
@@ -1897,7 +1929,7 @@ describe('personal realm direct threads', () => {
     await fireEvent.press(screen.getByLabelText('chat.addAttachment'));
     await fireEvent.press(screen.getByLabelText('chat.photoLibrary'));
     await waitFor(() => expect(screen.getByText('inspection.mov')).toBeTruthy());
-    expect(mockImageLibrary).toHaveBeenCalledWith({ mediaTypes: ['images', 'videos'], quality: 0.9 });
+    expect(mockImageLibrary).toHaveBeenCalledWith({ mediaTypes: ['images', 'videos'], quality: 0.9, allowsMultipleSelection: true, selectionLimit: 20 });
 
     await fireEvent.press(screen.getByLabelText('chat.sendAttachment'));
     await waitFor(() => expect(mockWorkspace.sendAttachment).toHaveBeenCalledWith(

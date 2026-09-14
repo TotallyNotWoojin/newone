@@ -336,3 +336,38 @@ test('a dropped file of any kind lands in the attachment sheet, and Enter sends 
   await expect(send).toHaveCount(0, { timeout: 45_000 });
   await expect(chats.getByText(fileName).first()).toBeVisible({ timeout: 45_000 });
 });
+
+test('several files dropped together, then one more, all send with Enter as separate messages', async ({
+  chats,
+  liveWorkspace,
+}) => {
+  // Choose or drag many at once (owner, Sep 14 2026), and drag another onto
+  // the open sheet: they accumulate, each sends as its own message, in order.
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  await expect(chats.getByTestId('composer-input')).toBeVisible();
+  const stamp = Date.now();
+  const names = [`first-${stamp}.pdf`, `second-${stamp}.txt`, `third-${stamp}.pdf`];
+  const drop = async (fileNames) => {
+    const dataTransfer = await chats.evaluateHandle((list) => {
+      const transfer = new DataTransfer();
+      for (const name of list) {
+        transfer.items.add(new File([`the web suite dropped ${name}`], name, {
+          type: name.endsWith('.txt') ? 'text/plain' : 'application/pdf',
+        }));
+      }
+      return transfer;
+    }, fileNames);
+    await chats.dispatchEvent('body', 'drop', { dataTransfer });
+  };
+  await drop(names.slice(0, 2));
+  const send = chats.getByTestId('attachment-send');
+  await expect(send).toBeVisible({ timeout: 10_000 });
+  await expect(send).toHaveAccessibleName('Send 2 files');
+  await drop(names.slice(2));
+  await expect(send).toHaveAccessibleName('Send 3 files');
+  for (const name of names) await expect(chats.getByText(name).first()).toBeVisible();
+
+  await chats.keyboard.press('Enter');
+  await expect(send).toHaveCount(0, { timeout: 90_000 });
+  for (const name of names) await expect(chats.getByText(name).first()).toBeVisible({ timeout: 45_000 });
+});
