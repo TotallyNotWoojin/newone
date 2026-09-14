@@ -197,11 +197,17 @@ function NotificationAwareWorkspace({ children }: PropsWithChildren) {
   });
   // The browser tab is the web app's only badge: "Gist (2)" while messages
   // wait, the plain title once they are read (owner request, Sep 14 2026).
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    document.title = badgeCount > 0 ? `Gist (${badgeCount})` : 'Gist · Messages in any language';
-  }, [badgeCount]);
-  return children;
+  // Rendered through Head rather than document.title: the layout's own Head
+  // re-applied its static title on every navigation and overwrote the count
+  // (owner report, same day, "the badge isn't working").
+  return (
+    <>
+      <Head>
+        <title>{badgeCount > 0 ? `Gist (${badgeCount})` : 'Gist · Messages in any language'}</title>
+      </Head>
+      {children}
+    </>
+  );
 }
 
 function AuthLoadingScreen({ label }: { label: string }) {

@@ -59,7 +59,10 @@ export default function ChatsScreen() {
   const realmKnown = Boolean(workspace.organizationId);
   // The details pane is worth 278px of chat when it is not being read, so it
   // folds away and the conversation takes the room (owner, Sep 11 2026).
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  // Closed until asked for. It opened by itself on every wide window and
+  // covered part of the list (owner, Sep 14 2026); the header's info button
+  // still opens it.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
 
@@ -148,6 +151,14 @@ export default function ChatsScreen() {
     if (action === 'archive' || action === 'unarchive') {
       void workspace.updateConversationPreferences(conversation.id, {
         isArchived: action === 'archive',
+      });
+      return;
+    }
+    // Bookmarking joins the swipe (phone) and hover (web) actions, so it is
+    // reachable without opening the chat (owner request, Sep 14 2026).
+    if (action === 'bookmark' || action === 'unbookmark') {
+      void workspace.updateConversationPreferences(conversation.id, {
+        isFavorite: action === 'bookmark',
       });
       return;
     }

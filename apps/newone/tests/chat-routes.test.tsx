@@ -265,6 +265,10 @@ describe('chats index route', () => {
 
     expect(screen.getByText('desktop-list')).toBeTruthy();
     expect(screen.getByText('Primary operations')).toBeTruthy();
+    // The details pane starts closed (owner, Sep 14 2026); the pane's header
+    // toggle -- passed to the mocked pane as onToggleDetails -- opens it.
+    expect(screen.queryByText('controlled-details:Primary operations')).toBeNull();
+    await act(async () => { mockConversationPaneProps?.onToggleDetails?.(); });
     expect(screen.getByText('controlled-details:Primary operations')).toBeTruthy();
     expect(mockConversationDetailsProps?.conversation.id).toBe('conversation-primary');
 
