@@ -421,7 +421,7 @@ export default function PeopleScreen() {
         />
         {searching ? (
           peopleResults.length ? (
-            <View style={styles.rows}>
+            <View style={styles.rows} testID="add-friend-results">
               {peopleResults.map((result) => {
                 const known = workspace.people.find((person) => person.id === result.userId);
                 // A friend used to fall into "already asked" and wear the
@@ -466,7 +466,7 @@ export default function PeopleScreen() {
               })}
             </View>
           ) : peopleSearched ? (
-            <Text style={styles.rowsEmpty}>{t('people.usernameNoResults')}</Text>
+            <Text style={styles.rowsEmpty} testID="add-friend-empty">{t('people.usernameNoResults')}</Text>
           ) : null
         ) : null}
       </ActionModal>
