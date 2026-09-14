@@ -632,7 +632,10 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
 
     await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
     await fireEvent.press(screen.getByLabelText('chat.copy'));
-    await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledWith(message.originalText));
+    // Copy hands over the translation the reader sees, not the sender's
+    // original (owner request, Sep 14 2026: copying gave people the
+    // untranslated text).
+    await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledWith(message.translatedText));
 
     await fireEvent(screen.getByText('Lock the north gate at 18:00.'), 'longPress');
     await fireEvent.press(screen.getByLabelText('chat.reply'));

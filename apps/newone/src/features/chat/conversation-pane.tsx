@@ -502,7 +502,6 @@ export function ConversationPane({
           workspace.clearActionError();
           setShowSummary(true);
         }}
-        typingLabel={typingLabel}
       />
 
       <View style={styles.timeline}>
@@ -586,6 +585,13 @@ export function ConversationPane({
         ) : null}
       </View>
 
+      {typingLabel ? (
+        // Who is typing belongs where the reply will appear, next to the
+        // composer, not in the header (owner request, Sep 14 2026).
+        <View style={styles.typingRow}>
+          <Text numberOfLines={1} style={styles.typingRowText}>{typingLabel}</Text>
+        </View>
+      ) : null}
       <Composer
       currentUserId={currentUserId}
       disabled={composerDisabled}
@@ -611,6 +617,41 @@ export function ConversationPane({
         void workspace.sendAttachment(conversation.id, attachment, '');
       }}
       onCancelReply={() => setReplyingTo(null)}
+      onPickFiles={async (files) => {
+        // A screenshot pasted or dropped into the composer goes through the
+        // same sheet a picked photo does -- preview, caption, Send -- so it can
+        // still be looked at before it leaves (owner's father, Sep 14 2026:
+        // wanted to paste images on the web app).
+        const file = files[0];
+        if (!file || composerDisabled) return;
+        const video = file.type.startsWith('video/');
+        const uri = URL.createObjectURL(file);
+        let width: number | undefined;
+        let height: number | undefined;
+        if (!video && typeof createImageBitmap === 'function') {
+          try {
+            const bitmap = await createImageBitmap(file);
+            width = bitmap.width;
+            height = bitmap.height;
+            bitmap.close();
+          } catch {
+            // Dimensions only size the preview; the upload measures again.
+          }
+        }
+        const extension = (file.type.split('/')[1] ?? (video ? 'mp4' : 'png')).replace('jpeg', 'jpg');
+        workspace.clearActionError();
+        setAttachmentCaption('');
+        setAttachmentImageMode('optimized');
+        setSelectedAttachment({
+          uri,
+          name: file.name || `${video ? 'video' : 'image'}-${Date.now()}.${extension}`,
+          mimeType: file.type || (video ? 'video/mp4' : 'image/png'),
+          size: file.size,
+          width,
+          height,
+        });
+        setShowAttachmentPicker(true);
+      }}
       onAddAttachment={() => {
         if (composerDisabled) return;
         // A keyboard left up by the composer stays up under the sheet and
@@ -658,7 +699,17 @@ export function ConversationPane({
         }}
         onCopy={async () => {
           if (!selectedMessage) return;
-          await Clipboard.setStringAsync(selectedMessage.originalText);
+          // Copy what the reader is looking at. A translated incoming message
+          // shows its translation, so that is what "copy" means to them; the
+          // original stays one tap away in the bubble (owner report, Sep 14
+          // 2026: copying handed people the untranslated text).
+          const showsTranslation = conversation.translationMode !== 'off'
+            && !selectedMessage.isOwn
+            && Boolean(selectedMessage.translatedText)
+            && selectedMessage.translation?.status === 'completed';
+          await Clipboard.setStringAsync(
+            showsTranslation ? selectedMessage.translatedText ?? selectedMessage.originalText : selectedMessage.originalText,
+          );
           setSelectedMessage(null);
         }}
         onPin={async () => {
@@ -1791,6 +1842,7 @@ function Composer({
   onSend,
   onSendVoiceNote,
   onAddAttachment,
+  onPickFiles,
   replyingTo,
   onCancelReply,
 }: {
@@ -1811,12 +1863,51 @@ function Composer({
   onSend: () => void;
   onSendVoiceNote: (attachment: SelectedAttachment) => void;
   onAddAttachment: () => void;
+  /** Web only: files pasted into the input or dropped on the composer row. */
+  onPickFiles?: (files: File[]) => void | Promise<void>;
   replyingTo: Message | null;
   onCancelReply: () => void;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const keyboardAppearance = useKeyboardAppearance();
+  const inputRef = useRef<TextInput>(null);
+  const composerRef = useRef<View>(null);
+  // Browser only: a screenshot pasted into the input or dropped onto the
+  // composer row becomes an attachment. React Native's TextInput has no paste
+  // or drop props, so the DOM nodes react-native-web renders are listened to
+  // directly. Native platforms hand images over through the picker.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !onPickFiles) return;
+    const input = inputRef.current as unknown as HTMLElement | null;
+    const row = composerRef.current as unknown as HTMLElement | null;
+    if (!input || !row) return;
+    const media = (list: FileList | null | undefined) => Array.from(list ?? [])
+      .filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'));
+    const onPaste = (event: ClipboardEvent) => {
+      const files = media(event.clipboardData?.files);
+      if (!files.length) return;
+      event.preventDefault();
+      void onPickFiles(files);
+    };
+    const onDragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+    };
+    const onDrop = (event: DragEvent) => {
+      const files = media(event.dataTransfer?.files);
+      if (!files.length) return;
+      event.preventDefault();
+      void onPickFiles(files);
+    };
+    input.addEventListener('paste', onPaste);
+    row.addEventListener('dragover', onDragOver);
+    row.addEventListener('drop', onDrop);
+    return () => {
+      input.removeEventListener('paste', onPaste);
+      row.removeEventListener('dragover', onDragOver);
+      row.removeEventListener('drop', onDrop);
+    };
+  }, [onPickFiles]);
   const { t } = useI18n();
   const bottomInset = useComposerBottomInset(mobile);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -1916,9 +2007,10 @@ function Composer({
           />
         </View>
       ) : null}
-      {!disabled && !recording ? <View style={styles.composer}>
+      {!disabled && !recording ? <View ref={composerRef} style={styles.composer}>
         <IconButton name="add" label={t('chat.addAttachment')} onPress={onAddAttachment} size={36} />
         <TextInput
+          ref={inputRef}
           keyboardAppearance={keyboardAppearance}
           accessibilityLabel={t('chat.message')}
           testID="composer-input"
@@ -3779,6 +3871,15 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.paper,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.lineStrong,
+  },
+  typingRow: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxs,
+  },
+  typingRowText: {
+    color: colors.mintDark,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   composer: {
     minHeight: 46,
