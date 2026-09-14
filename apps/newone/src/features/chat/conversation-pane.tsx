@@ -1120,12 +1120,15 @@ function SettingRow({
   value,
   onPress,
   icon,
+  accent = false,
 }: {
   label: string;
   value?: string;
   onPress: () => void;
   /** The mark the same action wears on the row and on its chip. */
   icon?: ComponentProps<typeof Ionicons>['name'];
+  /** Summarize is drawn in the accent, as its header button is. */
+  accent?: boolean;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -1135,7 +1138,7 @@ function SettingRow({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.settingRow, pressed && styles.pressed]}>
-      {icon ? <Ionicons color={colors.inkMuted} name={icon} size={18} style={styles.settingRowIcon} /> : null}
+      {icon ? <Ionicons color={accent ? colors.mintDark : colors.inkMuted} name={icon} size={18} style={styles.settingRowIcon} /> : null}
       <Text numberOfLines={1} style={styles.settingRowLabel}>{label}</Text>
       {value ? <Text numberOfLines={1} style={styles.settingRowValue}>{value}</Text> : null}
       <Ionicons color={colors.inkSubtle} name="chevron-forward" size={16} />
@@ -2830,20 +2833,46 @@ function ConversationControlsModal({
       // name a third time, not the title itself.
       title={t('chat.controlsTitle')}
       visible={visible}>
-      {/* Four things you might want, one row of icons (backlog 78). */}
+      {/* One slim list, every action with its icon and its word: a row of
+          icons alone (bookmark, pin, photos, summarize) said nothing to a
+          reader who had never swiped, and the bookmark then appeared twice
+          (owner, Sep 14 2026). Same order as the row's swipe and hover. */}
       {!conversation.managementOnly ? (
-        <View style={styles.quickRow}>
-          <IconButton
-            label={conversation.favorite ? t('chat.removeFavorite') : t('chat.addFavorite')}
-            name={conversation.favorite ? 'bookmark' : 'bookmark-outline'}
+        <View style={styles.settingRows}>
+          <SettingRow
+            icon={conversation.favorite ? 'bookmark' : 'bookmark-outline'}
+            label={conversation.favorite ? t('chat.unbookmark') : t('chat.bookmark')}
             onPress={onToggleFavorite}
-            size={44}
-            tone={conversation.favorite ? 'accent' : 'neutral'}
           />
-          <IconButton label={t('chat.pinnedTitle')} name="pin-outline" onPress={onOpenPinned} size={44} />
-          <IconButton label={t('chat.sharedMediaTitle')} name="images-outline" onPress={onOpenSharedMedia} size={44} />
+          <SettingRow
+            icon={unreadNow ? 'mail-open-outline' : 'mail-unread-outline'}
+            label={unreadNow ? t('chat.markRead') : t('chat.markUnread')}
+            onPress={() => onMarkUnread(!unreadNow)}
+          />
+          <SettingRow
+            icon={notificationLevel === 'none' || mutedUntil ? 'notifications-off-outline' : 'notifications-outline'}
+            label={notification.title}
+            onPress={() => setSheetPicker('notifications')}
+            value={mutedUntil
+              ? notification.mutedUntil
+              : notificationLevel === 'none'
+                ? notification.none
+                : notificationLevel === 'mentions'
+                  ? notification.mentions
+                  : notification.all}
+          />
+          <SettingRow
+            icon="language-outline"
+            label={translationPreference.title}
+            onPress={() => setSheetPicker('translation')}
+            value={conversation.translationMode === 'off'
+              ? translationPreference.off
+              : translationPreference.automatic}
+          />
+          <SettingRow icon="pin-outline" label={t('chat.pinnedTitle')} onPress={onOpenPinned} />
+          <SettingRow icon="images-outline" label={t('chat.sharedMediaTitle')} onPress={onOpenSharedMedia} />
           {onOpenSummary ? (
-            <IconButton label={t('chat.summarize')} name="sparkles-outline" tone="accent" onPress={onOpenSummary} size={44} />
+            <SettingRow accent icon="sparkles-outline" label={t('chat.summarize')} onPress={onOpenSummary} />
           ) : null}
         </View>
       ) : null}
@@ -3204,43 +3233,6 @@ function ConversationControlsModal({
           />
       </ActionModal>
 
-      {/* What the row's swipe and hover offer, written out with the same icons:
-          the icons alone said nothing to a reader who had never swiped, and
-          the words are what a person looks for (owner, Sep 14 2026). */}
-      {!conversation.managementOnly ? (
-        <View style={styles.settingRows}>
-          <SettingRow
-            icon={conversation.favorite ? 'bookmark' : 'bookmark-outline'}
-            label={conversation.favorite ? t('chat.unbookmark') : t('chat.bookmark')}
-            onPress={onToggleFavorite}
-          />
-          <SettingRow
-            icon={unreadNow ? 'mail-open-outline' : 'mail-unread-outline'}
-            label={unreadNow ? t('chat.markRead') : t('chat.markUnread')}
-            onPress={() => onMarkUnread(!unreadNow)}
-          />
-          <SettingRow
-            icon={notificationLevel === 'none' || mutedUntil ? 'notifications-off-outline' : 'notifications-outline'}
-            label={notification.title}
-            onPress={() => setSheetPicker('notifications')}
-            value={mutedUntil
-              ? notification.mutedUntil
-              : notificationLevel === 'none'
-                ? notification.none
-                : notificationLevel === 'mentions'
-                  ? notification.mentions
-                  : notification.all}
-          />
-          <SettingRow
-            icon="language-outline"
-            label={translationPreference.title}
-            onPress={() => setSheetPicker('translation')}
-            value={conversation.translationMode === 'off'
-              ? translationPreference.off
-              : translationPreference.automatic}
-          />
-        </View>
-      ) : null}
       {/* Leaving is a row like the others, and its confirmation opens in a
           sheet of its own. As the last section of a long sheet its checkbox
           sat below the fold, where a tap lands on the backdrop and closes
@@ -3934,7 +3926,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     letterSpacing: 0.6,
     minWidth: 18,
   },
-  quickRow: { flexDirection: 'row', gap: spacing.xs, paddingBottom: spacing.xs },
   settingRows: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   settingRow: {
     minHeight: 46,
