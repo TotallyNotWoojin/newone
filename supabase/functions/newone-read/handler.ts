@@ -11,6 +11,7 @@ import {
   buildRequestMeta,
   ensureSecureTransport,
   errorResponse,
+  fileResponse,
   jsonResponse,
   loadRuntimeConfig,
   parseJson,
@@ -27,6 +28,14 @@ import {
 } from '../_shared/security.ts';
 import { asRpcClient, invokeRpc } from '../_shared/rpc.ts';
 import { signSearchCursor, verifySearchCursor } from '../_shared/cursors.ts';
+import {
+  loadSummaryFonts,
+  renderSummaryDocx,
+  renderSummaryPdf,
+  SUMMARY_DOCUMENT_TYPES,
+  type SummaryDocumentFormat,
+  summaryDocumentFileName,
+} from '../_shared/summary-document.ts';
 import {
   asObject,
   bool,
@@ -64,6 +73,22 @@ interface PinQueryInput {
   organizationId: string;
   conversationId: string | null;
   limit: number;
+}
+
+export interface SummaryExportInput {
+  organizationId: string;
+  conversationId: string;
+  summaryId: string;
+  format: SummaryDocumentFormat;
+  /** IANA zone of the reader's device; the hours in the header are theirs. */
+  timeZone: string;
+  locale: 'en' | 'es' | 'ko';
+}
+
+export interface SummaryExportFile {
+  bytes: Uint8Array;
+  contentType: string;
+  fileName: string;
 }
 
 interface MediaQueryInput {
@@ -188,6 +213,7 @@ export interface ReadDependencies {
   loadMessages(actor: AuthenticatedActor, input: MessageQueryInput): Promise<unknown>;
   loadPins(actor: AuthenticatedActor, input: PinQueryInput): Promise<unknown>;
   loadMedia(actor: AuthenticatedActor, input: MediaQueryInput): Promise<unknown>;
+  loadSummaryExport(actor: AuthenticatedActor, input: SummaryExportInput): Promise<SummaryExportFile>;
   loadSearch(actor: AuthenticatedActor, input: SearchInput): Promise<unknown>;
   loadUserSearch(actor: AuthenticatedActor, input: UserSearchInput): Promise<unknown>;
   loadAudit(actor: AuthenticatedActor, input: AuditQueryInput): Promise<unknown>;
@@ -667,6 +693,7 @@ export function defaultReadDependencies(): ReadDependencies {
     loadMessages: loadMessagesDefault,
     loadPins: loadPinsDefault,
     loadMedia: loadMediaDefault,
+    loadSummaryExport: loadSummaryExportDefault,
     loadSearch: loadSearchDefault,
     loadUserSearch: loadUserSearchDefault,
     loadAudit: loadAuditDefault,
@@ -696,6 +723,133 @@ function matchMessages(path: string): string | null {
   if (!match?.[1]) return null;
   try {
     return uuid(decodeURIComponent(match[1]));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'bad_request');
+  }
+}
+
+const SUMMARY_EXPORT_LABELS = {
+  en: { participants: 'Participants', generated: 'Summary written by AI in Gist' },
+  es: { participants: 'Participantes', generated: 'Resumen escrito por la IA de Gist' },
+  ko: { participants: '참여자', generated: 'Gist의 AI가 작성한 요약' },
+} as const;
+
+/** "Sep 14, 2026 · 2:49 PM – 3:44 PM", or two dated ends when the messages span days; null without a timestamp. */
+export function summaryCoversLabel(
+  from: Date | null,
+  until: Date | null,
+  locale: SummaryExportInput['locale'],
+  timeZone: string,
+): string | null {
+  if (!from || !until) return null;
+  const languageTag = locale === 'ko' ? 'ko-KR' : locale === 'es' ? 'es-ES' : 'en-US';
+  const day = new Intl.DateTimeFormat(languageTag, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
+  const clock = new Intl.DateTimeFormat(languageTag, { hour: 'numeric', minute: '2-digit', timeZone });
+  if (day.format(from) === day.format(until)) {
+    return `${day.format(from)} · ${clock.format(from)} – ${clock.format(until)}`;
+  }
+  return `${day.format(from)} ${clock.format(from)} – ${day.format(until)} ${clock.format(until)}`;
+}
+
+/** A zone the runtime knows, else UTC: the header's hours are only as good as the zone the device sent. */
+export function safeTimeZone(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(value)) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/**
+ * The reader's own finished summary as a file. Only the person who asked for
+ * a recap can take it out (summaries are private to their requester, owner
+ * Sep 14 2026), and only a finished one; anything else is "not found" so the
+ * response says nothing about other people's recaps.
+ */
+async function loadSummaryExportDefault(
+  actor: AuthenticatedActor,
+  input: SummaryExportInput,
+): Promise<SummaryExportFile> {
+  const summaryQuery = await actor.adminClient
+    .from('conversation_summaries')
+    .select('id, primary_topic, summary_body, status, source_first_message_id, source_last_message_id, created_at')
+    .eq('organization_id', input.organizationId)
+    .eq('conversation_id', input.conversationId)
+    .eq('id', input.summaryId)
+    .eq('requested_by_user_id', actor.user.id)
+    .in('status', ['ready_for_review', 'approved', 'corrected'])
+    .maybeSingle();
+  if (summaryQuery.error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  const summary = summaryQuery.data as {
+    id: string;
+    primary_topic: string;
+    summary_body: string;
+    status: string;
+    source_first_message_id: string | number | null;
+    source_last_message_id: string | number | null;
+    created_at: string;
+  } | null;
+  if (!summary) throw new ApiError(404, 'not_found');
+
+  const membership = await actor.adminClient
+    .from('conversation_members')
+    .select('user_id, status')
+    .eq('organization_id', input.organizationId)
+    .eq('conversation_id', input.conversationId);
+  if (membership.error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  const members = (membership.data ?? []) as Array<{ user_id: string; status: string }>;
+  if (!members.some((member) => member.user_id === actor.user.id && member.status === 'active')) {
+    throw new ApiError(404, 'not_found');
+  }
+  const [conversation, profiles, edges] = await Promise.all([
+    actor.adminClient.from('conversations').select('name, kind').eq('id', input.conversationId).maybeSingle(),
+    actor.adminClient.from('profiles').select('user_id, display_name').in('user_id', members.map((member) => member.user_id)),
+    actor.adminClient
+      .from('messages')
+      .select('id, created_at')
+      .in('id', [summary.source_first_message_id, summary.source_last_message_id].filter((value) => value !== null)),
+  ]);
+  if (conversation.error || profiles.error || edges.error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  const names = new Map(((profiles.data ?? []) as Array<{ user_id: string; display_name: string | null }>)
+    .map((row) => [row.user_id, (row.display_name ?? '').trim()]));
+  const participants = members
+    .map((member) => names.get(member.user_id) ?? '')
+    .filter((name) => name.length > 0);
+  const stamps = ((edges.data ?? []) as Array<{ id: string | number; created_at: string }>)
+    .map((row) => new Date(row.created_at))
+    .filter((value) => !Number.isNaN(value.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const covers = summaryCoversLabel(stamps[0] ?? null, stamps[stamps.length - 1] ?? null, input.locale, input.timeZone);
+  const row = conversation.data as { name: string | null; kind: string } | null;
+  const others = participants.filter((name) => name !== names.get(actor.user.id));
+  const conversationTitle = (row?.name ?? '').trim() || (row?.kind === 'direct' ? others.join(', ') : '');
+  const lines = summary.summary_body.split('\n').map((line) => line.trim()).filter((line) => line.length > 0);
+  const document = {
+    title: summary.primary_topic.trim() || conversationTitle || 'Summary',
+    covers,
+    participants,
+    lines,
+    conversationTitle,
+    labels: SUMMARY_EXPORT_LABELS[input.locale],
+  };
+  const bytes = input.format === 'pdf'
+    ? await renderSummaryPdf(document, await loadSummaryFonts())
+    : await renderSummaryDocx(document);
+  return {
+    bytes,
+    contentType: SUMMARY_DOCUMENT_TYPES[input.format].contentType,
+    fileName: summaryDocumentFileName(conversationTitle || document.title, new Date(summary.created_at), input.format),
+  };
+}
+
+function matchSummaryExport(path: string): { conversationId: string; summaryId: string } | null {
+  const match = /^\/v2\/conversations\/([^/]+)\/summaries\/([^/]+)\/export$/.exec(path);
+  if (!match?.[1] || !match[2]) return null;
+  try {
+    return { conversationId: uuid(decodeURIComponent(match[1])), summaryId: uuid(decodeURIComponent(match[2])) };
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(400, 'bad_request');
@@ -1080,6 +1234,28 @@ export function createReadHandler(
             limit,
           }),
         );
+      }
+
+      const summaryExport = matchSummaryExport(path);
+      if (summaryExport) {
+        onlyKeys(parsed, ['organizationId', 'format', 'timeZone', 'locale']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        const format = oneOf(parsed.format, ['pdf', 'docx'] as const);
+        const locale = parsed.locale === undefined || parsed.locale === null
+          ? 'en'
+          : oneOf(parsed.locale, ['en', 'es', 'ko'] as const);
+        const timeZone = safeTimeZone(parsed.timeZone);
+        await dependencies.authorize(actor, organizationId, { operation: 'read.summary_export' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.summary_export');
+        const file = await dependencies.loadSummaryExport(actor, {
+          organizationId,
+          conversationId: summaryExport.conversationId,
+          summaryId: summaryExport.summaryId,
+          format,
+          timeZone,
+          locale,
+        });
+        return fileResponse(meta, file.bytes, file.contentType, file.fileName);
       }
 
       const mediaConversationId = matchMedia(path);

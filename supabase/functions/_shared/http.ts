@@ -345,6 +345,31 @@ export function jsonResponse(
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+/**
+ * A file for the person to keep (a summary as PDF or Word): the same security
+ * headers as JSON, the real media type, and an attachment disposition whose
+ * filename is ASCII-safe with the full name alongside for browsers that read
+ * RFC 5987.
+ */
+export function fileResponse(
+  meta: RequestMeta,
+  bytes: Uint8Array,
+  contentType: string,
+  fileName: string,
+): Response {
+  const headers = baseHeaders(meta);
+  headers.set('Content-Type', contentType);
+  headers.set('Content-Length', String(bytes.byteLength));
+  const ascii = fileName.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  headers.set(
+    'Content-Disposition',
+    `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
+  headers.append('Access-Control-Expose-Headers', 'Content-Disposition');
+  // A copy with its own ArrayBuffer: the body type wants a plain buffer, not a view over a shared one.
+  return new Response(bytes.slice().buffer, { status: 200, headers });
+}
+
 export function errorResponse(meta: RequestMeta, error: unknown): Response {
   const apiError = asApiError(error);
   const headers = new Headers();

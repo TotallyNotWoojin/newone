@@ -53,6 +53,7 @@ function dependencies(overrides: Partial<ReadDependencies> = {}): ReadDependenci
     loadMessages: async () => ({ messages: [], page: {} }),
     loadPins: async () => ({ schemaVersion: 1, pins: [] }),
     loadMedia: async () => ({ schemaVersion: 1, items: [], hasMore: false }),
+    loadSummaryExport: async () => ({ bytes: new Uint8Array([37, 80, 68, 70]), contentType: 'application/pdf', fileName: 'summary.pdf' }),
     loadSearch: async () => ({ results: [], nextCursor: null, hasMore: false }),
     loadUserSearch: async () => ({ users: [] }),
     loadAudit: async () => ({
@@ -670,4 +671,59 @@ Deno.test('audit read validation rejects missing purpose, future windows, and co
       receipt_id: '00000000-0000-4000-8000-000000000071',
     }, 50))
   );
+});
+
+Deno.test('a summary export is the reader\'s own file: authorized, rate limited, and returned as an attachment', async () => {
+  const calls: string[] = [];
+  let received: unknown;
+  const handler = createReadHandler(() =>
+    dependencies({
+      authorize: async (_actor, _organizationId, policy) => {
+        calls.push(`authorize:${policy.operation}`);
+      },
+      rateLimit: async (_request, _config, _actor, _organizationId, operation) => {
+        calls.push(`rate:${operation}`);
+      },
+      loadSummaryExport: async (_actor, input) => {
+        received = input;
+        return { bytes: new Uint8Array([37, 80, 68, 70, 45]), contentType: 'application/pdf', fileName: 'Gist summary - Kyle - 2026-09-14.pdf' };
+      },
+    }));
+  const response = await handler(request(
+    '/v2/conversations/00000000-0000-4000-8000-000000000010/summaries/00000000-0000-4000-8000-000000000020/export',
+    { organizationId, format: 'pdf', timeZone: 'America/Los_Angeles', locale: 'ko' },
+  ));
+  assertEquals(response.status, 200);
+  assertEquals(response.headers.get('content-type'), 'application/pdf');
+  assertEquals(response.headers.get('content-disposition')?.startsWith('attachment; filename="Gist summary - Kyle - 2026-09-14.pdf"'), true);
+  assertEquals(new Uint8Array(await response.arrayBuffer()).length, 5);
+  assertEquals(calls, ['authorize:read.summary_export', 'rate:read.summary_export']);
+  assertEquals(received, {
+    organizationId,
+    conversationId: '00000000-0000-4000-8000-000000000010',
+    summaryId: '00000000-0000-4000-8000-000000000020',
+    format: 'pdf',
+    timeZone: 'America/Los_Angeles',
+    locale: 'ko',
+  });
+
+  // An unknown zone falls back to UTC, an unknown format is refused, extra keys are refused.
+  received = undefined;
+  const fallback = await handler(request(
+    '/v2/conversations/00000000-0000-4000-8000-000000000010/summaries/00000000-0000-4000-8000-000000000020/export',
+    { organizationId, format: 'docx', timeZone: 'Mars/Olympus' },
+  ));
+  assertEquals(fallback.status, 200);
+  assertEquals((received as { timeZone: string; locale: string }).timeZone, 'UTC');
+  assertEquals((received as { timeZone: string; locale: string }).locale, 'en');
+  const refused = await handler(request(
+    '/v2/conversations/00000000-0000-4000-8000-000000000010/summaries/00000000-0000-4000-8000-000000000020/export',
+    { organizationId, format: 'xls' },
+  ));
+  assertEquals(refused.status, 400);
+  const extra = await handler(request(
+    '/v2/conversations/00000000-0000-4000-8000-000000000010/summaries/00000000-0000-4000-8000-000000000020/export',
+    { organizationId, format: 'pdf', evil: true },
+  ));
+  assertEquals(extra.status, 400);
 });

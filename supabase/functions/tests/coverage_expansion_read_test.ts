@@ -211,6 +211,7 @@ function dependencies(overrides: Partial<ReadDependencies> = {}): ReadDependenci
     loadMessages: async () => ({ messages: [] }),
     loadPins: async () => ({ schemaVersion: 1, pins: [] }),
     loadMedia: async () => ({ schemaVersion: 1, items: [], hasMore: false }),
+    loadSummaryExport: async () => ({ bytes: new Uint8Array([37, 80, 68, 70]), contentType: 'application/pdf', fileName: 'summary.pdf' }),
     loadSearch: async () => ({ results: [], nextCursor: null, hasMore: false }),
     loadUserSearch: async () => ({ users: [] }),
     loadAudit: async () => auditResponse({ items: [] }),

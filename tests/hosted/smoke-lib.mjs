@@ -102,6 +102,35 @@ export async function gatewayPost(functionSlug, path, keys, options) {
   return await gatewayRequest(functionSlug, 'POST', path, keys, options);
 }
 
+// A gateway call whose answer is a file (a summary as PDF or Word): the raw
+// status, the media type, and the bytes, so a smoke can look at the first
+// bytes of the document itself.
+export async function gatewayDownload(functionSlug, path, keys, options) {
+  const { installationId, accessToken, body, accept } = options;
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: accept ?? 'application/octet-stream',
+    apikey: keys.publishableKey,
+    'x-newone-installation-id': installationId,
+    'x-newone-client-platform': 'ios',
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const response = await fetch(`${PROJECT_URL}/functions/v1/${functionSlug}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return {
+    status: response.status,
+    contentType: response.headers.get('content-type'),
+    disposition: response.headers.get('content-disposition'),
+    bytes,
+    text: () => new TextDecoder().decode(bytes),
+  };
+}
+
 export async function adminRequest(adminKey, path, init = {}) {
   const response = await fetch(`${PROJECT_URL}/auth/v1${path}`, {
     ...init,

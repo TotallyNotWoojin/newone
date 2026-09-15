@@ -8,7 +8,7 @@
 // slices > 1 for the long run, and the timing of each.
 import { randomUUID } from 'node:crypto';
 import { makeRunId } from './lib.mjs';
-import { PERSONAL_REALM_ID, fail, gatewayPost, loadAccessToken, managementSql, projectKeys, signupUser } from './smoke-lib.mjs';
+import { PERSONAL_REALM_ID, fail, gatewayDownload, gatewayPost, loadAccessToken, managementSql, projectKeys, signupUser } from './smoke-lib.mjs';
 const runId = makeRunId();
 const accessToken = loadAccessToken();
 const keys = projectKeys(accessToken);
@@ -123,17 +123,50 @@ console.log('summary jobs:', JSON.stringify(jobs));
 console.log(`PASS (everything, ${longResult.final.slices} slices, ${longResult.final.source_count} messages): ${longResult.final.status} in ≤${longResult.seconds}s — topic: ${longResult.final.primary_topic ?? '(none)'}`);
 
 // 4. The longer spans the owner's father asked for (Sep 14 2026): "last 30
-//    days" is accepted, kept on the row, and the recap comes back as short
-//    numbered lines that open with a name -- never a paragraph, never "you".
+//    days" is accepted, kept on the row, and the recap comes back in the
+//    shape he described: at most ten short numbered lines that open with a
+//    name, no decisions or to-do lists, never a paragraph, never "you".
 const monthRequestedAt = Date.now();
 const month = await requestSummary('last_30_days', { kind: 'last_30_days', subject: null });
 if (month.scopeKind !== 'last_30_days') fail('30-day receipt did not echo the range', month);
 const monthResult = await waitForTerminal(month.summaryId, monthRequestedAt);
 if (monthResult.final.scope_kind !== 'last_30_days') fail('30-day row did not keep the range', monthResult.final);
 const monthLines = String(monthResult.final.summary_body ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
-console.log('30-day recap lines:', JSON.stringify(monthLines.slice(0, 4)));
+console.log('30-day recap lines:', JSON.stringify(monthLines));
 if (monthLines.length < 2 || !/^1[.)]\s/.test(monthLines[0] ?? '')) fail('the recap should be numbered lines, one per line', monthResult.final);
+if (monthLines.length > 10) fail(`the recap should be at most ten lines, got ${monthLines.length}`, monthResult.final);
 // The smoke accounts are named "Smoke ana" and "Smoke eli", so their first name is Smoke.
 if (!/^\d+[.)]\s+(Ana|Eli|Smoke)\b/.test(monthLines[0] ?? '')) fail('each recap line should open with the speaker\'s name', monthResult.final);
-if (/\byou\b/i.test(JSON.stringify(monthResult.final.action_items ?? []))) fail('to-do owners should be names, never "you"', monthResult.final);
-console.log(`PASS (last 30 days, numbered, name-first): ${monthResult.final.status} in ≤${monthResult.seconds}s`);
+const longest = Math.max(...monthLines.map((line) => line.replace(/^\d+[.)]\s+/, '').split(/\s+/).length));
+if (longest > 28) fail(`recap lines should be short phrases; the longest has ${longest} words`, monthResult.final);
+if ((monthResult.final.decisions ?? []).length || (monthResult.final.action_items ?? []).length) {
+  fail('a final recap carries no decisions or to-do lists any more', monthResult.final);
+}
+console.log(`PASS (last 30 days, ${monthLines.length} short name-first lines, no lists): ${monthResult.final.status} in ≤${monthResult.seconds}s`);
+
+// 5. The recap as a file, the way the owner's father wanted to download it
+//    (Sep 14 2026): a real PDF by default and a real Word document on request,
+//    rendered by the service; only the requester can take it out.
+const exportPath = `/v2/conversations/${conversationId}/summaries/${month.summaryId}/export`;
+const pdf = await gatewayDownload('newone-read', exportPath, keys, {
+  installationId: ana.installationId, accessToken: ana.accessToken, accept: 'application/pdf',
+  body: { organizationId: PERSONAL_REALM_ID, format: 'pdf', timeZone: 'America/Los_Angeles', locale: 'en' },
+});
+if (pdf.status !== 200) fail(`PDF export returned ${pdf.status}`, pdf.text().slice(0, 300));
+if (!pdf.contentType?.startsWith('application/pdf')) fail('PDF export has the wrong media type', pdf.contentType);
+if (new TextDecoder().decode(pdf.bytes.slice(0, 5)) !== '%PDF-') fail('PDF export does not start like a PDF', pdf.bytes.slice(0, 16));
+if (!/attachment; filename="Gist summary - .*\.pdf"/.test(pdf.disposition ?? '')) fail('PDF export is not an attachment', pdf.disposition);
+if (pdf.bytes.byteLength < 2_000) fail('PDF export is suspiciously small', pdf.bytes.byteLength);
+const docx = await gatewayDownload('newone-read', exportPath, keys, {
+  installationId: ana.installationId, accessToken: ana.accessToken,
+  body: { organizationId: PERSONAL_REALM_ID, format: 'docx', timeZone: 'America/Los_Angeles', locale: 'en' },
+});
+if (docx.status !== 200) fail(`Word export returned ${docx.status}`, docx.text().slice(0, 300));
+if (docx.bytes[0] !== 0x50 || docx.bytes[1] !== 0x4b) fail('Word export is not a docx package', docx.bytes.slice(0, 8));
+if (!docx.contentType?.includes('wordprocessingml')) fail('Word export has the wrong media type', docx.contentType);
+const foreign = await gatewayDownload('newone-read', exportPath, keys, {
+  installationId: eli.installationId, accessToken: eli.accessToken,
+  body: { organizationId: PERSONAL_REALM_ID, format: 'pdf' },
+});
+if (foreign.status !== 404) fail(`another member could export the requester's recap (${foreign.status})`, foreign.text().slice(0, 200));
+console.log(`PASS (export: PDF ${pdf.bytes.byteLength} bytes, Word ${docx.bytes.byteLength} bytes, other member refused with 404)`);
