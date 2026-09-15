@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type PropsWithChildren, useEffect, useRef } from 'react';
+import { type ReactNode, type PropsWithChildren, useEffect, useRef } from 'react';
 import {
   Animated,
   Easing,
@@ -29,12 +29,16 @@ export function ActionModal({
   title,
   description,
   onClose,
+  footer,
   children,
 }: PropsWithChildren<{
   visible: boolean;
   title: string;
   description?: string;
   onClose: () => void;
+  /** Stays put under the scrolling body: the sheet's main action, so it is
+   * never pushed off screen by a long list (two staged photos hid Send). */
+  footer?: ReactNode;
 }>) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -90,9 +94,11 @@ export function ActionModal({
             <ScrollView
               contentContainerStyle={styles.content}
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
+              showsVerticalScrollIndicator={false}
+              style={styles.body}>
               {children}
             </ScrollView>
+            {footer ? <View style={styles.footer}>{footer}</View> : null}
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -220,7 +226,16 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.paperMuted,
   },
   // Extra bottom room so the last action can scroll fully inside the clipped card.
+  body: { flexShrink: 1 },
   content: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.xxl },
+  footer: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+    backgroundColor: colors.paper,
+  },
   field: { gap: 6 },
   fieldLabel: { color: colors.ink, fontSize: 12, fontWeight: '800' },
   input: {

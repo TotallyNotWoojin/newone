@@ -3454,7 +3454,26 @@ function AttachmentPickerModal({
     <ActionModal
       onClose={onClose}
       title={t('chat.addAttachment')}
-      visible={visible}>
+      visible={visible}
+      // Send stays in view however many files are staged; with two photos it
+      // used to sit below the fold and a tap meant for it hit the backdrop.
+      footer={(
+        <>
+          <ActionError message={error} />
+          <PrimaryButton
+            disabled={!selected.length}
+            icon="shield-checkmark-outline"
+            testID="attachment-send"
+            label={busy
+              ? t('chat.uploading')
+              : selected.length > 1
+                ? t('chat.sendAttachments').replace('{count}', String(selected.length))
+                : t('chat.sendAttachment')}
+            loading={busy}
+            onPress={onSend}
+          />
+        </>
+      )}>
       <Text style={styles.modalNote}>{t('chat.fileLimit')} · {t('chat.videoFileLimit')}</Text>
       <View style={styles.attachmentChoices}>
         <PrimaryButton icon="images-outline" label={t('chat.photoLibrary')} onPress={onPickLibrary} tone="light" />
@@ -3501,19 +3520,6 @@ function AttachmentPickerModal({
         </View>
       ) : null}
       <FormField label={t('chat.captionOptional')} multiline onChangeText={onChangeCaption} value={caption} />
-      <ActionError message={error} />
-      <PrimaryButton
-        disabled={!selected.length}
-        icon="shield-checkmark-outline"
-        testID="attachment-send"
-        label={busy
-          ? t('chat.uploading')
-          : selected.length > 1
-            ? t('chat.sendAttachments').replace('{count}', String(selected.length))
-            : t('chat.sendAttachment')}
-        loading={busy}
-        onPress={onSend}
-      />
     </ActionModal>
   );
 }

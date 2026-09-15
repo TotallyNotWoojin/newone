@@ -340,7 +340,7 @@ test('a dropped file of any kind lands in the attachment sheet, and Enter sends 
 test('several files dropped together, then one more, all send with Enter as separate messages', async ({
   chats,
   liveWorkspace,
-}) => {
+}, testInfo) => {
   // Choose or drag many at once (owner, Sep 14 2026), and drag another onto
   // the open sheet: they accumulate, each sends as its own message, in order.
   await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
@@ -366,6 +366,10 @@ test('several files dropped together, then one more, all send with Enter as sepa
   await drop(names.slice(2));
   await expect(send).toHaveAccessibleName('Send 3 files');
   for (const name of names) await expect(chats.getByText(name).first()).toBeVisible();
+  // Send is pinned under the list, so it is on screen with three files staged
+  // and no scrolling (two photos used to push it below the fold).
+  await expect(send).toBeInViewport();
+  await chats.screenshot({ path: testInfo.outputPath('three-files-staged.png') });
 
   await chats.keyboard.press('Enter');
   await expect(send).toHaveCount(0, { timeout: 90_000 });
