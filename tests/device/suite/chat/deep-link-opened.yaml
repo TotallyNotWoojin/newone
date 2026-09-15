@@ -5,8 +5,10 @@ appId: com.totallynotwoojin.gist
 - tapOn:
     text: "Open"
     optional: true
-# After `simctl openurl newone://conversation/<id>` the conversation with
-# PEER must be open.
+# After `simctl openurl gist://conversation/<id>` the conversation with
+# PEER must be open. The scheme has been `gist` since the rename (Sep 11
+# 2026); `newone://` still opened the old Newone build left on the suite
+# simulators, which then failed to load (run-2026-09-15T01-00-00).
 - extendedWaitUntil:
     visible: ".*(Write a message…|Escribe un mensaje…).*"
     timeout: 30000

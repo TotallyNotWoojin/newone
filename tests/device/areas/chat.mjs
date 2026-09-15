@@ -390,8 +390,8 @@ export async function run(ctx) {
   // Deep link.
   await ctx.step({ id: 'chat-31a-a-back', title: 'A returns to Chats', device: devA, flow: 'chat/back-to-chats.yaml', expected: 'Chats', screen: 'chats' });
   try {
-    openUrl(devA, `newone://conversation/${convId}`);
-    await ctx.step({ id: 'chat-31-deep-link', title: 'Deep link newone://conversation/<id> opens the conversation', device: devA, flow: 'chat/deep-link-opened.yaml', env: { PEER: B.displayName }, expected: 'Conversation with B open', screen: 'deep link' });
+    openUrl(devA, `gist://conversation/${convId}`);
+    await ctx.step({ id: 'chat-31-deep-link', title: 'Deep link gist://conversation/<id> opens the conversation', device: devA, flow: 'chat/deep-link-opened.yaml', env: { PEER: B.displayName }, expected: 'Conversation with B open', screen: 'deep link' });
   } catch (error) {
     ctx.note({ id: 'chat-31-deep-link', title: 'Deep link', status: 'FAIL', observed: String(error.message) });
   }
