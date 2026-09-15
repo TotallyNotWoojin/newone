@@ -14,8 +14,12 @@ appId: com.totallynotwoojin.gist
 - extendedWaitUntil:
     visible: ".*typing indicator.*"
     timeout: 5000
+# Keep typing for about a minute. The watcher on the other phone starts at
+# the same moment but its driver can take 30 s to warm up, and six bursts
+# (~25 s) were over before it looked (run-2026-09-15T04-21-24 chat-16: B done
+# at :43, A watched :47 to 17). Sixteen bursts cover the whole window.
 - repeat:
-    times: 6
+    times: 16
     commands:
       - waitForAnimationToEnd:
           timeout: 3500

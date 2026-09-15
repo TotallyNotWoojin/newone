@@ -1,6 +1,8 @@
 appId: com.totallynotwoojin.gist
 ---
+# Sixty seconds: the typist on the other phone keeps going for about that
+# long, and this phone's driver may need 30 s before it looks at all.
 - extendedWaitUntil:
     visible: ".*typing.*"
-    timeout: 30000
+    timeout: 60000
 - takeScreenshot: ${SHOT}-typing-indicator

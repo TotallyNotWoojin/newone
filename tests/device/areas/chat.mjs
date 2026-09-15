@@ -227,7 +227,7 @@ export async function run(ctx) {
   // types: the two steps run concurrently and B keeps typing in bursts.
   await Promise.all([
     ctx.step({ id: 'chat-16a-b-types', title: 'B starts typing', device: devB, flow: 'chat/start-typing.yaml', expected: 'draft in composer', screen: 'conversation' }),
-    ctx.step({ id: 'chat-16-typing-indicator', title: 'A sees "… is typing" while B types', device: devA, flow: 'chat/see-typing.yaml', expected: '".*typing.*" banner on A within 30s', screen: 'conversation' }),
+    ctx.step({ id: 'chat-16-typing-indicator', title: 'A sees "… is typing" while B types', device: devA, flow: 'chat/see-typing.yaml', expected: '".*typing.*" banner on A within 60s', screen: 'conversation' }),
   ]);
   await ctx.step({ id: 'chat-16b-b-clears', title: 'B clears the draft', device: devB, flow: 'chat/clear-composer.yaml', expected: 'composer empty', screen: 'conversation' });
 
