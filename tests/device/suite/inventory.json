@@ -1743,12 +1743,12 @@
         },
         {
           "id": "pane.controls-favorite",
-          "label": "Bookmark this chat",
+          "label": "Bookmark",
           "catalogKey": "chat.addFavorite",
           "kind": "button",
           "gating": "controls modal && !conversation.managementOnly",
           "consumerIosReachable": true,
-          "note": "Label 'Remove bookmark' (chat.removeFavorite) when conversation.favorite; updateConversationPreferences({isFavorite})",
+          "note": "Label 'Remove bookmark' (chat.unbookmark) when conversation.favorite; updateConversationPreferences({isFavorite})",
           "sourceLine": 2595
         },
         {

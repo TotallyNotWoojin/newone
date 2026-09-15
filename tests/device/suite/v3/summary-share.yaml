@@ -4,8 +4,10 @@ appId: com.totallynotwoojin.gist
 # the sheet says "Nothing summarized yet." and shows the range chips (Today …
 # Everything) with the "What should this cover?" field. The reader picks
 # "Everything", types ${SUBJECT}, and taps "Summarize conversation". After the
-# request "Generating" gives way to the prose under a scope line such as
-# "Everything · 6 messages · about the plan", and Copy/Share become enabled;
+# request "Generating" gives way to the recap under a scope line such as
+# "Everything · 6 messages · about the plan": a header with the days covered
+# ("All messages" for Everything) and the participants, then short numbered
+# lines, and Copy, PDF and Word become enabled (Share left on Sep 14 2026);
 # Copy confirms with "Copied". The prose must carry no source-id citations
 # ("s1234"-style tokens belong to the workplace product, never to a consumer
 # summary).
@@ -64,11 +66,16 @@ appId: com.totallynotwoojin.gist
 # Ready: the scope line names the range, the count, and the subject; the prose
 # is on screen and both actions are enabled.
 - assertVisible: ".*Everything · [0-9]+ messages · about ${SUBJECT}.*"
+- assertVisible: "All messages"
+- assertVisible: "Participants: .*"
 - assertVisible:
     text: "Copy"
     enabled: true
 - assertVisible:
-    text: "Share"
+    text: "PDF"
+    enabled: true
+- assertVisible:
+    text: "Word"
     enabled: true
 - assertNotVisible: ".*s[0-9]{4}.*"
 - assertNotVisible: ".*participant [0-9].*"

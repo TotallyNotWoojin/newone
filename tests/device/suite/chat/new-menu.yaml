@@ -32,7 +32,7 @@ appId: com.totallynotwoojin.gist
 - tapOn: "Add a friend"
 # Contacts opens with the add-a-friend sheet already up: the stranger search.
 - extendedWaitUntil:
-    visible: "Search by name or @username"
+    visible: "Search by name.*"
     timeout: 20000
 - assertVisible: "Search a name or @handle, then send a request."
 - takeScreenshot: ${SHOT}-add-a-friend

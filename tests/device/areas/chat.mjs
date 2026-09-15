@@ -412,12 +412,7 @@ export async function run(ctx) {
       expected: 'Header shows the new name; server conversations.name updated', screen: 'conversation → Conversation controls',
       serverTruth: async () => { const w = await server.waitFor(() => server.conversationRow(groupRow.id), (r) => r?.name === renamed, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
     });
-    await ctx.step({
-      id: 'chat-34-archive', title: 'Archive the group conversation', device: devA, flow: 'chat/archive.yaml',
-      expected: 'Sheet closes; server is_archived true', screen: 'conversation → Conversation controls',
-      serverTruth: async () => { const w = await server.waitFor(() => server.conversationRow(groupRow.id), (r) => r?.is_archived === true, { timeoutMs: 20_000 }); return { ok: w.ok, detail: w.row }; },
-    });
-    await ctx.observe(devA, { id: 'chat-34b-after-archive', title: 'Where the user lands after archiving', screen: 'conversation/chats' });
+    // chat-34 (Archive conversation) retired Sep 14 2026: archive left the app.
   }
   // Owner ask: the phone's Chats list must match the server's conversations
   // and groups for that user (no desync). The server names every active
@@ -468,14 +463,14 @@ export async function run(ctx) {
   await ctx.step({
     id: 'chat-38-new-menu', title: 'The "+" on the Chats header: "Add a friend" reaches the stranger search, "New group" reaches creation', device: devA,
     flow: 'chat/new-menu.yaml',
-    expected: 'The "New" sheet holds exactly "Add a friend" and "New group"; the first opens Contacts with the "Search by name or @username" sheet, the second opens "Create a group"; the old "Start a conversation" entry is gone',
+    expected: 'The "New" sheet holds exactly "Add a friend" and "New group"; the first opens Contacts with the "Search by name, @username or email" sheet, the second opens "Create a group"; the old "Start a conversation" entry is gone',
     screen: 'chats → New',
   });
   // Chat-row actions: mark unread, mute, and the two confirmations.
   await ctx.step({
     id: 'chat-39-row-mark-unread', title: 'A puts B\'s chat back to unread from the row, then reads it again', device: devA,
     flow: 'chat/row-mark-unread.yaml', env: { PEER: B.displayName },
-    expected: 'A long press opens Mark unread / Mute / Archive / Delete; after Mark unread the Unread filter lists the chat and the row offers Mark read',
+    expected: 'A long press opens Mark unread / Mute / Bookmark / Delete; after Mark unread the Unread filter lists the chat and the row offers Mark read',
     screen: 'chats',
   });
   await ctx.step({
@@ -500,13 +495,7 @@ export async function run(ctx) {
   });
   // Archiving from the row takes the chat off the list at once. Last, because
   // it removes B's chat from A's list.
-  await ctx.step({
-    id: 'chat-43-row-archive', title: 'A archives B\'s chat from the row: it leaves the list', device: devA,
-    flow: 'chat/row-archive.yaml', env: { PEER: B.displayName },
-    expected: 'The row leaves the list for the Archived row; server conversation_preferences.is_archived true for A, and is_hidden untouched (v3.4: archiving is not deleting)',
-    screen: 'chats',
-    serverTruth: async () => { const w = await server.waitFor(() => server.preferences(convId, A.userId), (r) => r?.is_archived === true && r?.is_hidden === false, { timeoutMs: 30_000 }); return { ok: w.ok, detail: w.row }; },
-  });
+  // chat-43 (archive from the row) retired Sep 14 2026: archive left the app.
   // Back to the newest: the control only exists once the list is a screenful
   // deep, which a test account with a few chats never is.
   await ctx.step({

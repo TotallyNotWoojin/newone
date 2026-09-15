@@ -38,6 +38,12 @@ appId: com.totallynotwoojin.gist
     text: "Photo, .*"
     index: 1
     optional: true
+# The picker allows several photos since Sep 14 2026, so iOS asks for a
+# confirming "Add" after the tile is chosen; older single-select builds have
+# no such button, hence optional.
+- tapOn:
+    text: "Add.*"
+    optional: true
 # A missed tap closes the picker without choosing anything, and the sheet then
 # shows a disabled Send that is still "visible": two taps on it proved nothing
 # and the step failed four rows later (chat media-01, run-2026-09-06T20-23-19).
@@ -61,6 +67,9 @@ appId: com.totallynotwoojin.gist
       - tapOn:
           text: "Photo, .*"
           index: 2
+          optional: true
+      - tapOn:
+          text: "Add.*"
           optional: true
       - takeScreenshot: ${SHOT}-picker-retry
 - extendedWaitUntil:

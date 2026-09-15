@@ -11,6 +11,16 @@ appId: com.totallynotwoojin.gist
 - extendedWaitUntil:
     visible: "Chats"
     timeout: 15000
+# Six filter chips plus Pinned no longer fit a phone width (Sep 14 2026); the
+# row scrolls, so bring Pinned in from the right when it is off screen.
+- runFlow:
+    when:
+      notVisible: "Open pinned messages"
+    commands:
+      - swipe:
+          from:
+            text: "Groups"
+          direction: LEFT
 - tapOn: "Open pinned messages"
 - extendedWaitUntil:
     visible: "Pinned messages"

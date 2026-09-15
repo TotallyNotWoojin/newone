@@ -32,10 +32,10 @@ appId: com.totallynotwoojin.gist
     timeout: 20000
 - scrollUntilVisible:
     element:
-      text: "Search by name or @username"
+      text: "Search by name.*"
     direction: DOWN
     timeout: 45000
-- tapOn: "Search by name or @username"
+- tapOn: "Search by name.*"
 - inputText: ${MEMBER1_QUERY}
 - runFlow:
     when:
@@ -63,11 +63,11 @@ appId: com.totallynotwoojin.gist
 - takeScreenshot: ${SHOT}-one-person-refused
 - scrollUntilVisible:
     element:
-      text: "Search by name or @username"
+      text: "Search by name.*"
     direction: DOWN
     timeout: 45000
 - tapOn: "Clear search"
-- tapOn: "Search by name or @username"
+- tapOn: "Search by name.*"
 - inputText: ${MEMBER2_QUERY}
 - runFlow:
     when:

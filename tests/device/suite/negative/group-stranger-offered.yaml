@@ -64,10 +64,10 @@ appId: com.totallynotwoojin.gist
           duration: 600
 - scrollUntilVisible:
     element:
-      text: "Search by name or @username"
+      text: "Search by name.*"
     direction: DOWN
     timeout: 30000
-- tapOn: "Search by name or @username"
+- tapOn: "Search by name.*"
 - inputText: ${STRANGER_QUERY}
 # hideKeyboard fails on iOS while a spelling callout is up (neg-06, third
 # pass); the "Group name" caption tap puts the keyboard away, hideKeyboard is

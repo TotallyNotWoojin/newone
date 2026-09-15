@@ -33,7 +33,7 @@ appId: com.totallynotwoojin.gist
     timeout: 15000
 # The whole set a chat row offers.
 - assertVisible: "Mute"
-- assertVisible: "Archive"
+- assertVisible: "Mute"
 - takeScreenshot: ${SHOT}-row-actions
 - tapOn: "Mark unread"
 - extendedWaitUntil:
