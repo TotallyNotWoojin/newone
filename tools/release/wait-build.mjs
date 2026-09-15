@@ -1,5 +1,11 @@
-// Wait for a build to finish processing, then add it to the beta groups.
+// Wait for a build to finish processing, add it to the beta groups, and
+// submit it for Beta App Review when an external group is among them.
 // Usage: wait-build.mjs <buildNumber>
+//
+// Adding a build to an external group is not enough: external testers only
+// receive it once it has a Beta App Review submission. Builds 47-52 sat at
+// READY_FOR_BETA_SUBMISSION in "Public Testers" with nobody the wiser
+// (found Sep 15 2026 when the owner asked "still no upload?").
 import { asc, ascConfig } from './asc.mjs';
 
 const [buildNumber] = process.argv.slice(2);
@@ -41,7 +47,23 @@ while (Date.now() - started < 60 * 60 * 1000) {
       console.log('group', group.attributes.name, has ? 'has' : 'MISSING', buildNumber);
       if (!has) failed = true;
     }
-    console.log(failed ? `FAILED build ${buildNumber} is not in every group` : `DONE build ${buildNumber} in ${groups.length} groups`);
+    // External testers need a Beta App Review submission; internal groups do not.
+    if (groups.some((group) => group.attributes.isInternalGroup === false)) {
+      const before = (await asc('GET', `/builds/${build.id}/buildBetaDetail`)).json?.data?.attributes?.externalBuildState;
+      console.log('external state', before);
+      if (before === 'READY_FOR_BETA_SUBMISSION') {
+        const submit = await asc('POST', '/betaAppReviewSubmissions', {
+          data: { type: 'betaAppReviewSubmissions', relationships: { build: { data: { type: 'builds', id: build.id } } } },
+        });
+        const review = submit.json?.data?.attributes?.betaReviewState ?? submit.json?.errors?.[0]?.detail;
+        console.log('beta review submission', submit.status, review ?? '');
+        if (submit.status < 200 || submit.status >= 300) failed = true;
+      }
+      const after = (await asc('GET', `/builds/${build.id}/buildBetaDetail`)).json?.data?.attributes?.externalBuildState;
+      console.log('external state now', after);
+      if (!['IN_BETA_TESTING', 'READY_FOR_BETA_TESTING', 'WAITING_FOR_BETA_REVIEW', 'IN_BETA_REVIEW'].includes(after ?? '')) failed = true;
+    }
+    console.log(failed ? `FAILED build ${buildNumber} is not in every group or not submitted for external testing` : `DONE build ${buildNumber} in ${groups.length} groups, external review submitted or already testing`);
     process.exit(failed ? 1 : 0);
   }
   await new Promise((resolve) => setTimeout(resolve, 60_000));
