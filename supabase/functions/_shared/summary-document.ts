@@ -24,16 +24,20 @@ export interface SummaryDocumentInput {
 }
 
 export interface SummaryFonts {
-  /** OpenType bytes; null falls back to the PDF standard fonts (Latin only). */
+  /** TrueType bytes; null falls back to the PDF standard fonts (Latin only). */
   regular: Uint8Array | null;
   bold: Uint8Array | null;
 }
 
-// Noto Sans KR carries Hangul, Latin (Spanish included) and the punctuation
-// people type; the subset build is the Korean-scoped one, ~4.6 MB a face.
+// IBM Plex Sans KR: TrueType outlines with Hangul and Latin. The whole face is
+// embedded, never a subset -- pdf-lib's subsetting produced fonts that Apple's
+// renderer drew as garbage and pdf.js drew with the Hangul missing (Sep 15
+// 2026, tried with Noto Sans KR, Nanum Gothic and Plex). About 2.8 MB a face;
+// the PDF carries both, ~2 MB. Characters the face lacks (Spanish accents,
+// among others) come from the PDF's built-in Helvetica.
 const FONT_URLS = {
-  regular: 'https://github.com/notofonts/noto-cjk/raw/main/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf',
-  bold: 'https://github.com/notofonts/noto-cjk/raw/main/Sans/SubsetOTF/KR/NotoSansKR-Bold.otf',
+  regular: 'https://github.com/google/fonts/raw/main/ofl/ibmplexsanskr/IBMPlexSansKR-Regular.ttf',
+  bold: 'https://github.com/google/fonts/raw/main/ofl/ibmplexsanskr/IBMPlexSansKR-Bold.ttf',
 };
 const FONT_MAX_BYTES = 12_000_000;
 
@@ -62,6 +66,45 @@ export function loadSummaryFonts(fetcher: typeof fetch = fetch): Promise<Summary
   return fontCache;
 }
 
+/** A face plus the built-in fallback that covers what it lacks. */
+export interface Face {
+  primary: PDFFont;
+  fallback: PDFFont;
+  primarySet: Set<number>;
+  fallbackSet: Set<number>;
+}
+
+interface Run {
+  font: PDFFont;
+  text: string;
+}
+
+/** Splits text into runs by which font can draw each character; a character neither font has is dropped (an emoji, say). */
+export function runsFor(text: string, face: Face): Run[] {
+  const runs: Run[] = [];
+  for (const character of Array.from(text)) {
+    const point = character.codePointAt(0) ?? 0;
+    const font = face.primarySet.has(point) ? face.primary : face.fallbackSet.has(point) ? face.fallback : null;
+    if (!font) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.font === font) last.text += character;
+    else runs.push({ font, text: character });
+  }
+  return runs;
+}
+
+export function measureText(text: string, face: Face, size: number): number {
+  return runsFor(text, face).reduce((total, run) => total + run.font.widthOfTextAtSize(run.text, size), 0);
+}
+
+function drawRuns(page: PDFPage, text: string, face: Face, size: number, x: number, y: number, color: ReturnType<typeof rgb>) {
+  let cursor = x;
+  for (const run of runsFor(text, face)) {
+    page.drawText(run.text, { x: cursor, y, size, font: run.font, color });
+    cursor += run.font.widthOfTextAtSize(run.text, size);
+  }
+}
+
 const PAGE = { width: 612, height: 792, margin: 56 };
 const INK = rgb(0.07, 0.09, 0.09);
 const MUTED = rgb(0.36, 0.39, 0.39);
@@ -71,14 +114,13 @@ interface Pen {
   document: PDFDocument;
   page: PDFPage;
   y: number;
-  regular: PDFFont;
-  bold: PDFFont;
+  regular: Face;
+  bold: Face;
 }
 
 /** Splits `text` into lines no wider than `width`; a word wider than the line breaks by character (Korean has no spaces to break at). */
-export function wrapText(text: string, font: PDFFont, size: number, width: number): string[] {
+export function wrapText(text: string, measure: (value: string) => number, width: number): string[] {
   const lines: string[] = [];
-  const measure = (value: string) => font.widthOfTextAtSize(value, size);
   for (const paragraph of text.split('\n')) {
     let line = '';
     for (const word of paragraph.split(/(?<=\s)/)) {
@@ -119,31 +161,20 @@ function ensureRoom(pen: Pen, height: number) {
 function drawParagraph(
   pen: Pen,
   text: string,
-  options: { font: PDFFont; size: number; color?: ReturnType<typeof rgb>; indent?: number; hanging?: string; gapAfter?: number },
+  options: { face: Face; size: number; color?: ReturnType<typeof rgb>; indent?: number; hanging?: string; gapAfter?: number },
 ) {
   const lineHeight = options.size * 1.45;
   const indent = options.indent ?? 0;
   const width = PAGE.width - PAGE.margin * 2 - indent;
-  const lines = wrapText(text, options.font, options.size, width);
+  const color = options.color ?? INK;
+  const lines = wrapText(text, (value) => measureText(value, options.face, options.size), width);
   ensureRoom(pen, lineHeight);
   if (options.hanging) {
-    pen.page.drawText(options.hanging, {
-      x: PAGE.margin,
-      y: pen.y - options.size,
-      size: options.size,
-      font: options.font,
-      color: options.color ?? INK,
-    });
+    drawRuns(pen.page, options.hanging, options.face, options.size, PAGE.margin, pen.y - options.size, color);
   }
   for (const line of lines) {
     ensureRoom(pen, lineHeight);
-    pen.page.drawText(line, {
-      x: PAGE.margin + indent,
-      y: pen.y - options.size,
-      size: options.size,
-      font: options.font,
-      color: options.color ?? INK,
-    });
+    drawRuns(pen.page, line, options.face, options.size, PAGE.margin + indent, pen.y - options.size, color);
     pen.y -= lineHeight;
   }
   pen.y -= options.gapAfter ?? 0;
@@ -157,29 +188,41 @@ export async function renderSummaryPdf(input: SummaryDocumentInput, fonts: Summa
   document.setTitle(input.title);
   document.setProducer('Gist');
   document.setCreator('Gist');
-  let regular: PDFFont;
-  let bold: PDFFont;
+  // Helvetica is a built-in: no bytes to embed, WinAnsi coverage (Spanish
+  // accents included), and it steps in for whatever the Korean face lacks.
+  const [helvetica, helveticaBold] = await Promise.all([
+    document.embedFont(StandardFonts.Helvetica),
+    document.embedFont(StandardFonts.HelveticaBold),
+  ]);
+  const face = (primary: PDFFont, fallback: PDFFont): Face => ({
+    primary,
+    fallback,
+    primarySet: new Set(primary.getCharacterSet()),
+    fallbackSet: new Set(fallback.getCharacterSet()),
+  });
+  let regular: Face;
+  let bold: Face;
   if (fonts.regular && fonts.bold) {
     document.registerFontkit(fontkit);
-    [regular, bold] = await Promise.all([
-      document.embedFont(fonts.regular, { subset: true }),
-      document.embedFont(fonts.bold, { subset: true }),
+    const [plexRegular, plexBold] = await Promise.all([
+      document.embedFont(fonts.regular, { subset: false }),
+      document.embedFont(fonts.bold, { subset: false }),
     ]);
+    regular = face(plexRegular, helvetica);
+    bold = face(plexBold, helveticaBold);
   } else {
-    [regular, bold] = await Promise.all([
-      document.embedFont(StandardFonts.Helvetica),
-      document.embedFont(StandardFonts.HelveticaBold),
-    ]);
+    regular = face(helvetica, helvetica);
+    bold = face(helveticaBold, helveticaBold);
   }
   const pen: Pen = { document, page: document.addPage([PAGE.width, PAGE.height]), y: PAGE.height - PAGE.margin, regular, bold };
 
-  drawParagraph(pen, input.title, { font: bold, size: 20, gapAfter: 4 });
+  drawParagraph(pen, input.title, { face: bold, size: 20, gapAfter: 4 });
   if (input.conversationTitle.trim()) {
-    drawParagraph(pen, input.conversationTitle.trim(), { font: regular, size: 11, color: MUTED });
+    drawParagraph(pen, input.conversationTitle.trim(), { face: regular, size: 11, color: MUTED });
   }
-  if (input.covers) drawParagraph(pen, input.covers, { font: regular, size: 11, color: MUTED });
+  if (input.covers) drawParagraph(pen, input.covers, { face: regular, size: 11, color: MUTED });
   if (input.participants.length) {
-    drawParagraph(pen, `${input.labels.participants}: ${input.participants.join(', ')}`, { font: regular, size: 11, color: MUTED });
+    drawParagraph(pen, `${input.labels.participants}: ${input.participants.join(', ')}`, { face: regular, size: 11, color: MUTED });
   }
   pen.y -= 6;
   ensureRoom(pen, 14);
@@ -194,21 +237,15 @@ export async function renderSummaryPdf(input: SummaryDocumentInput, fonts: Summa
   for (const line of input.lines) {
     const numbered = NUMBERED.exec(line);
     if (numbered) {
-      drawParagraph(pen, numbered[2] ?? '', { font: regular, size: 12, indent: 26, hanging: `${numbered[1]}.`, gapAfter: 4 });
+      drawParagraph(pen, numbered[2] ?? '', { face: regular, size: 12, indent: 26, hanging: `${numbered[1]}.`, gapAfter: 4 });
     } else {
-      drawParagraph(pen, line, { font: regular, size: 12, gapAfter: 4 });
+      drawParagraph(pen, line, { face: regular, size: 12, gapAfter: 4 });
     }
   }
 
   pen.y -= 10;
   ensureRoom(pen, 12);
-  pen.page.drawText(input.labels.generated, {
-    x: PAGE.margin,
-    y: pen.y - 9,
-    size: 9,
-    font: regular,
-    color: MUTED,
-  });
+  drawRuns(pen.page, input.labels.generated, regular, 9, PAGE.margin, pen.y - 9, MUTED);
   return document.save();
 }
 

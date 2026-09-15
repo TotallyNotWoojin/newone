@@ -1,7 +1,9 @@
 import { assertEquals } from './assert.ts';
 import {
+  measureText,
   renderSummaryDocx,
   renderSummaryPdf,
+  runsFor,
   SUMMARY_DOCUMENT_TYPES,
   summaryDocumentFileName,
   wrapText,
@@ -40,13 +42,28 @@ Deno.test('many lines run onto a second page instead of off the bottom', async (
 Deno.test('text wraps at the page width, and a run without spaces breaks by character', async () => {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const lines = wrapText('one two three four five six seven eight nine ten eleven twelve', font, 12, 120);
+  const measure = (value: string) => font.widthOfTextAtSize(value, 12);
+  const lines = wrapText('one two three four five six seven eight nine ten eleven twelve', measure, 120);
   assertEquals(lines.length > 1, true);
-  assertEquals(lines.every((line) => font.widthOfTextAtSize(line, 12) <= 120), true);
-  const run = wrapText('abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz', font, 12, 60);
+  assertEquals(lines.every((line) => measure(line) <= 120), true);
+  const run = wrapText('abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz', measure, 60);
   assertEquals(run.length > 1, true);
   assertEquals(run.join(''), 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz');
-  assertEquals(wrapText('', font, 12, 100), ['']);
+  assertEquals(wrapText('', measure, 100), ['']);
+});
+
+Deno.test('characters the main face lacks come from the fallback, and one neither has is dropped', async () => {
+  const pdf = await PDFDocument.create();
+  const [helvetica, symbol] = await Promise.all([pdf.embedFont(StandardFonts.Helvetica), pdf.embedFont(StandardFonts.Symbol)]);
+  const face = { primary: symbol, fallback: helvetica, primarySet: new Set(symbol.getCharacterSet()), fallbackSet: new Set(helvetica.getCharacterSet()) };
+  const runs = runsFor('Peña 👍 x', face);
+  assertEquals(runs.every((run) => run.text.length > 0), true);
+  assertEquals(runs.map((run) => run.text).join(''), 'Peña  x');
+  assertEquals(runs.some((run) => run.font === helvetica && run.text.includes('ñ')), true);
+  assertEquals(measureText('Peña', face, 12) > 0, true);
+  // A Spanish line renders with the built-in faces alone.
+  const bytes = await renderSummaryPdf({ ...document, lines: ['1. Marisol: ¿qué día? ñ á é í ó ú'] }, { regular: null, bold: null });
+  assertEquals(new TextDecoder().decode(bytes.slice(0, 5)), '%PDF-');
 });
 
 Deno.test('the Word file is a zip package whose type is the docx media type', async () => {

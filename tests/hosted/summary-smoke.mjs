@@ -157,6 +157,12 @@ if (!pdf.contentType?.startsWith('application/pdf')) fail('PDF export has the wr
 if (new TextDecoder().decode(pdf.bytes.slice(0, 5)) !== '%PDF-') fail('PDF export does not start like a PDF', pdf.bytes.slice(0, 16));
 if (!/attachment; filename="Gist summary - .*\.pdf"/.test(pdf.disposition ?? '')) fail('PDF export is not an attachment', pdf.disposition);
 if (pdf.bytes.byteLength < 2_000) fail('PDF export is suspiciously small', pdf.bytes.byteLength);
+// NEWONE_SMOKE_OUT=<dir> keeps the files so a person can open them.
+if (process.env.NEWONE_SMOKE_OUT) {
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  mkdirSync(process.env.NEWONE_SMOKE_OUT, { recursive: true });
+  writeFileSync(`${process.env.NEWONE_SMOKE_OUT}/smoke-summary.pdf`, pdf.bytes);
+}
 const docx = await gatewayDownload('newone-read', exportPath, keys, {
   installationId: ana.installationId, accessToken: ana.accessToken,
   body: { organizationId: PERSONAL_REALM_ID, format: 'docx', timeZone: 'America/Los_Angeles', locale: 'en' },
@@ -164,6 +170,10 @@ const docx = await gatewayDownload('newone-read', exportPath, keys, {
 if (docx.status !== 200) fail(`Word export returned ${docx.status}`, docx.text().slice(0, 300));
 if (docx.bytes[0] !== 0x50 || docx.bytes[1] !== 0x4b) fail('Word export is not a docx package', docx.bytes.slice(0, 8));
 if (!docx.contentType?.includes('wordprocessingml')) fail('Word export has the wrong media type', docx.contentType);
+if (process.env.NEWONE_SMOKE_OUT) {
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(`${process.env.NEWONE_SMOKE_OUT}/smoke-summary.docx`, docx.bytes);
+}
 const foreign = await gatewayDownload('newone-read', exportPath, keys, {
   installationId: eli.installationId, accessToken: eli.accessToken,
   body: { organizationId: PERSONAL_REALM_ID, format: 'pdf' },
