@@ -9,7 +9,7 @@ const PERSONAL_REALM = '11111111-1111-4111-8111-111111111111';
 const mockPush = jest.fn<(_href: unknown) => void>();
 const mockClipboardWrite = jest.fn<(_value: string) => Promise<void>>(async () => undefined);
 const mockFileCreate = jest.fn();
-const mockFileWrite = jest.fn<(_content: string) => void>();
+const mockFileWrite = jest.fn<(_content: string | Uint8Array) => void>();
 const mockFileDelete = jest.fn();
 const mockFileArgs = jest.fn<(..._args: unknown[]) => void>();
 let mockFileExists = false;
@@ -21,12 +21,9 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (value: string) => mockClipboardWrite(value),
 }));
-const mockPrintToFile = jest.fn<(_input: { html: string }) => Promise<{ uri: string }>>(async () => ({ uri: 'file:///cache/printed.pdf' }));
 const mockShareAsync = jest.fn<(_uri: string, _options: Record<string, string>) => Promise<void>>(async () => undefined);
-jest.mock('expo-print', () => ({
-  printToFileAsync: (input: { html: string }) => mockPrintToFile(input),
-  printAsync: async () => undefined,
-}));
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 jest.mock('expo-sharing', () => ({
   isAvailableAsync: async () => true,
   shareAsync: (uri: string, options: Record<string, string>) => mockShareAsync(uri, options),
@@ -121,6 +118,11 @@ function buildWorkspace(organizationId = PERSONAL_REALM) {
     hasCapability: jest.fn(() => true),
     clearActionError: jest.fn(),
     requestConversationSummary: successfulAction(),
+    exportConversationSummary: jest.fn(async (_summary: unknown, format: 'pdf' | 'docx') => ({
+      bytes: PDF_BYTES,
+      contentType: format === 'pdf' ? 'application/pdf' : DOCX_TYPE,
+    })),
+    messages: {},
     correctConversationSummary: successfulAction(),
     reviewConversationSummary: successfulAction(),
     setConversationSummaryPolicy: successfulAction(),
@@ -158,7 +160,7 @@ beforeEach(() => {
 });
 
 describe('summary sheet for consumers', () => {
-  test('shows the latest recap as prose, then decisions and to-dos, with one scope line and no workplace controls', async () => {
+  test('shows the latest recap: title, the span covered, who took part, the lines, and nothing else', async () => {
     await open();
     expect(screen.getByText('chat.summarySheetTitle')).toBeTruthy();
     expect(screen.getByText('chat.summaryScopeLine · chat.summaryScopeAbout')).toBeTruthy();
@@ -168,10 +170,10 @@ describe('summary sheet for consumers', () => {
     expect(screen.getByText(/2026/)).toBeTruthy();
     expect(screen.getByText('chat.summaryParticipants: Jordan Lee, Ana Torres')).toBeTruthy();
     expect(screen.getByText(/You asked whether Saturday works/)).toBeTruthy();
-    expect(screen.getByText('chat.summaryDecisions')).toBeTruthy();
-    expect(screen.getByText('• Meet at noon')).toBeTruthy();
-    expect(screen.getByText('chat.summaryTodo')).toBeTruthy();
-    expect(screen.getByText('• Ana: Book the cabin')).toBeTruthy();
+    // No decisions or to-do sections: the recap is the lines alone.
+    expect(screen.queryByText('chat.summaryDecisions')).toBeNull();
+    expect(screen.queryByText('chat.summaryTodo')).toBeNull();
+    expect(screen.queryByText(/Meet at noon/)).toBeNull();
     expect(screen.queryByText('chat.summaryReadyReview')).toBeNull();
     expect(screen.queryByLabelText('chat.correctSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewSummary')).toBeNull();
@@ -181,11 +183,15 @@ describe('summary sheet for consumers', () => {
     expect(screen.queryByText(/\bs0\d{3}\b/)).toBeNull();
   });
 
-  test('keeps the lists out when a recap has none', async () => {
-    mockWorkspace.summaries = [summary({ decisions: [], actionItems: [] })];
+  test('the header shows the date and hours of the first and last message covered when they are loaded', async () => {
+    mockWorkspace.messages = {
+      'conversation-a': [
+        { id: 'm1', serverId: '101', createdAt: new Date(2026, 8, 14, 14, 49).toISOString() },
+        { id: 'm3', serverId: '103', createdAt: new Date(2026, 8, 14, 15, 44).toISOString() },
+      ],
+    };
     await open();
-    expect(screen.queryByText('chat.summaryDecisions')).toBeNull();
-    expect(screen.queryByText('chat.summaryTodo')).toBeNull();
+    expect(screen.getByText('Sep 14, 2026 · 2:49 PM – 3:44 PM')).toBeTruthy();
   });
 
   test('offers Everything by default; the reader picks a range and says what it should cover', async () => {
@@ -250,50 +256,59 @@ describe('summary sheet for consumers', () => {
     expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(true);
   });
 
-  test('copies the recap as clean text with its scope line and lists', async () => {
+  test('copies the recap as clean text with its header and lines, and nothing else', async () => {
     await open();
     await fireEvent.press(screen.getByLabelText('chat.copy'));
     await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledTimes(1));
     const copied = mockClipboardWrite.mock.calls[0]?.[0] ?? '';
     expect(copied.startsWith('Weekend plans\nAna Torres · chat.summaryScopeLine · chat.summaryScopeAbout\n')).toBe(true);
     expect(copied).toContain('\nchat.summaryParticipants: Jordan Lee, Ana Torres\n\nYou asked whether Saturday works.');
-    expect(copied).toContain('\nchat.summaryDecisions\n• Meet at noon\n');
-    expect(copied).toContain('\nchat.summaryTodo\n• Ana: Book the cabin\n');
+    expect(copied).not.toContain('chat.summaryDecisions');
+    expect(copied).not.toContain('Meet at noon');
     expect(copied).not.toMatch(/\bs0\d{3}\b|\[sources/);
     expect(screen.getByText('chat.summaryCopied')).toBeTruthy();
   });
 
-  test('PDF prints the recap to a file and hands it to the share sheet, where it is saved', async () => {
+  test('PDF asks the service for the file and hands it to the share sheet, where it is saved', async () => {
+    mockFileExists = true;
     await open();
     await fireEvent.press(screen.getByLabelText('chat.summaryPdf'));
     await waitFor(() => expect(mockShareAsync).toHaveBeenCalledTimes(1));
-    const html = mockPrintToFile.mock.calls[0]?.[0]?.html ?? '';
-    expect(html).toContain('<h1>Weekend plans</h1>');
-    expect(html).toContain('chat.summaryParticipants: Jordan Lee, Ana Torres');
-    expect(html).toContain('<p>You asked whether Saturday works. Ana said yes');
-    expect(html).toContain('<li>Ana: Book the cabin</li>');
-    expect(mockShareAsync).toHaveBeenCalledWith('file:///cache/printed.pdf', expect.objectContaining({ mimeType: 'application/pdf', dialogTitle: 'Weekend plans' }));
+    expect(mockWorkspace.exportConversationSummary).toHaveBeenCalledWith(expect.objectContaining({ id: 'summary-a' }), 'pdf');
+    const fileName = String(mockFileArgs.mock.calls[0]?.[1]);
+    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
+    expect(mockFileCreate).toHaveBeenCalledTimes(1);
+    expect(mockFileWrite.mock.calls[0]?.[0]).toBe(PDF_BYTES);
+    expect(mockShareAsync).toHaveBeenCalledWith(`file:///cache/${fileName}`, expect.objectContaining({ mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Weekend plans' }));
     expect(screen.queryByText('chat.summaryShareFailed')).toBeNull();
   });
 
-  test('Word writes the recap as a .doc in the cache directory and shares it; a failed share is reported', async () => {
-    mockFileExists = true;
+  test('Word saves the service\'s .docx through the share sheet; a failed share is reported; a refused export shows nothing extra', async () => {
     const first = await open();
     await fireEvent.press(screen.getByLabelText('chat.summaryWord'));
     await waitFor(() => expect(mockShareAsync).toHaveBeenCalledTimes(1));
+    expect(mockWorkspace.exportConversationSummary).toHaveBeenCalledWith(expect.objectContaining({ id: 'summary-a' }), 'docx');
     const fileName = String(mockFileArgs.mock.calls[0]?.[1]);
-    expect(mockFileArgs.mock.calls[0]?.[0]).toBe('file:///cache/');
-    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.doc$/);
-    expect(mockFileDelete).toHaveBeenCalledTimes(1);
-    expect(mockFileCreate).toHaveBeenCalledTimes(1);
-    expect(mockFileWrite.mock.calls[0]?.[0]).toContain('<h1>Weekend plans</h1>');
-    expect(mockShareAsync).toHaveBeenCalledWith(`file:///cache/${fileName}`, expect.objectContaining({ mimeType: 'application/msword' }));
+    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.docx$/);
+    expect(mockShareAsync).toHaveBeenCalledWith(`file:///cache/${fileName}`, expect.objectContaining({ mimeType: DOCX_TYPE }));
     await first.view.unmount();
 
     mockShareAsync.mockRejectedValueOnce(new Error('no share targets'));
-    await open();
+    const second = await open();
     await fireEvent.press(screen.getByLabelText('chat.summaryWord'));
     await waitFor(() => expect(screen.getByText('chat.summaryShareFailed')).toBeTruthy());
+    await second.view.unmount();
+
+    // The workspace already surfaces a refused export as its action error.
+    mockWorkspace = buildWorkspace();
+    mockWorkspace.exportConversationSummary = jest.fn(async () => null);
+    await open();
+    await fireEvent.press(screen.getByLabelText('chat.summaryPdf'));
+    await waitFor(() => expect(mockWorkspace.exportConversationSummary).toHaveBeenCalledTimes(1));
+    // Nothing reached the share sheet beyond the two earlier presses.
+    expect(mockShareAsync).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('chat.summaryShareFailed')).toBeNull();
   });
 
   test('says to pick a shorter range when a recap was too long or refused, and to try again otherwise', async () => {

@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
@@ -9,17 +9,16 @@ import {
   SUMMARY_SCOPE_KINDS,
   latestSummary,
   summaryCoverageDates,
-  summaryExportHtml,
+  summaryCoversLabel,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
   summaryScopeLine,
-  summaryTodoText,
 } from '@/data/summary-text';
 import type { Conversation, OperationalAction, SummaryScopeKind } from '@/domain/types';
-// Metro selects the platform adapter (file + share sheet natively, Web Share or clipboard on web).
+// Metro selects the platform adapter (share sheet natively, a download on web).
 // eslint-disable-next-line import/no-unresolved
-import { exportSummaryDocument } from '@/features/chat/summary-export';
+import { saveSummaryFile } from '@/features/chat/summary-export';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
@@ -44,8 +43,11 @@ const SHORTER_RANGE_FAILURE = /too_long|refused|needs_review/;
  * The conversation summary, reachable from the header anywhere in the thread:
  * the reader picks a range (Today ... Everything, Everything by default) and
  * can say what the recap should cover; their own latest recap shows with a
- * header (the chat, the days covered, who took part), short numbered lines
- * that open with a name, its decisions and to-dos, and Copy, PDF and Word.
+ * header (the AI's title, the date and hours covered, who took part), short
+ * numbered lines that open with a name, and Copy, PDF and Word -- the file
+ * comes rendered from the service and downloads (browser) or goes to the
+ * share sheet (phone). No decisions or to-do sections: the owner's father
+ * asked for the lines alone (Sep 14 2026).
  * Only the reader's own requests show here (owner, Sep 14 2026). Workplace
  * organizations additionally keep their review, correction, schedule, and
  * operational-action controls here.
@@ -89,16 +91,27 @@ export function SummarySheet({
     aboutTemplate: t('chat.summaryScopeAbout'),
   };
   const scope = summary ? summaryScopeLine(summary, scopeCopy) : null;
-  // The header the owner's father asked for (Sep 14 2026): which days the
-  // recap covers and who took part, above the AI's title and the lines.
+  // The header the owner's father asked for (Sep 14 2026): the date and the
+  // hours the recap covers, and who took part, above the AI's title and the
+  // lines. The hours come from the first and last message the recap read
+  // when they are on this device; otherwise the range's days stand in.
+  const timeline = workspace.messages?.[conversation.id] ?? [];
+  const stampOf = (serverId: string | null | undefined) => {
+    const stamp = serverId ? timeline.find((message) => message.serverId === serverId)?.createdAt : undefined;
+    return stamp ? new Date(stamp) : null;
+  };
+  const exact = readySummary
+    ? summaryCoversLabel(stampOf(readySummary.sourceFirstMessageId), stampOf(readySummary.sourceLastMessageId), locale)
+    : null;
   const coverage = readySummary ? summaryCoverageDates(readySummary.scopeKind, readySummary.createdAt) : null;
   const day = (value: Date) => value.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
   const covers = readySummary
-    ? coverage
-      ? coverage.from.toDateString() === coverage.until.toDateString()
-        ? day(coverage.until)
-        : `${day(coverage.from)} – ${day(coverage.until)}`
-      : t('chat.summaryCoversAll')
+    ? exact
+      ?? (coverage
+        ? coverage.from.toDateString() === coverage.until.toDateString()
+          ? day(coverage.until)
+          : `${day(coverage.from)} – ${day(coverage.until)}`
+        : t('chat.summaryCoversAll'))
     : null;
   const participantNames = (conversation.memberIds?.length
     ? conversation.memberIds.map((id) => (
@@ -107,27 +120,21 @@ export function SummarySheet({
     : [workspace.currentUser?.displayName, conversation.kind === 'direct' ? conversation.title : null])
     .filter((name): name is string => Boolean(name && name.trim()));
   const participants = participantNames.length ? `${t('chat.summaryParticipants')}: ${participantNames.join(', ')}` : null;
-  const decisions = readySummary ? readySummary.decisions.map((item) => item.text.trim()).filter(Boolean) : [];
-  const todos = readySummary ? readySummary.actionItems.map(summaryTodoText).filter(Boolean) : [];
-  const exportInput = readySummary
-    ? {
+  const exportText = readySummary
+    ? summaryExportText({
       title: readySummary.primaryTopic,
       body: readySummary.summary,
       conversationTitle: conversation.title,
       scope,
       covers,
       participants,
-      decisions,
-      todos,
-      headings: { decisions: t('chat.summaryDecisions'), todo: t('chat.summaryTodo') },
-    }
-    : null;
-  const exportText = exportInput ? summaryExportText(exportInput) : '';
+    })
+    : '';
   const summaryLines = readySummary ? readySummary.summary.split('\n').map((line) => line.trim()).filter(Boolean) : [];
   // The pane remounts the sheet on every open (see its `key`), so notices and
   // nested dialogs never carry over from one visit to the next.
-  const [notice, setNotice] = useState<'copied' | 'shareFailed' | 'pdfWeb' | null>(null);
-  const [exporting, setExporting] = useState<'pdf' | 'word' | null>(null);
+  const [notice, setNotice] = useState<'copied' | 'shareFailed' | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
 
   const summaryErrorReport = summary
     ? workspace.aiOutputErrorReports.find((report) => report.summaryId === summary.id)
@@ -171,21 +178,22 @@ export function SummarySheet({
     await Clipboard.setStringAsync(exportText);
     setNotice('copied');
   };
-  // PDF by default, Word on request (owner's father, Sep 14 2026). The phone
-  // makes the file and offers the share sheet; the browser downloads the Word
-  // file and opens its print window for the PDF, where "Save as PDF" lives.
-  const download = async (format: 'pdf' | 'word') => {
-    if (!readySummary || !exportInput) return;
+  // PDF by default, Word on request (owner's father, Sep 14 2026). The service
+  // renders the file so both platforms hand out the same page; the browser
+  // drops it into downloads, the phone offers the share sheet.
+  const download = async (format: 'pdf' | 'docx') => {
+    if (!readySummary) return;
     setExporting(format);
     setNotice(null);
     try {
-      await exportSummaryDocument({
-        fileName: summaryFileName(conversation.title, new Date(), format === 'pdf' ? 'pdf' : 'doc'),
+      const file = await workspace.exportConversationSummary(readySummary, format);
+      if (!file) return;
+      await saveSummaryFile({
+        fileName: summaryFileName(conversation.title, new Date(), format),
         title: readySummary.primaryTopic,
-        html: summaryExportHtml(exportInput),
-        format,
+        bytes: file.bytes,
+        mimeType: file.contentType,
       });
-      if (format === 'pdf' && Platform.OS === 'web') setNotice('pdfWeb');
     } catch {
       setNotice('shareFailed');
     } finally {
@@ -216,22 +224,6 @@ export function SummarySheet({
               <Text key={`line-${index}`} selectable style={styles.prose}>{line}</Text>
             ))}
           </View>
-          {decisions.length ? (
-            <View style={styles.list}>
-              <Text style={styles.listTitle}>{t('chat.summaryDecisions')}</Text>
-              {decisions.map((text, index) => (
-                <Text key={`decision-${index}`} selectable style={styles.listItem}>• {text}</Text>
-              ))}
-            </View>
-          ) : null}
-          {todos.length ? (
-            <View style={styles.list}>
-              <Text style={styles.listTitle}>{t('chat.summaryTodo')}</Text>
-              {todos.map((text, index) => (
-                <Text key={`todo-${index}`} selectable style={styles.listItem}>• {text}</Text>
-              ))}
-            </View>
-          ) : null}
         </View>
       ) : generating ? (
         <View accessibilityLiveRegion="polite" style={styles.stateRow}>
@@ -290,14 +282,14 @@ export function SummarySheet({
           disabled={!readySummary}
           icon="document-outline"
           label={t('chat.summaryWord')}
-          loading={exporting === 'word'}
-          onPress={() => void download('word')}
+          loading={exporting === 'docx'}
+          onPress={() => void download('docx')}
           tone="light"
         />
       </View>
       {notice ? (
         <Text accessibilityLiveRegion="polite" style={styles.hint}>
-          {notice === 'copied' ? t('chat.summaryCopied') : notice === 'pdfWeb' ? t('chat.summaryPdfWebHint') : t('chat.summaryShareFailed')}
+          {notice === 'copied' ? t('chat.summaryCopied') : t('chat.summaryShareFailed')}
         </Text>
       ) : null}
       <ActionError message={workspace.actionError} />
@@ -419,9 +411,6 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   topic: { color: colors.ink, fontSize: 14, fontWeight: '800', lineHeight: 20 },
   prose: { color: colors.ink, fontSize: 13, lineHeight: 20 },
   lines: { gap: 2, paddingTop: spacing.xs },
-  list: { gap: 2, paddingTop: spacing.xs },
-  listTitle: { color: colors.inkMuted, fontSize: 11, fontWeight: '800', lineHeight: 16 },
-  listItem: { color: colors.ink, fontSize: 13, lineHeight: 20 },
   stateRow: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   state: { gap: spacing.xs },
   stateText: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },

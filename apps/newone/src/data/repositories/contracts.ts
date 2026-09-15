@@ -811,6 +811,20 @@ export interface CommandRepository {
     note?: string | null;
     idempotencyKey: string;
   }): Promise<{ correctionId: string; decision: 'approved' | 'rejected' | 'changes_requested'; reviewedAt: string }>;
+  /**
+   * The reader's own finished summary as a PDF (default) or Word file, rendered
+   * by the service so the browser and the phones hand out the same page; the
+   * bytes go straight to a download or the share sheet.
+   */
+  exportConversationSummary(input: {
+    organizationId: string;
+    conversationId: string;
+    summaryId: string;
+    format: 'pdf' | 'docx';
+    /** IANA zone of this device, so the header's hours read right. */
+    timeZone: string;
+    locale: 'en' | 'es' | 'ko';
+  }): Promise<{ bytes: Uint8Array; contentType: string }>;
   requestConversationSummary(input: RequestSummaryInput): Promise<{
     summaryId: string;
     versionNumber: number;

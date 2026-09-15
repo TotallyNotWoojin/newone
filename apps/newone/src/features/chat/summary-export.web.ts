@@ -1,7 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
-import * as Print from 'expo-print';
 
-import type { SummaryDocumentInput, SummaryShareInput, SummaryShareOutcome } from '@/features/chat/summary-export';
+import type { SummaryFileInput, SummaryShareInput, SummaryShareOutcome } from '@/features/chat/summary-export';
 
 /**
  * Browsers with the Web Share API get the system share sheet; everything else
@@ -25,17 +24,12 @@ export async function shareSummary({ title, text }: SummaryShareInput): Promise<
 }
 
 /**
- * A downloadable copy of the summary (owner's father, Sep 14 2026). Word is a
- * real download: the HTML saved as a .doc, which Word opens as a document.
- * PDF goes through the browser's print dialog, whose "Save as PDF" is the one
- * PDF path that renders Korean without shipping a font; the sheet says so.
+ * The finished file (rendered by the service) goes straight to the browser's
+ * downloads: no print window, no "Save as PDF" (owner's father, Sep 14 2026:
+ * "there's no place to download it").
  */
-export async function exportSummaryDocument({ fileName, html, format }: SummaryDocumentInput): Promise<SummaryShareOutcome> {
-  if (format === 'pdf') {
-    await Print.printAsync({ html });
-    return 'shared';
-  }
-  const blob = new Blob(['﻿', html], { type: 'application/msword' });
+export async function saveSummaryFile({ fileName, bytes, mimeType }: SummaryFileInput): Promise<SummaryShareOutcome> {
+  const blob = new Blob([bytes as BlobPart], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -45,5 +39,5 @@ export async function exportSummaryDocument({ fileName, html, format }: SummaryD
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return 'shared';
+  return 'saved';
 }

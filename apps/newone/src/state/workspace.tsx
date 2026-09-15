@@ -221,6 +221,11 @@ interface WorkspaceState {
     conversationId: string,
     range: { kind: SummaryScopeKind; subject?: string | null },
   ) => Promise<boolean>;
+  /** The reader's finished summary as a PDF or Word file from the service; null when it could not be prepared. */
+  exportConversationSummary: (
+    summary: ConversationSummary,
+    format: 'pdf' | 'docx',
+  ) => Promise<{ bytes: Uint8Array; contentType: string } | null>;
   correctConversationSummary: (
     summary: ConversationSummary,
     primaryTopic: string,
@@ -2355,6 +2360,23 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     await refresh();
     return true;
   }, [executeImmediate, refresh, repositories.commands]);
+
+  const exportConversationSummary = useCallback(async (
+    summary: ConversationSummary,
+    format: 'pdf' | 'docx',
+  ) => {
+    if (!snapshot) return null;
+    const locale = snapshot.currentUser.preferredLanguage;
+    return await executeImmediate(`summary-export:${summary.id}`, () =>
+      repositories.commands.exportConversationSummary({
+        organizationId: snapshot.organizationId,
+        conversationId: summary.conversationId,
+        summaryId: summary.id,
+        format,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        locale: locale === 'es' || locale === 'ko' ? locale : 'en',
+      }));
+  }, [executeImmediate, repositories.commands, snapshot]);
 
   const requestConversationSummary = useCallback(async (
     conversationId: string,
@@ -6288,6 +6310,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       proposeTranslationCorrection,
       reviewTranslationCorrection,
       requestConversationSummary,
+      exportConversationSummary,
       correctConversationSummary,
       reviewConversationSummary,
       reportAiOutputError,
@@ -6481,6 +6504,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       reportGroup,
       reportMember,
       requestConversationSummary,
+      exportConversationSummary,
       requestConversationJoin,
       requestTranslation,
       retryAttachmentUpload,

@@ -958,6 +958,9 @@ async function parseAuditExport(value: unknown): Promise<AuditExportReceipt> {
   };
 }
 
+// A summary is a few pages at most; a PDF with a subset Korean font stays under a megabyte or two.
+const SUMMARY_DOCUMENT_MAX_BYTES = 8_000_000;
+
 export class BffCommandRepository implements CommandRepository {
   constructor(private readonly context: RepositoryContext) {}
 
@@ -977,6 +980,73 @@ export class BffCommandRepository implements CommandRepository {
       },
     });
     return await parseAuditExport(dataValue(payload));
+  }
+
+  /** The authenticated transport behind request(): the same session, CSRF and edge headers, the raw Response back. */
+  private async fetchRaw(
+    path: string,
+    input: {
+      organizationId: string;
+      idempotencyKey?: string;
+      body?: Record<string, unknown>;
+      method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+      accept?: string;
+      timeoutMs?: number;
+    },
+  ): Promise<Response> {
+    if (!publicRuntimeConfig.apiUrl) {
+      throw new RepositoryError(
+        'The Gist command service is not configured in this build.',
+        'service_unconfigured',
+        false,
+      );
+    }
+
+    const cookieSession = usesCookieSession();
+    const session = await this.context.getSession();
+    if (!cookieSession && !session?.access_token) {
+      throw new RepositoryError('Sign in again to continue.', 'authentication_required', false);
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 15_000);
+    try {
+      const csrfToken = cookieSession ? getWebCsrfToken() : null;
+      if (cookieSession && !csrfToken) {
+        throw new RepositoryError('Your secure web session needs to be refreshed.', 'csrf_required', false);
+      }
+      const url = apiUrlFor(path as `/${string}`);
+      if (!url) {
+        throw new RepositoryError('The Gist command service is not configured.', 'service_unconfigured', false);
+      }
+      const edgeHeaders = nativeEdgeRequestHeaders(session?.access_token);
+      if (!edgeHeaders) {
+        throw new RepositoryError('The native command service is not configured.', 'service_unconfigured', false);
+      }
+      return await fetch(url, {
+        method: input.method ?? 'POST',
+        credentials: cookieSession ? 'include' : 'omit',
+        cache: 'no-store',
+        headers: {
+          Accept: input.accept ?? 'application/json',
+          'Content-Type': 'application/json',
+          ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
+          ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          ...edgeHeaders,
+        },
+        body: JSON.stringify({ organizationId: input.organizationId, ...input.body }),
+        signal: controller.signal,
+      });
+    } catch (requestError) {
+      if (requestError instanceof RepositoryError) throw requestError;
+      throw new RepositoryError(
+        'Gist cannot reach the command service. Your action remains queued.',
+        'network_unavailable',
+        true,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private async request(
@@ -2071,6 +2141,52 @@ export class BffCommandRepository implements CommandRepository {
       correctionId: input.correctionId,
       decision: input.decision,
       reviewedAt,
+    };
+  }
+
+  async exportConversationSummary(
+    input: Parameters<CommandRepository['exportConversationSummary']>[0],
+  ) {
+    const response = await this.fetchRaw(
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/summaries/${encodeURIComponent(input.summaryId)}/export`,
+      {
+        organizationId: input.organizationId,
+        body: { format: input.format, timeZone: input.timeZone, locale: input.locale },
+        accept: input.format === 'pdf'
+          ? 'application/pdf'
+          : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      },
+    );
+    if (!response.ok) {
+      let code = `http_${response.status}`;
+      let correlationId: string | undefined;
+      try {
+        const problem = (objectValue(JSON.parse(await response.text())) as ErrorPayload).error;
+        if (problem?.code) code = problem.code;
+        correlationId = problem?.correlationId;
+      } catch {
+        // A non-JSON failure keeps the status code as its name.
+      }
+      throw new RepositoryError(
+        'The summary file could not be prepared.',
+        code,
+        response.status === 408 || response.status === 429 || response.status >= 500,
+        correlationId,
+        response.status,
+      );
+    }
+    const declaredLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > SUMMARY_DOCUMENT_MAX_BYTES) {
+      throw new RepositoryError('The summary file is larger than expected.', 'response_too_large', false);
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > SUMMARY_DOCUMENT_MAX_BYTES) {
+      throw new RepositoryError('The summary file is larger than expected.', 'response_too_large', false);
+    }
+    return {
+      bytes,
+      contentType: response.headers.get('content-type')?.split(';')[0]?.trim()
+        || (input.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     };
   }
 

@@ -179,6 +179,8 @@ export function edgeFunctionForPath(path) {
   if (
     READ_PATHS.has(path)
     || /^\/v2\/conversations\/[0-9a-f-]{36}\/(?:messages|media)\/query$/i.test(path)
+    // A summary as a PDF or Word file is a read of the reader's own recap.
+    || /^\/v2\/conversations\/[0-9a-f-]{36}\/summaries\/[0-9a-f-]{36}\/export$/i.test(path)
   ) return 'newone-read';
   return 'newone-api';
 }

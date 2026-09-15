@@ -5,7 +5,7 @@ import {
   latestSummary,
   stripSummarySourceTokens,
   summaryCoverageDates,
-  summaryExportHtml,
+  summaryCoversLabel,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
@@ -73,24 +73,17 @@ describe('summary text never shows machinery', () => {
     expect(stripSummarySourceTokens('First line s0001.\n\n\n\nSecond [sources: s0002] line.')).toBe('First line.\n\nSecond line.');
   });
 
-  test('export text carries the title, one metadata line, clean prose, and the lists when they have entries', () => {
+  test('export text carries the title, one metadata line, and clean lines; nothing else', () => {
     const text = summaryExportText({
       title: 'Weekend plans (s0001)',
-      body: 'You asked about Saturday [sources:s0001]. Ana said yes.',
+      body: '1. Ana: Saturday plans asked [sources:s0001]\n2. Kyle: yes to Saturday',
       conversationTitle: 'Ana Torres',
       scope: 'Last 7 days · 143 messages · about the trip',
-      decisions: ['Meet at noon (s0002)', ''],
-      todos: ['Book the cabin · Ana', 's0003'],
-      headings: { decisions: 'Decisions', todo: 'To-do' },
     });
     expect(text).toBe(
-      'Weekend plans\nAna Torres · Last 7 days · 143 messages · about the trip\n\nYou asked about Saturday. Ana said yes.\n'
-      + '\nDecisions\n• Meet at noon\n\nTo-do\n• Book the cabin · Ana\n',
+      'Weekend plans\nAna Torres · Last 7 days · 143 messages · about the trip\n\n1. Ana: Saturday plans asked\n2. Kyle: yes to Saturday\n',
     );
     expect(summaryExportText({ title: 'T', body: 'B', conversationTitle: 'C', scope: null })).toBe('T\nC\n\nB\n');
-    expect(summaryExportText({
-      title: 'T', body: 'B', conversationTitle: 'C', scope: null, decisions: [], todos: ['s0001'], headings: { decisions: 'D', todo: 'X' },
-    })).toBe('T\nC\n\nB\n');
     expect(text).not.toMatch(/\bs0\d{3}\b/);
   });
 
@@ -101,21 +94,22 @@ describe('summary text never shows machinery', () => {
     expect(summaryTodoText({ title: '', sourceMessageIds: [] })).toBe('');
   });
 
-  test('the header carries the days covered and the participants, in text and in the HTML document', () => {
-    const input = {
-      title: 'Weekend plans', body: '1. Ana: asked about Saturday.\n2. Kyle: said yes.', conversationTitle: 'Ana Torres',
-      scope: 'Last 7 days · 2 messages', covers: 'Sep 8, 2026 – Sep 14, 2026', participants: 'Participants: Kyle, Ana',
-      todos: ['Ana: Book the cabin'], headings: { decisions: 'Decisions', todo: 'To-do' },
-    };
-    expect(summaryExportText(input)).toBe(
-      'Weekend plans\nAna Torres · Last 7 days · 2 messages\nSep 8, 2026 – Sep 14, 2026\nParticipants: Kyle, Ana\n\n1. Ana: asked about Saturday.\n2. Kyle: said yes.\n\nTo-do\n• Ana: Book the cabin\n',
+  test('the header carries the date and hours covered and the participants', () => {
+    expect(summaryExportText({
+      title: 'Weekend plans', body: '1. Ana: Saturday plans asked\n2. Kyle: yes to Saturday', conversationTitle: 'Ana Torres',
+      scope: 'Last 7 days · 2 messages', covers: 'Sep 14, 2026 · 2:49 PM – 3:44 PM', participants: 'Participants: Kyle, Ana',
+    })).toBe(
+      'Weekend plans\nAna Torres · Last 7 days · 2 messages\nSep 14, 2026 · 2:49 PM – 3:44 PM\nParticipants: Kyle, Ana\n\n1. Ana: Saturday plans asked\n2. Kyle: yes to Saturday\n',
     );
-    const html = summaryExportHtml(input);
-    expect(html).toContain('<h1>Weekend plans</h1>');
-    expect(html).toContain('<p class="meta">Sep 8, 2026 – Sep 14, 2026</p>');
-    expect(html).toContain('<p>1. Ana: asked about Saturday.</p><p>2. Kyle: said yes.</p>');
-    expect(html).toContain('<li>Ana: Book the cabin</li>');
-    expect(summaryExportHtml({ ...input, title: '<b>x</b>' })).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+
+  test('the covered span shows one date with both hours, or two dated ends across days, and nothing without both ends', () => {
+    const from = new Date(2026, 8, 14, 14, 49);
+    const until = new Date(2026, 8, 14, 15, 44);
+    expect(summaryCoversLabel(from, until, 'en-US')).toBe('Sep 14, 2026 · 2:49 PM – 3:44 PM');
+    expect(summaryCoversLabel(new Date(2026, 8, 10, 9, 5), until, 'en-US')).toBe('Sep 10, 2026 9:05 AM – Sep 14, 2026 3:44 PM');
+    expect(summaryCoversLabel(null, until, 'en-US')).toBeNull();
+    expect(summaryCoversLabel(from, new Date('nonsense'), 'en-US')).toBeNull();
   });
 
   test('a range reaches back from the day it was asked for; everything has no dates', () => {

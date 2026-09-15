@@ -81,14 +81,15 @@ declare module '@/features/chat/summary-export' {
     title: string;
     text: string;
   }
-  export type SummaryShareOutcome = 'shared' | 'dismissed' | 'copied';
+  export type SummaryShareOutcome = 'shared' | 'dismissed' | 'copied' | 'saved';
   export function shareSummary(input: SummaryShareInput): Promise<SummaryShareOutcome>;
-  export interface SummaryDocumentInput {
-    /** Named for the format already: "… .pdf" or "… .doc". */
+  /** A finished PDF or Word file from the service, ready to save. */
+  export interface SummaryFileInput {
     fileName: string;
     title: string;
-    html: string;
-    format: 'pdf' | 'word';
+    bytes: Uint8Array;
+    mimeType: string;
   }
-  export function exportSummaryDocument(input: SummaryDocumentInput): Promise<SummaryShareOutcome>;
+  /** Browser: straight into downloads. Phones: the share sheet, where Files and Drive save it. */
+  export function saveSummaryFile(input: SummaryFileInput): Promise<SummaryShareOutcome>;
 }

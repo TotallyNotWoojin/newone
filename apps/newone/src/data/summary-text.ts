@@ -124,64 +124,32 @@ export interface SummaryExportInput {
   body: string;
   conversationTitle: string;
   scope: string | null;
-  /** "Sep 8 – Sep 14, 2026", already in the reader's language. */
+  /** "Sep 14, 2026 · 2:49 PM – 3:44 PM", already in the reader's language. */
   covers?: string | null;
   /** "Participants: Kyle, Marisol", already labelled. */
   participants?: string | null;
-  decisions?: string[];
-  todos?: string[];
-  headings?: { decisions: string; todo: string };
 }
 
+/** The recap as plain text for the clipboard: title, chat, dates, people, then the lines. */
 export function summaryExportText(input: SummaryExportInput): string {
   const heading = stripSummarySourceTokens(input.title);
   const meta = [input.conversationTitle.trim(), input.scope?.trim()].filter(Boolean).join(' · ');
   const header = [heading, meta, input.covers?.trim(), input.participants?.trim()].filter(Boolean) as string[];
   const lines = [...header, '', stripSummarySourceTokens(input.body)].filter((line, index) => line || index === header.length);
-  const list = (title: string | undefined, items: string[] | undefined) => {
-    const clean = (items ?? []).map(stripSummarySourceTokens).filter(Boolean);
-    if (!clean.length) return;
-    lines.push('', title ?? '', ...clean.map((item) => `• ${item}`));
-  };
-  list(input.headings?.decisions, input.decisions);
-  list(input.headings?.todo, input.todos);
   return lines.join('\n') + '\n';
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] as string
-  ));
-}
-
 /**
- * The same summary as a small self-contained HTML document, which is what the
- * PDF (printed by the OS) and the Word file (an HTML-in-.doc, which Word opens
- * natively) are made from. Fonts fall through to whatever the system has for
- * Korean, Spanish and English; nothing is embedded.
+ * "Sep 14, 2026 · 2:49 PM – 3:44 PM" when the messages fall on one day, or
+ * two dated ends when they span days: the date and hours the recap covers,
+ * as the owner's father asked (Sep 14 2026). Null when either end is unknown.
  */
-export function summaryExportHtml(input: SummaryExportInput): string {
-  const heading = stripSummarySourceTokens(input.title);
-  const meta = [input.conversationTitle.trim(), input.scope?.trim()].filter(Boolean).join(' · ');
-  const bodyLines = stripSummarySourceTokens(input.body).split('\n').map((line) => line.trim()).filter(Boolean);
-  const list = (title: string | undefined, items: string[] | undefined) => {
-    const clean = (items ?? []).map(stripSummarySourceTokens).filter(Boolean);
-    if (!clean.length) return '';
-    return `<h2>${escapeHtml(title ?? '')}</h2><ul>${clean.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
-  };
-  return '<!doctype html><html><head><meta charset="utf-8"><title>' + escapeHtml(heading) + '</title>'
-    + '<style>body{font-family:-apple-system,"Segoe UI",Roboto,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;color:#111;margin:32px;line-height:1.5}'
-    + 'h1{font-size:20px;margin:0 0 6px}h2{font-size:13px;margin:18px 0 4px;color:#555;text-transform:uppercase;letter-spacing:.04em}'
-    + '.meta{color:#555;font-size:12px;margin:0 0 2px}p{margin:0 0 6px;font-size:14px}ul{margin:0;padding-left:18px}li{font-size:14px;margin:2px 0}</style></head><body>'
-    + `<h1>${escapeHtml(heading)}</h1>`
-    + (meta ? `<p class="meta">${escapeHtml(meta)}</p>` : '')
-    + (input.covers?.trim() ? `<p class="meta">${escapeHtml(input.covers.trim())}</p>` : '')
-    + (input.participants?.trim() ? `<p class="meta">${escapeHtml(input.participants.trim())}</p>` : '')
-    + '<div style="height:12px"></div>'
-    + bodyLines.map((line) => `<p>${escapeHtml(line)}</p>`).join('')
-    + list(input.headings?.decisions, input.decisions)
-    + list(input.headings?.todo, input.todos)
-    + '</body></html>';
+export function summaryCoversLabel(from: Date | null, until: Date | null, locale: string): string | null {
+  if (!from || !until || Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) return null;
+  const day = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  if (day.format(from) === day.format(until)) return `${day.format(from)} · ${clock.format(from)} – ${clock.format(until)}`;
+  return `${day.format(from)} ${clock.format(from)} – ${day.format(until)} ${clock.format(until)}`;
 }
 
 function localDate(date: Date): string {
