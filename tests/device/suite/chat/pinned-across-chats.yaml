@@ -13,14 +13,30 @@ appId: com.totallynotwoojin.gist
     timeout: 15000
 # Six filter chips plus Pinned no longer fit a phone width (Sep 14 2026); the
 # row scrolls, so bring Pinned in from the right when it is off screen.
+# The chip row scrolls sideways and "Open pinned messages" sits at its end.
+# Start the swipe on a chip that is on screen at every width: "Bookmarked" is
+# the third chip; "Groups" is already cut off on an iPhone
+# (run-2026-09-15T03-50-11 chat-10c), so a swipe "from Groups" never begins.
 - runFlow:
     when:
       notVisible: "Open pinned messages"
     commands:
       - swipe:
           from:
-            text: "Groups"
+            text: "Bookmarked"
           direction: LEFT
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      notVisible: "Open pinned messages"
+    commands:
+      - swipe:
+          from:
+            text: "(DMs|Groups|Announcements)"
+          direction: LEFT
+      - waitForAnimationToEnd:
+          timeout: 2000
 - tapOn: "Open pinned messages"
 - extendedWaitUntil:
     visible: "Pinned messages"
