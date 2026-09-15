@@ -675,22 +675,26 @@ function summaryDraft(
     const base = evidence({ text: row.text, sourceRefs: row.sourceRefs }, limits.actionItem);
     return {
       ...base,
-      owner: row.owner === null ? null : restoreSummaryString(row.owner, 1, 240, tokens, allowIntroduced),
-      due: row.due === null ? null : restoreSummaryString(row.due, 1, 240, tokens, allowIntroduced),
+      // An empty string is the model's way of saying "nobody" or "no date"
+      // as often as null is; it was read as a one-character-minimum failure
+      // and sank the whole recap with a bare bad_request (Sep 14 2026).
+      owner: blankToNull(row.owner) === null ? null : restoreSummaryString(row.owner, 1, 240, tokens, allowIntroduced, 'owner'),
+      due: blankToNull(row.due) === null ? null : restoreSummaryString(row.due, 1, 240, tokens, allowIntroduced, 'due'),
     };
   }).filter((entry) => entry.text.length > 0);
   // An item whose text was nothing but reference codes says nothing on its
   // own; the summary prose must still say something.
   const withText = (entry: SummaryEvidence) => entry.text.length > 0;
   const summary = cleanSummaryText(
-    restoreSummaryString(output.summary, 1, limits.summary, tokens, allowIntroduced),
+    restoreSummaryString(output.summary, 1, limits.summary, tokens, allowIntroduced, 'summary'),
     allowedRefs,
   );
   if (summary.length === 0) {
     throw new ApiError(422, 'ai_output_needs_review', 'summary_prose_empty');
   }
   let primaryTopic = cleanSummaryText(
-    restoreSummaryString(output.primaryTopic, 1, 240, tokens, allowIntroduced),
+    // A title is trimmed to its limit rather than failing the recap.
+    restoreSummaryString(clipCharacters(output.primaryTopic, 240), 1, 240, tokens, allowIntroduced, 'topic'),
     allowedRefs,
   );
   // A topic left with no letter or digit (the model wrote only placeholders
@@ -775,14 +779,30 @@ function sourceReferences(
   return refs;
 }
 
+function blankToNull(value: unknown): unknown {
+  return typeof value === 'string' && value.trim() === '' ? null : value;
+}
+
+function clipCharacters(value: unknown, max: number): unknown {
+  return typeof value === 'string' ? Array.from(value.trim()).slice(0, max).join('') : value;
+}
+
 function restoreSummaryString(
   value: unknown,
   min: number,
   max: number,
   tokens: Array<{ placeholder: string; value: string }>,
   allowIntroduced = false,
+  field = 'text',
 ): string {
-  let text = normalizedString(value, { min, max }) as string;
+  let text: string;
+  try {
+    text = normalizedString(value, { min, max }) as string;
+  } catch {
+    // Named, so the failure says which field the model got wrong instead of
+    // a bare bad_request that nothing downstream could explain.
+    throw new ApiError(422, 'ai_output_needs_review', `summary_${field}_length`);
+  }
   const allowed = new Map(tokens.map((token) => [token.placeholder, token.value]));
   // Each rejection names its rule (never the content) so the worker log
   // says why a draft needed review.
