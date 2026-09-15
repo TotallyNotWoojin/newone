@@ -653,6 +653,9 @@ function attachmentObjectNotReady(error: unknown) {
   return code === 'attachment_not_ready' || code === 'http_409';
 }
 
+/** Waits between finalize attempts while storage has not yet shown the object. */
+const ATTACHMENT_FINALIZE_RETRY_DELAYS_MS = [500, 1_000, 2_000];
+
 const WORKSPACE_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function conversationAvatarAttachmentId(
@@ -900,6 +903,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const retriedAfterRefreshRef = useRef(false);
   const attachmentUploadsRef = useRef(new Map<string, AttachmentUploadOperation>());
   const attachmentCancellationsRef = useRef(new Map<string, AttachmentCancellation>());
+  // Uploads leave one at a time; see performAttachmentUpload.
+  const attachmentUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const attachmentScanTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const conversationAvatarCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const conversationAvatarTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -3458,17 +3463,29 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [connectivity, refresh, synchronizeMessageOutbox, t]);
 
-  const performAttachmentUpload = useCallback(async (operation: AttachmentUploadOperation) => {
+  const runAttachmentUpload = useCallback(async (operation: AttachmentUploadOperation) => {
     const complete = async (grant: AttachmentUploadGrant) => {
-      await repositories.commands.completeAttachmentUpload({
-        organizationId: operation.organizationId,
-        attachmentId: grant.attachmentId,
-        bucket: grant.bucket,
-        path: grant.path,
-        byteSize: operation.prepared.byteSize,
-        sha256Hex: operation.prepared.sha256Hex,
-        idempotencyKey: operation.completionIdempotencyKey,
-      });
+      // Storage can answer "not ready" for a moment after the bytes landed;
+      // finalize asks again a few times before giving up.
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          await repositories.commands.completeAttachmentUpload({
+            organizationId: operation.organizationId,
+            attachmentId: grant.attachmentId,
+            bucket: grant.bucket,
+            path: grant.path,
+            byteSize: operation.prepared.byteSize,
+            sha256Hex: operation.prepared.sha256Hex,
+            idempotencyKey: operation.completionIdempotencyKey,
+          });
+          break;
+        } catch (completionError) {
+          if (!attachmentObjectNotReady(completionError) || attempt >= ATTACHMENT_FINALIZE_RETRY_DELAYS_MS.length) {
+            throw completionError;
+          }
+          await waitFor(ATTACHMENT_FINALIZE_RETRY_DELAYS_MS[attempt] as number);
+        }
+      }
       // The row is clean the moment finalize returns: the server marks a
       // consumer attachment clean itself (migration 20260904170100). The photo
       // used to sit in "scanning" while a 1 s, 2 s, 4 s... poll went to ask
@@ -3518,26 +3535,51 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         id: grant.attachmentId,
         status: 'quarantined',
       });
-      await uploadAttachment(
-        grant,
-        { uri: operation.prepared.uri, bytes: operation.prepared.bytes },
-        operation.prepared.mimeType,
-        {
-          signal: controller.signal,
-          onProgress: (progress) => {
-            operation.localAttachment.transfer = { state: 'uploading', progress };
-            patchLocalAttachment(operation.clientMessageId, {
-              transfer: { state: 'uploading', progress },
-            });
+      try {
+        await uploadAttachment(
+          grant,
+          { uri: operation.prepared.uri, bytes: operation.prepared.bytes },
+          operation.prepared.mimeType,
+          {
+            signal: controller.signal,
+            onProgress: (progress) => {
+              operation.localAttachment.transfer = { state: 'uploading', progress };
+              patchLocalAttachment(operation.clientMessageId, {
+                transfer: { state: 'uploading', progress },
+              });
+            },
           },
-        },
-      );
+        );
+      } catch (uploadError) {
+        // Storage refuses a second PUT to a path that already holds an object
+        // (x-upsert is off), which is how a retry learns that the first
+        // attempt did land even though the app never heard back. Finalize
+        // then checks size and hash, so nothing is taken on faith.
+        if (attachmentErrorCode(uploadError) !== 'upload_http_409') throw uploadError;
+      }
       operation.uploadMayHaveCommitted = true;
       await complete(grant);
     } finally {
       if (operation.controller === controller) operation.controller = null;
     }
   }, [markMessage, patchLocalAttachment, repositories.commands]);
+
+  // One upload at a time, in the order the files were sent. Two pictures sent
+  // together used to upload side by side, and on iOS one of the two native
+  // upload tasks never reported back: the bytes reached storage, finalize was
+  // never called, and the row stayed "pending" behind a blank bubble for good
+  // (simulator, Sep 15 2026 03:58Z). The message rows still appear at once;
+  // only the bytes wait their turn. An operation withdrawn while it waited
+  // (cancelled, conversation left, account switched) is skipped.
+  const performAttachmentUpload = useCallback((operation: AttachmentUploadOperation) => {
+    const run = attachmentUploadQueueRef.current.then(() => (
+      attachmentUploadsRef.current.get(operation.clientMessageId) === operation
+        ? runAttachmentUpload(operation)
+        : undefined
+    ));
+    attachmentUploadQueueRef.current = run.catch(() => undefined);
+    return run;
+  }, [runAttachmentUpload]);
 
   const handleAttachmentUploadFailure = useCallback(async (
     operation: AttachmentUploadOperation,

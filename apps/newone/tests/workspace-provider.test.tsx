@@ -136,8 +136,11 @@ jest.mock('@/i18n/provider', () => ({
   useI18n: () => ({ locale: 'en', t: mockTranslate }),
 }));
 
+// One fixed id by default; a test that needs two distinct messages in flight
+// gives this a counter.
+const mockCreateClientId = jest.fn<() => string>(() => '50000000-0000-4000-8000-000000000005');
 jest.mock('@/lib/client-id', () => ({
-  createClientId: () => '50000000-0000-4000-8000-000000000005',
+  createClientId: () => mockCreateClientId(),
 }));
 
 jest.mock('@/lib/supabase', () => ({
@@ -3051,6 +3054,132 @@ describe('authoritative workspace provider', () => {
     });
     expect(currentWorkspace().messages['conversation-a'].some(
       (message) => message.clientMessageId === cancelled.clientMessageId,
+    )).toBe(false);
+    await view.unmount();
+  });
+
+  test('two files sent together upload one after the other; the second waits for the first to finalize', async () => {
+    // Sep 15 2026: two pictures pasted and sent together uploaded side by
+    // side, and one native upload task never reported back, leaving a
+    // "pending" row behind a blank bubble. The rows still appear at once; the
+    // bytes go in order, one at a time.
+    const snapshot = richWorkspaceSnapshot();
+    snapshot.conversations = snapshot.conversations.map((item) => ({ ...item, avatarPath: null }));
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    mockCommand.mockImplementation(async (method: string, input: unknown) => controlledCommandResponse(method, input));
+    let ids = 0;
+    mockCreateClientId.mockImplementation(() => `50000000-0000-4000-8000-${String(ids += 1).padStart(12, '0')}`);
+    let releaseFirstUpload: () => void = () => undefined;
+    const firstUpload = new Promise<void>((resolve) => { releaseFirstUpload = resolve; });
+    mockUploadAttachment.mockImplementationOnce(() => firstUpload);
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://first.jpg', name: 'first.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        'two at once',
+      )).toBe(true);
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://second.jpg', name: 'second.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        '',
+      )).toBe(true);
+    });
+    const grants = () => mockCommand.mock.calls.filter(([method]) => method === 'createAttachmentUploadGrant');
+    const completions = () => mockCommand.mock.calls.filter(([method]) => method === 'completeAttachmentUpload');
+    const staged = () => currentWorkspace().messages['conversation-a'].filter(
+      (message) => message.isOwn && message.attachment && message.clientMessageId,
+    );
+    // Both bubbles are on screen at once, but only the first has a grant and
+    // an upload in flight; the second has not started.
+    expect(staged()).toHaveLength(2);
+    expect(staged()[0]?.originalText).toBe('two at once');
+    await waitFor(() => expect(mockUploadAttachment).toHaveBeenCalledTimes(1));
+    expect(grants()).toHaveLength(1);
+    expect(completions()).toHaveLength(0);
+
+    await act(async () => { releaseFirstUpload(); });
+    await waitFor(() => expect(completions()).toHaveLength(2));
+    expect(mockUploadAttachment).toHaveBeenCalledTimes(2);
+    expect(grants()).toHaveLength(2);
+    await waitFor(() => expect(staged().every((message) => message.attachment?.status === 'clean')).toBe(true));
+    mockCreateClientId.mockImplementation(() => '50000000-0000-4000-8000-000000000005');
+    await view.unmount();
+  });
+
+  test('finalize that finds the object not visible yet asks again on its own, and the photo ends clean', async () => {
+    const snapshot = richWorkspaceSnapshot();
+    snapshot.conversations = snapshot.conversations.map((item) => ({ ...item, avatarPath: null }));
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    let completionCalls = 0;
+    mockCommand.mockImplementation(async (method: string, input: unknown) => {
+      if (method === 'completeAttachmentUpload') {
+        completionCalls += 1;
+        if (completionCalls === 1) {
+          throw new RepositoryError('The object is not visible yet.', 'attachment_not_ready', true);
+        }
+      }
+      return controlledCommandResponse(method, input);
+    });
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://late.jpg', name: 'late.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        'not ready yet',
+      )).toBe(true);
+    });
+    await waitFor(() => expect(completionCalls).toBe(2), { timeout: 4_000 });
+    expect(mockUploadAttachment).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(currentWorkspace().messages['conversation-a'].find(
+      (message) => message.originalText === 'not ready yet',
+    )?.attachment?.status).toBe('clean'));
+    expect(currentWorkspace().messages['conversation-a'].some(
+      (message) => message.attachment?.transfer?.state === 'failed',
+    )).toBe(false);
+    await view.unmount();
+  });
+
+  test('an upload refused because the object already exists goes on to finalize instead of failing', async () => {
+    const snapshot = richWorkspaceSnapshot();
+    snapshot.conversations = snapshot.conversations.map((item) => ({ ...item, avatarPath: null }));
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    mockCommand.mockImplementation(async (method: string, input: unknown) => controlledCommandResponse(method, input));
+    mockUploadAttachment.mockImplementationOnce(async () => {
+      throw new RepositoryError('The attachment upload was rejected.', 'upload_http_409', false);
+    });
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://already.jpg', name: 'already.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        'already there',
+      )).toBe(true);
+    });
+    await waitFor(() => expect(mockCommand.mock.calls.filter(([method]) => method === 'completeAttachmentUpload')).toHaveLength(1));
+    await waitFor(() => expect(currentWorkspace().messages['conversation-a'].find(
+      (message) => message.originalText === 'already there',
+    )?.attachment?.status).toBe('clean'));
+    expect(currentWorkspace().messages['conversation-a'].some(
+      (message) => message.attachment?.transfer?.state === 'failed',
     )).toBe(false);
     await view.unmount();
   });
