@@ -2191,7 +2191,6 @@ function Composer({
   // directly. Native platforms hand images over through the picker.
   useEffect(() => {
     if (Platform.OS !== 'web' || !onPickFiles || typeof document === 'undefined') return;
-    const input = inputRef.current as unknown as HTMLElement | null;
     // Any file, not only a picture: a dropped PDF or document goes into the
     // same attachment sheet as a photo and sends with Enter (owner's father,
     // Sep 14 2026). A dropped folder arrives as an empty, typeless entry and
@@ -2201,13 +2200,13 @@ function Composer({
     // Page-wide, not input-wide. The first version listened on the message
     // box only, so Cmd+V did nothing unless the cursor was blinking in it --
     // which is not where people are when they paste (owner report, Sep 14
-    // 2026, "still can't paste"). Another text field keeps its own paste;
-    // everything else on the page hands an image to the chat.
+    // 2026, "still can't paste"). A paste that carries files is taken from
+    // anywhere on the page, a focused text field included: no field here can
+    // hold a picture, and the sheet's caption box keeps focus while someone
+    // copies a second image elsewhere and comes back to paste it (owner, Sep
+    // 14 2026: "paste one, go copy another, paste another"). A text paste is
+    // left to whichever field has it.
     const onPaste = (event: ClipboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const inOtherField = Boolean(target && target !== input
-        && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable));
-      if (inOtherField) return;
       const files = droppable(event.clipboardData?.files);
       if (!files.length) return;
       event.preventDefault();

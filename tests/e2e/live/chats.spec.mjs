@@ -371,3 +371,45 @@ test('several files dropped together, then one more, all send with Enter as sepa
   await expect(send).toHaveCount(0, { timeout: 90_000 });
   for (const name of names) await expect(chats.getByText(name).first()).toBeVisible({ timeout: 45_000 });
 });
+
+test('a second picture pasted while the caption box has focus joins the first, and Enter sends both', async ({
+  chats,
+  liveWorkspace,
+}) => {
+  // "Paste one, go copy another, paste another" (owner, Sep 14 2026). The page
+  // listener used to step aside whenever a text field had focus, and after a
+  // caption is typed the caption box keeps focus while the second copy is
+  // made elsewhere -- so the second paste vanished. A real paste event with a
+  // real File, dispatched on whatever element has focus, as a browser does.
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  await expect(chats.getByTestId('composer-input')).toBeVisible();
+  const openImage = chats.getByLabel('Open image full screen');
+  const imagesBefore = await openImage.count();
+  const stamp = Date.now();
+  const paste = (name) => chats.evaluate((fileName) => {
+    // A 1x1 red PNG: real image bytes, so the upload path decodes it.
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], fileName, { type: 'image/png' }));
+    const target = document.activeElement ?? document.body;
+    target.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
+  }, name);
+
+  await paste(`shot-one-${stamp}.png`);
+  const send = chats.getByTestId('attachment-send');
+  await expect(send).toBeVisible({ timeout: 10_000 });
+  const caption = chats.getByLabel('Caption (optional)');
+  await caption.click();
+  await caption.fill('two pictures');
+  expect(await chats.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('Caption (optional)');
+
+  await paste(`shot-two-${stamp}.png`);
+  await expect(send).toHaveAccessibleName('Send 2 files');
+  await expect(caption).toHaveValue('two pictures');
+
+  await chats.keyboard.press('Enter');
+  await expect(send).toHaveCount(0, { timeout: 90_000 });
+  await expect(openImage).toHaveCount(imagesBefore + 2, { timeout: 60_000 });
+  await expect(chats.getByText('two pictures').first()).toBeVisible();
+});
