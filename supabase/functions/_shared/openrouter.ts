@@ -719,10 +719,10 @@ function summaryDraft(
   // An item whose text was nothing but reference codes says nothing on its
   // own; the summary prose must still say something.
   const withText = (entry: SummaryEvidence) => entry.text.length > 0;
-  const summary = splitNumberedItems(cleanSummaryText(
+  const summary = trimLineTails(splitNumberedItems(cleanSummaryText(
     restoreSummaryString(output.summary, 1, limits.summary, tokens, allowIntroduced, 'summary'),
     allowedRefs,
-  ));
+  )));
   if (summary.length === 0) {
     throw new ApiError(422, 'ai_output_needs_review', 'summary_prose_empty');
   }
@@ -832,6 +832,19 @@ export function splitNumberedItems(text: string): string {
   }
   parts.push(rest);
   return parts.join('\n');
+}
+
+/**
+ * A headline-style line ends without punctuation; the model sometimes closes
+ * one with a comma or semicolon where a sentence would have had a full stop
+ * (hosted smoke, Sep 15 2026: "...confirmed by Eli,"). Those go; a full stop,
+ * a question mark or a closing quote stays.
+ */
+export function trimLineTails(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/[\s,;:]+$/u, ''))
+    .join('\n');
 }
 
 function blankToNull(value: unknown): unknown {

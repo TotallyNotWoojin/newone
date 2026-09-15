@@ -76,3 +76,9 @@ Deno.test('the covered span reads as one date with both hours, or two dated ends
   assertEquals(safeTimeZone(42), 'UTC');
   assertEquals(safeTimeZone('a'.repeat(80)), 'UTC');
 });
+
+Deno.test('a recap line loses a trailing comma or semicolon but keeps a full stop', async () => {
+  const { trimLineTails } = await import('../_shared/openrouter.ts');
+  assertEquals(trimLineTails('1. Kyle: move the print run to Monday,\n2. Eli: bring the proofs;\n3. All: done.'), '1. Kyle: move the print run to Monday\n2. Eli: bring the proofs\n3. All: done.');
+  assertEquals(trimLineTails('1. Kyle: is Monday fine? '), '1. Kyle: is Monday fine?');
+});

@@ -780,7 +780,9 @@ async function loadSummaryExportDefault(
     .eq('conversation_id', input.conversationId)
     .eq('id', input.summaryId)
     .eq('requested_by_user_id', actor.user.id)
-    .in('status', ['ready_for_review', 'approved', 'corrected'])
+    // The row's own states: a finished recap is 'draft' (the app shows it as
+    // ready) or 'approved'; queued, processing, failed and stale never export.
+    .in('status', ['draft', 'approved'])
     .maybeSingle();
   if (summaryQuery.error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
   const summary = summaryQuery.data as {
