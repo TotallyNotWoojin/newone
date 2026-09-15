@@ -296,7 +296,10 @@ export function speakerLabels(messages: unknown[], requesterId: string): Map<str
     const senderId = typeof message.sender_user_id === 'string'
       ? message.sender_user_id.toLowerCase()
       : null;
-    if (!senderId || senderId === requesterId || labels.has(senderId)) continue;
+    // The reader is labelled like everyone else when their name is known;
+    // the recap's lines open with names, and "you" stayed only for a reader
+    // without one (owner's father, Sep 14 2026).
+    if (!senderId || labels.has(senderId)) continue;
     const candidates = [firstName(message.sender_display_name)];
     if (typeof message.sender_display_name === 'string') {
       const full = message.sender_display_name.normalize('NFC').trim()
@@ -305,6 +308,9 @@ export function speakerLabels(messages: unknown[], requesterId: string): Map<str
     }
     let label = candidates.find((candidate) => candidate && !used.has(candidate.toLowerCase())) ?? null;
     if (!label) {
+      // A reader without a usable name stays "you" rather than becoming a
+      // numbered participant in their own recap.
+      if (senderId === requesterId) continue;
       unnamed += 1;
       label = `participant ${unnamed}`;
     }

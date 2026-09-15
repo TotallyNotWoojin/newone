@@ -509,7 +509,8 @@ Deno.test('summary resolution labels senders by first name, keeps namesakes apar
   assertEquals(resolved.source.scopeKind, 'last_7_days');
   assertEquals(resolved.source.subject, 'the trip');
   assertEquals(resolved.source.sources.map((source) => source.speaker), [
-    'you', 'Diego', 'Ana', 'Ana Kim', '이지수', 'participant 1', 'Diego', 'participant 2',
+    // The requester carries a name here, so they are labelled like the others.
+    'Jordan', 'Diego', 'Ana', 'Ana Kim', '이지수', 'participant 1', 'Diego', 'participant 2',
   ]);
   // No names, no scope: the older resolver shape still works.
   const legacy = parseSummaryResolution({

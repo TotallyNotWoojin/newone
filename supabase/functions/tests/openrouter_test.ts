@@ -949,3 +949,14 @@ Deno.test('a refusal is terminal, a range over the cap never reaches the provide
   assertEquals(summarySubject(undefined), null);
   assertEquals(summarySubject('x'.repeat(250))?.length, 200);
 });
+
+Deno.test('a numbered recap that arrived on one line is split into one item per line', async () => {
+  const { splitNumberedItems } = await import('../_shared/openrouter.ts');
+  assertEquals(
+    splitNumberedItems('1. Ana: asked about Saturday. 2. Kyle: said yes at 8. 3. Ana: booked.'),
+    '1. Ana: asked about Saturday.\n2. Kyle: said yes at 8.\n3. Ana: booked.',
+  );
+  // Already on lines, or not a numbered list: untouched.
+  assertEquals(splitNumberedItems('1. Ana: hi.\n2. Kyle: hi.'), '1. Ana: hi.\n2. Kyle: hi.');
+  assertEquals(splitNumberedItems('Ana said 2. Kyle said 3.'), 'Ana said 2. Kyle said 3.');
+});

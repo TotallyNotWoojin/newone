@@ -685,10 +685,10 @@ function summaryDraft(
   // An item whose text was nothing but reference codes says nothing on its
   // own; the summary prose must still say something.
   const withText = (entry: SummaryEvidence) => entry.text.length > 0;
-  const summary = cleanSummaryText(
+  const summary = splitNumberedItems(cleanSummaryText(
     restoreSummaryString(output.summary, 1, limits.summary, tokens, allowIntroduced, 'summary'),
     allowedRefs,
-  );
+  ));
   if (summary.length === 0) {
     throw new ApiError(422, 'ai_output_needs_review', 'summary_prose_empty');
   }
@@ -777,6 +777,27 @@ function sourceReferences(
     throw new ApiError(503, 'provider_unavailable', 'provider_summary_source_refs_duplicate', 5);
   }
   return refs;
+}
+
+/**
+ * A recap asked for as numbered lines sometimes arrives as one line -- "1. Ana:
+ * ... 2. Kyle: ..." -- because the model kept the items but not the line
+ * breaks (hosted summary smoke, Sep 14 2026). Each item goes on its own line.
+ * The walk only splits at the *next* item number in sequence, so a number
+ * inside a sentence ("at 8. Then") is left alone.
+ */
+export function splitNumberedItems(text: string): string {
+  if (text.includes('\n') || !/^\s*1[.)]\s/.test(text)) return text;
+  const parts: string[] = [];
+  let rest = text;
+  for (let next = 2; next < 100; next += 1) {
+    const match = new RegExp(`\\s+(?=${next}[.)]\\s+\\S)`).exec(rest);
+    if (!match) break;
+    parts.push(rest.slice(0, match.index));
+    rest = rest.slice(match.index + match[0].length);
+  }
+  parts.push(rest);
+  return parts.join('\n');
 }
 
 function blankToNull(value: unknown): unknown {

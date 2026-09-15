@@ -133,6 +133,7 @@ if (monthResult.final.scope_kind !== 'last_30_days') fail('30-day row did not ke
 const monthLines = String(monthResult.final.summary_body ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
 console.log('30-day recap lines:', JSON.stringify(monthLines.slice(0, 4)));
 if (monthLines.length < 2 || !/^1[.)]\s/.test(monthLines[0] ?? '')) fail('the recap should be numbered lines, one per line', monthResult.final);
-if (!/^\d+[.)]\s+(Ana|Eli)\b/.test(monthLines[0] ?? '')) fail('each recap line should open with the speaker\'s name', monthResult.final);
+// The smoke accounts are named "Smoke ana" and "Smoke eli", so their first name is Smoke.
+if (!/^\d+[.)]\s+(Ana|Eli|Smoke)\b/.test(monthLines[0] ?? '')) fail('each recap line should open with the speaker\'s name', monthResult.final);
 if (/\byou\b/i.test(JSON.stringify(monthResult.final.action_items ?? []))) fail('to-do owners should be names, never "you"', monthResult.final);
 console.log(`PASS (last 30 days, numbered, name-first): ${monthResult.final.status} in ≤${monthResult.seconds}s`);
