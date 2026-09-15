@@ -744,12 +744,17 @@ export function summaryCoversLabel(
 ): string | null {
   if (!from || !until) return null;
   const languageTag = locale === 'ko' ? 'ko-KR' : locale === 'es' ? 'es-ES' : 'en-US';
-  const day = new Intl.DateTimeFormat(languageTag, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
-  const clock = new Intl.DateTimeFormat(languageTag, { hour: 'numeric', minute: '2-digit', timeZone });
-  if (day.format(from) === day.format(until)) {
-    return `${day.format(from)} · ${clock.format(from)} – ${clock.format(until)}`;
+  const dayFormat = new Intl.DateTimeFormat(languageTag, { year: 'numeric', month: 'short', day: 'numeric', timeZone });
+  const clockFormat = new Intl.DateTimeFormat(languageTag, { hour: 'numeric', minute: '2-digit', timeZone });
+  // ICU puts a narrow no-break space before AM/PM; neither PDF face has that
+  // glyph, so "10:25 PM" printed as "10:25PM" (smoke, Sep 15 2026).
+  const plain = (value: string) => value.replace(/[\u202f\u00a0]/g, ' ');
+  const day = (value: Date) => plain(dayFormat.format(value));
+  const clock = (value: Date) => plain(clockFormat.format(value));
+  if (day(from) === day(until)) {
+    return `${day(from)} · ${clock(from)} – ${clock(until)}`;
   }
-  return `${day.format(from)} ${clock.format(from)} – ${day.format(until)} ${clock.format(until)}`;
+  return `${day(from)} ${clock(from)} – ${day(until)} ${clock(until)}`;
 }
 
 /** A zone the runtime knows, else UTC: the header's hours are only as good as the zone the device sent. */

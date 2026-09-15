@@ -146,10 +146,14 @@ export function summaryExportText(input: SummaryExportInput): string {
  */
 export function summaryCoversLabel(from: Date | null, until: Date | null, locale: string): string | null {
   if (!from || !until || Number.isNaN(from.getTime()) || Number.isNaN(until.getTime())) return null;
-  const day = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' });
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
-  if (day.format(from) === day.format(until)) return `${day.format(from)} · ${clock.format(from)} – ${clock.format(until)}`;
-  return `${day.format(from)} ${clock.format(from)} – ${day.format(until)} ${clock.format(until)}`;
+  const dayFormat = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const clockFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  // A plain space before AM/PM, the same as the service prints in the file.
+  const plain = (value: string) => value.replace(/[\u202f\u00a0]/g, ' ');
+  const day = (value: Date) => plain(dayFormat.format(value));
+  const clock = (value: Date) => plain(clockFormat.format(value));
+  if (day(from) === day(until)) return `${day(from)} · ${clock(from)} – ${clock(until)}`;
+  return `${day(from)} ${clock(from)} – ${day(until)} ${clock(until)}`;
 }
 
 function localDate(date: Date): string {
