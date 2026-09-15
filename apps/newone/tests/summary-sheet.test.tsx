@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Platform, Share } from 'react-native';
 
 import type { ConversationSummary } from '@/domain/types';
 import { SummarySheet } from '@/features/chat/summary-sheet';
@@ -21,6 +20,16 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (value: string) => mockClipboardWrite(value),
+}));
+const mockPrintToFile = jest.fn<(_input: { html: string }) => Promise<{ uri: string }>>(async () => ({ uri: 'file:///cache/printed.pdf' }));
+const mockShareAsync = jest.fn<(_uri: string, _options: Record<string, string>) => Promise<void>>(async () => undefined);
+jest.mock('expo-print', () => ({
+  printToFileAsync: (input: { html: string }) => mockPrintToFile(input),
+  printAsync: async () => undefined,
+}));
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: async () => true,
+  shareAsync: (uri: string, options: Record<string, string>) => mockShareAsync(uri, options),
 }));
 jest.mock('expo-file-system', () => ({
   Paths: { cache: 'file:///cache/' },
@@ -154,11 +163,15 @@ describe('summary sheet for consumers', () => {
     expect(screen.getByText('chat.summarySheetTitle')).toBeTruthy();
     expect(screen.getByText('chat.summaryScopeLine · chat.summaryScopeAbout')).toBeTruthy();
     expect(screen.getByText('Weekend plans')).toBeTruthy();
+    // The header: the days the recap covers (a 7-day range reaching back from
+    // the request) and who took part (owner's father, Sep 14 2026).
+    expect(screen.getByText(/2026/)).toBeTruthy();
+    expect(screen.getByText('chat.summaryParticipants: Jordan Lee, Ana Torres')).toBeTruthy();
     expect(screen.getByText(/You asked whether Saturday works/)).toBeTruthy();
     expect(screen.getByText('chat.summaryDecisions')).toBeTruthy();
     expect(screen.getByText('• Meet at noon')).toBeTruthy();
     expect(screen.getByText('chat.summaryTodo')).toBeTruthy();
-    expect(screen.getByText('• Book the cabin · Ana')).toBeTruthy();
+    expect(screen.getByText('• Ana: Book the cabin')).toBeTruthy();
     expect(screen.queryByText('chat.summaryReadyReview')).toBeNull();
     expect(screen.queryByLabelText('chat.correctSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.reviewSummary')).toBeNull();
@@ -175,38 +188,43 @@ describe('summary sheet for consumers', () => {
     expect(screen.queryByText('chat.summaryTodo')).toBeNull();
   });
 
-  test('offers Today by default without unread messages; the reader picks a range and says what it should cover', async () => {
+  test('offers Everything by default; the reader picks a range and says what it should cover', async () => {
     await open();
+    // "Unread" is gone from the chips and the longer spans arrived (owner, Sep 14 2026).
     expect(screen.queryByLabelText('chat.summaryRangeUnread')).toBeNull();
-    expect(selectedState(screen.getByLabelText('chat.summaryRangeToday'))).toBe(true);
-    expect(screen.getByLabelText('chat.summaryRangeYesterday')).toBeTruthy();
-    expect(screen.getByLabelText('chat.summaryRangeEverything')).toBeTruthy();
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeEverything'))).toBe(true);
+    for (const key of ['chat.summaryRangeToday', 'chat.summaryRangeYesterday', 'chat.summaryRangeWeek', 'chat.summaryRangeMonth', 'chat.summaryRangeQuarter']) {
+      expect(screen.getByLabelText(key)).toBeTruthy();
+    }
     await fireEvent.press(screen.getByLabelText('chat.summaryRangeWeek'));
     expect(selectedState(screen.getByLabelText('chat.summaryRangeWeek'))).toBe(true);
-    expect(selectedState(screen.getByLabelText('chat.summaryRangeToday'))).toBe(false);
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeEverything'))).toBe(false);
     await fireEvent.changeText(screen.getByLabelText('chat.summarySubject'), 'the trip');
     await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
     expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', { kind: 'last_7_days', subject: 'the trip' });
   });
 
-  test('starts from Unread when the chat had unread messages, and an earlier recap never narrows a request', async () => {
+  test('unread messages change nothing about the default, and an earlier recap never narrows a request', async () => {
     mockWorkspace.unreadDividerIds = { 'conversation-a': 'local-104' };
     // The newest version already covers every loaded message: still summarizable.
     mockWorkspace.summaries = [summary({ sourceLastMessageId: '105', sourceMessageIds: ['101', '102', '103', '104', '105'] })];
-    const withDivider = await open();
-    expect(selectedState(screen.getByLabelText('chat.summaryRangeUnread'))).toBe(true);
+    const withDivider = await open({ conversation: conversation({ unreadCount: 3 }) });
+    expect(screen.queryByLabelText('chat.summaryRangeUnread')).toBeNull();
+    expect(selectedState(screen.getByLabelText('chat.summaryRangeEverything'))).toBe(true);
     expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
-    expect(screen.queryByText(/chat\.summaryNoNewMessages|chat\.summarizeNew/)).toBeNull();
     await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', { kind: 'unread', subject: '' });
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-a', { kind: 'everything', subject: '' });
     await withDivider.view.unmount();
-
-    mockWorkspace = buildWorkspace();
-    await open({ conversation: conversation({ unreadCount: 3 }) });
-    expect(selectedState(screen.getByLabelText('chat.summaryRangeUnread'))).toBe(true);
   });
 
-  test('shows a loading state while a recap is generating and disables copy and share without one', async () => {
+  test('another member\'s recap is theirs alone: it never shows here', async () => {
+    mockWorkspace.summaries = [summary({ id: 'theirs', versionNumber: 9, requestedByUserId: 'user-other' })];
+    await open();
+    expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
+    expect(screen.queryByText('Weekend plans')).toBeNull();
+  });
+
+  test('shows a loading state while a recap is generating and disables copy and the downloads without one', async () => {
     mockWorkspace.summaries = [summary({ status: 'generating', summary: '', primaryTopic: '', outputFingerprint: null })];
     const generating = await open();
     expect(screen.getByText('chat.summaryGenerating')).toBeTruthy();
@@ -221,7 +239,8 @@ describe('summary sheet for consumers', () => {
     expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
     expect(screen.queryByText(/chat\.summaryScopeLine/)).toBeNull();
     expect(disabledState(screen.getByLabelText('chat.copy'))).toBe(true);
-    expect(disabledState(screen.getByLabelText('chat.summaryShare'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.summaryPdf'))).toBe(true);
+    expect(disabledState(screen.getByLabelText('chat.summaryWord'))).toBe(true);
     expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
     await empty.view.unmount();
 
@@ -236,53 +255,45 @@ describe('summary sheet for consumers', () => {
     await fireEvent.press(screen.getByLabelText('chat.copy'));
     await waitFor(() => expect(mockClipboardWrite).toHaveBeenCalledTimes(1));
     const copied = mockClipboardWrite.mock.calls[0]?.[0] ?? '';
-    expect(copied.startsWith(
-      'Weekend plans\nAna Torres · chat.summaryScopeLine · chat.summaryScopeAbout\n\nYou asked whether Saturday works.',
-    )).toBe(true);
+    expect(copied.startsWith('Weekend plans\nAna Torres · chat.summaryScopeLine · chat.summaryScopeAbout\n')).toBe(true);
+    expect(copied).toContain('\nchat.summaryParticipants: Jordan Lee, Ana Torres\n\nYou asked whether Saturday works.');
     expect(copied).toContain('\nchat.summaryDecisions\n• Meet at noon\n');
-    expect(copied).toContain('\nchat.summaryTodo\n• Book the cabin · Ana\n');
+    expect(copied).toContain('\nchat.summaryTodo\n• Ana: Book the cabin\n');
     expect(copied).not.toMatch(/\bs0\d{3}\b|\[sources/);
     expect(screen.getByText('chat.summaryCopied')).toBeTruthy();
   });
 
-  test('shares the recap as a text file in the cache directory through the system share sheet', async () => {
-    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction } as any);
-    mockFileExists = true;
+  test('PDF prints the recap to a file and hands it to the share sheet, where it is saved', async () => {
     await open();
-    await fireEvent.press(screen.getByLabelText('chat.summaryShare'));
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    const fileName = String(mockFileArgs.mock.calls[0]?.[1]);
-    expect(mockFileArgs.mock.calls[0]?.[0]).toBe('file:///cache/');
-    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.txt$/);
-    expect(mockFileDelete).toHaveBeenCalledTimes(1);
-    expect(mockFileCreate).toHaveBeenCalledTimes(1);
-    expect(mockFileWrite.mock.calls[0]?.[0]).toContain('You asked whether Saturday works.');
-    expect(mockFileWrite.mock.calls[0]?.[0]).toContain('• Book the cabin · Ana');
-    expect(share).toHaveBeenCalledWith(
-      { url: `file:///cache/${fileName}`, title: 'Weekend plans' },
-      { subject: 'Weekend plans' },
-    );
+    await fireEvent.press(screen.getByLabelText('chat.summaryPdf'));
+    await waitFor(() => expect(mockShareAsync).toHaveBeenCalledTimes(1));
+    const html = mockPrintToFile.mock.calls[0]?.[0]?.html ?? '';
+    expect(html).toContain('<h1>Weekend plans</h1>');
+    expect(html).toContain('chat.summaryParticipants: Jordan Lee, Ana Torres');
+    expect(html).toContain('<p>You asked whether Saturday works. Ana said yes');
+    expect(html).toContain('<li>Ana: Book the cabin</li>');
+    expect(mockShareAsync).toHaveBeenCalledWith('file:///cache/printed.pdf', expect.objectContaining({ mimeType: 'application/pdf', dialogTitle: 'Weekend plans' }));
     expect(screen.queryByText('chat.summaryShareFailed')).toBeNull();
-    share.mockRestore();
   });
 
-  test('shares text rather than a file on Android and reports a failed share', async () => {
-    const os = jest.replaceProperty(Platform, 'OS', 'android');
-    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.dismissedAction } as any);
+  test('Word writes the recap as a .doc in the cache directory and shares it; a failed share is reported', async () => {
+    mockFileExists = true;
     const first = await open();
-    await fireEvent.press(screen.getByLabelText('chat.summaryShare'));
-    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
-    expect(share.mock.calls[0]?.[0]).toMatchObject({ title: 'Weekend plans' });
-    expect((share.mock.calls[0]?.[0] as { message?: string }).message).toContain('You asked whether Saturday works.');
-    expect((share.mock.calls[0]?.[0] as { url?: string }).url).toBeUndefined();
+    await fireEvent.press(screen.getByLabelText('chat.summaryWord'));
+    await waitFor(() => expect(mockShareAsync).toHaveBeenCalledTimes(1));
+    const fileName = String(mockFileArgs.mock.calls[0]?.[1]);
+    expect(mockFileArgs.mock.calls[0]?.[0]).toBe('file:///cache/');
+    expect(fileName).toMatch(/^Gist summary – Ana Torres – \d{4}-\d{2}-\d{2}\.doc$/);
+    expect(mockFileDelete).toHaveBeenCalledTimes(1);
+    expect(mockFileCreate).toHaveBeenCalledTimes(1);
+    expect(mockFileWrite.mock.calls[0]?.[0]).toContain('<h1>Weekend plans</h1>');
+    expect(mockShareAsync).toHaveBeenCalledWith(`file:///cache/${fileName}`, expect.objectContaining({ mimeType: 'application/msword' }));
     await first.view.unmount();
-    os.restore();
 
-    share.mockRejectedValue(new Error('no share targets'));
+    mockShareAsync.mockRejectedValueOnce(new Error('no share targets'));
     await open();
-    await fireEvent.press(screen.getByLabelText('chat.summaryShare'));
+    await fireEvent.press(screen.getByLabelText('chat.summaryWord'));
     await waitFor(() => expect(screen.getByText('chat.summaryShareFailed')).toBeTruthy());
-    share.mockRestore();
   });
 
   test('says to pick a shorter range when a recap was too long or refused, and to try again otherwise', async () => {

@@ -1,13 +1,15 @@
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 import { Chip, PrimaryButton, StatusBadge } from '@/components/ui/primitives';
 import {
   SUMMARY_SCOPE_KINDS,
   latestSummary,
+  summaryCoverageDates,
+  summaryExportHtml,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
@@ -17,7 +19,7 @@ import {
 import type { Conversation, OperationalAction, SummaryScopeKind } from '@/domain/types';
 // Metro selects the platform adapter (file + share sheet natively, Web Share or clipboard on web).
 // eslint-disable-next-line import/no-unresolved
-import { shareSummary } from '@/features/chat/summary-export';
+import { exportSummaryDocument } from '@/features/chat/summary-export';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
 import { useWorkspace } from '@/state/workspace';
@@ -29,6 +31,8 @@ const RANGE_KEYS: Record<SummaryScopeKind, MessageKey> = {
   today: 'chat.summaryRangeToday',
   yesterday: 'chat.summaryRangeYesterday',
   last_7_days: 'chat.summaryRangeWeek',
+  last_30_days: 'chat.summaryRangeMonth',
+  last_90_days: 'chat.summaryRangeQuarter',
   everything: 'chat.summaryRangeEverything',
 };
 
@@ -38,11 +42,13 @@ const SHORTER_RANGE_FAILURE = /too_long|refused|needs_review/;
 
 /**
  * The conversation summary, reachable from the header anywhere in the thread:
- * the reader picks a range (Unread, Today, Yesterday, Last 7 days, Everything)
- * and can say what the recap should cover; the latest recap shows as plain
- * prose with its decisions and to-dos, one scope line, and copy and share
- * actions. Workplace organizations additionally keep their review,
- * correction, schedule, and operational-action controls here.
+ * the reader picks a range (Today ... Everything, Everything by default) and
+ * can say what the recap should cover; their own latest recap shows with a
+ * header (the chat, the days covered, who took part), short numbered lines
+ * that open with a name, its decisions and to-dos, and Copy, PDF and Word.
+ * Only the reader's own requests show here (owner, Sep 14 2026). Workplace
+ * organizations additionally keep their review, correction, schedule, and
+ * operational-action controls here.
  */
 export function SummarySheet({
   conversation,
@@ -59,15 +65,12 @@ export function SummarySheet({
   const styles = useThemedStyles(buildStyles);
   const workspace = useWorkspace();
   const router = useRouter();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const currentUserId = workspace.currentUser?.id ?? null;
   const summary = latestSummary(workspace.summaries, conversation.id, currentUserId);
   const readySummary = summaryIsReady(summary) ? summary : null;
-  // The pane marks the chat read as it opens; the unread divider it keeps is
-  // what "Unread" means here.
-  const hasUnread = Boolean(workspace.unreadDividerIds?.[conversation.id]) || conversation.unreadCount > 0;
-  const ranges = hasUnread ? SUMMARY_SCOPE_KINDS : SUMMARY_SCOPE_KINDS.filter((kind) => kind !== 'unread');
-  const [range, setRange] = useState<SummaryScopeKind>(hasUnread ? 'unread' : 'today');
+  const ranges = SUMMARY_SCOPE_KINDS;
+  const [range, setRange] = useState<SummaryScopeKind>('everything');
   const [subject, setSubject] = useState('');
   const requesting = workspace.actionBusy === `summary-request:${conversation.id}`;
   const generating = summary?.status === 'queued' || summary?.status === 'generating';
@@ -77,6 +80,8 @@ export function SummarySheet({
       today: t('chat.summaryRangeToday'),
       yesterday: t('chat.summaryRangeYesterday'),
       last_7_days: t('chat.summaryRangeWeek'),
+      last_30_days: t('chat.summaryRangeMonth'),
+      last_90_days: t('chat.summaryRangeQuarter'),
       everything: t('chat.summaryRangeEverything'),
     },
     lineTemplate: t('chat.summaryScopeLine'),
@@ -84,23 +89,45 @@ export function SummarySheet({
     aboutTemplate: t('chat.summaryScopeAbout'),
   };
   const scope = summary ? summaryScopeLine(summary, scopeCopy) : null;
+  // The header the owner's father asked for (Sep 14 2026): which days the
+  // recap covers and who took part, above the AI's title and the lines.
+  const coverage = readySummary ? summaryCoverageDates(readySummary.scopeKind, readySummary.createdAt) : null;
+  const day = (value: Date) => value.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const covers = readySummary
+    ? coverage
+      ? coverage.from.toDateString() === coverage.until.toDateString()
+        ? day(coverage.until)
+        : `${day(coverage.from)} – ${day(coverage.until)}`
+      : t('chat.summaryCoversAll')
+    : null;
+  const participantNames = (conversation.memberIds?.length
+    ? conversation.memberIds.map((id) => (
+      id === currentUserId ? workspace.currentUser?.displayName : workspace.people.find((person) => person.id === id)?.displayName
+    ))
+    : [workspace.currentUser?.displayName, conversation.kind === 'direct' ? conversation.title : null])
+    .filter((name): name is string => Boolean(name && name.trim()));
+  const participants = participantNames.length ? `${t('chat.summaryParticipants')}: ${participantNames.join(', ')}` : null;
   const decisions = readySummary ? readySummary.decisions.map((item) => item.text.trim()).filter(Boolean) : [];
   const todos = readySummary ? readySummary.actionItems.map(summaryTodoText).filter(Boolean) : [];
-  const exportText = readySummary
-    ? summaryExportText({
+  const exportInput = readySummary
+    ? {
       title: readySummary.primaryTopic,
       body: readySummary.summary,
       conversationTitle: conversation.title,
       scope,
+      covers,
+      participants,
       decisions,
       todos,
       headings: { decisions: t('chat.summaryDecisions'), todo: t('chat.summaryTodo') },
-    })
-    : '';
+    }
+    : null;
+  const exportText = exportInput ? summaryExportText(exportInput) : '';
+  const summaryLines = readySummary ? readySummary.summary.split('\n').map((line) => line.trim()).filter(Boolean) : [];
   // The pane remounts the sheet on every open (see its `key`), so notices and
   // nested dialogs never carry over from one visit to the next.
-  const [notice, setNotice] = useState<'copied' | 'shareFailed' | null>(null);
-  const [sharing, setSharing] = useState(false);
+  const [notice, setNotice] = useState<'copied' | 'shareFailed' | 'pdfWeb' | null>(null);
+  const [exporting, setExporting] = useState<'pdf' | 'word' | null>(null);
 
   const summaryErrorReport = summary
     ? workspace.aiOutputErrorReports.find((report) => report.summaryId === summary.id)
@@ -144,21 +171,25 @@ export function SummarySheet({
     await Clipboard.setStringAsync(exportText);
     setNotice('copied');
   };
-  const share = async () => {
-    if (!readySummary) return;
-    setSharing(true);
+  // PDF by default, Word on request (owner's father, Sep 14 2026). The phone
+  // makes the file and offers the share sheet; the browser downloads the Word
+  // file and opens its print window for the PDF, where "Save as PDF" lives.
+  const download = async (format: 'pdf' | 'word') => {
+    if (!readySummary || !exportInput) return;
+    setExporting(format);
     setNotice(null);
     try {
-      const outcome = await shareSummary({
-        fileName: summaryFileName(conversation.title),
+      await exportSummaryDocument({
+        fileName: summaryFileName(conversation.title, new Date(), format === 'pdf' ? 'pdf' : 'doc'),
         title: readySummary.primaryTopic,
-        text: exportText,
+        html: summaryExportHtml(exportInput),
+        format,
       });
-      if (outcome === 'copied') setNotice('copied');
+      if (format === 'pdf' && Platform.OS === 'web') setNotice('pdfWeb');
     } catch {
       setNotice('shareFailed');
     } finally {
-      setSharing(false);
+      setExporting(null);
     }
   };
 
@@ -178,7 +209,13 @@ export function SummarySheet({
             </View>
           ) : null}
           <Text style={styles.topic}>{readySummary.primaryTopic}</Text>
-          <Text selectable style={styles.prose}>{readySummary.summary}</Text>
+          {covers ? <Text style={styles.meta}>{covers}</Text> : null}
+          {participants ? <Text style={styles.meta}>{participants}</Text> : null}
+          <View style={styles.lines}>
+            {summaryLines.map((line, index) => (
+              <Text key={`line-${index}`} selectable style={styles.prose}>{line}</Text>
+            ))}
+          </View>
           {decisions.length ? (
             <View style={styles.list}>
               <Text style={styles.listTitle}>{t('chat.summaryDecisions')}</Text>
@@ -243,16 +280,24 @@ export function SummarySheet({
         />
         <PrimaryButton
           disabled={!readySummary}
-          icon="share-outline"
-          label={t('chat.summaryShare')}
-          loading={sharing}
-          onPress={() => void share()}
+          icon="document-text-outline"
+          label={t('chat.summaryPdf')}
+          loading={exporting === 'pdf'}
+          onPress={() => void download('pdf')}
+          tone="light"
+        />
+        <PrimaryButton
+          disabled={!readySummary}
+          icon="document-outline"
+          label={t('chat.summaryWord')}
+          loading={exporting === 'word'}
+          onPress={() => void download('word')}
           tone="light"
         />
       </View>
       {notice ? (
         <Text accessibilityLiveRegion="polite" style={styles.hint}>
-          {notice === 'copied' ? t('chat.summaryCopied') : t('chat.summaryShareFailed')}
+          {notice === 'copied' ? t('chat.summaryCopied') : notice === 'pdfWeb' ? t('chat.summaryPdfWebHint') : t('chat.summaryShareFailed')}
         </Text>
       ) : null}
       <ActionError message={workspace.actionError} />
@@ -373,13 +418,14 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   topic: { color: colors.ink, fontSize: 14, fontWeight: '800', lineHeight: 20 },
   prose: { color: colors.ink, fontSize: 13, lineHeight: 20 },
+  lines: { gap: 2, paddingTop: spacing.xs },
   list: { gap: 2, paddingTop: spacing.xs },
   listTitle: { color: colors.inkMuted, fontSize: 11, fontWeight: '800', lineHeight: 16 },
   listItem: { color: colors.ink, fontSize: 13, lineHeight: 20 },
   stateRow: { minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   state: { gap: spacing.xs },
   stateText: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
-  meta: { color: colors.inkSubtle, fontSize: 10, lineHeight: 15 },
+  meta: { color: colors.inkMuted, fontSize: 12, lineHeight: 17 },
   empty: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
   ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingTop: spacing.xs },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

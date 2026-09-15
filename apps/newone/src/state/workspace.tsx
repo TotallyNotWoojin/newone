@@ -605,7 +605,7 @@ function messageFromCommand(
 }
 
 type SummaryScopeKind = NonNullable<ConversationSummary['scopeKind']>;
-const SUMMARY_SCOPE_KINDS: readonly SummaryScopeKind[] = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'];
+const SUMMARY_SCOPE_KINDS: readonly SummaryScopeKind[] = ['unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything'];
 
 function mergeMessages(current: Message[], incoming: Message[]) {
   return mergeTimelineMessages(current, incoming) as Message[];

@@ -121,3 +121,18 @@ const jobs = await rows(`select id, topic, status, attempts, last_error_code, cr
   where topic = 'summary' and organization_id = '${PERSONAL_REALM_ID}' and created_at > now() - interval '15 minutes' order by id desc limit 5`);
 console.log('summary jobs:', JSON.stringify(jobs));
 console.log(`PASS (everything, ${longResult.final.slices} slices, ${longResult.final.source_count} messages): ${longResult.final.status} in ≤${longResult.seconds}s — topic: ${longResult.final.primary_topic ?? '(none)'}`);
+
+// 4. The longer spans the owner's father asked for (Sep 14 2026): "last 30
+//    days" is accepted, kept on the row, and the recap comes back as short
+//    numbered lines that open with a name -- never a paragraph, never "you".
+const monthRequestedAt = Date.now();
+const month = await requestSummary('last_30_days', { kind: 'last_30_days', subject: null });
+if (month.scopeKind !== 'last_30_days') fail('30-day receipt did not echo the range', month);
+const monthResult = await waitForTerminal(month.summaryId, monthRequestedAt);
+if (monthResult.final.scope_kind !== 'last_30_days') fail('30-day row did not keep the range', monthResult.final);
+const monthLines = String(monthResult.final.summary_body ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+console.log('30-day recap lines:', JSON.stringify(monthLines.slice(0, 4)));
+if (monthLines.length < 2 || !/^1[.)]\s/.test(monthLines[0] ?? '')) fail('the recap should be numbered lines, one per line', monthResult.final);
+if (!/^\d+[.)]\s+(Ana|Eli)\b/.test(monthLines[0] ?? '')) fail('each recap line should open with the speaker\'s name', monthResult.final);
+if (/\byou\b/i.test(JSON.stringify(monthResult.final.action_items ?? []))) fail('to-do owners should be names, never "you"', monthResult.final);
+console.log(`PASS (last 30 days, numbered, name-first): ${monthResult.final.status} in ≤${monthResult.seconds}s`);

@@ -1197,7 +1197,7 @@ function parseSummaryAction(
   };
 }
 
-const SUMMARY_SCOPE_KIND_VALUES = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'];
+const SUMMARY_SCOPE_KIND_VALUES = ['unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything'];
 
 function summaryFromDto(row: JsonRecord): ConversationSummary {
   const rawStatus = String(row.status);

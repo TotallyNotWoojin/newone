@@ -83,4 +83,12 @@ declare module '@/features/chat/summary-export' {
   }
   export type SummaryShareOutcome = 'shared' | 'dismissed' | 'copied';
   export function shareSummary(input: SummaryShareInput): Promise<SummaryShareOutcome>;
+  export interface SummaryDocumentInput {
+    /** Named for the format already: "… .pdf" or "… .doc". */
+    fileName: string;
+    title: string;
+    html: string;
+    format: 'pdf' | 'word';
+  }
+  export function exportSummaryDocument(input: SummaryDocumentInput): Promise<SummaryShareOutcome>;
 }

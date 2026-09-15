@@ -697,7 +697,7 @@ function announcementAudienceSpec(value: unknown): JsonObject {
 }
 
 // The ranges a reader can pick for a summary; the server resolves them.
-const SUMMARY_RANGE_KINDS = ['unread', 'today', 'yesterday', 'last_7_days', 'everything'] as const;
+const SUMMARY_RANGE_KINDS = ['unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything'] as const;
 
 function messageIdArray(value: unknown, maximum = 500): string[] {
   if (!Array.isArray(value) || value.length > maximum) {

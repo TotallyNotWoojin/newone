@@ -4,6 +4,8 @@ import {
   SUMMARY_SCOPE_KINDS,
   latestSummary,
   stripSummarySourceTokens,
+  summaryCoverageDates,
+  summaryExportHtml,
   summaryExportText,
   summaryFileName,
   summaryIsReady,
@@ -54,7 +56,7 @@ function summary(overrides: Partial<ConversationSummary> = {}): ConversationSumm
 
 const copy = {
   ranges: {
-    unread: 'Unread', today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', everything: 'Everything',
+    unread: 'Unread', today: 'Today', yesterday: 'Yesterday', last_7_days: 'Last 7 days', last_30_days: 'Last 30 days', last_90_days: 'Last 3 months', everything: 'Everything',
   },
   lineTemplate: '{range} · {count} messages',
   lineOneTemplate: '{range} · 1 message',
@@ -92,10 +94,44 @@ describe('summary text never shows machinery', () => {
     expect(text).not.toMatch(/\bs0\d{3}\b/);
   });
 
-  test('to-do lines join the title, owner, and due date and drop empty parts', () => {
-    expect(summaryTodoText({ title: 'Book the cabin', owner: 'Ana', dueAt: 'Friday', sourceMessageIds: [] })).toBe('Book the cabin · Ana · Friday');
+  test('to-do lines put the person first, then the task, then the date, and drop empty parts', () => {
+    expect(summaryTodoText({ title: 'Book the cabin', owner: 'Ana', dueAt: 'Friday', sourceMessageIds: [] })).toBe('Ana: Book the cabin · Friday');
     expect(summaryTodoText({ title: ' Book (s0001) ', owner: null, dueAt: '  ', sourceMessageIds: [] })).toBe('Book');
+    expect(summaryTodoText({ title: '', owner: 'Ana', sourceMessageIds: [] })).toBe('Ana');
     expect(summaryTodoText({ title: '', sourceMessageIds: [] })).toBe('');
+  });
+
+  test('the header carries the days covered and the participants, in text and in the HTML document', () => {
+    const input = {
+      title: 'Weekend plans', body: '1. Ana: asked about Saturday.\n2. Kyle: said yes.', conversationTitle: 'Ana Torres',
+      scope: 'Last 7 days · 2 messages', covers: 'Sep 8, 2026 – Sep 14, 2026', participants: 'Participants: Kyle, Ana',
+      todos: ['Ana: Book the cabin'], headings: { decisions: 'Decisions', todo: 'To-do' },
+    };
+    expect(summaryExportText(input)).toBe(
+      'Weekend plans\nAna Torres · Last 7 days · 2 messages\nSep 8, 2026 – Sep 14, 2026\nParticipants: Kyle, Ana\n\n1. Ana: asked about Saturday.\n2. Kyle: said yes.\n\nTo-do\n• Ana: Book the cabin\n',
+    );
+    const html = summaryExportHtml(input);
+    expect(html).toContain('<h1>Weekend plans</h1>');
+    expect(html).toContain('<p class="meta">Sep 8, 2026 – Sep 14, 2026</p>');
+    expect(html).toContain('<p>1. Ana: asked about Saturday.</p><p>2. Kyle: said yes.</p>');
+    expect(html).toContain('<li>Ana: Book the cabin</li>');
+    expect(summaryExportHtml({ ...input, title: '<b>x</b>' })).toContain('&lt;b&gt;x&lt;/b&gt;');
+  });
+
+  test('a range reaches back from the day it was asked for; everything has no dates', () => {
+    const asked = '2026-09-14T20:00:00.000Z';
+    expect(summaryCoverageDates('today', asked)?.from.toISOString()).toBe(asked);
+    expect(summaryCoverageDates('yesterday', asked)?.until.getDate()).toBe(new Date(asked).getDate() - 1);
+    const span = (kind: 'last_7_days' | 'last_30_days' | 'last_90_days') => {
+      const dates = summaryCoverageDates(kind, asked)!;
+      return Math.round((dates.until.getTime() - dates.from.getTime()) / 86_400_000);
+    };
+    expect(span('last_7_days')).toBe(6);
+    expect(span('last_30_days')).toBe(29);
+    expect(span('last_90_days')).toBe(89);
+    expect(summaryCoverageDates('everything', asked)).toBeNull();
+    expect(summaryCoverageDates(null, asked)).toBeNull();
+    expect(summaryCoverageDates('today', 'not a date')).toBeNull();
   });
 
   test('file names are safe and dated', () => {
@@ -117,7 +153,8 @@ describe('summary versions and the reader-defined scope', () => {
     ];
     expect(latestSummary(summaries, 'conversation-a')?.id).toBe('theirs');
     expect(latestSummary(summaries, 'conversation-a', 'user-self')?.id).toBe('v3');
-    expect(latestSummary(summaries, 'conversation-a', 'user-nobody')?.id).toBe('theirs');
+    // Another member's request is theirs alone (owner, Sep 14 2026).
+    expect(latestSummary(summaries, 'conversation-a', 'user-nobody')).toBeUndefined();
     expect(latestSummary(summaries, 'conversation-c', 'user-self')).toBeUndefined();
     expect(summaryIsReady(latestSummary(summaries, 'conversation-a', 'user-self'))).toBe(false);
     expect(summaryIsReady(summaries[0])).toBe(true);
@@ -133,6 +170,7 @@ describe('summary versions and the reader-defined scope', () => {
     expect(summaryScopeLine(summary({ scopeKind: 'everything', scopeSubject: null, sourceMessageCount: 2 }), {
       ...copy, lineTemplate: '{range} · 메시지 {count}개',
     })).toBe('Everything · 메시지 2개');
-    expect(SUMMARY_SCOPE_KINDS).toEqual(['unread', 'today', 'yesterday', 'last_7_days', 'everything']);
+    // Unread left the chips; the longer spans arrived (owner, Sep 14 2026).
+    expect(SUMMARY_SCOPE_KINDS).toEqual(['today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything']);
   });
 });

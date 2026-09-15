@@ -690,8 +690,10 @@ Deno.test('summary prose is stored clean: no source codes, headings, or markdown
   assert(!/\bs[0-9]{4}\b/.test(result.summary));
   const messages = sent?.messages as Array<Record<string, string>>;
   const system = String(messages[0]?.content ?? '');
-  assert(system.includes('plain, readable prose'));
-  assert(system.includes('"you" is the person reading the recap'));
+  // Short numbered lines that open with a name, everyone named alike (the
+  // owner's father, Sep 14 2026).
+  assert(system.includes('Write "summary" as a numbered list'));
+  assert(system.includes('Call every person by that name, the reader included'));
   assert(!system.includes('__NEWONE_PROTECTED_'));
   const user = String(messages[1]?.content ?? '');
   assert(user.includes('"speaker":"you"'));

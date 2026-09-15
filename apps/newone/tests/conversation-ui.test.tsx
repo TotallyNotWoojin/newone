@@ -869,7 +869,8 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await fireEvent.press(screen.getByLabelText('chat.summarize'));
     expect(screen.getByText('chat.summaryEmpty')).toBeTruthy();
     await fireEvent.press(screen.getByLabelText('chat.summarizeAll'));
-    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'unread', subject: '' });
+    // Everything is the default range now (owner, Sep 14 2026).
+    expect(mockWorkspace.requestConversationSummary).toHaveBeenCalledWith('conversation-main', { kind: 'everything', subject: '' });
     await missing.unmount();
 
     mockWorkspace = buildWorkspace();

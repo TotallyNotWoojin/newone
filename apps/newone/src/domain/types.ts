@@ -577,7 +577,7 @@ export interface SummaryProvenance {
 }
 
 /** The range a reader picked for a summary (v3.1). */
-export type SummaryScopeKind = 'unread' | 'today' | 'yesterday' | 'last_7_days' | 'everything';
+export type SummaryScopeKind = 'unread' | 'today' | 'yesterday' | 'last_7_days' | 'last_30_days' | 'last_90_days' | 'everything';
 
 export interface ConversationSummary {
   id: string;

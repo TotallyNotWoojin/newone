@@ -347,7 +347,10 @@ export function parseSummaryResolution(
     const senderId = typeof message.sender_user_id === 'string'
       ? message.sender_user_id.toLowerCase()
       : null;
-    const speaker = senderId === requesterId ? 'you' : senderId ? speakers.get(senderId) : undefined;
+    // The reader is named like everyone else: the recap's lines start with a
+    // name, and "you" at the end of a to-do read as a stray word (owner's
+    // father, Sep 14 2026). "you" stays only for a reader with no name.
+    const speaker = senderId ? speakers.get(senderId) ?? (senderId === requesterId ? 'you' : undefined) : undefined;
     return [{
       messageId,
       body: normalizedString(message.body, { min: 1, max: 20_000, trim: false }) as string,
