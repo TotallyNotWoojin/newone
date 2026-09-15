@@ -34,11 +34,11 @@ appId: com.totallynotwoojin.gist
 - extendedWaitUntil:
     visible: "Search by name.*"
     timeout: 20000
-- assertVisible: "Search a name or @handle, then send a request."
+- assertVisible: "Search a name, @handle or exact email, then send a request."
 - takeScreenshot: ${SHOT}-add-a-friend
 - tapOn: "Close dialog"
 - extendedWaitUntil:
-    notVisible: "Search a name or @handle, then send a request."
+    notVisible: "Search a name, @handle or exact email, then send a request."
     timeout: 15000
 - tapOn: "Chats"
 - extendedWaitUntil:

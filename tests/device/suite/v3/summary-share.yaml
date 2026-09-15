@@ -66,7 +66,9 @@ appId: com.totallynotwoojin.gist
 # Ready: the scope line names the range, the count, and the subject; the prose
 # is on screen and both actions are enabled.
 - assertVisible: ".*Everything · [0-9]+ messages · about ${SUBJECT}.*"
-- assertVisible: "All messages"
+# The header the owner's father asked for (Sep 14 2026): the date and hours
+# the recap covers (a year and a clock time), and who took part.
+- assertVisible: ".*20[0-9][0-9].*[0-9]:[0-9][0-9].*"
 - assertVisible: "Participants: .*"
 - assertVisible:
     text: "Copy"
@@ -84,6 +86,32 @@ appId: com.totallynotwoojin.gist
     visible: "Copied"
     timeout: 10000
 - takeScreenshot: ${SHOT}-copied
+# PDF: the service renders the file and the phone opens the share sheet with
+# it (Save to Files, AirDrop, Mail...). The sheet is proof the bytes arrived.
+- tapOn: "PDF"
+- extendedWaitUntil:
+    visible: ".*(Save to Files|AirDrop|Mail|Copy|Print|Markup).*"
+    timeout: 90000
+- takeScreenshot: ${SHOT}-pdf-share-sheet
+- tapOn:
+    text: "Close"
+    optional: true
+- extendedWaitUntil:
+    notVisible: ".*(Save to Files|AirDrop).*"
+    timeout: 10000
+    optional: true
+- runFlow:
+    when:
+      visible: ".*(Save to Files|AirDrop).*"
+    commands:
+      - swipe:
+          start: 50%, 40%
+          end: 50%, 95%
+      - waitForAnimationToEnd:
+          timeout: 2000
+- extendedWaitUntil:
+    visible: "Summary"
+    timeout: 10000
 - tapOn: "Close dialog"
 - extendedWaitUntil:
     visible: ".*Write a message….*"

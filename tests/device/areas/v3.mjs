@@ -214,7 +214,7 @@ export async function run(ctx) {
   //    make sure no source ids or participant labels leak.
   await openA();
   await ctx.step({
-    id: 'v3-07-summary-copy', title: 'Header "Summarize" → "Summary" sheet → range "Everything" + subject → "Summarize conversation" → prose + scope line → Copy → "Copied"; no "s1234"-style source ids', device: devA,
+    id: 'v3-07-summary-copy', title: 'Header "Summarize" → "Summary" sheet → range "Everything" + subject → "Summarize conversation" → header with date, hours and participants → short lines → Copy → "Copied" → PDF opens the share sheet with the file; no "s1234"-style source ids', device: devA,
     flow: 'v3/summary-share.yaml', env: { SUBJECT: 'the plan' },
     expected: 'Sheet first says "Nothing summarized yet." with the range chips (Today … Everything) and the "What should this cover?" field; after the request the prose appears under "Everything · N messages · about the plan" with Copy and Share enabled; Copy shows "Copied"; no text matching s[0-9]{4}; server conversation_summaries row draft with scope_kind everything and scope_subject "the plan", without such tokens', screen: 'conversation → Summary sheet',
     serverTruth: async () => {
