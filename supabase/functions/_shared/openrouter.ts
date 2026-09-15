@@ -605,10 +605,10 @@ function summarySubjectInstruction(context: SummaryPromptContext): string {
   // with the answer buried at the end (Sep 6 2026). Answer first, then only
   // what bears on the subject, and nothing else.
   return context.subject
-    ? `The reader asked specifically: "${context.subject}". That request comes from the reader, not from the messages, and it overrides the general recap shape: ` +
-      'if it is a question, open "summary" with the direct answer in one or two sentences, quoting or paraphrasing only what the messages actually say; ' +
-      'then add only the details that bear on that subject, in order. Leave out introductions, background, and everything unrelated to it, even if it was most of the conversation. ' +
-      'If the messages say nothing about the subject, "summary" is a single sentence saying so, and the lists stay empty. ' +
+    ? `The reader asked specifically: "${context.subject}". That request comes from the reader, not from the messages, and it narrows what the recap covers, not its shape: ` +
+      'keep the numbered, name-first lines. If the request is a question, line 1 is the direct answer as a short phrase (opening with the name of whoever said it), quoting or paraphrasing only what the messages actually say; ' +
+      'the following lines are only the points that bear on that subject, in order. Leave out introductions, background, and everything unrelated to it, even if it was most of the conversation. ' +
+      'If the messages say nothing about the subject, "summary" is one line saying so, and the lists stay empty. ' +
       '"primaryTopic" names the subject, not the conversation. '
     : '';
 }

@@ -83,6 +83,10 @@ const shortResult = await waitForTerminal(short.summaryId, shortRequestedAt);
 if (shortResult.final.scope_kind !== 'today' || shortResult.final.scope_subject !== 'the print run' || Number(shortResult.final.source_count) !== 4) {
   fail('summary row did not keep the reader\'s scope', shortResult.final);
 }
+// A subject narrows the recap but keeps its shape: numbered, name-first lines
+// (the phone showed a paragraph for "about the plan", Sep 15 2026).
+const shortLines = String(shortResult.final.summary_body ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+if (!/^1[.)]\s+(Ana|Eli|Smoke)\b/.test(shortLines[0] ?? '')) fail('a recap about a subject should still be numbered, name-first lines', shortResult.final);
 console.log(`PASS (today · about the print run): ${shortResult.final.status} in ≤${shortResult.seconds}s — topic: ${shortResult.final.primary_topic ?? '(none)'}`);
 
 // 2. A range with nothing in it is refused by name, never queued.
