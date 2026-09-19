@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "El número en el icono\n\nEl icono ahora muestra cuántos mensajes esperan, y sigue contando con la app cerrada. El número viaja con cada notificación, así que el icono y la lista de chats siempre coinciden. En Android aparece donde tu launcher lo muestre (Samsung enseña el número, Pixel un punto).\n\nAndroid pregunta bien\n\nEn Android 13 y posteriores, “Activar” te llevaba a los ajustes del sistema en vez de preguntar. Ahora muestra el diálogo de permiso normal. Si dijiste “Ahora no”, la tarjeta vuelve más o menos una vez por semana mientras las notificaciones sigan apagadas.\n\nEn el navegador\n\nEl icono de la pestaña también lleva el número de mensajes sin leer, y si instalaste Gist como app, su icono también.\n\nPor favor revisa\n\n- Cierra la app, pide que te escriban y mira el icono.\n- Abre el chat y observa cómo baja el número.\n- Android: toca “Activar” en la tarjeta de notificaciones y confirma que aparece el diálogo del sistema.",
+  "whatsNewPlay": "El icono de la app ahora muestra cuántos mensajes esperan, y sigue contando con la app cerrada; Samsung enseña el número, Pixel un punto.\n\nEn Android 13 y posteriores, “Activar notificaciones” muestra el diálogo de permiso en vez de llevarte a los ajustes del sistema, y la tarjeta vuelve más o menos una vez por semana mientras las notificaciones sigan apagadas."
+}

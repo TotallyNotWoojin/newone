@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "The number on the app icon\n\nThe icon now shows how many messages are waiting, and it keeps counting while the app is closed. The count travels with each notification, so the icon and the chat list always agree. On Android the number appears where your launcher shows one (Samsung shows a count, Pixel a dot).\n\nAndroid asks properly\n\nOn Android 13 and later, “Turn on” used to drop you in the system settings page instead of asking. It now shows the normal permission dialog. If you said “Not now”, the card comes back about once a week while notifications stay off.\n\nIn the browser\n\nThe tab’s icon carries the unread count too, and if you installed Gist as an app, so does its icon.\n\nPlease check\n\n- Close the app, have someone message you, and look at the icon.\n- Open the chat and watch the number go down.\n- Android: tap “Turn on” on the notifications card and confirm the system dialog appears.",
+  "whatsNewPlay": "The app icon now shows how many messages are waiting, and keeps counting while the app is closed; Samsung shows the number, Pixel a dot.\n\nOn Android 13 and later, “Turn on notifications” now shows the permission dialog instead of dropping you in system settings, and the card returns about once a week while notifications stay off."
+}
