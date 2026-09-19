@@ -195,8 +195,10 @@ function NotificationAwareWorkspace({ children }: PropsWithChildren) {
     organizationId: workspace.organizationId || null,
     badgeCount,
   });
-  // The browser tab is the web app's only badge: "Gist (2)" while messages
-  // wait, the plain title once they are read (owner request, Sep 14 2026).
+  // The web app's badges: the tab title reads "Gist (2)" while messages
+  // wait and is the plain title once they are read (owner request, Sep 14
+  // 2026); the web bridge above puts the same number on the favicon and,
+  // where the app is installed, on its icon (owner request, Sep 19 2026).
   // Rendered through Head rather than document.title: the layout's own Head
   // re-applied its static title on every navigation and overwrote the count
   // (owner report, same day, "the badge isn't working").

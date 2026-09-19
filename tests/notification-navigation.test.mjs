@@ -56,3 +56,15 @@ test('native notification bridge covers cold start, response replay, tenant bind
   assert.match(nativeBridge, /setBadgeCountAsync/);
   assert.doesNotMatch(nativeBridge, /Linking\.openURL|data\.url|data\.href/);
 });
+
+test('web notification bridge badges the tab and the installed app, never routes pushes', () => {
+  const webBridge = readFileSync(
+    'apps/newone/src/device/notification-navigation.web.ts',
+    'utf8',
+  );
+  assert.match(webBridge, /setAppBadge/);
+  assert.match(webBridge, /clearAppBadge/);
+  assert.match(webBridge, /link\[rel~="icon"\]/);
+  assert.match(webBridge, /Math\.min\(99, Math\.max\(0, Math\.trunc\(badgeCount\)\)\)/);
+  assert.doesNotMatch(webBridge, /expo-notifications|Linking\.openURL|router\.push/);
+});
