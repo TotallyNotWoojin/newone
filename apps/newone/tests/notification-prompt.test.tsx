@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
-import { NotificationPrompt } from '@/features/notifications/notification-prompt';
+import { NotificationPrompt, REPROMPT_AFTER_MS, promptDue } from '@/features/notifications/notification-prompt';
 import { DevicePreferencesProvider } from '@/state/device-preferences';
 
 type PermissionState = 'granted' | 'denied' | 'undetermined' | 'unavailable';
@@ -153,6 +153,37 @@ describe('first-launch notification prompt', () => {
     );
     await waitFor(() => expect(screen.getByText('settings.notificationsPromptTitle')).toBeTruthy());
     await view.unmount();
+  });
+
+  test('asks again once a week while notifications stay off, not sooner', async () => {
+    const eightDaysAgo = new Date(Date.now() - REPROMPT_AFTER_MS - 24 * 60 * 60 * 1000).toISOString();
+    mockStore[STORAGE_KEY] = JSON.stringify({ notificationsPromptedAt: eightDaysAgo });
+    const view = await renderPrompt();
+    await waitFor(() => expect(screen.getByText('settings.notificationsPromptTitle')).toBeTruthy());
+    await fireEvent.press(screen.getByRole('button', { name: 'settings.notificationsPromptDismiss' }));
+    await waitFor(() => expect(screen.queryByText('settings.notificationsPromptTitle')).toBeNull());
+    // Not now moves the clock: the stamp is fresh again.
+    expect(Date.parse(storedPromptedAt() ?? '')).toBeGreaterThan(Date.now() - 60_000);
+    await view.unmount();
+
+    const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+    mockStore[STORAGE_KEY] = JSON.stringify({ notificationsPromptedAt: sixDaysAgo });
+    mockGetPermissionState.mockClear();
+    const tooSoon = await renderPrompt();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText('settings.notificationsPromptTitle')).toBeNull();
+    expect(mockGetPermissionState).not.toHaveBeenCalled();
+    expect(storedPromptedAt()).toBe(sixDaysAgo);
+    await tooSoon.unmount();
+  });
+
+  test('promptDue treats never, a week ago and an unreadable stamp as due', () => {
+    const now = Date.parse('2026-09-19T12:00:00Z');
+    expect(promptDue(null, now)).toBe(true);
+    expect(promptDue('not a date', now)).toBe(true);
+    expect(promptDue(new Date(now - REPROMPT_AFTER_MS).toISOString(), now)).toBe(true);
+    expect(promptDue(new Date(now - REPROMPT_AFTER_MS + 1000).toISOString(), now)).toBe(false);
+    expect(promptDue(new Date(now).toISOString(), now)).toBe(false);
   });
 
   test('never asks on the web and leaves the flag untouched', async () => {

@@ -186,12 +186,20 @@ export type NotificationPermissionState = 'granted' | 'denied' | 'undetermined' 
  * The operating-system permission as it stands, without prompting. 'denied'
  * means the OS will not show its prompt again, so the only way back on is the
  * system settings page.
+ *
+ * Only canAskAgain decides that, never the status string. On Android 13+
+ * expo-notifications reports a permission nobody has asked for yet as
+ * status 'denied' (notifications count as disabled until POST_NOTIFICATIONS is
+ * granted) while canAskAgain stays true. Reading that as 'denied' sent every
+ * fresh Android install to the system settings page instead of showing the
+ * OS dialog, and not one real Android user ever registered for push
+ * (owner's father, Sep 19 2026).
  */
 export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'unavailable';
   const permissions = await Notifications.getPermissionsAsync();
   if (permissions.granted) return 'granted';
-  if (permissions.status === 'denied' || permissions.canAskAgain === false) return 'denied';
+  if (permissions.canAskAgain === false) return 'denied';
   return 'undetermined';
 }
 

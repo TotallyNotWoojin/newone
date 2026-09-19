@@ -302,6 +302,10 @@ describe('operating-system permission state', () => {
   test.each([
     [{ granted: true, status: 'granted', canAskAgain: true }, 'granted'],
     [{ granted: false, status: 'denied', canAskAgain: false }, 'denied'],
+    // Android 13+ before anyone has asked: expo-notifications says 'denied'
+    // because notifications count as disabled until POST_NOTIFICATIONS is
+    // granted, yet the OS dialog has never been shown and still can be.
+    [{ granted: false, status: 'denied', canAskAgain: true }, 'undetermined'],
     [{ granted: false, status: 'undetermined', canAskAgain: false }, 'denied'],
     [{ granted: false, status: 'undetermined', canAskAgain: true }, 'undetermined'],
   ])('reads %j as %s without prompting', async (permissions, expected) => {

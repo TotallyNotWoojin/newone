@@ -14,8 +14,9 @@ import { isThemePreference, type ThemePreference } from '@/theme/scheme';
  *   the other side reads, in the same two lines as an incoming message.
  * - enterSends: the keyboard's return/enter key sends the message instead of
  *   inserting a newline (default on; a Settings toggle turns it off).
- * - notificationsPromptedAt: when the app first asked for notification
- *   permission, so the ask happens once at first launch, not on every start.
+ * - notificationsPromptedAt: when the app last asked for notification
+ *   permission, so the ask happens at first launch and then at most once a
+ *   week while notifications stay off, not on every start.
  * - theme: light or dark, or "system" to follow the phone's appearance
  *   setting (the default).
  */

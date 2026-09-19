@@ -13,10 +13,26 @@ import { radii, spacing } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
 
 /**
- * One friendly ask for notification permission on the first signed-in launch.
- * The OS prompt only appears after "Turn on"; both answers record that the
- * question was asked, so it never comes back. A device that already granted
- * permission is registered silently by the workspace and never sees the card.
+ * How long an answer to the card holds before the question is worth asking
+ * again. A week: long enough that "Not now" is respected, short enough that a
+ * person who never noticed the card (owner's father, Sep 19 2026) is asked
+ * again before they conclude the app is silent.
+ */
+export const REPROMPT_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** True when the card was last answered long enough ago to ask again, or never. */
+export function promptDue(promptedAt: string | null, now = Date.now()): boolean {
+  if (promptedAt === null) return true;
+  const answered = Date.parse(promptedAt);
+  return !Number.isFinite(answered) || now - answered >= REPROMPT_AFTER_MS;
+}
+
+/**
+ * A friendly ask for notification permission on the first signed-in launch,
+ * and again once a week while notifications stay off. The OS prompt only
+ * appears after "Turn on"; both answers record when the question was asked. A
+ * device that already granted permission is registered silently by the
+ * workspace and never sees the card.
  */
 export function NotificationPrompt() {
   const { colors } = useTheme();
@@ -26,7 +42,7 @@ export function NotificationPrompt() {
   const { t } = useI18n();
   const enableNotifications = workspace.enableNotifications;
   const eligible = ready
-    && preferences.notificationsPromptedAt === null
+    && promptDue(preferences.notificationsPromptedAt)
     && Platform.OS !== 'web'
     && Boolean(workspace.organizationId);
   const [permission, setPermission] = useState<NotificationPermissionState | null>(null);
