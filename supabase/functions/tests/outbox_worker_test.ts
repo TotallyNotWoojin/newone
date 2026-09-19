@@ -728,6 +728,7 @@ Deno.test('shift-aware suppression uses authoritative state and only server crit
     contentBody: null,
     translationPending: false,
     notificationsMuted: false,
+    badgeCount: null,
     preferences: {
       notificationPreview: 'generic',
       soundEnabled: true,
@@ -854,12 +855,15 @@ Deno.test('push resolver requires Expo project and environment binding', () => {
   assertEquals(parsed.deliveries[0]?.contentTitle, null);
   assertEquals(parsed.deliveries[0]?.contentBody, null);
   assertEquals(parsed.deliveries[0]?.translationPending, false);
+  // ...and without an icon number (rows from before the badge travelled).
+  assertEquals(parsed.deliveries[0]?.badgeCount, null);
   // Consumer rows carry the message text (translated when ready) and a hold flag.
   const withContent = structuredClone(page);
   Object.assign(withContent.deliveries[0] as Record<string, unknown>, {
     content_title: 'Kyle LEE',
     content_body: '¿Nos vemos a las 10?',
     translation_pending: true,
+    badge_count: 4,
   });
   (withContent.deliveries[0] as { preferences: Record<string, unknown> }).preferences
     .notification_preview = 'content';
@@ -867,6 +871,7 @@ Deno.test('push resolver requires Expo project and environment binding', () => {
   assertEquals(parsedContent.deliveries[0]?.contentTitle, 'Kyle LEE');
   assertEquals(parsedContent.deliveries[0]?.contentBody, '¿Nos vemos a las 10?');
   assertEquals(parsedContent.deliveries[0]?.translationPending, true);
+  assertEquals(parsedContent.deliveries[0]?.badgeCount, 4);
   assertEquals(parsedContent.deliveries[0]?.preferences.notificationPreview, 'content');
   let rejected = false;
   try {
@@ -877,6 +882,16 @@ Deno.test('push resolver requires Expo project and environment binding', () => {
     rejected = true;
   }
   assertEquals(rejected, true);
+  // A badge that is not a non-negative integer is a resolver fault, not a number to send.
+  let badgeRejected = false;
+  try {
+    const badBadge = structuredClone(page);
+    Object.assign(badBadge.deliveries[0] as Record<string, unknown>, { badge_count: -1 });
+    parsePushPage(badBadge, job);
+  } catch {
+    badgeRejected = true;
+  }
+  assertEquals(badgeRejected, true);
 
   const closedIncident = structuredClone(page) as unknown as {
     job_id: number;

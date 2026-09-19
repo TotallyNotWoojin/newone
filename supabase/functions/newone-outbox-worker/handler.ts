@@ -225,6 +225,12 @@ export interface PushDelivery {
   translationPending: boolean;
   /** The member muted this registration in Settings: settle as skipped, never submit. */
   notificationsMuted: boolean;
+  /**
+   * Every message still unread across the reader's chats when the push was
+   * resolved: the number the app icon shows. Null only for a row from a
+   * resolver that predates it.
+   */
+  badgeCount: number | null;
   preferences: {
     notificationPreview: 'generic' | 'hidden' | 'content';
     soundEnabled: boolean;
@@ -665,6 +671,7 @@ function pushDelivery(value: unknown): PushDelivery {
     'content_body',
     'translation_pending',
     'notifications_muted',
+    'badge_count',
   ]);
   oneOf(row.dispatch_status, ['pending', 'retry_wait'] as const);
   if (row.dispatchable !== true) throw new ApiError(503, 'dependency_unavailable');
@@ -752,6 +759,9 @@ function pushDelivery(value: unknown): PushDelivery {
       : normalizedString(row.content_body, { min: 1, max: 4000, trim: false }) as string,
     translationPending: row.translation_pending === true,
     notificationsMuted: row.notifications_muted === true,
+    badgeCount: row.badge_count === null || row.badge_count === undefined
+      ? null
+      : integer(row.badge_count, 0, 2_147_483_647),
     preferences: {
       notificationPreview: oneOf(
         preferences.notification_preview,
@@ -1158,6 +1168,10 @@ async function expoMessage(
       ? 'newone-default'
       : 'newone-silent',
     priority: silent ? 'normal' : 'high',
+    // The icon number rides along even when the notification itself is
+    // silent: a quiet-hours push still has to keep the icon honest. Capped
+    // at 99 exactly as the app caps its own setBadgeCountAsync.
+    ...(delivery.badgeCount === null ? {} : { badge: Math.min(99, delivery.badgeCount) }),
     contentAvailable: true,
   };
 }

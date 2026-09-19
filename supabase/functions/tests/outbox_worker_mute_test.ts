@@ -262,3 +262,61 @@ Deno.test('a page of only muted registrations completes without touching the pro
     },
   );
 });
+
+// The app-icon number rides the same dispatch: it reuses this harness because
+// what matters is the body that reaches exp.host, not the parsed delivery.
+Deno.test('the unread count is sent as the Expo badge, capped at 99, even on a silent push', async () => {
+  await withMutedDispatch(
+    (tokens) => [
+      // Not muted: the "muted" token is just a second registration here.
+      deliveryRow({
+        device_id: mutedDeviceId,
+        attempt_id: '51',
+        installation_id: mutedInstallationId,
+        push_token_ciphertext: tokens.muted,
+        badge_count: 250,
+      }),
+      // Preview hidden makes the push silent; the icon still has to be right.
+      deliveryRow({
+        push_token_ciphertext: tokens.open,
+        badge_count: 2,
+        preferences: {
+          notification_preview: 'hidden',
+          sound_enabled: true,
+          vibration_enabled: true,
+          shift_aware_suppression: false,
+          time_zone: 'UTC',
+          quiet_hours_start: null,
+          quiet_hours_end: null,
+          quiet_days: [0, 1, 2, 3, 4, 5, 6],
+        },
+      }),
+    ],
+    async (recorded) => {
+      const dependencies = defaultOutboxWorkerDependencies();
+      await dependencies.dispatchPush(workerId, job, workerId);
+      assertEquals(recorded.expoSends.length, 1);
+      const [loud, silent] = recorded.expoSends[0] ?? [];
+      assert(loud && silent);
+      assertEquals(loud.to, 'ExpoPushToken[mutedmutedmuted01]');
+      assertEquals(loud.badge, 99);
+      assertEquals(loud.title, 'Ana');
+      assertEquals(silent.to, 'ExpoPushToken[openopenopenopen1]');
+      assertEquals(silent.badge, 2);
+      assertEquals('title' in silent, false);
+      assertEquals('body' in silent, false);
+    },
+  );
+});
+
+Deno.test('a delivery without a badge count sends no badge at all', async () => {
+  await withMutedDispatch(
+    (tokens) => [deliveryRow({ push_token_ciphertext: tokens.open })],
+    async (recorded) => {
+      const dependencies = defaultOutboxWorkerDependencies();
+      await dependencies.dispatchPush(workerId, job, workerId);
+      assertEquals(recorded.expoSends[0]?.length, 1);
+      assertEquals('badge' in (recorded.expoSends[0]?.[0] ?? {}), false);
+    },
+  );
+});

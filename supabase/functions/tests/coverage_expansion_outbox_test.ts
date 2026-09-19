@@ -202,6 +202,7 @@ const delivery: PushDelivery = {
   contentBody: null,
   translationPending: false,
   notificationsMuted: false,
+    badgeCount: null,
   preferences: {
     notificationPreview: 'generic',
     soundEnabled: true,

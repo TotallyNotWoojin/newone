@@ -20,6 +20,8 @@ export interface ExpoPushMessage {
   body?: string;
   sound?: 'default';
   channelId?: 'newone-default' | 'newone-silent';
+  /** The app-icon number: aps.badge on iOS, the notification's number on Android. */
+  badge?: number;
   priority: 'normal' | 'high';
   contentAvailable: boolean;
 }
@@ -116,6 +118,7 @@ export class ExpoPushClient {
         ...(message.body ? { body: message.body } : {}),
         ...(message.sound ? { sound: message.sound } : {}),
         ...(message.channelId ? { channelId: message.channelId } : {}),
+        ...(message.badge === undefined ? {} : { badge: message.badge }),
         priority: message.priority,
         _contentAvailable: message.contentAvailable,
       })),

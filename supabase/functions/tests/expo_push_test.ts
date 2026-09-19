@@ -23,6 +23,9 @@ Deno.test('Expo tickets separate provider acceptance from delivery and classify 
   const client = new ExpoPushClient(token, async (_input, init) => {
     const submitted = JSON.parse(String(init?.body));
     assertEquals(submitted.length, 2);
+    // The icon number is sent only when the delivery carried one.
+    assertEquals(submitted[0].badge, 3);
+    assertEquals('badge' in submitted[1], false);
     return Response.json({
       data: [{ status: 'ok', id: 'ticket-001' }, {
         status: 'error',
@@ -35,6 +38,7 @@ Deno.test('Expo tickets separate provider acceptance from delivery and classify 
     attemptId: '1',
     to: 'ExponentPushToken[first-token]',
     data: { event_type: 'message.changed' },
+    badge: 3,
     priority: 'normal',
     contentAvailable: true,
   }, {
