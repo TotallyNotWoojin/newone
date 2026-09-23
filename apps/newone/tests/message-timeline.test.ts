@@ -82,3 +82,65 @@ describe('mergeTimelineMessages', () => {
     expect(merge(existing, [], { pruneMissingWithinPage: true })).toHaveLength(2);
   });
 });
+
+describe('an own upload this device has not finished', () => {
+  type Attached = Row & { attachment?: Record<string, unknown>; failureReason?: string };
+  const mergeAttached = (existing: Attached[], incoming: Attached[]) =>
+    mergeTimelineMessages(existing, incoming) as Attached[];
+  const local = (transfer: Record<string, unknown>, extra: Partial<Attached> = {}): Attached => ({
+    ...row('20', { clientMessageId: 'photo-1', isOwn: true, body: '' }),
+    attachment: {
+      id: 'pending-photo-1',
+      status: 'quarantined',
+      localUri: 'blob:local-photo',
+      name: 'photo.jpg',
+      transfer,
+    },
+    ...extra,
+  });
+  const fromServer = (attachment?: Record<string, unknown>): Attached => ({
+    ...row('20', { clientMessageId: 'photo-1', isOwn: true, body: '' }),
+    deliveryState: 'sent',
+    attachment,
+  });
+
+  test('a refused upload keeps its photo, the failure and Retry when the row arrives without a file', () => {
+    // The grant was refused (rate limit): the server row has no attachment.
+    // Taking it left a blank own bubble with no Retry (Sep 23 2026).
+    const failed = local(
+      { state: 'failed', progress: 0, errorCode: 'rate_limited' },
+      { failureReason: 'Too many uploads. Try again in a minute.' },
+    );
+    const [merged] = mergeAttached([failed], [fromServer(undefined)]);
+    expect(merged.attachment).toEqual(failed.attachment);
+    expect(merged.failureReason).toBe('Too many uploads. Try again in a minute.');
+  });
+
+  test('an upload in flight keeps its progress and local preview over a pending server file', () => {
+    const uploading = local({ state: 'uploading', progress: 0.4 });
+    const [merged] = mergeAttached([uploading], [fromServer({ id: 'attachment-1', status: 'scanning', name: 'photo.jpg' })]);
+    expect(merged.attachment).toEqual({
+      id: 'attachment-1',
+      status: 'scanning',
+      name: 'photo.jpg',
+      localUri: 'blob:local-photo',
+      transfer: { state: 'uploading', progress: 0.4 },
+    });
+  });
+
+  test('the server wins once it holds the clean file, and a finished upload is not kept', () => {
+    const clean = { id: 'attachment-1', status: 'clean', name: 'photo.jpg' };
+    const [overFailed] = mergeAttached([local({ state: 'failed', progress: 1 }, { failureReason: 'lost' })], [fromServer(clean)]);
+    expect(overFailed.attachment).toEqual(clean);
+    expect(overFailed.failureReason).toBeUndefined();
+
+    const [overUploaded] = mergeAttached([local({ state: 'uploaded', progress: 1 })], [fromServer(undefined)]);
+    expect(overUploaded.attachment).toBeUndefined();
+  });
+
+  test("a peer's message takes the server's attachment as it is", () => {
+    const peer: Attached = { ...row('21'), attachment: { id: 'a', status: 'scanning' } };
+    const [merged] = mergeAttached([peer], [{ ...row('21'), attachment: { id: 'a', status: 'clean' } }]);
+    expect(merged.attachment).toEqual({ id: 'a', status: 'clean' });
+  });
+});

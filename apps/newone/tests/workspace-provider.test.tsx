@@ -3058,6 +3058,58 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
+  test('a photo sent while the chat marks itself read keeps its bubble, and a refused upload shows its reason and Retry', async () => {
+    // The chat pane marks the chat read the moment a new message becomes its
+    // tail, in an effect that runs before the provider's own. It used to copy
+    // the snapshot from before that message and write the copy back after
+    // storing the receipt, so the photo just sent vanished from the state;
+    // its refusal then had nothing to land on, and the server's row, which
+    // has no file, drew a blank bubble (live web suite, Sep 23 2026).
+    function ReadOnNewTail() {
+      const workspace = useWorkspace();
+      const tail = workspace.messages['conversation-a']?.at(-1)?.id;
+      const markConversationRead = workspace.markConversationRead;
+      useEffect(() => {
+        if (tail) void markConversationRead('conversation-a');
+      }, [markConversationRead, tail]);
+      return null;
+    }
+    const snapshot = richWorkspaceSnapshot();
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    mockCommand.mockImplementation(async (method: string, input: unknown) => {
+      if (method === 'createAttachmentUploadGrant') {
+        throw new RepositoryError('Too many requests', 'rate_limited', true);
+      }
+      return controlledCommandResponse(method, input);
+    });
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+        <ReadOnNewTail />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://refused.jpg', name: 'refused.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        '',
+      )).toBe(true);
+    });
+    await waitFor(() => expect(currentWorkspace().messages['conversation-a'].some(
+      (message) => message.attachment?.transfer?.state === 'failed',
+    )).toBe(true));
+    const refused = currentWorkspace().messages['conversation-a'].find(
+      (message) => message.attachment?.transfer?.state === 'failed',
+    ) as Message;
+    expect(refused.attachment).toMatchObject({ name: 'controlled.jpg', localUri: 'file://controlled' });
+    expect(refused.failureReason).toBeTruthy();
+    // The chat was still marked read around it.
+    expect(currentWorkspace().conversations.find((item) => item.id === 'conversation-a')?.unreadCount).toBe(0);
+    await view.unmount();
+  });
+
   test('two files sent together upload one after the other; the second waits for the first to finalize', async () => {
     // Sep 15 2026: two pictures pasted and sent together uploaded side by
     // side, and one native upload task never reported back, leaving a

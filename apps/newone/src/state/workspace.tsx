@@ -5,6 +5,7 @@ import {
 import {
   createContext,
   PropsWithChildren,
+  SetStateAction,
   useCallback,
   useContext,
   useEffect,
@@ -863,7 +864,7 @@ function rememberedConversationKey(userId: string) {
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const { locale, t } = useI18n();
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  const [snapshot, setSnapshotState] = useState<WorkspaceSnapshot | null>(null);
   const [conversationAvatarUrls, setConversationAvatarUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<ResourceStatus>('loading');
   const [connectivity, setConnectivity] = useState<ConnectivityState>('unknown');
@@ -909,6 +910,18 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const flushingRef = useRef(false);
   const flushAgainRef = useRef(false);
   const snapshotRef = useRef<WorkspaceSnapshot | null>(null);
+  // Every write lands in snapshotRef at once, not when the provider's effects
+  // next run. The chat pane's effects run before the provider's, and marking a
+  // chat read on a new tail copied the snapshot from before that tail, then
+  // wrote the copy back after its await: a photo just sent vanished from the
+  // state, its upload had nothing left to update, and a refused one stayed a
+  // blank bubble (Sep 23 2026). Updaters therefore run here, against the
+  // newest state, in the order they were issued.
+  const setSnapshot = useCallback((next: SetStateAction<WorkspaceSnapshot | null>) => {
+    const value = typeof next === 'function' ? next(snapshotRef.current) : next;
+    snapshotRef.current = value;
+    setSnapshotState(value);
+  }, []);
   const selectedConversationIdRef = useRef('');
   const mountedRef = useRef(true);
   const refreshIdentityRef = useRef('');
@@ -961,10 +974,6 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     endAccessRef.current = auth.endAccess;
     refreshSessionRef.current = auth.refreshSession;
   }, [auth.endAccess, auth.refreshSession]);
-
-  useEffect(() => {
-    snapshotRef.current = snapshot;
-  }, [snapshot]);
 
   useEffect(() => {
     if (
@@ -1494,7 +1503,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setError(t(errorMessageKey(loadError)));
       if (isOfflineError(loadError)) setConnectivity('offline');
     }
-  }, [auth.mode, auth.user?.id, hydrateOutbox, loadConversationAvatarUrl, repositories.reads, t]);
+  }, [auth.mode, auth.user?.id, hydrateOutbox, loadConversationAvatarUrl, repositories.reads, setSnapshot, t]);
 
   useEffect(() => {
     if (refreshIdentityRef.current !== refreshIdentity) {
@@ -1576,7 +1585,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       cancelled = true;
       if (timeout) clearTimeout(timeout);
     };
-  }, [workspaceAccessDeadline]);
+  }, [setSnapshot, workspaceAccessDeadline]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1719,7 +1728,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         void loadConversationTimelineRef.current(conversationId);
       }
     }
-  }, [repositories.reads]);
+  }, [repositories.reads, setSnapshot]);
 
   useEffect(() => {
     const timeout = setTimeout(() => void refresh(), 0);
@@ -1843,7 +1852,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return { ...current, messages: nextMessages };
       });
     },
-    [],
+    [setSnapshot],
   );
 
   const patchServerMessage = useCallback((messageId: string, patch: Partial<Message>) => {
@@ -1861,7 +1870,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         ),
       };
     });
-  }, []);
+  }, [setSnapshot]);
 
   const patchLocalAttachment = useCallback((
     clientMessageId: string,
@@ -1903,7 +1912,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         ),
       };
     });
-  }, []);
+  }, [setSnapshot]);
 
   const removeLocalMessage = useCallback((clientMessageId: string, conversationId: string) => {
     setSnapshot((current) => {
@@ -1927,7 +1936,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         ),
       };
     });
-  }, []);
+  }, [setSnapshot]);
 
   const flushOutbox = useCallback(async () => {
     if (flushingRef.current) {
@@ -2063,7 +2072,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       flushingRef.current = false;
     }
-  }, [markMessage, patchServerMessage, reconcileConversationAfterSend, repositories.commands, t]);
+  }, [markMessage, patchServerMessage, reconcileConversationAfterSend, repositories.commands, setSnapshot, t]);
 
   const enqueueMessageReceipt = useCallback(async (input: Omit<MessageReceiptInput, 'idempotencyKey'>) => {
     const key = receiptProgressKey(input);
@@ -2197,7 +2206,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     const readAt = new Date().toISOString();
-    const nextMessages = messages.map((message) =>
+    // Marked on the state as it is now: anything sent or updated while the
+    // receipt was being stored stays.
+    const latest = snapshotRef.current;
+    if (
+      !latest
+      || latest.organizationId !== current.organizationId
+      || latest.currentUser.id !== current.currentUser.id
+    ) return;
+    const nextMessages = (latest.messages[conversationId] ?? []).map((message) =>
       !message.isOwn
         && message.serverId
         && compareMessageIds(message.serverId, latestIncoming.serverId as string) <= 0
@@ -2216,16 +2233,14 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           }
         : message
     );
-    const nextSnapshot: WorkspaceSnapshot = {
-      ...current,
-      messages: { ...current.messages, [conversationId]: nextMessages },
-      conversations: current.conversations.map((item) => item.id === conversationId
+    setSnapshot({
+      ...latest,
+      messages: { ...latest.messages, [conversationId]: nextMessages },
+      conversations: latest.conversations.map((item) => item.id === conversationId
         ? { ...item, unreadCount: 0, lastReadMessageId: latestIncoming.serverId as string }
         : item),
-    };
-    snapshotRef.current = nextSnapshot;
-    setSnapshot(nextSnapshot);
-  }, [enqueueMessageReceipt]);
+    });
+  }, [enqueueMessageReceipt, setSnapshot]);
 
   const loadOlderMessages = useCallback(async (conversationId: string) => {
     const initial = snapshotRef.current;
@@ -2291,7 +2306,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         },
       }));
     }
-  }, [repositories.reads, t]);
+  }, [repositories.reads, setSnapshot, t]);
 
   loadConversationTimelineRef.current = loadConversationTimeline;
 
@@ -2872,7 +2887,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return null;
       }
     },
-    [repositories.commands, selectConversation, snapshot, t],
+    [repositories.commands, selectConversation, setSnapshot, snapshot, t],
   );
 
   const queryGroupCreationCandidates = useCallback(async (query = '') => {
@@ -3043,7 +3058,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         setActionBusy((current) => current === 'create-group' ? null : current);
       }
     },
-    [repositories.commands, snapshot, t],
+    [repositories.commands, setSnapshot, snapshot, t],
   );
 
   const uploadConversationAvatar = useCallback(async (
@@ -3149,7 +3164,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
     });
     return result === true;
-  }, [connectivity, executeImmediate, repositories.commands, snapshot]);
+  }, [connectivity, executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const removeConversationAvatar = useCallback(async (conversationId: string) => {
     const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
@@ -3179,7 +3194,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return true;
     });
     return result === true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const sendMessage = useCallback(
     async (
@@ -3370,7 +3385,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         if (isOfflineError(commandError)) setConnectivity('offline');
       }
     },
-    [connectivity, flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, snapshot, t],
+    [connectivity, flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, setSnapshot, snapshot, t],
   );
 
   const synchronizeMessageOutbox = useCallback(async () => {
@@ -3448,7 +3463,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       setActionBusy((current) => current === `outbox-edit:${outboxId}` ? null : current);
     }
-  }, [connectivity, flushOutbox, synchronizeMessageOutbox, t]);
+  }, [connectivity, flushOutbox, setSnapshot, synchronizeMessageOutbox, t]);
 
   const retryOutboxMessage = useCallback(async (outboxId: string) => {
     setActionBusy(`outbox-retry:${outboxId}`);
@@ -3521,7 +3536,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       setActionBusy((current) => current === `outbox-cancel:${outboxId}` ? null : current);
     }
-  }, [connectivity, refresh, synchronizeMessageOutbox, t]);
+  }, [connectivity, refresh, setSnapshot, synchronizeMessageOutbox, t]);
 
   const runAttachmentUpload = useCallback(async (operation: AttachmentUploadOperation) => {
     const complete = async (grant: AttachmentUploadGrant) => {
@@ -3809,6 +3824,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       handleAttachmentUploadFailure,
       performAttachmentUpload,
       repositories.commands,
+      setSnapshot,
       snapshot,
       t,
     ],
@@ -3932,7 +3948,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const forwardMessage = useCallback(
@@ -3987,7 +4003,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const placeMessagePreservationHold = useCallback(
@@ -4333,7 +4349,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     };
     setSnapshot((current) => current ? { ...current, actions: [action, ...current.actions] } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const confirmAction = useCallback(async (actionId: string, assigneePersonId: string, dueAt?: string) => {
     const person = snapshot?.people.find((item) => item.id === assigneePersonId);
@@ -4358,7 +4374,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : action),
     } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const transitionAction = useCallback(async (
     actionId: string,
@@ -4381,7 +4397,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         : action),
     } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({});
   // A download grant is a signed URL with an expiry. This used to remember only
@@ -4533,7 +4549,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const updateConversationPreferences = useCallback(
@@ -4571,7 +4587,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
       return false;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const updateProfile = useCallback(async (
@@ -4613,7 +4629,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         }
       : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const updateConversationControls = useCallback(async (
     conversationId: string,
@@ -4656,7 +4672,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : item),
     } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const requestConversationJoin = useCallback(async (conversationId: string) => {
     if (!snapshot || !snapshot.discoverableConversations.some(
@@ -4677,7 +4693,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       ),
     } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const cancelConversationJoinRequest = useCallback(async (request: ConversationJoinRequest) => {
     if (!snapshot || request.status !== 'pending') return false;
@@ -4697,7 +4713,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       ),
     } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const loadConversationJoinRequests = useCallback(async (conversationId: string) => {
     const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
@@ -4788,7 +4804,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (conversation.managementOnly) await refresh();
       return true;
     },
-    [executeImmediate, refresh, repositories.commands, snapshot],
+    [executeImmediate, refresh, repositories.commands, setSnapshot, snapshot],
   );
 
   const removeConversationMember = useCallback(
@@ -4838,7 +4854,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (conversation.managementOnly) await refresh();
       return true;
     },
-    [executeImmediate, refresh, repositories.commands, snapshot],
+    [executeImmediate, refresh, repositories.commands, setSnapshot, snapshot],
   );
 
   const updateConversationMemberRole = useCallback(
@@ -4879,7 +4895,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const leaveConversation = useCallback(async (
@@ -4951,7 +4967,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return next;
     });
     return true;
-  }, [executeImmediate, repositories.commands, snapshot, synchronizeMessageOutbox]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot, synchronizeMessageOutbox]);
 
   const closeIncident = useCallback(
     async (conversationId: string, reason: string) => {
@@ -4985,7 +5001,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const publishUpdate = useCallback(
@@ -5063,7 +5079,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const previewUpdateAudience = useCallback(
@@ -5108,7 +5124,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const acknowledgeUpdate = useCallback(
@@ -5180,7 +5196,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       });
       await flushOutbox();
     },
-    [flushOutbox, repositories.commands, snapshot, t],
+    [flushOutbox, repositories.commands, setSnapshot, snapshot, t],
   );
 
   const createHandoff = useCallback(
@@ -5263,7 +5279,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot, t],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot, t],
   );
 
   const correctHandoff = useCallback(
@@ -5392,7 +5408,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot, t],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot, t],
   );
 
   const signHandoff = useCallback(
@@ -5421,7 +5437,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const acknowledgeHandoff = useCallback(
@@ -5469,7 +5485,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot, t],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot, t],
   );
 
   const updateConnection = useCallback(
@@ -5507,7 +5523,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return false;
       }
     },
-    [repositories.commands, snapshot, t],
+    [repositories.commands, setSnapshot, snapshot, t],
   );
 
   const searchUsers = useCallback(
@@ -5619,7 +5635,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       selectConversation(conversation.id);
       return receipt.conversationId;
     },
-    [executeImmediate, repositories.commands, selectConversation, snapshot],
+    [executeImmediate, repositories.commands, selectConversation, setSnapshot, snapshot],
   );
 
   const respondConnection = useCallback(
@@ -5653,7 +5669,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const removeConnection = useCallback(
@@ -5716,7 +5732,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const saveContact = useCallback(
@@ -5744,7 +5760,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const removeSavedContact = useCallback(
@@ -5770,7 +5786,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const setPersonBlocked = useCallback(
@@ -5819,7 +5835,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } : current);
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const loadRoleAssignments = useCallback(
@@ -6017,7 +6033,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       );
       return true;
     },
-    [executeImmediate, repositories.commands, snapshot],
+    [executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const revokeSession = useCallback(
@@ -6051,7 +6067,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       setAccountSessions((current) => current.filter((item) => item.sessionId !== sessionId));
       return true;
     },
-    [accountSessions, auth, executeImmediate, repositories.commands, snapshot],
+    [accountSessions, auth, executeImmediate, repositories.commands, setSnapshot, snapshot],
   );
 
   const queryCurrentDeviceNotificationPreferences = useCallback(async () => {
@@ -6148,7 +6164,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     if (!result) return false;
     setSnapshot((current) => current ? { ...current, organizationPolicy: result } : current);
     return true;
-  }, [executeImmediate, repositories.commands, snapshot]);
+  }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
   const loadOrganizationAiPolicy = useCallback(async () => {
     if (!snapshot || !snapshot.capabilities.includes('ai.policy.manage')) return null;

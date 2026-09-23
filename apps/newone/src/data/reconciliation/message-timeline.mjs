@@ -42,6 +42,27 @@ function matchingIndex(messages, candidate) {
 }
 
 /**
+ * An own upload this device has not finished knows more than the server row,
+ * which until finalize has no attachment yet or a pending one. Taking the
+ * row's version wiped the photo, its progress, the failure and Retry, and
+ * every later progress patch then had nothing to land on: a refused upload
+ * was left as a blank bubble (Sep 23 2026). The server wins again once it
+ * holds the clean file.
+ */
+function mergedAttachment(previous, message) {
+  const local = previous.attachment;
+  const state = local?.transfer?.state;
+  if (!state || state === 'uploaded') return message.attachment;
+  if (!message.attachment) return local;
+  if (message.attachment.status === 'clean') return message.attachment;
+  return {
+    ...message.attachment,
+    ...(local.localUri ? { localUri: local.localUri } : {}),
+    transfer: local.transfer,
+  };
+}
+
+/**
  * Merge authoritative pages and optimistic rows with deterministic order and
  * identity. This is safe for prepended history and concurrent tail arrivals.
  *
@@ -60,11 +81,16 @@ export function mergeTimelineMessages(existing, incoming, options = {}) {
       continue;
     }
     const previous = merged[index];
+    const attachment = mergedAttachment(previous, message);
+    const uploadInterrupted = ['failed', 'cancelled'].includes(attachment?.transfer?.state);
     merged[index] = {
       ...previous,
       ...message,
       id: previous.id,
-      failureReason: message.deliveryState === 'failed' ? message.failureReason : undefined,
+      attachment,
+      failureReason: message.deliveryState === 'failed'
+        ? message.failureReason
+        : uploadInterrupted ? previous.failureReason : undefined,
     };
   }
   const pruned = options.pruneMissingWithinPage ? pruneMissingWithinPage(merged, incoming, options.now) : merged;
