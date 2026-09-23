@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 
+import { browserReportsOffline, onNetworkReturn } from '@/lib/network-return';
 import { getRealtimeClient } from '@/lib/supabase';
 
 export type RealtimeState = 'idle' | 'connecting' | 'subscribed' | 'degraded' | 'error';
@@ -128,9 +129,11 @@ export function parseInboxInvalidation(
  * error, an unexpected close, or a missed heartbeat all mark the connection
  * 'degraded' and drive an automatic resubscribe with exponential backoff
  * (1s, 2s, 4s… capped at 30s) until a fresh pair of channels is fully
- * subscribed again. Bumping `resubscribeNonce` forces an immediate full
- * teardown and reconnect — used on app foreground/resume — and always uses
- * whatever `accessToken` is current at that moment.
+ * subscribed again. In a browser, retries wait while it reports being
+ * offline and run at once when the network returns. Bumping
+ * `resubscribeNonce` forces an immediate full teardown and reconnect — used
+ * on app foreground/resume — and always uses whatever `accessToken` is
+ * current at that moment.
  */
 export function useUserRealtime(input: {
   enabled: boolean;
@@ -213,6 +216,13 @@ export function useUserRealtime(input: {
       retryTimer = setTimeout(() => {
         retryTimer = null;
         if (!active || accessEnded) return;
+        // Joins made while the browser is offline only queue behind the dead
+        // socket and are replayed, already stale, ahead of the live ones when
+        // it returns. Keep waiting; the network coming back retries at once.
+        if (browserReportsOffline()) {
+          scheduleRetry();
+          return;
+        }
         void connect();
       }, delay);
     };
@@ -309,6 +319,15 @@ export function useUserRealtime(input: {
       });
     };
 
+    // The backoff can have grown to 30 s by the time the network is back;
+    // start over now rather than leave new messages waiting on it.
+    const stopListeningForNetwork = onNetworkReturn(() => {
+      if (!active || accessEnded || !degraded) return;
+      clearRetryTimer();
+      retryCount = 0;
+      void connect();
+    });
+
     client.realtime.onHeartbeat?.((status: string) => {
       if (!active || accessEnded) return;
       if (status === 'ok') armHeartbeatWatchdog();
@@ -319,6 +338,7 @@ export function useUserRealtime(input: {
 
     return () => {
       active = false;
+      stopListeningForNetwork();
       onStateChange('idle');
       clearRetryTimer();
       clearHeartbeatTimer();

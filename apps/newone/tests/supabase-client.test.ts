@@ -21,6 +21,7 @@ function loadSupabase(input: {
     return instance;
   });
   const authStorage = { name: 'controlled-secure-storage' };
+  const networkListeners: (() => void)[] = [];
 
   jest.doMock('react-native-url-polyfill/auto', () => ({}));
   jest.doMock('react-native', () => ({ Platform: { OS: input.platform } }));
@@ -33,9 +34,15 @@ function loadSupabase(input: {
     publicRuntimeConfig: { supabase: input.supabase },
   }));
   jest.doMock('@/lib/secure-storage', () => ({ authStorage }));
+  jest.doMock('@/lib/network-return', () => ({
+    onNetworkReturn: (listener: () => void) => {
+      networkListeners.push(listener);
+      return () => undefined;
+    },
+  }));
 
   const supabase = jest.requireActual<typeof import('@/lib/supabase')>('@/lib/supabase');
-  return { authStorage, clients, createClient, supabase };
+  return { authStorage, clients, createClient, networkListeners, supabase };
 }
 
 const configured = {
@@ -212,4 +219,61 @@ describe('Supabase client boundaries', () => {
     supabase.setRealtimeAccessToken(null);
     await expect(options.accessToken()).resolves.toBeNull();
   });
+
+  test('the web realtime socket reconnects the moment the network returns, not on its backoff', () => {
+    // Phoenix waited 1 s, 2 s, 5 s, then 10 s between tries and never
+    // listened for the network, so typing sent while it waited was lost
+    // (Sep 23 2026).
+    const { clients, networkListeners, supabase } = loadSupabase({
+      platform: 'web',
+      nativeConfigured: false,
+      apiConfigured: true,
+      supabase: configured,
+    });
+    supabase.getRealtimeClient();
+    supabase.getRealtimeClient();
+    expect(networkListeners).toHaveLength(1);
+
+    const socket = fakeSocket({ connected: false, channels: 2 });
+    clients[0].realtime = socket;
+    networkListeners[0]();
+    expect(socket.reconnectTimer.reset).toHaveBeenCalledTimes(1);
+    expect(socket.reconnectTimer.callback).toHaveBeenCalledTimes(1);
+  });
+
+  test('a reconnect is only forced for a dropped socket that still has channels to carry', () => {
+    const { supabase } = loadSupabase({
+      platform: 'web',
+      nativeConfigured: false,
+      apiConfigured: true,
+      supabase: configured,
+    });
+    const reconnect = (socket: ReturnType<typeof fakeSocket> | undefined) => (
+      supabase.reconnectRealtimeNow(socket as unknown as Parameters<typeof supabase.reconnectRealtimeNow>[0])
+    );
+    const connected = fakeSocket({ connected: true, channels: 2 });
+    const connecting = fakeSocket({ connecting: true, channels: 2 });
+    const closedOnPurpose = fakeSocket({ channels: 0 });
+    const dropped = fakeSocket({ channels: 1 });
+
+    expect(reconnect(undefined)).toBe(false);
+    expect(reconnect(connected)).toBe(false);
+    expect(reconnect(connecting)).toBe(false);
+    expect(reconnect(closedOnPurpose)).toBe(false);
+    for (const socket of [connected, connecting, closedOnPurpose]) {
+      expect(socket.reconnectTimer.callback).not.toHaveBeenCalled();
+    }
+    expect(reconnect(dropped)).toBe(true);
+    expect(dropped.reconnectTimer.reset).toHaveBeenCalledTimes(1);
+    expect(dropped.reconnectTimer.callback).toHaveBeenCalledTimes(1);
+  });
 });
+
+function fakeSocket(input: { connected?: boolean; connecting?: boolean; channels: number }) {
+  return {
+    isConnected: () => input.connected ?? false,
+    isConnecting: () => input.connecting ?? false,
+    getChannels: () => Array.from({ length: input.channels }, (_, index) => ({ topic: `topic-${index}` })),
+    reconnectTimer: { reset: jest.fn(), callback: jest.fn() },
+  };
+}

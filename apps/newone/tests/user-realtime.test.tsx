@@ -28,6 +28,20 @@ jest.mock('@/lib/supabase', () => ({
   getRealtimeClient: () => mockGetRealtimeClient(),
 }));
 
+const mockNetwork = { offline: false, listeners: new Set<() => void>() };
+jest.mock('@/lib/network-return', () => ({
+  browserReportsOffline: () => mockNetwork.offline,
+  onNetworkReturn: (listener: () => void) => {
+    mockNetwork.listeners.add(listener);
+    return () => { mockNetwork.listeners.delete(listener); };
+  },
+}));
+
+function networkReturns() {
+  mockNetwork.offline = false;
+  for (const listener of [...mockNetwork.listeners]) listener();
+}
+
 function emitHeartbeat(status: HeartbeatStatus) {
   heartbeatCallback?.(status);
 }
@@ -86,6 +100,8 @@ function RealtimeHarness(props: {
 }
 
 beforeEach(() => {
+  mockNetwork.offline = false;
+  mockNetwork.listeners.clear();
   subscriptions.clear();
   broadcasts.clear();
   channelOptions.clear();
@@ -346,6 +362,60 @@ describe('private Realtime subscription lifecycle', () => {
     expect(mockSetAuth).toHaveBeenCalledTimes(5);
 
     await view.unmount();
+    jest.clearAllTimers();
+  });
+
+  test('an offline browser queues no joins; the network coming back resubscribes at once', async () => {
+    // Joins made offline sat behind the dead socket and were replayed, stale,
+    // ahead of the live ones; and a backoff grown to 30 s kept new messages
+    // waiting that long after the Wi-Fi came back (Sep 23 2026).
+    jest.useFakeTimers();
+    const onStateChange = jest.fn();
+    const onReconcile = jest.fn();
+    const inboxTopic = 'org:org-a:user:user-a:inbox';
+    const controlTopic = 'org:org-a:user:user-a:control';
+    const view = await render(
+      <RealtimeHarness
+        onAccessEnded={jest.fn()}
+        onInvalidate={jest.fn()}
+        onReconcile={onReconcile}
+        onStateChange={onStateChange}
+      />,
+    );
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    await act(async () => {
+      subscriptions.get(inboxTopic)?.('SUBSCRIBED');
+      subscriptions.get(controlTopic)?.('SUBSCRIBED');
+    });
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+
+    // Back online while healthy: nothing to redo.
+    await act(async () => { networkReturns(); });
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+
+    mockNetwork.offline = true;
+    await act(async () => { subscriptions.get(inboxTopic)?.('CHANNEL_ERROR'); });
+    expect(onStateChange).toHaveBeenLastCalledWith('degraded');
+    await act(async () => { await jest.advanceTimersByTimeAsync(120_000); });
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+
+    await act(async () => { networkReturns(); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    expect(mockSetAuth).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      subscriptions.get(inboxTopic)?.('SUBSCRIBED');
+      subscriptions.get(controlTopic)?.('SUBSCRIBED');
+    });
+    expect(onStateChange).toHaveBeenLastCalledWith('subscribed');
+    expect(onReconcile).toHaveBeenCalledTimes(2);
+
+    // The backoff started over: a later failure retries after 1 s.
+    await act(async () => { subscriptions.get(inboxTopic)?.('CHANNEL_ERROR'); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(1_000); });
+    expect(mockSetAuth).toHaveBeenCalledTimes(3);
+
+    await view.unmount();
+    expect(mockNetwork.listeners.size).toBe(0);
     jest.clearAllTimers();
   });
 

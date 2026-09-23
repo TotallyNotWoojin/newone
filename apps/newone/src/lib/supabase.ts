@@ -11,6 +11,7 @@ import {
   publicRuntimeConfig,
 } from '@/config/runtime';
 import type { Database } from '@/data/database.types';
+import { onNetworkReturn } from '@/lib/network-return';
 // Metro selects the native or web suffix; ESLint's Node resolver cannot model it.
 // eslint-disable-next-line import/no-unresolved
 import { authStorage } from '@/lib/secure-storage';
@@ -36,6 +37,28 @@ let realtimeAccessToken: string | null = null;
  */
 export function setRealtimeAccessToken(token: string | null) {
   realtimeAccessToken = token;
+}
+
+type RealtimeSocket = SupabaseClient<Database>['realtime'];
+
+/**
+ * Reconnect a dropped realtime socket now instead of on its backoff. Phoenix
+ * retries a lost socket after 1 s, 2 s, 5 s and then every 10 s, and it does
+ * not listen for the network coming back, so a laptop back on Wi-Fi sat up to
+ * ten seconds without realtime and then spent a few more replaying the joins
+ * queued while offline. Typing that happened in that gap never arrived: the
+ * friend's dots only came back if they were still typing once the socket
+ * did (Sep 23 2026). Returns whether a reconnect was started. A socket with
+ * no channels left was closed on purpose and stays closed.
+ */
+export function reconnectRealtimeNow(realtime: RealtimeSocket | undefined): boolean {
+  if (!realtime || realtime.isConnected() || realtime.isConnecting()) return false;
+  if (realtime.getChannels().length === 0) return false;
+  const timer = realtime.reconnectTimer;
+  if (!timer || typeof timer.callback !== 'function') return false;
+  timer.reset();
+  timer.callback();
+  return true;
 }
 
 export function getSupabaseClient() {
@@ -85,5 +108,7 @@ export function getRealtimeClient() {
       global: { headers: { 'x-client-info': 'newone-expo/web-realtime-only' } },
     },
   );
+  const realtimeClient = webRealtimeClient;
+  onNetworkReturn(() => { reconnectRealtimeNow(realtimeClient.realtime); });
   return webRealtimeClient;
 }
