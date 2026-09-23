@@ -60,6 +60,7 @@ import {
   attachmentReady,
   AwaitingAttachment,
   ImageAttachment,
+  useArrivalWindowPassed,
   isVideoAttachment,
   TransferControls,
   VideoMessageAttachment,
@@ -1434,7 +1435,17 @@ const MessageBubble = memo(function MessageBubble({
     if (currentUserId !== null && userId === currentUserId) return mention.you;
     return workspace.people.find((person) => person.id === userId)?.displayName ?? mention.member;
   });
-  const attachment = message.attachment;
+  const arrivalWindowPassed = useArrivalWindowPassed(message.createdAt);
+  // An upload abandoned after its grant leaves the file pending on the server
+  // for good; past the window it reads "not sent", not "Uploading" forever.
+  const abandonedAttachment = Boolean(
+    message.attachment
+    && !message.attachment.transfer
+    && message.attachment.status !== 'clean'
+    && message.attachment.status !== 'blocked'
+    && arrivalWindowPassed,
+  );
+  const attachment = abandonedAttachment ? undefined : message.attachment;
   const caption = message.originalText.trim();
   const imageAttachment = attachment?.kind === 'image';
   const inlineVideo = attachment ? isVideoAttachment(attachment) && attachmentReady(attachment) : false;
@@ -1632,7 +1643,7 @@ const MessageBubble = memo(function MessageBubble({
             ) : (
               <AttachmentCard message={message} onDownload={() => onDownload(message)} />
             )
-          ) : message.awaitingAttachment && !message.deleted ? (
+          ) : (message.awaitingAttachment || abandonedAttachment) && !message.deleted ? (
             <AwaitingAttachment createdAt={message.createdAt} />
           ) : null}
 

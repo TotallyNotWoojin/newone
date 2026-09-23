@@ -2472,6 +2472,26 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     expect(screen.queryByText('chat.attachmentOnItsWay')).toBeNull();
   });
 
+  test('a file whose upload was abandoned reads "not sent" once the window has passed, not "Uploading" forever', async () => {
+    // Reloading mid-upload left the file pending on the server for good.
+    const file = (minutesAgo: number) => incomingMessage({
+      id: `file-${minutesAgo}`, serverId: `file-${minutesAgo}`, originalText: '',
+      createdAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+      attachment: {
+        id: `attachment-${minutesAgo}`, kind: 'document', name: `plans-${minutesAgo}.pdf`, sizeLabel: '35 B',
+        status: 'scanning', mimeType: 'application/pdf', byteSize: 35,
+      },
+    });
+    const view = await render(<ConversationPane conversation={conversation()} messages={[file(2)]} onSend={noopSend} />);
+    expect(screen.getByText('plans-2.pdf')).toBeTruthy();
+    expect(screen.queryByText('chat.attachmentNotSent')).toBeNull();
+    await view.unmount();
+
+    await render(<ConversationPane conversation={conversation()} messages={[file(45)]} onSend={noopSend} />);
+    expect(screen.getByText('chat.attachmentNotSent')).toBeTruthy();
+    expect(screen.queryByText('plans-45.pdf')).toBeNull();
+  });
+
   test('the Chats row names a photo or file still on its way instead of saying the chat is empty', () => {
     const t = (key: string) => key;
     expect(attachmentPreviewLine({ lastMessageAwaitingAttachment: true }, t)).toBe('chat.previewAttachment');

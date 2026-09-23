@@ -254,6 +254,13 @@ export function ProgressRing({
 /** How long a photo or file may take to arrive before its bubble says it was not sent. */
 export const ATTACHMENT_ARRIVAL_WINDOW_MS = 30 * 60_000;
 
+/** Whether a message sent at `createdAt` is past that window, as of when it was drawn. */
+export function useArrivalWindowPassed(createdAt?: string) {
+  const [shownAt] = useState(() => Date.now());
+  const sentAt = Date.parse(createdAt ?? '');
+  return Number.isFinite(sentAt) && shownAt - sentAt > ATTACHMENT_ARRIVAL_WINDOW_MS;
+}
+
 /**
  * The bubble of a photo or file that has not reached the server yet: the
  * sender's upload is still running, or was refused and never retried. The
@@ -264,9 +271,7 @@ export function AwaitingAttachment({ createdAt }: { createdAt?: string }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
-  const [shownAt] = useState(() => Date.now());
-  const sentAt = Date.parse(createdAt ?? '');
-  const late = Number.isFinite(sentAt) && shownAt - sentAt > ATTACHMENT_ARRIVAL_WINDOW_MS;
+  const late = useArrivalWindowPassed(createdAt);
   return (
     <View style={styles.awaiting} testID="attachment-awaiting">
       <Ionicons

@@ -1,6 +1,7 @@
 import {
   AppState,
   Linking,
+  Platform,
 } from 'react-native';
 import {
   createContext,
@@ -982,6 +983,8 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const attachmentCancellationsRef = useRef(new Map<string, AttachmentCancellation>());
   // Uploads leave one at a time; see performAttachmentUpload.
   const attachmentUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  // Uploads queued or running, for the leave-page guard below.
+  const uploadsInFlightRef = useRef(0);
   const attachmentScanTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const conversationAvatarCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const conversationAvatarTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -3680,8 +3683,28 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         : undefined
     ));
     attachmentUploadQueueRef.current = run.catch(() => undefined);
+    uploadsInFlightRef.current += 1;
+    const settled = () => { uploadsInFlightRef.current -= 1; };
+    run.then(settled, settled);
     return run;
   }, [runAttachmentUpload]);
+
+  // Reloading or closing the page mid-upload abandoned the photo: its message
+  // was already sent, so the other side waited on a file that never came and
+  // this side had nothing left to retry (a full live web run, Sep 23 2026).
+  // While anything is queued or uploading, the browser asks first.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return undefined;
+    }
+    const warn = (event: BeforeUnloadEvent) => {
+      if (uploadsInFlightRef.current === 0) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, []);
 
   const handleAttachmentUploadFailure = useCallback(async (
     operation: AttachmentUploadOperation,
