@@ -46,7 +46,16 @@ const RATE_LIMIT_OPERATION_ALIASES = {
   'attachment.grant': 'attachment.upload.create',
 } satisfies Partial<Record<RouteKind, string>>;
 
-export function rateLimitOperation(kind: RouteKind): string {
+/**
+ * The grant route hands out both upload and download links, and they used to
+ * share the upload budget (10 a minute): opening a chat with a dozen photos
+ * spent it on previews, and a file sent in the same minute was refused before
+ * it reached the database (live web suite, Sep 23 2026). A download link is
+ * for something the reader can already see, so it counts against its own,
+ * ordinary budget.
+ */
+export function rateLimitOperation(kind: RouteKind, values?: Record<string, unknown>): string {
+  if (kind === 'attachment.grant' && values?.action === 'download') return 'attachment.download.create';
   return RATE_LIMIT_OPERATION_ALIASES[kind as keyof typeof RATE_LIMIT_OPERATION_ALIASES] ?? kind;
 }
 
@@ -230,7 +239,7 @@ export function createApiHandler(
           config,
           actor,
           command.organizationId,
-          rateLimitOperation(route.kind),
+          rateLimitOperation(route.kind, command.values),
         );
       }
 
@@ -249,7 +258,7 @@ export function createApiHandler(
           config,
           actor,
           command.organizationId,
-          rateLimitOperation(route.kind),
+          rateLimitOperation(route.kind, command.values),
         );
       }
 

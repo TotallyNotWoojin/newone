@@ -198,7 +198,7 @@ export function ProjectsPanel({
       </View>
 
       {sidebar && collapsed ? null : !projects ? (
-        <ActivityIndicator color={colors.mintDark} style={styles.loading} />
+        <ActivityIndicator accessibilityLabel={t('projects.title')} color={colors.mintDark} style={styles.loading} />
       ) : list.length === 0 ? (
         sidebar ? null : <Text style={styles.empty}>{t('projects.empty')}</Text>
       ) : (
@@ -538,7 +538,7 @@ function ItemRow({
         <View style={styles.itemCopy}>
           {pending ? (
             <View style={styles.pendingRow}>
-              <ActivityIndicator color={colors.plum} size="small" />
+              <ActivityIndicator accessibilityLabel={t('projects.pendingSummary')} color={colors.plum} size="small" />
               <Text style={styles.itemMeta}>{t('projects.pendingSummary')}</Text>
             </View>
           ) : (
@@ -572,7 +572,7 @@ function ItemRow({
             disabled={exporting !== null}
             onPress={() => void exportAs('pdf')}
             style={({ pressed }) => [styles.format, pressed && styles.pressed]}>
-            {exporting === 'pdf' ? <ActivityIndicator size="small" color={colors.ink} /> : <Text style={styles.formatText}>PDF</Text>}
+            {exporting === 'pdf' ? <ActivityIndicator accessibilityLabel="PDF" size="small" color={colors.ink} /> : <Text style={styles.formatText}>PDF</Text>}
           </Pressable>
           <Pressable
             accessibilityLabel={`Word: ${label}`}
@@ -580,7 +580,7 @@ function ItemRow({
             disabled={exporting !== null}
             onPress={() => void exportAs('docx')}
             style={({ pressed }) => [styles.format, pressed && styles.pressed]}>
-            {exporting === 'docx' ? <ActivityIndicator size="small" color={colors.ink} /> : <Text style={styles.formatText}>Word</Text>}
+            {exporting === 'docx' ? <ActivityIndicator accessibilityLabel="Word" size="small" color={colors.ink} /> : <Text style={styles.formatText}>Word</Text>}
           </Pressable>
         </View>
       ) : null}

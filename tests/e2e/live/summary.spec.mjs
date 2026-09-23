@@ -12,18 +12,22 @@ test('a summary shows its header and short lines, and PDF and Word download real
   liveWorkspace,
 }, testInfo) => {
   test.setTimeout(360_000);
-  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  // A single hello is not enough to recap (owner, Sep 23 2026): the sheet
+  // says so and keeps the button off. The chat with the third person holds
+  // only that hello; no other spec writes to it.
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.third.displayName}:`) }).click();
   await expect(chats.getByTestId('composer-input')).toBeVisible();
   await chats.getByRole('button', { name: 'Summarize' }).click();
   const sheet = chats.getByRole('heading', { name: 'Summary' });
   await expect(sheet).toBeVisible();
-  // A handful of short hellos is not enough to recap (owner, Sep 23 2026):
-  // the sheet says so and keeps the button off until there is.
   const summarize = chats.getByRole('button', { name: 'Summarize conversation' });
   await expect(chats.getByTestId('summary-not-enough')).toBeVisible({ timeout: 15_000 });
   await expect(chats.getByText('Not enough conversation in this range to summarize yet.')).toBeVisible();
   await expect(summarize).toBeDisabled();
   await chats.getByRole('button', { name: 'Close dialog' }).last().click();
+
+  await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
+  await expect(chats.getByTestId('composer-input')).toBeVisible();
 
   const { keys, sessions, conversationId } = liveWorkspace;
   await sendText(keys, sessions.friend, conversationId, 's-f1',

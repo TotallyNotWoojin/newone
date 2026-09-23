@@ -31,6 +31,9 @@ Deno.test('rate-limit operation aliases preserve command-specific policy buckets
   assertEquals(rateLimitOperation('conversation.direct'), 'conversation.direct.create');
   assertEquals(rateLimitOperation('conversation.group'), 'conversation.group.create');
   assertEquals(rateLimitOperation('attachment.grant'), 'attachment.upload.create');
+  assertEquals(rateLimitOperation('attachment.grant', { action: 'upload' }), 'attachment.upload.create');
+  // A download link spends its own budget, never the upload one.
+  assertEquals(rateLimitOperation('attachment.grant', { action: 'download' }), 'attachment.download.create');
   assertEquals(rateLimitOperation('message.send'), 'message.send');
 });
 
