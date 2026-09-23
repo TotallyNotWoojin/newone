@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Fotos que no se envían\n\nSi una foto o un archivo no se puede enviar en ese momento (por ejemplo, después de enviar muchos en un minuto), ahora se queda en el chat, atenuado, con el motivo y un botón Reintentar, en lugar de convertirse en una burbuja vacía. Reintentar lo envía en cuanto se pueda.\n\nTambién corregido: una foto que acababas de enviar podía perder su vista previa y su progreso mientras el chat se marcaba como leído.\n\nEn la web, los puntos de \"escribiendo\" y los mensajes nuevos vuelven en cuanto vuelve tu conexión.\n\nPor favor revisa\n\n- Envía varias fotos seguidas y mira cada una hasta que se envíe.\n- Activa el modo avión mientras se envía una foto, desactívalo y toca Reintentar.",
+  "whatsNewPlay": "Las fotos que no se pueden enviar en ese momento ahora se quedan en el chat con el motivo y un botón Reintentar, en lugar de una burbuja vacía. Una foto recién enviada ya no pierde su vista previa ni su progreso. En la web, los puntos de \"escribiendo\" y los mensajes nuevos vuelven en cuanto vuelve la conexión."
+}

@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Photos that don't go through\n\nIf a photo or file can't be sent right away (for example, after sending a lot of them within a minute), it now stays in the chat, dimmed, with the reason and a Retry button, instead of turning into an empty bubble. Retry sends it once it can.\n\nAlso fixed: a photo you had just sent could lose its preview and progress while the chat was marking itself read.\n\nOn the web, the typing dots and new messages come back as soon as your connection does.\n\nPlease check\n\n- Send several photos in a row and watch each one until it's sent.\n- Turn on airplane mode while a photo is sending, turn it off, and tap Retry.",
+  "whatsNewPlay": "Photos that can't be sent right away now stay in the chat with the reason and a Retry button, instead of an empty bubble. A photo you had just sent no longer loses its preview and progress. On the web, typing dots and new messages come back as soon as your connection does."
+}
