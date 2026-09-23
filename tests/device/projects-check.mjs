@@ -272,7 +272,27 @@ if (signedIn) {
     });
     maestro('close-sheet.yaml', {});
   }
-  await step('07-copy-image', 'Copy the friend\'s photo from the message menu, then paste it back in the attachment sheet', 'copy-image.yaml', {});
+  const copied = await step('07-copy-image', 'Copy the friend\'s photo from the message menu, then paste it back in the attachment sheet', 'copy-image.yaml', {});
+  if (copied) {
+    await step('07b-send-pasted', 'Send the pasted photo into the group; it stays in its bubble through the upload and lands clean', 'send-pasted.yaml', {}, async () => {
+      // The server holds it as the owner's photo, clean, and it was filed
+      // into the project selected while it was sent.
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const response = await post(owner, 'newone-read', `/v2/conversations/${groupId}/messages/query`, { limit: 50 });
+        if (response.status !== 200) throw new Error(`messages read ${response.status}`);
+        const mine = (data(response)?.messages ?? []).filter((row) => (
+          (row.sender?.userId ?? row.senderUserId) === owner.userId && row.kind === 'attachment'
+        ));
+        const clean = mine.find((row) => (row.attachments ?? []).some((attachment) => attachment.scanStatus === 'clean'));
+        if (clean) {
+          const uploads = (await projectsOf()).items?.filter((item) => item.kind === 'upload') ?? [];
+          return { ok: uploads.length >= 1, detail: { messageId: clean.id ?? clean.messageId, uploads: uploads.length } };
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+      }
+      return { ok: false, detail: 'no clean photo from the owner in the group' };
+    });
+  }
   maestro('close-sheet.yaml', {});
   await step('08-find', '찾기 finds the chat a word came up in and opens it there', 'find.yaml', {
     GROUP: groupName,

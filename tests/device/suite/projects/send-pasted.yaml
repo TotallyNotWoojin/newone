@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.gist
+---
+# Send the pasted picture into the group. The chat marks itself read the
+# moment the photo becomes its newest message, which used to erase the photo
+# from the app's state (Sep 23 2026); it has to stay on screen through its
+# upload and end up openable.
+- tapOn:
+    id: "attachment-send"
+# A second tap races the first send closing the sheet (media-01); a button that
+# has already gone is the outcome this waits for.
+- runFlow:
+    when:
+      visible:
+        id: "attachment-send"
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn:
+          id: "attachment-send"
+          optional: true
+- extendedWaitUntil:
+    notVisible:
+      id: "attachment-send"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: ".*(Uploading|Upload progress|Preparing upload|Open image full screen).*"
+    timeout: 60000
+- assertNotVisible: "Retry upload"
