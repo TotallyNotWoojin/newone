@@ -26,10 +26,12 @@ test('a photo the other person is still sending says so, then turns into the pho
   const photos = pane.getByLabel('Open image full screen');
   const photosBefore = await photos.count();
 
-  const messageId = await startAttachment(keys, sessions.friend, conversationId, { label: 'pending-photo' });
+  // The chat is shared with the other specs, so count rather than assume.
   const waiting = pane.getByTestId('attachment-awaiting');
-  await expect(waiting).toBeVisible({ timeout: 30_000 });
-  await expect(waiting).toContainText('Photo or file on its way…');
+  const waitingBefore = await waiting.count();
+  const messageId = await startAttachment(keys, sessions.friend, conversationId, { label: 'pending-photo' });
+  await expect(waiting).toHaveCount(waitingBefore + 1, { timeout: 30_000 });
+  await expect(waiting.first()).toContainText('Photo or file on its way…');
   // The Chats row names it rather than claiming the chat is empty.
   const row = chats.getByRole('button', { name: new RegExp(`^${friend.displayName}:`) });
   await expect(row).toContainText('Attachment');
@@ -43,7 +45,7 @@ test('a photo the other person is still sending says so, then turns into the pho
     bytes: readFileSync(PHOTO),
   });
   await expect(photos).toHaveCount(photosBefore + 1, { timeout: 45_000 });
-  await expect(waiting).toHaveCount(0);
+  await expect(waiting).toHaveCount(waitingBefore);
   await expect.poll(() => photos.last().evaluate((element) => {
     const image = element.querySelector('img');
     return Boolean(image && image.complete && image.naturalWidth > 0);

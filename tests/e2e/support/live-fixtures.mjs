@@ -70,7 +70,30 @@ export const test = base.extend({
     await signedInPage.goto('/');
     await signedInPage.getByTestId('conversation-list').waitFor({ state: 'visible', timeout: 60_000 });
     await use(signedInPage);
+    // A test that sends a file may end once the file shows in the chat, with
+    // its upload still running; the next test's goto('/') then reloaded the
+    // app mid-upload and abandoned it (a full live run, Sep 23 2026). Whatever
+    // a test sends has to finish before the page is handed on.
+    await waitForUploadsToFinish(signedInPage);
   },
 });
+
+/** Waits until nothing on the page is preparing or uploading. */
+export async function waitForUploadsToFinish(page, timeout = 120_000) {
+  const busy = () => page.evaluate(() => {
+    const pattern = /^(Uploading|Preparing upload|Upload progress)|, (Uploading|Preparing upload)$/;
+    const labels = [...document.querySelectorAll('[aria-label]')]
+      .map((element) => element.getAttribute('aria-label') ?? '')
+      .filter((label) => pattern.test(label));
+    return labels.length ? labels : null;
+  }).catch(() => null);
+  const deadline = Date.now() + timeout;
+  let still = await busy();
+  while (still && Date.now() < deadline) {
+    await page.waitForTimeout(1_000);
+    still = await busy();
+  }
+  if (still) throw new Error(`uploads never finished: ${still.join(' | ')}`);
+}
 
 export { expect } from '@playwright/test';
