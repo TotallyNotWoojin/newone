@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Photos on their way\n\nWhen someone sends you a photo or file, its message can reach you a few seconds before the file does. It used to show as an empty bubble, and the chat list said \"No messages yet\". Now the bubble says \"Photo or file on its way…\" and turns into the photo as soon as it arrives, and the chat list says \"Attachment\". If it never arrives (the sender's upload failed and wasn't retried), the bubble says so after half an hour.\n\nThe chat list also names what you just sent in your own language right away.\n\nOn the web, reloading or closing the page while a photo or file is still uploading now asks first, so an upload isn't lost by accident.\n\nPlease check\n\n- Ask someone to send you a large photo and watch the bubble while it arrives.\n- Send a photo and look at the chat list while it uploads.",
+  "whatsNewPlay": "When someone sends you a photo or file, its bubble now says \"Photo or file on its way…\" until the file arrives, instead of showing up empty, and the chat list says \"Attachment\" instead of \"No messages yet\". On the web, leaving the page mid-upload asks first."
+}

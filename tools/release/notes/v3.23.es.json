@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Fotos en camino\n\nCuando alguien te envía una foto o un archivo, el mensaje puede llegarte unos segundos antes que el archivo. Antes se veía como una burbuja vacía y la lista de chats decía \"Aún no hay mensajes\". Ahora la burbuja dice \"Foto o archivo en camino…\" y se convierte en la foto en cuanto llega, y la lista de chats dice \"Archivo adjunto\". Si nunca llega (la subida de quien lo envió falló y no se reintentó), la burbuja lo dice después de media hora.\n\nLa lista de chats también muestra lo que acabas de enviar en tu idioma de inmediato.\n\nEn la web, recargar o cerrar la página mientras una foto o un archivo todavía se sube ahora pregunta antes, para que una subida no se pierda por accidente.\n\nPor favor revisa\n\n- Pide a alguien que te envíe una foto grande y mira la burbuja mientras llega.\n- Envía una foto y mira la lista de chats mientras se sube.",
+  "whatsNewPlay": "Cuando alguien te envía una foto o un archivo, su burbuja ahora dice \"Foto o archivo en camino…\" hasta que llega el archivo, en lugar de verse vacía, y la lista de chats dice \"Archivo adjunto\" en lugar de \"Aún no hay mensajes\". En la web, salir de la página a mitad de una subida ahora pregunta antes."
+}
