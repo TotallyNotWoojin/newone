@@ -23,15 +23,19 @@ test('a photo the other person is still sending says so, then turns into the pho
   await chats.getByRole('button', { name: new RegExp(`^${friend.displayName}:`) }).click();
   await expect(chats.getByTestId('composer-input')).toBeVisible();
   const pane = chats.getByTestId('keyboard-avoiding-screen');
-  const photos = pane.getByLabel('Open image full screen');
-  const photosBefore = await photos.count();
+  // The chat is shared with the other specs, so look at the newest message
+  // rather than counting: the list keeps the newest first in the page.
+  const newest = () => pane.evaluate((root) => {
+    const element = root.querySelector('[data-testid="attachment-awaiting"], [aria-label="Open image full screen"]');
+    if (!element) return null;
+    if (element.getAttribute('data-testid') === 'attachment-awaiting') return { kind: 'waiting', text: element.textContent };
+    const image = element.querySelector('img');
+    return { kind: 'photo', painted: Boolean(image && image.complete && image.naturalWidth > 0) };
+  });
 
-  // The chat is shared with the other specs, so count rather than assume.
-  const waiting = pane.getByTestId('attachment-awaiting');
-  const waitingBefore = await waiting.count();
   const messageId = await startAttachment(keys, sessions.friend, conversationId, { label: 'pending-photo' });
-  await expect(waiting).toHaveCount(waitingBefore + 1, { timeout: 30_000 });
-  await expect(waiting.first()).toContainText('Photo or file on its way…');
+  await expect.poll(newest, { timeout: 30_000 }).toMatchObject({ kind: 'waiting' });
+  expect((await newest()).text).toContain('Photo or file on its way…');
   // The Chats row names it rather than claiming the chat is empty.
   const row = chats.getByRole('button', { name: new RegExp(`^${friend.displayName}:`) });
   await expect(row).toContainText('Attachment');
@@ -44,12 +48,7 @@ test('a photo the other person is still sending says so, then turns into the pho
     mimeType: 'image/jpeg',
     bytes: readFileSync(PHOTO),
   });
-  await expect(photos).toHaveCount(photosBefore + 1, { timeout: 45_000 });
-  await expect(waiting).toHaveCount(waitingBefore);
-  await expect.poll(() => photos.last().evaluate((element) => {
-    const image = element.querySelector('img');
-    return Boolean(image && image.complete && image.naturalWidth > 0);
-  }), { timeout: 30_000 }).toBe(true);
+  await expect.poll(newest, { timeout: 60_000 }).toEqual({ kind: 'photo', painted: true });
   await expect(row).toContainText('Photo');
   await chats.screenshot({ path: testInfo.outputPath('pending-attachment-arrived.png') });
 });

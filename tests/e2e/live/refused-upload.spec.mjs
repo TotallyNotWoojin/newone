@@ -26,8 +26,6 @@ test('a photo the server refuses keeps its bubble with the reason and Retry, and
   await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
   await expect(chats.getByTestId('composer-input')).toBeVisible();
   const pane = chats.getByTestId('keyboard-avoiding-screen');
-  const photos = pane.getByLabel('Open image full screen');
-  const photosBefore = await photos.count();
 
   // Ten real uploads into the group at once, the whole minute's budget. The
   // grant is what spends it, and all ten are granted within seconds.
@@ -77,22 +75,29 @@ test('a photo the server refuses keeps its bubble with the reason and Retry, and
   if (wait > 0) await chats.waitForTimeout(wait);
   await retry.click();
   await expect(retry).toHaveCount(0, { timeout: 45_000 });
-  await expect(photos).toHaveCount(photosBefore + 1, { timeout: 45_000 });
-  await expectPainted(photos.last());
+  await expectNewestPhotoPainted(pane);
   await chats.screenshot({ path: testInfo.outputPath('refused-upload-retried.png') });
 
   // And it is the server's photo now, not a leftover on this page.
   await chats.reload();
   await chats.getByRole('button', { name: new RegExp(`^${liveWorkspace.friend.displayName}:`) }).click();
-  await expect(photos).toHaveCount(photosBefore + 1, { timeout: 45_000 });
-  await expectPainted(photos.last());
+  await expectNewestPhotoPainted(pane);
   await chats.screenshot({ path: testInfo.outputPath('refused-upload-reloaded.png') });
 });
 
-/** The picture itself has loaded, not only the button that opens it. */
-async function expectPainted(photo) {
-  await expect.poll(() => photo.evaluate((element) => {
+/**
+ * The newest photo-or-upload in the chat is a photo whose picture has loaded,
+ * not only the button that opens it. The list keeps the newest message first
+ * in the page, and a photo still uploading is labelled "Uploading", so an
+ * older photo can never stand in for this one.
+ */
+async function expectNewestPhotoPainted(pane) {
+  await expect.poll(() => pane.evaluate((root) => {
+    const element = root.querySelector(
+      '[aria-label="Open image full screen"], [aria-label="Uploading"], [data-testid="attachment-awaiting"]',
+    );
+    if (element?.getAttribute('aria-label') !== 'Open image full screen') return false;
     const image = element.querySelector('img');
     return Boolean(image && image.complete && image.naturalWidth > 0);
-  }), { timeout: 30_000 }).toBe(true);
+  }), { timeout: 60_000 }).toBe(true);
 }
