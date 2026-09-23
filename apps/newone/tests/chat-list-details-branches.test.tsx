@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
+import { projectWorkspaceFields } from './fixtures/project-workspace';
 
 let mockWorkspace: any;
 
@@ -53,6 +54,7 @@ function listProps(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mockWorkspace = {
+    ...projectWorkspaceFields(),
     conversationAvatarUrls: {},
     people: [],
     actionBusy: null,

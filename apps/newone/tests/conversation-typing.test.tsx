@@ -8,6 +8,7 @@ import {
 } from '@/data/realtime/use-conversation-typing';
 import type { Message } from '@/domain/types';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { projectWorkspaceFields } from './fixtures/project-workspace';
 
 const mockSetAuth = jest.fn<(_token: string) => Promise<void>>(async () => undefined);
 const mockRemoveChannel = jest.fn<(_channel: unknown) => Promise<void>>(async () => undefined);
@@ -160,6 +161,7 @@ async function noopSend(
 
 function buildWorkspace() {
   return {
+    ...projectWorkspaceFields(),
     actionBusy: null,
     actionError: null,
     actions: [],

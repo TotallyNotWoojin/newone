@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   Image,
   Modal,
@@ -15,6 +15,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { type EdgeInsets, SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import type { CopyImageOutcome } from '@/features/chat/copy-image';
 import { useI18n } from '@/i18n/provider';
 import { spacing } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
@@ -43,6 +44,7 @@ export function ImageViewerModal({
   name,
   onClose,
   onDownload,
+  onCopy,
   onNext,
   onPrevious,
 }: {
@@ -51,6 +53,12 @@ export function ImageViewerModal({
   name?: string | null;
   onClose: () => void;
   onDownload?: () => void;
+  /**
+   * Puts the photo on the clipboard. Called straight from the click (or
+   * Ctrl/Cmd+C on the web), so a browser still counts it as the reader's own
+   * gesture; the viewer says how it went.
+   */
+  onCopy?: () => Promise<CopyImageOutcome>;
   /** Given when the viewer sits on a list: a swipe, a chevron or an arrow key
    * moves along it. Left undefined for a single photo in a bubble. */
   onNext?: () => void;
@@ -65,6 +73,16 @@ export function ImageViewerModal({
   const insets = useContext(SafeAreaInsetsContext ?? NoInsetsContext);
   const topInset = insets?.top ?? 0;
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [copyNotice, setCopyNotice] = useState<'copied' | 'failed' | null>(null);
+  const copyNow = useCallback(() => {
+    void onCopy?.().then((outcome) => setCopyNotice(outcome === 'copied' ? 'copied' : 'failed'));
+  }, [onCopy]);
+  const copy = onCopy ? copyNow : undefined;
+  useEffect(() => {
+    if (!copyNotice) return undefined;
+    const timer = setTimeout(() => setCopyNotice(null), 2500);
+    return () => clearTimeout(timer);
+  }, [copyNotice]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -89,7 +107,15 @@ export function ImageViewerModal({
   useEffect(() => {
     if (Platform.OS !== 'web' || !visible) return undefined;
     if (typeof globalThis.addEventListener !== 'function') return undefined;
-    const onKey = (event: { key?: string; preventDefault?: () => void }) => {
+    const onKey = (event: { key?: string; metaKey?: boolean; ctrlKey?: boolean; preventDefault?: () => void }) => {
+      // Ctrl/Cmd+C copies the photo on screen, as it does in a desktop viewer,
+      // unless the reader has selected some text to copy instead.
+      if (copy && (event.metaKey || event.ctrlKey) && event.key?.toLowerCase() === 'c'
+        && !String(globalThis.getSelection?.() ?? '')) {
+        event.preventDefault?.();
+        copy();
+        return;
+      }
       const step = event.key === 'ArrowRight'
         ? onNext
         : event.key === 'ArrowLeft'
@@ -101,7 +127,7 @@ export function ImageViewerModal({
     };
     globalThis.addEventListener('keydown', onKey as EventListener);
     return () => globalThis.removeEventListener('keydown', onKey as EventListener);
-  }, [onNext, onPrevious, visible]);
+  }, [copy, onNext, onPrevious, visible]);
 
   const toggleChrome = () => setChromeVisible((current) => !current);
 
@@ -241,6 +267,17 @@ export function ImageViewerModal({
                   <Ionicons name="chevron-forward" size={24} color={colors.white} />
                 </Pressable>
               ) : null}
+              {copy ? (
+                <Pressable
+                  accessibilityLabel={t('chat.imageViewerCopy')}
+                  accessibilityRole="button"
+                  hitSlop={12}
+                  onPress={copy}
+                  style={({ pressed }) => [styles.barButton, pressed && styles.pressed]}
+                  testID="image-viewer-copy">
+                  <Ionicons name="copy-outline" size={21} color={colors.white} />
+                </Pressable>
+              ) : null}
               {onDownload ? (
                 <Pressable
                   accessibilityLabel={t('chat.imageViewerDownload')}
@@ -254,6 +291,13 @@ export function ImageViewerModal({
                 <View style={styles.barButton} />
               )}
             </View>
+          </View>
+        ) : null}
+        {copyNotice ? (
+          <View accessibilityLiveRegion="polite" pointerEvents="none" style={styles.noticeWrap}>
+            <Text style={styles.notice}>
+              {t(copyNotice === 'copied' ? 'chat.imageCopied' : 'chat.imageCopyFailed')}
+            </Text>
           </View>
         ) : null}
       </GestureHandlerRootView>
@@ -276,4 +320,15 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   barButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   title: { flex: 1, color: colors.white, fontSize: 15, fontWeight: '600', textAlign: 'center', marginHorizontal: spacing.sm },
   pressed: { opacity: 0.6 },
+  noticeWrap: { position: 'absolute', left: 0, right: 0, bottom: 48, alignItems: 'center' },
+  notice: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
 });

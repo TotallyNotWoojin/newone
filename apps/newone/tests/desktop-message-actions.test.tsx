@@ -68,6 +68,28 @@ describe('what a pointer gets instead of a gesture', () => {
     expect(handlers.onContextMenu).toHaveBeenCalledTimes(1);
   });
 
+  test('a right-click from a pop-up rendered by the row is left to the browser', () => {
+    // The full-screen photo viewer is a portal: React hands its right-click
+    // to the row, but the click was never on the row.
+    const handlers = {
+      onHoverChange: jest.fn<(hovered: boolean) => void>(),
+      onContextMenu: jest.fn<() => void>(),
+    };
+    const props = desktopMessageProps(handlers, 'web') as MouseProps & {
+      onContextMenu?: (event: { preventDefault?: () => void; target?: unknown; currentTarget?: unknown }) => void;
+    };
+    const viewerImage = { id: 'viewer-image' };
+    const bubbleImage = { id: 'bubble-image' };
+    const row = { contains: (node: unknown) => node === bubbleImage };
+    const preventDefault = jest.fn<() => void>();
+    props.onContextMenu?.({ preventDefault, target: viewerImage, currentTarget: row });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(handlers.onContextMenu).not.toHaveBeenCalled();
+    props.onContextMenu?.({ preventDefault, target: bubbleImage, currentTarget: row });
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(handlers.onContextMenu).toHaveBeenCalledTimes(1);
+  });
+
   test('a right-click event with nothing on it is still handled', () => {
     const handlers = {
       onHoverChange: jest.fn<(hovered: boolean) => void>(),

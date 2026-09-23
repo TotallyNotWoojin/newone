@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Attachment, Message } from '@/domain/types';
+import { copyImage } from '@/features/chat/copy-image';
 import { ImageViewerModal } from '@/features/chat/image-viewer';
 import { mediaFrame } from '@/features/chat/timeline-layout';
 import { VideoAttachment } from '@/features/chat/video-attachment';
@@ -147,6 +148,7 @@ export function ImageAttachment({
         <ImageViewerModal
           name={attachment.name}
           onClose={() => setViewerOpen(false)}
+          onCopy={ready ? () => copyImage(async () => uri) : undefined}
           onDownload={ready ? onDownload : undefined}
           uri={uri}
           visible

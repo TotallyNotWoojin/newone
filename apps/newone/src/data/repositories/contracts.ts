@@ -38,6 +38,7 @@ import type {
   AiOutputErrorReport,
   AiOutputErrorReportDetail,
   AiRegressionExample,
+  SummaryScopeKind,
 } from '@/domain/types';
 import type {
   HandoffCorrectionInput,
@@ -261,6 +262,107 @@ export interface SharedMediaPage {
   cursor: { beforeCreatedAt: string; beforeAttachmentId: string } | null;
 }
 
+/** A named folder inside a chat; everyone in the chat sees it (owner, Sep 23 2026). */
+export interface ConversationProject {
+  id: string;
+  name: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+export type ProjectItemKind = 'summary' | 'upload' | 'link';
+
+/** One entry in a project's drawers: a saved summary, a sent file, or a shared link. */
+export interface ProjectItem {
+  id: string;
+  projectId: string;
+  kind: ProjectItemKind;
+  /**
+   * The stored name. For a summary it is the AI's ("Acid delivery #1") until
+   * someone renames it, and null while the summary is still being written.
+   * The date is never part of it: every screen shows it after the name.
+   */
+  title: string | null;
+  addedByUserId: string;
+  createdAt: string;
+  senderId: string | null;
+  senderName: string;
+  summary: {
+    summaryId: string;
+    state: 'ready' | 'pending';
+    topic: string | null;
+    language: string | null;
+    createdAt: string;
+  } | null;
+  upload: {
+    attachmentId: string;
+    messageId: string;
+    fileName: string;
+    mimeType: string;
+    byteSize: number;
+    mediaKind: 'image' | 'video' | 'voice' | 'file';
+    /** Short-lived preview for photos and videos; files have none. */
+    previewUrl: string | null;
+  } | null;
+  link: { url: string; messageId: string } | null;
+}
+
+export interface ConversationProjects {
+  conversationId: string;
+  /** The project this reader is filing into, or null. */
+  selectedProjectId: string | null;
+  /** Oldest first: the order they are numbered in. */
+  projects: ConversationProject[];
+  /** Newest first. */
+  items: ProjectItem[];
+}
+
+export type ProjectItemTarget =
+  | { kind: 'summary'; summaryId: string }
+  | { kind: 'upload'; attachmentId: string }
+  | { kind: 'link'; messageId: string; url?: string | null };
+
+export type ProjectCommand =
+  | { action: 'create'; name: string }
+  | { action: 'rename'; projectId: string; name: string }
+  | { action: 'delete'; projectId: string }
+  | { action: 'select'; projectId: string | null }
+  | { action: 'add_item'; projectId: string; target: ProjectItemTarget }
+  | { action: 'rename_item'; itemId: string; name: string }
+  | { action: 'remove_item'; itemId: string };
+
+export interface ProjectCommandResult {
+  projectId: string | null;
+  itemId: string | null;
+  selectedProjectId: string | null;
+}
+
+export interface SummaryRangeReadiness {
+  messages: number;
+  characters: number;
+  /** Enough conversation for a recap, and not too much for one. */
+  ready: boolean;
+  tooLong: boolean;
+}
+
+export interface SummaryReadiness {
+  conversationId: string;
+  minimumMessages: number;
+  minimumCharacters: number;
+  ranges: Record<SummaryScopeKind, SummaryRangeReadiness>;
+}
+
+/** One chat a keyword came up in (찾기). */
+export interface KeywordFindResult {
+  conversationId: string;
+  messageCount: number;
+  latestMessageId: string | null;
+  latestMessageAt: string | null;
+  snippet: string | null;
+  projects: { projectId: string; name: string }[];
+  items: { projectId: string; projectName: string; kind: ProjectItemKind; title: string }[];
+}
+
 export interface ReadRepository {
   loadWorkspace(
     userId: string,
@@ -293,6 +395,14 @@ export interface ReadRepository {
     limit?: number;
   }): Promise<UserSearchResult[]>;
   queryAudit(input: AuditQueryInput): Promise<AuditPage>;
+  loadProjects(input: { organizationId: string; conversationId: string }): Promise<ConversationProjects>;
+  loadSummaryReadiness(input: {
+    organizationId: string;
+    conversationId: string;
+    fromMessageId?: string | null;
+    utcOffsetMinutes: number;
+  }): Promise<SummaryReadiness>;
+  findKeyword(input: { organizationId: string; query: string; limit?: number }): Promise<KeywordFindResult[]>;
 }
 
 export interface CreateDirectInput {
@@ -825,6 +935,12 @@ export interface CommandRepository {
     timeZone: string;
     locale: 'en' | 'es' | 'ko';
   }): Promise<{ bytes: Uint8Array; contentType: string }>;
+  runProjectCommand(input: {
+    organizationId: string;
+    conversationId: string;
+    command: ProjectCommand;
+    idempotencyKey: string;
+  }): Promise<ProjectCommandResult>;
   requestConversationSummary(input: RequestSummaryInput): Promise<{
     summaryId: string;
     versionNumber: number;

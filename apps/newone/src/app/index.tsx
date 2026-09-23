@@ -22,6 +22,7 @@ import {
 import { ConversationPane } from '@/features/chat/conversation-pane';
 import { PinnedMessagesModal } from '@/features/chat/pinned-messages';
 import { NotificationPrompt } from '@/features/notifications/notification-prompt';
+import { KeywordFindModal } from '@/features/search/keyword-find';
 import {
   buildSearchSuggestions,
   parseSearch,
@@ -65,6 +66,7 @@ export default function ChatsScreen() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
 
   const [departing, setDeparting] = useState<{ id: string; title: string; group: boolean } | null>(null);
   const search = workspace.inboxSearch;
@@ -191,6 +193,7 @@ export default function ChatsScreen() {
       .map((conversation) => conversation.id),
     onRowAction: runRowAction,
     onOpenPinned: () => setPinnedOpen(true),
+    onOpenFind: () => setFindOpen(true),
     organizationName: workspace.organizationName,
     people: searchPeople,
     search,
@@ -267,6 +270,23 @@ export default function ChatsScreen() {
         />
         <PrimaryButton label={t('chat.keepChat')} onPress={() => setDeparting(null)} tone="light" />
       </ActionModal>
+      {findOpen ? (
+        <KeywordFindModal
+          onClose={() => setFindOpen(false)}
+          onOpen={(conversationId, messageId) => {
+            setFindOpen(false);
+            workspace.selectConversation(conversationId);
+            // The same way a message found by the search field opens: at the
+            // message, or at the chat when only its project matched.
+            if (desktop && !messageId) return;
+            router.push({
+              pathname: '/conversation/[id]',
+              params: messageId ? { id: conversationId, messageId } : { id: conversationId },
+            });
+          }}
+          visible
+        />
+      ) : null}
       {pinnedOpen ? (
         <PinnedMessagesModal
           onClose={() => setPinnedOpen(false)}

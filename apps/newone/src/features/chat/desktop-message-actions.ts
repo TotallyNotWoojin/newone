@@ -18,6 +18,22 @@ export interface DesktopMessageHandlers {
 
 interface PreventableEvent {
   preventDefault?: () => void;
+  target?: unknown;
+  currentTarget?: unknown;
+}
+
+/**
+ * React sends a portal's events up the component tree, not the page, so a
+ * right-click inside the full-screen photo viewer (a modal rendered from the
+ * photo's own row) arrived here: the browser's menu, with its Copy image, was
+ * suppressed and the actions sheet opened unseen behind the viewer (owner,
+ * Sep 23 2026: "copying an image doesn't work"). Only a click on the row
+ * itself is the row's.
+ */
+function insideRow(event: PreventableEvent): boolean {
+  const row = event?.currentTarget as { contains?: (node: unknown) => boolean } | undefined;
+  if (!row || typeof row.contains !== 'function' || !event.target) return true;
+  return row.contains(event.target);
 }
 
 /** True where a pointer stands in for a finger. */
@@ -35,6 +51,7 @@ export function desktopMessageProps(
     onMouseEnter: () => handlers.onHoverChange(true),
     onMouseLeave: () => handlers.onHoverChange(false),
     onContextMenu: (event: PreventableEvent) => {
+      if (!insideRow(event)) return;
       // Right-click is the mouse's long press, so it opens our actions rather
       // than the browser's menu.
       event?.preventDefault?.();

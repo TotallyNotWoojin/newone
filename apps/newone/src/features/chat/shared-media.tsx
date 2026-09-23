@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 
 import { ActionModal } from '@/components/ui/action-modal';
 import type { SharedMediaItem, SharedMediaPage } from '@/data/repositories/contracts';
+import { copyImage } from '@/features/chat/copy-image';
 import { ImageViewerModal } from '@/features/chat/image-viewer';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
@@ -199,6 +200,7 @@ export function SharedMediaModal({
         <ImageViewerModal
           name={shown.name}
           onClose={() => setViewing(null)}
+          onCopy={shown.kind === 'image' ? () => copyImage(async () => shown.previewUrl) : undefined}
           onNext={viewingIndex < viewable.length - 1 ? () => step(1) : undefined}
           onPrevious={viewingIndex > 0 ? () => step(-1) : undefined}
           uri={shown.previewUrl}

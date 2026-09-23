@@ -28,6 +28,7 @@ import {
 } from '@/features/search/chat-search';
 import { radii, spacing, type } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
+import { ProjectsPanel } from '@/features/projects/projects-panel';
 import { useI18n } from '@/i18n/provider';
 import { useProfileAvatar } from '@/state/profile-avatar';
 import { useWorkspace } from '@/state/workspace';
@@ -206,6 +207,7 @@ export function ConversationList({
   onOpenSuggestion,
   onRowAction,
   onOpenPinned,
+  onOpenFind,
   onRefresh,
   markedUnreadIds = [],
 }: {
@@ -230,6 +232,8 @@ export function ConversationList({
   onRowAction?: (action: ConversationRowActionKey, conversation: Conversation) => void;
   /** Opens the pins gathered from every chat. */
   onOpenPinned?: () => void;
+  /** Opens 찾기: which chats a keyword or a project came up in. */
+  onOpenFind?: () => void;
   /** Pull the list down to ask the server again. */
   onRefresh?: () => Promise<void>;
   /** Chats the reader put back to unread by hand. */
@@ -322,7 +326,7 @@ export function ConversationList({
         contentContainerStyle={styles.filterRow}
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}>
-        {visibleFilters.map((item) => (
+        {visibleFilters.map((item, index) => [
           <Chip
             count={
               item === 'unread'
@@ -336,8 +340,19 @@ export function ConversationList({
             label={filterLabels[item]}
             onPress={() => onFilterChange(item)}
             selected={filter === item}
-          />
-        ))}
+          />,
+          // 찾기 sits right after All, where the owner's father drew it (Sep
+          // 23 2026) and where a phone shows it without scrolling the row.
+          index === 0 && onOpenFind ? (
+            <Chip
+              accessibilityLabel={t('find.title')}
+              icon="search-outline"
+              key="find"
+              label={t('chat.filterFind')}
+              onPress={onOpenFind}
+            />
+          ) : null,
+        ])}
         {onOpenPinned ? (
           <Chip
             accessibilityLabel={t('chat.pinnedOpen')}
@@ -405,7 +420,7 @@ export function ConversationList({
           </View>
         ) : null}
         {visible.length ? (
-          visible.map((conversation, index) => (
+          visible.map((conversation, index) => [
             <ConversationRow
               actionsOpen={openRowId === conversation.id}
               conversation={conversation}
@@ -418,8 +433,13 @@ export function ConversationList({
               showPinnedDivider={
                 index > 0 && !conversation.pinned && visible[index - 1]?.pinned === true
               }
-            />
-          ))
+            />,
+            // The open chat's projects hang under its row on a wide screen,
+            // as the owner's father drew them (Sep 23 2026).
+            desktop && selectedId === conversation.id && !conversation.managementOnly ? (
+              <ProjectsPanel conversation={conversation} key={`${conversation.id}:projects`} variant="sidebar" />
+            ) : null,
+          ])
         ) : (
           <View style={styles.noResults}>
             <View style={styles.noResultsIcon}>

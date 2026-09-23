@@ -37,6 +37,11 @@ import type {
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
+import {
+  conversationProjectsFromDto,
+  keywordFindFromDto,
+  summaryReadinessFromDto,
+} from '@/data/repositories/project-dto';
 import { parseOrganizationPolicy } from '@/data/repositories/organization-policy-dto.mjs';
 import { compareMessageIds } from '@/data/reconciliation/message-timeline.mjs';
 import { parseMentionDto } from '@/features/chat/mention-controls.mjs';
@@ -1621,6 +1626,38 @@ export class WebReadRepository implements ReadRepository {
       throw new RepositoryError('The service returned an invalid pinned list.', 'invalid_response', true);
     }
     return values(payload.pins).map(pinnedMessageFromDto);
+  }
+
+  async loadProjects(input: Parameters<ReadRepository['loadProjects']>[0]) {
+    const payload = await readRequest(
+      this.context,
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/projects/query`,
+      { organizationId: input.organizationId },
+    );
+    return conversationProjectsFromDto(payload, input.conversationId);
+  }
+
+  async loadSummaryReadiness(input: Parameters<ReadRepository['loadSummaryReadiness']>[0]) {
+    const payload = await readRequest(
+      this.context,
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/summaries/readiness`,
+      {
+        organizationId: input.organizationId,
+        fromMessageId: input.fromMessageId ?? null,
+        utcOffsetMinutes: input.utcOffsetMinutes,
+      },
+    );
+    return summaryReadinessFromDto(payload, input.conversationId);
+  }
+
+  async findKeyword(input: Parameters<ReadRepository['findKeyword']>[0]) {
+    const limit = Math.min(Math.max(input.limit ?? 30, 1), 50);
+    const payload = await readRequest(this.context, '/v2/find/query', {
+      organizationId: input.organizationId,
+      query: input.query,
+      limit,
+    });
+    return keywordFindFromDto(payload, limit);
   }
 
   async loadSharedMedia(

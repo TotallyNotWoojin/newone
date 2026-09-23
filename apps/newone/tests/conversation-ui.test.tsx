@@ -6,6 +6,7 @@ import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { ConversationList } from '@/features/chat/conversation-list';
 import { ConversationPane, TRANSLATION_DELAYED_AFTER_MS } from '@/features/chat/conversation-pane';
+import { projectWorkspaceFields } from './fixtures/project-workspace';
 
 const mockPush = jest.fn<(_href: unknown) => void>();
 const mockReplace = jest.fn<(_href: unknown) => void>();
@@ -461,6 +462,7 @@ function summary(overrides: Record<string, unknown> = {}) {
 function buildWorkspace() {
   const primary = conversation();
   return {
+    ...projectWorkspaceFields(),
     actionBusy: null,
     actionError: null,
     actions: [

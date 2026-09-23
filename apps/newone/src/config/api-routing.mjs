@@ -44,6 +44,8 @@ const READ_PATHS = new Set([
   // Missing here they routed to the API function and answered 404, so the
   // Pinned view was always empty (found by the web suite, Sep 2026).
   '/v2/pins/query',
+  // 찾기 (find by keyword) reads across the reader's chats.
+  '/v2/find/query',
 ]);
 
 function safeApiPath(path) {
@@ -178,9 +180,11 @@ export function edgeFunctionForPath(path) {
   ) return 'newone-auth';
   if (
     READ_PATHS.has(path)
-    || /^\/v2\/conversations\/[0-9a-f-]{36}\/(?:messages|media)\/query$/i.test(path)
-    // A summary as a PDF or Word file is a read of the reader's own recap.
+    || /^\/v2\/conversations\/[0-9a-f-]{36}\/(?:messages|media|projects)\/query$/i.test(path)
+    // A summary as a PDF or Word file is a read of a recap the reader may see.
     || /^\/v2\/conversations\/[0-9a-f-]{36}\/summaries\/[0-9a-f-]{36}\/export$/i.test(path)
+    // How much conversation each summary range holds, before anyone asks.
+    || /^\/v2\/conversations\/[0-9a-f-]{36}\/summaries\/readiness$/i.test(path)
   ) return 'newone-read';
   return 'newone-api';
 }

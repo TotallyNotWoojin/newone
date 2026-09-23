@@ -41,7 +41,7 @@ import { attachmentMimeTypes, type SelectedAttachment } from '@/data/attachments
 import { useConversationTyping } from '@/data/realtime/use-conversation-typing';
 import { activeMutedUntil, temporaryMutePatch } from '@/data/notification-preferences.mjs';
 import { firstUnreadMessageId } from '@/data/reconciliation/message-timeline.mjs';
-import type { ConversationMemberCandidate } from '@/data/repositories/contracts';
+import type { ConversationMemberCandidate, ProjectItemTarget } from '@/data/repositories/contracts';
 import type { AiOutputErrorCategory, Attachment, Conversation, Message, Person } from '@/domain/types';
 import { Avatar, Chip, EmptyState, IconButton, PrimaryButton, SearchField, StatusBadge } from '@/components/ui/primitives';
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
@@ -68,6 +68,8 @@ import { ReactionRow } from '@/features/chat/reaction-row';
 import { PinnedMessagesModal } from '@/features/chat/pinned-messages';
 import { SharedMediaModal } from '@/features/chat/shared-media';
 import { SummarySheet } from '@/features/chat/summary-sheet';
+import { copyImage } from '@/features/chat/copy-image';
+import { ActiveProjectBar, ProjectsSheet, SaveToProjectSheet } from '@/features/projects/project-sheets';
 import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
 import { swipeReplyAvailable } from '@/features/chat/swipe-to-reply';
 import {
@@ -137,6 +139,16 @@ export function ConversationPane({
   const [showPinned, setShowPinned] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
+  const [saveTarget, setSaveTarget] = useState<ProjectItemTarget | null>(null);
+  // A short line over the timeline after a copy or a save, then gone. The
+  // actions sheet has closed by then, so this is where the answer goes.
+  const [flash, setFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flash) return undefined;
+    const timer = setTimeout(() => setFlash(null), 2600);
+    return () => clearTimeout(timer);
+  }, [flash]);
   const [reportingSummaryId, setReportingSummaryId] = useState<string | null>(null);
   const [conversationName, setConversationName] = useState('');
   const [conversationDescription, setConversationDescription] = useState('');
@@ -614,6 +626,10 @@ export function ConversationPane({
           workspace.clearActionError();
           setShowSummary(true);
         }}
+        onOpenProjects={() => {
+          workspace.clearActionError();
+          setShowProjects(true);
+        }}
       />
 
       <View style={styles.timeline}>
@@ -684,6 +700,11 @@ export function ConversationPane({
           </View>
         )}
         <WorkspaceStatusBanner />
+        {flash ? (
+          <View accessibilityLiveRegion="polite" pointerEvents="none" style={styles.flash}>
+            <Text style={styles.flashText}>{flash}</Text>
+          </View>
+        ) : null}
         {newMessageCount > 0 ? (
           <Pressable
             accessibilityRole="button"
@@ -718,6 +739,15 @@ export function ConversationPane({
             );
           })}
         </View>
+      ) : null}
+      {!composerDisabled ? (
+        <ActiveProjectBar
+          conversation={conversation}
+          onOpenProjects={() => {
+            workspace.clearActionError();
+            setShowProjects(true);
+          }}
+        />
       ) : null}
       <Composer
       currentUserId={currentUserId}
@@ -795,10 +825,14 @@ export function ConversationPane({
           if (!selectedMessage) return;
           // A picture copies as a picture, ready to paste into another app
           // (owner, Sep 14 2026: copying gave people a link, not the image).
+          // The copy starts before anything is awaited: a browser only lets a
+          // page write the clipboard inside the click that asked for it.
           if (selectedMessage.attachment?.kind === 'image' && selectedMessage.attachment.status === 'clean') {
-            const url = await workspace.attachmentUrlForCopy(selectedMessage);
-            if (url) await copyImageToClipboard(url);
+            const message = selectedMessage;
+            const copying = copyImage(() => workspace.attachmentUrlForCopy(message));
             setSelectedMessage(null);
+            const outcome = await copying;
+            setFlash(t(outcome === 'copied' ? 'chat.imageCopied' : 'chat.imageCopyFailed'));
             return;
           }
           // Copy what the reader is looking at. A translated incoming message
@@ -819,6 +853,15 @@ export function ConversationPane({
             setSelectedMessage(null);
           }
         }}
+        onSaveToProject={(() => {
+          const target = selectedMessage ? projectTargetFor(selectedMessage) : null;
+          if (!target) return undefined;
+          return () => {
+            workspace.clearActionError();
+            setSelectedMessage(null);
+            setSaveTarget(target);
+          };
+        })()}
         onProposeCorrection={() => {
           if (!selectedMessage) return;
           workspace.clearActionError();
@@ -930,6 +973,15 @@ export function ConversationPane({
           setReportingSummaryId(summaryId);
         }}
         visible={showSummary}
+      />
+      {showProjects ? (
+        <ProjectsSheet conversation={conversation} onClose={() => setShowProjects(false)} visible />
+      ) : null}
+      <SaveToProjectSheet
+        conversation={conversation}
+        onClose={() => setSaveTarget(null)}
+        onSaved={(name) => setFlash(t('projects.savedTo').replace('{name}', name))}
+        target={saveTarget}
       />
       {reportingSummaryId ? (
         <AiOutputErrorReportModal
@@ -1056,6 +1108,7 @@ function ConversationHeader({
   onBack,
   onOpenControls,
   onOpenSummary,
+  onOpenProjects,
   onToggleDetails,
   detailsOpen,
   mobile,
@@ -1065,6 +1118,7 @@ function ConversationHeader({
   onBack?: () => void;
   onOpenControls: () => void;
   onOpenSummary?: () => void;
+  onOpenProjects?: () => void;
   onToggleDetails?: () => void;
   detailsOpen?: boolean;
   mobile: boolean;
@@ -1125,6 +1179,9 @@ function ConversationHeader({
         </View>
       </View>
       <View style={styles.headerActions}>
+        {onOpenProjects ? (
+          <IconButton name="folder-open-outline" label={t('projects.open')} onPress={onOpenProjects} size={36} />
+        ) : null}
         {onOpenSummary ? (
           <IconButton name="sparkles-outline" tone="accent" label={t('chat.summarize')} onPress={onOpenSummary} size={36} />
         ) : null}
@@ -2036,34 +2093,16 @@ function pastedLink(previous: string, next: string): string | null {
 
 /** Message text with tappable links (owner request, Sep 14 2026, both platforms). */
 /**
- * Puts the picture itself on the clipboard. Browsers take a PNG blob through
- * the async clipboard API (Chrome accepts only PNG, so other formats are
- * redrawn); the phones take the bytes as base64 through expo-clipboard.
+ * What a project could keep from a message: its file once it has arrived
+ * whole, otherwise the first link in its text.
  */
-async function copyImageToClipboard(url: string) {
-  if (Platform.OS === 'web') {
-    const png = (async () => {
-      const blob = await (await fetch(url)).blob();
-      if (blob.type === 'image/png' || typeof createImageBitmap !== 'function' || typeof document === 'undefined') return blob;
-      const bitmap = await createImageBitmap(blob);
-      const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      canvas.getContext('2d')?.drawImage(bitmap, 0, 0);
-      bitmap.close();
-      return await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((out) => (out ? resolve(out) : reject(new Error('image could not be redrawn'))), 'image/png');
-      });
-    })();
-    // The promise form keeps the write inside the user's gesture in Safari.
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-    return;
+function projectTargetFor(message: Message): ProjectItemTarget | null {
+  if (!message.serverId || message.deleted) return null;
+  if (message.attachment && message.attachment.status === 'clean') {
+    return { kind: 'upload', attachmentId: message.attachment.id };
   }
-  const target = `${FileSystem.cacheDirectory ?? ''}copy-${Date.now()}`;
-  const downloaded = await FileSystem.downloadAsync(url, target);
-  const base64 = await FileSystem.readAsStringAsync(downloaded.uri, { encoding: FileSystem.EncodingType.Base64 });
-  await Clipboard.setImageAsync(base64);
-  await FileSystem.deleteAsync(downloaded.uri, { idempotent: true }).catch(() => undefined);
+  const url = firstPreviewUrl(message.originalText ?? '');
+  return url ? { kind: 'link', messageId: message.serverId, url } : null;
 }
 
 function LinkifiedText({ children, style, accessibilityHint, onLongPress }: {
@@ -2532,6 +2571,7 @@ function MessageActionsModal({
   onReply,
   onCopy,
   onPin,
+  onSaveToProject,
   onTranslate,
   onProposeCorrection,
   onReviewCorrection,
@@ -2551,6 +2591,8 @@ function MessageActionsModal({
   onReply: () => void;
   onCopy: () => void;
   onPin: () => void;
+  /** Given when the message carries a file or a link a project could keep. */
+  onSaveToProject?: () => void;
   onTranslate?: (() => void) | null;
   onProposeCorrection?: () => void;
   onReviewCorrection?: () => void;
@@ -2585,8 +2627,16 @@ function MessageActionsModal({
       {message ? (
         <View style={styles.modalRow}>
           <PrimaryButton icon="arrow-undo-outline" label={t('chat.reply')} onPress={onReply} tone="light" />
-          <PrimaryButton icon="copy-outline" label={t(message.attachment?.kind === 'image' ? 'chat.copyImage' : 'chat.copy')} onPress={onCopy} tone="light" />
+          <PrimaryButton
+            icon="copy-outline"
+            label={t(message.attachment?.kind === 'image' && message.attachment.status === 'clean' ? 'chat.copyImage' : 'chat.copy')}
+            onPress={onCopy}
+            tone="light"
+          />
           <PrimaryButton icon={message.pinned ? 'pin' : 'pin-outline'} label={message.pinned ? t('chat.unpin') : t('chat.pin')} loading={busy === 'message-pin'} onPress={onPin} tone="light" />
+          {live && onSaveToProject ? (
+            <PrimaryButton icon="folder-outline" label={t('projects.saveToProject')} onPress={onSaveToProject} tone="light" />
+          ) : null}
           {live ? (
             <PrimaryButton
               icon="arrow-redo-outline"
@@ -3638,6 +3688,23 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.mintDark,
     fontSize: 10,
     fontWeight: '700',
+  },
+  flash: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: spacing.md,
+    alignItems: 'center',
+  },
+  flashText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(16,46,39,0.9)',
   },
   headerActions: {
     flexDirection: 'row',

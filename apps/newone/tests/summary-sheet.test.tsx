@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import type { ConversationSummary } from '@/domain/types';
 import { SummarySheet } from '@/features/chat/summary-sheet';
 import { shareSummary as shareSummaryWeb } from '@/features/chat/summary-export.web';
+import { projectWorkspaceFields } from './fixtures/project-workspace';
+import { resetConversationProjectsStore } from '@/features/projects/use-conversation-projects';
 
 const PERSONAL_REALM = '11111111-1111-4111-8111-111111111111';
 const mockPush = jest.fn<(_href: unknown) => void>();
@@ -106,6 +108,7 @@ const successfulAction = () => jest.fn(async () => true);
 
 function buildWorkspace(organizationId = PERSONAL_REALM) {
   return {
+    ...projectWorkspaceFields(),
     organizationId,
     currentUser: self,
     actionBusy: null,
@@ -373,6 +376,83 @@ describe('summary sheet', () => {
     expect(screen.getByText('chat.summarySuperseded')).toBeTruthy();
     expect(screen.queryByLabelText('chat.correctSummary')).toBeNull();
     expect(screen.queryByLabelText('chat.summarySchedule')).toBeNull();
+  });
+});
+
+function readiness(ready: Partial<Record<string, { messages: number; characters: number; ready: boolean; tooLong?: boolean }>>) {
+  const range = (value?: { messages: number; characters: number; ready: boolean; tooLong?: boolean }) => ({
+    messages: value?.messages ?? 12,
+    characters: value?.characters ?? 900,
+    ready: value?.ready ?? true,
+    tooLong: value?.tooLong ?? false,
+  });
+  return {
+    conversationId: 'conversation-a',
+    minimumMessages: 3,
+    minimumCharacters: 200,
+    ranges: {
+      unread: range(ready.unread),
+      today: range(ready.today),
+      yesterday: range(ready.yesterday),
+      last_7_days: range(ready.last_7_days),
+      last_30_days: range(ready.last_30_days),
+      last_90_days: range(ready.last_90_days),
+      everything: range(ready.everything),
+    },
+  };
+}
+
+describe('a summary once there is enough conversation for one', () => {
+  beforeEach(() => resetConversationProjectsStore());
+
+  test('keeps Summarize off and says why while the chosen range is too thin, and lets a fuller range through', async () => {
+    mockWorkspace.summaries = [];
+    mockWorkspace.loadSummaryReadiness = jest.fn(async () => readiness({
+      today: { messages: 2, characters: 40, ready: false },
+      everything: { messages: 2, characters: 40, ready: false },
+      last_90_days: { messages: 2, characters: 40, ready: false },
+    }));
+    await open();
+    await waitFor(() => expect(screen.getByText('chat.summaryNotEnough')).toBeTruthy());
+    expect(screen.getByText('chat.summaryNotEnoughHint')).toBeTruthy();
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(true);
+    fireEvent.press(screen.getByLabelText('chat.summaryRangeWeek'));
+    await waitFor(() => expect(screen.queryByText('chat.summaryNotEnough')).toBeNull());
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
+  });
+
+  test('when the readiness cannot be read the server decides, so the button stays on', async () => {
+    mockWorkspace.loadSummaryReadiness = jest.fn(async () => null);
+    await open();
+    await waitFor(() => expect(mockWorkspace.loadSummaryReadiness).toHaveBeenCalledWith('conversation-a'));
+    expect(screen.queryByText('chat.summaryNotEnough')).toBeNull();
+    expect(disabledState(screen.getByLabelText('chat.summarizeAll'))).toBe(false);
+  });
+
+  test('names the project the summary will be saved to, and where a finished one already is', async () => {
+    mockWorkspace.loadConversationProjects = jest.fn(async () => ({
+      conversationId: 'conversation-a',
+      selectedProjectId: 'project-1',
+      projects: [
+        { id: 'project-1', name: 'HDG', createdByUserId: 'user-self', createdAt: '2026-09-23T01:00:00.000Z' },
+      ],
+      items: [{
+        id: 'item-1',
+        projectId: 'project-1',
+        kind: 'summary',
+        title: 'Weekend plans #1',
+        addedByUserId: 'user-self',
+        createdAt: '2026-09-23T01:05:00.000Z',
+        senderId: null,
+        senderName: '',
+        summary: { summaryId: 'summary-a', state: 'ready', topic: 'Weekend plans', language: 'en', createdAt: '2026-09-23T01:05:00.000Z' },
+        upload: null,
+        link: null,
+      }],
+    }));
+    await open();
+    await waitFor(() => expect(screen.getByText('projects.summaryWillSave')).toBeTruthy());
+    expect(screen.getByTestId('summary-saved-in')).toBeTruthy();
   });
 });
 

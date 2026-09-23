@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationPane } from '@/features/chat/conversation-pane';
+import { projectWorkspaceFields } from './fixtures/project-workspace';
 
 const mockRequestRecordingPermissions = jest.fn(async () => ({ granted: true }));
 const mockSetAudioMode = jest.fn<(_mode: unknown) => Promise<void>>(async () => undefined);
@@ -168,6 +169,7 @@ async function noopSend(
 
 function buildWorkspace() {
   return {
+    ...projectWorkspaceFields(),
     actionBusy: null,
     actionError: null,
     actions: [],

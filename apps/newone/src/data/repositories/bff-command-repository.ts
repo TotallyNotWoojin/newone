@@ -22,6 +22,7 @@ import type {
   UpdateNonAcknowledgerPage,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
+import { projectCommandResultFromDto } from '@/data/repositories/project-dto';
 import {
   normalizeHandoffCorrectionRequest,
   parseHandoffCorrectionReceipt,
@@ -2188,6 +2189,24 @@ export class BffCommandRepository implements CommandRepository {
       contentType: response.headers.get('content-type')?.split(';')[0]?.trim()
         || (input.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     };
+  }
+
+  async runProjectCommand(input: Parameters<CommandRepository['runProjectCommand']>[0]) {
+    const { command } = input;
+    const body: Record<string, unknown> = { action: command.action };
+    if ('projectId' in command) body.projectId = command.projectId;
+    if ('itemId' in command) body.itemId = command.itemId;
+    if ('name' in command) body.name = command.name;
+    if ('target' in command) body.target = command.target;
+    const payload = await this.request(
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/projects/commands`,
+      {
+        organizationId: input.organizationId,
+        idempotencyKey: input.idempotencyKey,
+        body,
+      },
+    );
+    return projectCommandResultFromDto(dataValue(payload));
   }
 
   async requestConversationSummary(

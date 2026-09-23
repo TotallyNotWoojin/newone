@@ -54,6 +54,11 @@ import type {
   ReadRepository,
   SendMessageInput,
   SharedMediaPage,
+  ConversationProjects,
+  KeywordFindResult,
+  ProjectCommand,
+  ProjectCommandResult,
+  SummaryReadiness,
   UpdateAudiencePreview,
   UpdateAudienceSpec,
   UserSearchResult,
@@ -353,6 +358,27 @@ interface WorkspaceState {
     conversationId: string,
     cursor?: SharedMediaPage['cursor'],
   ) => Promise<SharedMediaPage | null>;
+  /**
+   * Bumped whenever something a chat's projects show may have changed: a
+   * command from this device, or any realtime hint about the chat (a message,
+   * a file, another member's project change). Open drawers reload on it.
+   */
+  projectRevisions: Record<string, number>;
+  /** A chat's projects and drawers; null when they could not be read (quietly). */
+  loadConversationProjects: (conversationId: string) => Promise<ConversationProjects | null>;
+  runProjectCommand: (conversationId: string, command: ProjectCommand) => Promise<ProjectCommandResult | null>;
+  /** How much conversation every summary range holds; null when it could not be read. */
+  loadSummaryReadiness: (conversationId: string) => Promise<SummaryReadiness | null>;
+  /** 찾기: the chats a keyword came up in; null when the search failed. */
+  findKeyword: (query: string) => Promise<KeywordFindResult[] | null>;
+  /** Any finished summary this reader may take out (their own, or one saved to a project), as a file. */
+  exportSummaryFile: (
+    conversationId: string,
+    summaryId: string,
+    format: 'pdf' | 'docx',
+  ) => Promise<{ bytes: Uint8Array; contentType: string } | null>;
+  /** Opens (web: downloads) a file from a project's uploads. */
+  downloadAttachmentById: (conversationId: string, attachmentId: string) => Promise<boolean>;
   reportMessage: (
     message: Message,
     category: Parameters<CommandRepository['reportMessage']>[0]['category'],
@@ -873,6 +899,10 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     Record<string, { hasMore: boolean; loading: boolean; loaded: boolean }>
   >({});
   const [unreadDividerIds, setUnreadDividerIds] = useState<Record<string, string | null>>({});
+  const [projectRevisions, setProjectRevisions] = useState<Record<string, number>>({});
+  const bumpProjectRevision = useCallback((conversationId: string) => {
+    setProjectRevisions((current) => ({ ...current, [conversationId]: (current[conversationId] ?? 0) + 1 }));
+  }, []);
   const [selectedConversationId, setSelectedConversationId] = useState('');
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all');
   const [inboxSearch, setInboxSearch] = useState('');
@@ -1765,6 +1795,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       reconcileWorkspace();
       return;
     }
+    bumpProjectRevision(conversationId);
     // The bootstrap only ever carries a timeline for the conversation that is
     // open, so a message arriving anywhere else made it ship one nobody asked
     // about. The open thread takes its own page instead, and the reconcile is
@@ -1774,7 +1805,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
     void refreshConversationList().then(() => followUpTranslation(conversationId, 0));
   }, [
-    followUpTranslation, loadConversationTimeline, markRealtimeEventFresh,
+    bumpProjectRevision, followUpTranslation, loadConversationTimeline, markRealtimeEventFresh,
     reconcileWorkspace, refreshConversationList,
   ]);
   const handleRealtimeReconcile = useCallback(() => {
@@ -2361,22 +2392,29 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return true;
   }, [executeImmediate, refresh, repositories.commands]);
 
-  const exportConversationSummary = useCallback(async (
-    summary: ConversationSummary,
+  const exportSummaryFile = useCallback(async (
+    conversationId: string,
+    summaryId: string,
     format: 'pdf' | 'docx',
   ) => {
     if (!snapshot) return null;
     const locale = snapshot.currentUser.preferredLanguage;
-    return await executeImmediate(`summary-export:${summary.id}`, () =>
+    return await executeImmediate(`summary-export:${summaryId}`, () =>
       repositories.commands.exportConversationSummary({
         organizationId: snapshot.organizationId,
-        conversationId: summary.conversationId,
-        summaryId: summary.id,
+        conversationId,
+        summaryId,
         format,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         locale: locale === 'es' || locale === 'ko' ? locale : 'en',
       }));
   }, [executeImmediate, repositories.commands, snapshot]);
+
+  const exportConversationSummary = useCallback(
+    (summary: ConversationSummary, format: 'pdf' | 'docx') =>
+      exportSummaryFile(summary.conversationId, summary.id, format),
+    [exportSummaryFile],
+  );
 
   const requestConversationSummary = useCallback(async (
     conversationId: string,
@@ -4104,6 +4142,78 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     [executeImmediate, repositories.reads, snapshot],
   );
 
+  // Drawers reload in the background whenever the chat changes, so a failed
+  // read keeps what is on screen rather than raising the sheet's error line.
+  // These three read the organization from the ref, so they keep one
+  // identity while the snapshot refreshes underneath them; the summary sheet
+  // asked for its readiness on every refresh while they did not.
+  const loadConversationProjects = useCallback(
+    async (conversationId: string) => {
+      const current = snapshotRef.current;
+      if (!current || !repositories.reads) return null;
+      try {
+        return await repositories.reads.loadProjects({
+          organizationId: current.organizationId,
+          conversationId,
+        });
+      } catch {
+        return null;
+      }
+    },
+    [repositories.reads],
+  );
+
+  const runProjectCommand = useCallback(
+    async (conversationId: string, command: ProjectCommand) => {
+      if (!snapshot) return null;
+      const result = await executeImmediate(`project:${command.action}`, () =>
+        repositories.commands.runProjectCommand({
+          organizationId: snapshot.organizationId,
+          conversationId,
+          command,
+          idempotencyKey: createClientId(),
+        }),
+      );
+      if (result) bumpProjectRevision(conversationId);
+      return result;
+    },
+    [bumpProjectRevision, executeImmediate, repositories.commands, snapshot],
+  );
+
+  const loadSummaryReadiness = useCallback(
+    async (conversationId: string) => {
+      const current = snapshotRef.current;
+      if (!current || !repositories.reads) return null;
+      try {
+        return await repositories.reads.loadSummaryReadiness({
+          organizationId: current.organizationId,
+          conversationId,
+          utcOffsetMinutes: -new Date().getTimezoneOffset(),
+        });
+      } catch {
+        return null;
+      }
+    },
+    [repositories.reads],
+  );
+
+  const findKeyword = useCallback(
+    async (query: string) => {
+      const current = snapshotRef.current;
+      if (!current || !repositories.reads) return null;
+      try {
+        return await repositories.reads.findKeyword({
+          organizationId: current.organizationId,
+          query,
+          limit: 30,
+        });
+      } catch {
+        return null;
+      }
+    },
+    [repositories.reads],
+  );
+
   const reportMessage = useCallback(
     async (
       message: Message,
@@ -4317,6 +4427,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
 
   const attachmentUrlForCopy = useCallback(async (message: Message) => {
     if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return null;
+    // The photo on screen already holds a signed link for the same file; while
+    // it has time left, copying reuses it instead of asking the server again
+    // (a chat full of photos had spent the grant budget on its thumbnails, and
+    // the copy's own request was refused: web suite, Sep 23 2026).
+    const shown = attachmentPreviewUrls[message.attachment.id];
+    const heldUntil = previewRequestsRef.current.get(message.attachment.id) ?? 0;
+    if (shown && heldUntil - Date.now() > 15_000) return shown;
     try {
       const grant = await repositories.commands.createAttachmentDownloadGrant({
         organizationId: snapshot.organizationId,
@@ -4325,10 +4442,34 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         idempotencyKey: createClientId(),
       });
       return grant.signedUrl;
-    } catch {
-      return null;
+    } catch (error) {
+      console.warn('copy image link refused', errorIdentifier(error) ?? error);
+      return shown ?? null;
     }
-  }, [repositories.commands, snapshot]);
+  }, [attachmentPreviewUrls, repositories.commands, snapshot]);
+
+  const downloadAttachmentById = useCallback(
+    async (conversationId: string, attachmentId: string) => {
+      if (!snapshot) return false;
+      const result = await executeImmediate('attachment-download', () =>
+        repositories.commands.createAttachmentDownloadGrant({
+          organizationId: snapshot.organizationId,
+          conversationId,
+          attachmentId,
+          idempotencyKey: createClientId(),
+        }),
+      );
+      if (!result) return false;
+      try {
+        await Linking.openURL(result.signedUrl);
+        return true;
+      } catch {
+        setActionError(t('errors.downloadOpen'));
+        return false;
+      }
+    },
+    [executeImmediate, repositories.commands, snapshot, t],
+  );
 
   const downloadAttachment = useCallback(
     async (message: Message) => {
@@ -6349,6 +6490,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       loadPinnedMessages,
       unpinMessage,
       loadSharedMedia,
+      projectRevisions,
+      loadConversationProjects,
+      runProjectCommand,
+      loadSummaryReadiness,
+      findKeyword,
+      exportSummaryFile,
+      downloadAttachmentById,
       reportMessage,
       reportGroup,
       reportMember,
@@ -6552,6 +6700,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       loadPinnedMessages,
       unpinMessage,
       loadSharedMedia,
+      projectRevisions,
+      loadConversationProjects,
+      runProjectCommand,
+      loadSummaryReadiness,
+      findKeyword,
+      exportSummaryFile,
+      downloadAttachmentById,
       setConversationSummaryPolicy,
       updateConversation,
       updateConversationControls,

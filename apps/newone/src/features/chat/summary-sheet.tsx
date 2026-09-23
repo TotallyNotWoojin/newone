@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
@@ -21,6 +21,9 @@ import type { Conversation, OperationalAction, SummaryScopeKind } from '@/domain
 import { saveSummaryFile } from '@/features/chat/summary-export';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
+import type { SummaryReadiness } from '@/data/repositories/contracts';
+import { SaveToProjectSheet } from '@/features/projects/project-sheets';
+import { useConversationProjects } from '@/features/projects/use-conversation-projects';
 import { useWorkspace } from '@/state/workspace';
 import { radii, spacing } from '@/theme/tokens';
 import { useTheme, useThemedStyles, type ThemeColors } from '@/theme/provider';
@@ -74,6 +77,30 @@ export function SummarySheet({
   const ranges = SUMMARY_SCOPE_KINDS;
   const [range, setRange] = useState<SummaryScopeKind>('everything');
   const [subject, setSubject] = useState('');
+  // Whether each range holds enough conversation for a recap, asked once
+  // when the sheet opens and again after a request (owner, Sep 23 2026: a
+  // summary once there is enough conversation for one). Unknown while it
+  // loads or if the read fails, and then the server decides.
+  const [readiness, setReadiness] = useState<SummaryReadiness | null>(null);
+  const loadSummaryReadiness = workspace.loadSummaryReadiness;
+  const messageCount = workspace.messages?.[conversation.id]?.length ?? 0;
+  useEffect(() => {
+    if (!visible) return undefined;
+    let live = true;
+    void loadSummaryReadiness(conversation.id).then((value) => {
+      if (live) setReadiness(value);
+    });
+    return () => {
+      live = false;
+    };
+  }, [conversation.id, loadSummaryReadiness, messageCount, visible]);
+  const rangeReadiness = readiness?.ranges[range] ?? null;
+  const notEnough = Boolean(rangeReadiness && !rangeReadiness.ready && !rangeReadiness.tooLong);
+  const tooLong = Boolean(rangeReadiness?.tooLong);
+  // Saved to the project this reader is filing into, if any; a finished
+  // recap that is in no project yet can be put in one by hand.
+  const { projects, selectedProject } = useConversationProjects(visible ? conversation.id : null);
+  const [savingSummaryId, setSavingSummaryId] = useState<string | null>(null);
   const requesting = workspace.actionBusy === `summary-request:${conversation.id}`;
   const generating = summary?.status === 'queued' || summary?.status === 'generating';
   const scopeCopy = {
@@ -131,6 +158,13 @@ export function SummarySheet({
     })
     : '';
   const summaryLines = readySummary ? readySummary.summary.split('\n').map((line) => line.trim()).filter(Boolean) : [];
+  const savedIn = readySummary
+    ? projects?.items
+      .filter((item) => item.summary?.summaryId === readySummary.id)
+      .map((item) => projects.projects.find((project) => project.id === item.projectId)?.name)
+      .filter((name): name is string => Boolean(name)) ?? []
+    : [];
+  const projectIndex = selectedProject && projects ? projects.projects.indexOf(selectedProject) + 1 : 0;
   // The pane remounts the sheet on every open (see its `key`), so notices and
   // nested dialogs never carry over from one visit to the next.
   const [notice, setNotice] = useState<'copied' | 'shareFailed' | null>(null);
@@ -254,13 +288,29 @@ export function SummarySheet({
         placeholder={t('chat.summarySubjectPlaceholder')}
         value={subject}
       />
+      {notEnough ? (
+        <View accessibilityLiveRegion="polite" style={styles.state} testID="summary-not-enough">
+          <Text style={styles.notEnough}>{t('chat.summaryNotEnough')}</Text>
+          <Text style={styles.stateText}>{t('chat.summaryNotEnoughHint')}</Text>
+        </View>
+      ) : tooLong ? (
+        <Text accessibilityLiveRegion="polite" style={styles.stateText}>{t('chat.summaryTooLong')}</Text>
+      ) : null}
+      {selectedProject ? (
+        <Text style={styles.projectNote} testID="summary-project-note">
+          {t('projects.summaryWillSave').replace('{name}', `${projectIndex}. ${selectedProject.name}`)}
+        </Text>
+      ) : null}
       <View style={styles.actions}>
         <PrimaryButton
-          disabled={generating}
+          disabled={generating || notEnough || tooLong}
           icon="sparkles-outline"
           label={t('chat.summarizeAll')}
           loading={requesting}
-          onPress={() => void workspace.requestConversationSummary(conversation.id, { kind: range, subject })}
+          onPress={async () => {
+            await workspace.requestConversationSummary(conversation.id, { kind: range, subject });
+            setReadiness(await loadSummaryReadiness(conversation.id));
+          }}
           tone="dark"
         />
         <PrimaryButton
@@ -287,6 +337,26 @@ export function SummarySheet({
           tone="light"
         />
       </View>
+      {readySummary && savedIn.length ? (
+        <Text style={styles.projectNote} testID="summary-saved-in">
+          {t('projects.summarySavedIn').replace('{name}', savedIn.join(', '))}
+        </Text>
+      ) : readySummary && projects?.projects.length ? (
+        <PrimaryButton
+          icon="folder-outline"
+          label={t('projects.saveToProject')}
+          onPress={() => {
+            workspace.clearActionError();
+            setSavingSummaryId(readySummary.id);
+          }}
+          tone="light"
+        />
+      ) : null}
+      <SaveToProjectSheet
+        conversation={conversation}
+        onClose={() => setSavingSummaryId(null)}
+        target={savingSummaryId ? { kind: 'summary', summaryId: savingSummaryId } : null}
+      />
       {notice ? (
         <Text accessibilityLiveRegion="polite" style={styles.hint}>
           {notice === 'copied' ? t('chat.summaryCopied') : t('chat.summaryShareFailed')}
@@ -416,6 +486,8 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   stateText: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
   meta: { color: colors.inkMuted, fontSize: 12, lineHeight: 17 },
   empty: { color: colors.inkMuted, fontSize: 12, lineHeight: 18 },
+  notEnough: { color: colors.ink, fontSize: 13, fontWeight: '800', lineHeight: 18 },
+  projectNote: { color: colors.mintDark, fontSize: 12, fontWeight: '800', lineHeight: 17 },
   ranges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, paddingTop: spacing.xs },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   hint: { color: colors.inkSubtle, fontSize: 11, lineHeight: 16 },
