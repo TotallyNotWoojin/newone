@@ -6,18 +6,23 @@ appId: com.totallynotwoojin.gist
 # upload and end up openable.
 - tapOn:
     id: "attachment-send"
-# A second tap races the first send closing the sheet (media-01); a button that
-# has already gone is the outcome this waits for.
+    retryTapIfNoChange: false
+# Tap again only if the sheet is still up well after the first tap. A second
+# tap that raced the sheet closing landed on the "Saving to 1. HDG" bar, which
+# sits where Send was, and opened Projects over the chat (Android, Sep 23 2026).
+- extendedWaitUntil:
+    notVisible:
+      id: "attachment-send"
+    timeout: 15000
+    optional: true
 - runFlow:
     when:
       visible:
         id: "attachment-send"
     commands:
-      - waitForAnimationToEnd:
-          timeout: 2000
       - tapOn:
           id: "attachment-send"
-          optional: true
+          retryTapIfNoChange: false
 - extendedWaitUntil:
     notVisible:
       id: "attachment-send"
