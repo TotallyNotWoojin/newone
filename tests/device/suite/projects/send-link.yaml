@@ -1,0 +1,9 @@
+appId: com.totallynotwoojin.gist
+---
+# A link typed and sent while HDG is selected. Env: BODY.
+- tapOn: ".*Write a message….*"
+- inputText: ${BODY}
+- tapOn: "Send message"
+- extendedWaitUntil:
+    visible: ".*newoneinc.com.*"
+    timeout: 20000

@@ -1,4 +1,5 @@
 import { expect, test } from '../support/live-fixtures.mjs';
+import { sendText } from '../support/live-media.mjs';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -16,7 +17,26 @@ test('a summary shows its header and short lines, and PDF and Word download real
   await chats.getByRole('button', { name: 'Summarize' }).click();
   const sheet = chats.getByRole('heading', { name: 'Summary' });
   await expect(sheet).toBeVisible();
-  await chats.getByRole('button', { name: 'Summarize conversation' }).click();
+  // A handful of short hellos is not enough to recap (owner, Sep 23 2026):
+  // the sheet says so and keeps the button off until there is.
+  const summarize = chats.getByRole('button', { name: 'Summarize conversation' });
+  await expect(chats.getByTestId('summary-not-enough')).toBeVisible({ timeout: 15_000 });
+  await expect(chats.getByText('Not enough conversation in this range to summarize yet.')).toBeVisible();
+  await expect(summarize).toBeDisabled();
+  await chats.getByRole('button', { name: 'Close dialog' }).last().click();
+
+  const { keys, sessions, conversationId } = liveWorkspace;
+  await sendText(keys, sessions.friend, conversationId, 's-f1',
+    'The ferry leaves at six, so meet at the pier by half past five with the tickets and the cooler.');
+  await sendText(keys, sessions.owner, conversationId, 's-o1',
+    'I will bring the tickets and the snacks; can you pick up the rental car and the umbrella on the way?');
+  await sendText(keys, sessions.friend, conversationId, 's-f2',
+    'Yes, I will get the car at five and bring the umbrella. Dinner is booked for eight at the harbor place.');
+  await chats.getByRole('button', { name: 'Summarize' }).click();
+  await expect(sheet).toBeVisible();
+  await expect(summarize).toBeEnabled({ timeout: 15_000 });
+  await expect(chats.getByTestId('summary-not-enough')).toHaveCount(0);
+  await summarize.click();
   await expect(chats.getByText(/Generating/)).toBeVisible({ timeout: 30_000 });
   await expect(chats.getByText(/Generating/)).toHaveCount(0, { timeout: 240_000 });
 
@@ -52,14 +72,14 @@ test('a summary shows its header and short lines, and PDF and Word download real
 
   const [pdf] = await Promise.all([
     chats.waitForEvent('download', { timeout: 60_000 }),
-    chats.getByRole('button', { name: 'PDF' }).click(),
+    chats.getByRole('button', { name: 'PDF', exact: true }).click(),
   ]);
   expect(pdf.suggestedFilename()).toMatch(/^Gist summary – .* – \d{4}-\d{2}-\d{2}\.pdf$/);
   expect((await firstBytes(pdf, 5)).toString('latin1')).toBe('%PDF-');
 
   const [word] = await Promise.all([
     chats.waitForEvent('download', { timeout: 60_000 }),
-    chats.getByRole('button', { name: 'Word' }).click(),
+    chats.getByRole('button', { name: 'Word', exact: true }).click(),
   ]);
   expect(word.suggestedFilename()).toMatch(/\.docx$/);
   expect((await firstBytes(word, 2)).toString('latin1')).toBe('PK');

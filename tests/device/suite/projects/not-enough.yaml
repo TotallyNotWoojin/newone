@@ -1,0 +1,16 @@
+appId: com.totallynotwoojin.gist
+---
+# A chat of two short messages: the summary sheet says there is not enough
+# conversation yet and keeps the button off. Env: PEER.
+- runFlow:
+    file: ../common/open-conversation.yaml
+    env:
+      PEER: ${PEER}
+- tapOn: "Summarize"
+- extendedWaitUntil:
+    visible: "Not enough conversation in this range to summarize yet."
+    timeout: 20000
+- assertVisible:
+    text: "Summarize conversation"
+    enabled: false
+- runFlow: close-sheet.yaml

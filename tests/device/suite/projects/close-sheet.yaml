@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.gist
+---
+# Close the dialog on top with its ✕. Android also exposes the dimmed backdrop
+# as "Close dialog" (index 0, whose centre is the card itself); iOS exposes
+# only the ✕, since the card is the accessibility modal.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: "Close dialog"
+          optional: true
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          text: "Close dialog"
+          index: 1
+          optional: true

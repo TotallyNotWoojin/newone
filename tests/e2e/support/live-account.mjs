@@ -98,8 +98,31 @@ export async function createLiveWorkspace() {
   });
   expectStatus(pin, 200, 'pinning a message');
 
+  // A group of three, the shape the owner's father's projects live in (Sep 23
+  // 2026): the projects, 찾기 and copy specs use it.
+  const group = expectStatus(
+    await post(keys, owner, '/v2/conversations/group', 'group', {
+      name: `Administration Team ${runId.slice(-4)}`,
+      kind: 'group',
+      memberAssignments: [
+        { membershipId: friend.userId, role: 'member' },
+        { membershipId: third.userId, role: 'member' },
+      ],
+    }),
+    201,
+    'group creation',
+  );
+
   // signupUser names an account `Smoke <label>`.
   return {
+    keys,
+    sessions: {
+      owner: { installationId: owner.installationId, accessToken: owner.accessToken },
+      friend: { installationId: friend.installationId, accessToken: friend.accessToken },
+      third: { installationId: third.installationId, accessToken: third.accessToken },
+    },
+    groupConversationId: String(group.conversationId),
+    groupName: `Administration Team ${runId.slice(-4)}`,
     runId,
     projectUrl: PROJECT_URL,
     owner: { email: owner.email, username: owner.username, password, userId: owner.userId },

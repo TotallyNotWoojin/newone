@@ -1,0 +1,12 @@
+appId: com.totallynotwoojin.gist
+---
+# The Projects sheet shows the link in HDG's Links drawer, filed by itself.
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "1. HDG"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*Links \\(1\\).*"
+    timeout: 30000
+- assertVisible: "www.newoneinc.com"
+- runFlow: close-sheet.yaml

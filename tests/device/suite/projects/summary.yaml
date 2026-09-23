@@ -1,0 +1,28 @@
+appId: com.totallynotwoojin.gist
+---
+# Ask for a summary while HDG is selected: the sheet says where it will be
+# saved; once written it sits in HDG's Summaries under the AI's name with the
+# date after it.
+- tapOn: "Summarize"
+- extendedWaitUntil:
+    visible: "The summary will be saved to 1. HDG."
+    timeout: 20000
+- tapOn: "Summarize conversation"
+- extendedWaitUntil:
+    visible: ".*(Generating|Saved in HDG).*"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Generating"
+    timeout: 240000
+# The line sits under the buttons, below the fold of the sheet on a phone.
+- scrollUntilVisible:
+    element:
+      text: "Saved in HDG"
+    direction: DOWN
+    timeout: 30000
+- runFlow: close-sheet.yaml
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: ".* #1 \\(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\\)"
+    timeout: 60000
+- assertVisible: ".*Summaries \\(1\\).*"

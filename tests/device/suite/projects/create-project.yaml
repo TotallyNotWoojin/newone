@@ -1,0 +1,35 @@
+appId: com.totallynotwoojin.gist
+---
+# The owner's father's first step (Sep 23 2026): in the chat, open Projects
+# (the folder in the chat's header), make "HDG", and see that it is now the
+# project being saved into — marked in the list and named over the composer.
+# Env: GROUP.
+- runFlow:
+    file: ../common/open-conversation.yaml
+    env:
+      PEER: ${GROUP}
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "New project"
+    timeout: 20000
+- tapOn: "New project"
+- extendedWaitUntil:
+    visible:
+      id: "project-name-input"
+    timeout: 15000
+- tapOn:
+    id: "project-name-input"
+- inputText: "HDG"
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "project-name-save"
+- extendedWaitUntil:
+    visible: "1. HDG"
+    timeout: 30000
+# iOS reads the pill by its action ("Stop saving here: HDG"); Android also by its text.
+- assertVisible: ".*(Saving here|Stop saving here: HDG).*"
+- runFlow: close-sheet.yaml
+- extendedWaitUntil:
+    visible: "Saving to 1. HDG"
+    timeout: 15000

@@ -1,0 +1,75 @@
+appId: com.totallynotwoojin.gist
+---
+# Password sign-in on either platform (the Android flows' path, with the
+# keyboard put away only where there is one to put away). Env: EMAIL, PASSWORD.
+# Screenshots come from the host (projects-check.mjs), never takeScreenshot.
+- extendedWaitUntil:
+    visible: "(Returning member|Sign in)"
+    timeout: 40000
+- tapOn:
+    text: "English"
+    optional: true
+- tapOn:
+    text: "(Returning member|Sign in)"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "sign-in-destination"
+    timeout: 15000
+- tapOn:
+    id: "sign-in-destination"
+- eraseText: 120
+- inputText: ${EMAIL}
+- hideKeyboard:
+    optional: true
+# On iOS putting the keyboard away submits the email by itself, so the
+# password step may already be up; Continue is only tapped when it is not.
+- runFlow:
+    when:
+      notVisible:
+        id: "password"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "(Continue securely|Continue)"
+          direction: DOWN
+          timeout: 15000
+      - tapOn: "(Continue securely|Continue)"
+- extendedWaitUntil:
+    visible:
+      id: "password"
+    timeout: 30000
+- tapOn:
+    id: "password"
+- eraseText: 60
+- inputText: ${PASSWORD}
+- hideKeyboard:
+    optional: true
+# The same keyboard may already have submitted the password.
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      visible:
+        id: "password"
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Sign in"
+          direction: DOWN
+          timeout: 15000
+          optional: true
+      - tapOn:
+          text: "Sign in"
+          optional: true
+- extendedWaitUntil:
+    visible: "Chats"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 3000
+- tapOn:
+    text: "(Not now|Don’t Allow|Don't Allow)"
+    optional: true
+- extendedWaitUntil:
+    notVisible: ".*(Reconnecting and checking|Offline · |Loading…).*"
+    timeout: 30000

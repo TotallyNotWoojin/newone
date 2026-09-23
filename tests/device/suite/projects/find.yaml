@@ -1,0 +1,31 @@
+appId: com.totallynotwoojin.gist
+---
+# 찾기: from Chats, find which chat a word came up in and open it there.
+# Env: GROUP, WORD, LINE.
+- tapOn:
+    text: "Back to chats"
+    optional: true
+- extendedWaitUntil:
+    visible: "Find by keyword"
+    timeout: 20000
+- tapOn: "Find by keyword"
+- extendedWaitUntil:
+    visible:
+      id: "keyword-find-input"
+    timeout: 15000
+- tapOn:
+    id: "keyword-find-input"
+- inputText: ${WORD}
+- extendedWaitUntil:
+    visible: "Open ${GROUP}.*"
+    timeout: 20000
+# Maestro's hideKeyboard on iOS taps the screen, which can land on the result
+# itself; so no hideKeyboard here, and the tap only if the result is still up.
+- runFlow:
+    when:
+      visible: "Open ${GROUP}.*"
+    commands:
+      - tapOn: "Open ${GROUP}.*"
+- extendedWaitUntil:
+    visible: ".*${LINE}.*"
+    timeout: 20000

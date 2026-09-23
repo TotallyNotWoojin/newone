@@ -1,0 +1,41 @@
+appId: com.totallynotwoojin.gist
+---
+# Copy a photo someone sent (long press → Copy image), then paste it back in
+# the attachment sheet: the clipboard really holds the picture.
+- scrollUntilVisible:
+    element:
+      text: "Open image full screen"
+    direction: UP
+    timeout: 20000
+    optional: true
+- longPressOn: "Open image full screen"
+- extendedWaitUntil:
+    visible: "Copy image"
+    timeout: 15000
+- tapOn: "Copy image"
+- extendedWaitUntil:
+    visible: "(Image copied|The image could not be copied\\.)"
+    timeout: 25000
+- assertVisible: "Image copied"
+# Android 13+ previews what was copied in a thumbnail at the bottom left,
+# right over the composer's +; a tap there opens the system editor on the
+# copied picture (which proves the copy, but is not our screen). Let it go.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible: "a thumbnail that never appears"
+          timeout: 8000
+          optional: true
+- tapOn: "Add attachment"
+- extendedWaitUntil:
+    visible: "Paste image"
+    timeout: 15000
+- tapOn: "Paste image"
+- tapOn:
+    text: "(Allow Paste|Allow)"
+    optional: true
+- extendedWaitUntil:
+    visible: "Selected image preview"
+    timeout: 20000
