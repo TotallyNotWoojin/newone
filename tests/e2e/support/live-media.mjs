@@ -94,3 +94,28 @@ export async function finishAttachment(keys, user, conversationId, messageId, { 
   );
   return { messageId, attachmentId: grant.attachmentId };
 }
+
+/**
+ * Spends the account's upload budget for the current minute: one attachment
+ * message, then `count` upload-grant requests for it. Every request counts
+ * against the budget before anything else is checked, so the ones after the
+ * first are refused yet still spend it. Resolves with the answer to one more
+ * request, which is 429 once the budget is gone.
+ */
+export async function spendUploadBudget(keys, user, conversationId, count) {
+  const messageId = await startAttachment(keys, user, conversationId, { label: 'budget' });
+  const bytes = Buffer.from('upload budget');
+  const sha256Hex = createHash('sha256').update(bytes).digest('hex');
+  const grant = (index) => apiPost(keys, user, '/v2/attachments/grants', `budget-grant-${index}`, {
+    action: 'upload',
+    conversationId,
+    messageId,
+    fileName: `budget-${index}.jpg`,
+    mimeType: 'image/jpeg',
+    byteSize: bytes.length,
+    sha256Hex,
+  });
+  await Promise.all(Array.from({ length: count }, (_, index) => grant(index)));
+  return (await grant('check')).status;
+}
+

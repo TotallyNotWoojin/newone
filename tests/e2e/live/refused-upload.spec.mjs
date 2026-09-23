@@ -1,21 +1,21 @@
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test } from '../support/live-fixtures.mjs';
-import { sendAttachment } from '../support/live-media.mjs';
+import { spendUploadBudget } from '../support/live-media.mjs';
 
 // A photo the server refuses used to leave a blank bubble of the sender's own:
 // the refresh that followed the send swapped the local message for the
 // server's row, which has no file yet, so the photo, the reason and Retry
 // were gone, and every later update had nothing to land on (full live run,
 // Sep 23 2026). The refusal here is the server's own: an account may start
-// ten uploads a minute, and this one has just started ten from another
-// device of theirs.
+// 60 uploads a minute (10 until the same day), and this one has just spent
+// them from another device of theirs.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PHOTO = join(HERE, '..', 'fixtures', 'copy-me.jpg');
 const UPLOAD_WINDOW_MS = 60_000;
+const UPLOADS_PER_MINUTE = 60;
 
 test('a photo the server refuses keeps its bubble with the reason and Retry, and Retry sends it', async ({
   chats,
@@ -27,23 +27,10 @@ test('a photo the server refuses keeps its bubble with the reason and Retry, and
   await expect(chats.getByTestId('composer-input')).toBeVisible();
   const pane = chats.getByTestId('keyboard-avoiding-screen');
 
-  // Ten real uploads into the group at once, the whole minute's budget. The
-  // grant is what spends it, and all ten are granted within seconds.
-  const bytes = readFileSync(PHOTO);
+  // The minute's upload budget, spent in the group; the next request is refused.
   const budgetStartedAt = Date.now();
-  await Promise.all(Array.from({ length: 10 }, (_, index) => (
-    sendAttachment(keys, sessions.owner, groupConversationId, {
-      label: `budget-${index}`,
-      fileName: `budget-${index}.jpg`,
-      mimeType: 'image/jpeg',
-      bytes,
-    })
-  )));
+  expect(await spendUploadBudget(keys, sessions.owner, groupConversationId, UPLOADS_PER_MINUTE)).toBe(429);
   expect(Date.now() - budgetStartedAt).toBeLessThan(UPLOAD_WINDOW_MS - 20_000);
-  // Ten messages in ten seconds is a budget of its own; once that has passed,
-  // the message goes through and only the upload is refused.
-  const burstOver = budgetStartedAt + 12_000 - Date.now();
-  if (burstOver > 0) await chats.waitForTimeout(burstOver);
 
   await chats.getByRole('button', { name: 'Add attachment' }).click();
   const [chooser] = await Promise.all([
