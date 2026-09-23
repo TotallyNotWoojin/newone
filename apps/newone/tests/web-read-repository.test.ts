@@ -1137,6 +1137,34 @@ describe('authoritative web read repository', () => {
     });
   });
 
+  test('a photo or file still on its way is marked in its bubble and in the Chats row', async () => {
+    // The server hands a photo whose upload has not finished over with no body
+    // and no attachment; it drew an empty bubble and "No messages yet" on the
+    // other side (hosted probe, Sep 23 2026).
+    const payload = bootstrapPayload();
+    const pending = { ...incomingMessage('91'), kind: 'attachment', body: null, attachments: [] };
+    payload.timeline.messages = [incomingMessage('90'), pending] as typeof payload.timeline.messages;
+    (payload.conversations[0] as unknown as { preview: unknown }).preview = {
+      messageId: 91,
+      senderUserId: colleagueId,
+      kind: 'attachment',
+      attachment: null,
+      createdAt: now,
+    };
+    mockFetch.mockImplementationOnce(async () => response({ data: payload }));
+    const snapshot = await repository().loadWorkspace(currentUserId, conversationId);
+    expect(snapshot.conversations.find((item) => item.id === conversationId)).toMatchObject({
+      lastMessage: '',
+      lastMessageAwaitingAttachment: true,
+    });
+    const messages = snapshot.messages[conversationId] ?? [];
+    expect(messages.find((message) => message.serverId === '91')).toMatchObject({
+      originalText: '',
+      awaitingAttachment: true,
+    });
+    expect(messages.find((message) => message.serverId === '90')?.awaitingAttachment).toBeUndefined();
+  });
+
   test('bootstraps implicitly when messages are requested before workspace identity', async () => {
     const payload = bootstrapPayload();
     payload.timeline.messages = [incomingMessage('90')];

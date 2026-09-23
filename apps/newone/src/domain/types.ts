@@ -328,6 +328,10 @@ export interface Message {
   };
   reactions?: Reaction[];
   attachment?: Attachment;
+  /** A photo or file message whose file has not arrived yet: the sender's
+   * upload is still running, or was refused and not retried. The server hands
+   * it over with no body and no attachment; it used to draw an empty bubble. */
+  awaitingAttachment?: boolean;
   systemEvent?: {
     eventType:
       | 'conversation.posting.admins_only'
@@ -358,6 +362,9 @@ export interface Conversation {
   /** Set when the newest message is a photo, video, voice note or file and
    * carries no caption of its own. */
   lastMessageAttachment?: { kind: 'image' | 'video' | 'audio' | 'file'; fileName: string | null };
+  /** The newest message is a photo or file still on its way (see
+   * Message.awaitingAttachment); the row says "Attachment", not "No messages yet". */
+  lastMessageAwaitingAttachment?: boolean;
   /** Who wrote the preview message; own texts need no translation. */
   lastMessageSenderId?: string;
   /** The preview already shows the viewer's translation. */

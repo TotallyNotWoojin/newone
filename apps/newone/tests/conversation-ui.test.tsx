@@ -4,7 +4,7 @@ import { FlatList, Keyboard, Linking } from 'react-native';
 
 import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
-import { ConversationList } from '@/features/chat/conversation-list';
+import { attachmentPreviewLine, ConversationList } from '@/features/chat/conversation-list';
 import { ConversationPane, TRANSLATION_DELAYED_AFTER_MS } from '@/features/chat/conversation-pane';
 import { projectWorkspaceFields } from './fixtures/project-workspace';
 
@@ -2448,6 +2448,35 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     expect(screen.queryByText('chat.translationUnavailable')).toBeNull();
     await fireEvent.press(screen.getByLabelText('line-two.mp4, chat.fileReady'));
     expect(mockWorkspace.downloadAttachment).toHaveBeenCalledWith(video);
+  });
+
+  test('a photo or file still on its way says so instead of drawing an empty bubble', async () => {
+    // The server hands it over with no text and no file while the sender's
+    // upload runs, or after it was refused and never retried (Sep 23 2026).
+    const recent = incomingMessage({
+      id: 'pending-photo', serverId: 'pending-photo', originalText: '', attachment: undefined,
+      awaitingAttachment: true, createdAt: new Date(Date.now() - 20_000).toISOString(),
+    });
+    const view = await render(<ConversationPane conversation={conversation()} messages={[recent]} onSend={noopSend} />);
+    expect(screen.getByTestId('attachment-awaiting')).toBeTruthy();
+    expect(screen.getByText('chat.attachmentOnItsWay')).toBeTruthy();
+    await view.unmount();
+
+    // Half an hour on, it is not coming.
+    const abandoned = incomingMessage({
+      id: 'lost-photo', serverId: 'lost-photo', originalText: '', attachment: undefined,
+      awaitingAttachment: true, createdAt: new Date(Date.now() - 31 * 60_000).toISOString(),
+    });
+    await render(<ConversationPane conversation={conversation()} messages={[abandoned]} onSend={noopSend} />);
+    expect(screen.getByText('chat.attachmentNotSent')).toBeTruthy();
+    expect(screen.queryByText('chat.attachmentOnItsWay')).toBeNull();
+  });
+
+  test('the Chats row names a photo or file still on its way instead of saying the chat is empty', () => {
+    const t = (key: string) => key;
+    expect(attachmentPreviewLine({ lastMessageAwaitingAttachment: true }, t)).toBe('chat.previewAttachment');
+    expect(attachmentPreviewLine({ lastMessageAttachment: { kind: 'image', fileName: 'site.jpg' } }, t)).toBe('chat.previewPhoto');
+    expect(attachmentPreviewLine({}, t)).toBe('');
   });
 
   test('puts the handle, member count, and language pair on the single header line', async () => {

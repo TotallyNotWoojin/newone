@@ -3105,6 +3105,12 @@ describe('authoritative workspace provider', () => {
     ) as Message;
     expect(refused.attachment).toMatchObject({ name: 'controlled.jpg', localUri: 'file://controlled' });
     expect(refused.failureReason).toBeTruthy();
+    // The Chats row names the photo the way the server's preview does, in the
+    // reader's language, not with English text of the app's own.
+    expect(currentWorkspace().conversations.find((item) => item.id === 'conversation-a')).toMatchObject({
+      lastMessage: '',
+      lastMessageAttachment: { kind: 'image', fileName: 'controlled.jpg' },
+    });
     // The chat was still marked read around it.
     expect(currentWorkspace().conversations.find((item) => item.id === 'conversation-a')?.unreadCount).toBe(0);
     await view.unmount();

@@ -58,6 +58,7 @@ import { mentionCopy } from '@/features/chat/mention-copy';
 import { messageEditWindowOpen } from '@/features/chat/message-edit-window';
 import {
   attachmentReady,
+  AwaitingAttachment,
   ImageAttachment,
   isVideoAttachment,
   TransferControls,
@@ -896,7 +897,7 @@ export function ConversationPane({
         <TranslationReviewModal message={reviewingMessage} onClose={() => setReviewingMessage(null)} />
       ) : null}
       <ConversationControlsModal
-        key={`${conversation.id}:${showControls ? 'open' : 'closed'}`}
+        key={`controls:${conversation.id}:${showControls ? 'open' : 'closed'}`}
         busy={workspace.actionBusy}
         conversation={conversation}
         currentUserId={currentUserId}
@@ -964,7 +965,7 @@ export function ConversationPane({
         />
       ) : null}
       <SummarySheet
-        key={`${conversation.id}:${showSummary ? 'open' : 'closed'}`}
+        key={`summary:${conversation.id}:${showSummary ? 'open' : 'closed'}`}
         conversation={conversation}
         onClose={() => setShowSummary(false)}
         onReportError={(summaryId) => {
@@ -1631,6 +1632,8 @@ const MessageBubble = memo(function MessageBubble({
             ) : (
               <AttachmentCard message={message} onDownload={() => onDownload(message)} />
             )
+          ) : message.awaitingAttachment && !message.deleted ? (
+            <AwaitingAttachment createdAt={message.createdAt} />
           ) : null}
 
           {showTranslationOnly ? (

@@ -639,6 +639,35 @@ function messageFromCommand(
 type SummaryScopeKind = NonNullable<ConversationSummary['scopeKind']>;
 const SUMMARY_SCOPE_KINDS: readonly SummaryScopeKind[] = ['unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything'];
 
+/**
+ * The Chats row's preview for a message the app added or removed itself, in
+ * the fields the server's preview fills. It used to be English text of its
+ * own ("You: …", "Attachment: photo.jpg") until the next refresh replaced it.
+ */
+function listPreviewOf(message: Message | undefined): Pick<
+  Conversation,
+  'lastMessage' | 'lastMessageAttachment' | 'lastMessageAwaitingAttachment' | 'lastMessageSenderId' | 'lastMessageTranslated'
+> {
+  const attachment = message?.attachment;
+  const mimeType = attachment?.mimeType ?? '';
+  return {
+    lastMessage: message?.originalText ?? '',
+    lastMessageAttachment: attachment
+      ? {
+          kind: mimeType.startsWith('image/')
+            ? 'image'
+            : mimeType.startsWith('video/')
+              ? 'video'
+              : mimeType.startsWith('audio/') ? 'audio' : 'file',
+          fileName: attachment.name,
+        }
+      : undefined,
+    lastMessageAwaitingAttachment: !attachment && message?.awaitingAttachment ? true : undefined,
+    lastMessageSenderId: message?.senderId,
+    lastMessageTranslated: false,
+  };
+}
+
 function mergeMessages(current: Message[], incoming: Message[]) {
   return mergeTimelineMessages(current, incoming) as Message[];
 }
@@ -1928,8 +1957,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           conversation.id === conversationId
             ? {
                 ...conversation,
-                lastMessage: last?.originalText
-                  || (last?.attachment ? `Attachment: ${last.attachment.name}` : ''),
+                ...listPreviewOf(last),
                 lastActivity: last?.sentAt ?? conversation.lastActivity,
               }
             : conversation
@@ -3271,7 +3299,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
               conversations: current.conversations
                 .map((conversation) =>
                   conversation.id === conversationId
-                    ? { ...conversation, lastMessage: `You: ${text}`, lastActivity: 'Now' }
+                    ? { ...conversation, ...listPreviewOf(optimistic), lastActivity: 'Now' }
                     : conversation,
                 )
                 .sort((left) => (left.id === conversationId ? -1 : 0)),
@@ -3449,7 +3477,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           conversations: current.conversations.map((conversation) =>
             conversation.id === item.conversationId
               && messages.at(-1)?.clientMessageId === item.clientMessageId
-              ? { ...conversation, lastMessage: `You: ${(edited.payload as SendMessageInput).body ?? ''}` }
+              ? { ...conversation, lastMessage: (edited.payload as SendMessageInput).body ?? '' }
               : conversation
           ),
         };
@@ -3517,8 +3545,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             conversation.id === item.conversationId
               ? {
                   ...conversation,
-                  lastMessage: last?.originalText
-                    || (last?.attachment ? `Attachment: ${last.attachment.name}` : ''),
+                  ...listPreviewOf(last),
                   lastActivity: last?.sentAt ?? conversation.lastActivity,
                 }
               : conversation
@@ -3788,7 +3815,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
                   conversation.id === conversationId
                     ? {
                         ...conversation,
-                        lastMessage: caption.trim() || `Attachment: ${prepared.name}`,
+                        ...listPreviewOf(optimistic),
                         lastActivity: 'Now',
                       }
                     : conversation,

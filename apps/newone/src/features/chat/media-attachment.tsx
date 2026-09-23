@@ -251,6 +251,36 @@ export function ProgressRing({
   );
 }
 
+/** How long a photo or file may take to arrive before its bubble says it was not sent. */
+export const ATTACHMENT_ARRIVAL_WINDOW_MS = 30 * 60_000;
+
+/**
+ * The bubble of a photo or file that has not reached the server yet: the
+ * sender's upload is still running, or was refused and never retried. The
+ * message came with no text and no file and drew an empty bubble; the other
+ * side saw one for every photo while it uploaded (Sep 23 2026).
+ */
+export function AwaitingAttachment({ createdAt }: { createdAt?: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const { t } = useI18n();
+  const [shownAt] = useState(() => Date.now());
+  const sentAt = Date.parse(createdAt ?? '');
+  const late = Number.isFinite(sentAt) && shownAt - sentAt > ATTACHMENT_ARRIVAL_WINDOW_MS;
+  return (
+    <View style={styles.awaiting} testID="attachment-awaiting">
+      <Ionicons
+        name={late ? 'alert-circle-outline' : 'cloud-upload-outline'}
+        size={16}
+        color={colors.inkSubtle}
+      />
+      <Text style={styles.awaitingText}>
+        {late ? t('chat.attachmentNotSent') : t('chat.attachmentOnItsWay')}
+      </Text>
+    </View>
+  );
+}
+
 /** Retry / cancel controls for an upload that is running, failed, or awaiting cleanup. */
 export function TransferControls({ message, tone }: { message: Message; tone: 'light' | 'default' }) {
   const { colors } = useTheme();
@@ -352,5 +382,7 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   controlDanger: { color: colors.red },
   failureText: { color: colors.red, fontSize: 11, lineHeight: 15 },
   failureTextLight: { color: '#FFD4C7' },
+  awaiting: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 2 },
+  awaitingText: { color: colors.inkSubtle, fontSize: 14, fontStyle: 'italic', flexShrink: 1 },
   pressed: { opacity: 0.7 },
 });

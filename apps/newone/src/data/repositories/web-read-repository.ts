@@ -794,6 +794,7 @@ function messageFromDto(
     } : undefined,
     reactions: reactionSummary(values(row.reactions), current.id),
     attachment: attachmentFrom(attachments[0]),
+    ...(row.kind === 'attachment' && !attachments.length ? { awaitingAttachment: true } : {}),
     forwarded: forward.forwarded === true,
     forwardSource: forward.sourceConversationId && forward.sourceMessageId ? {
       conversationId: String(forward.sourceConversationId),
@@ -912,6 +913,9 @@ function conversationFromDto(
     // A photo or a file with no caption has no body: the row names the kind
     // instead of claiming the chat is empty (v3.4).
     lastMessageAttachment: attachmentPreview(preview.attachment),
+    ...(preview.kind === 'attachment' && !attachmentPreview(preview.attachment)
+      ? { lastMessageAwaitingAttachment: true }
+      : {}),
     // The server preview layer swaps in the viewer's translation once it
     // exists and says so; own texts never need one.
     lastMessageSenderId: optionalString(preview.senderUserId) ?? undefined,

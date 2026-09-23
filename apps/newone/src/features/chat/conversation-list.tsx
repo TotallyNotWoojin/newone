@@ -130,11 +130,12 @@ export function attachContextMenu(node: unknown, open: () => void) {
  * anything but "No messages yet", which is what the row used to claim (v3.4).
  */
 export function attachmentPreviewLine(
-  conversation: Pick<Conversation, 'lastMessageAttachment'>,
-  t: (key: 'chat.previewPhoto' | 'chat.previewVideo' | 'chat.previewVoice' | 'chat.previewFile') => string,
+  conversation: Pick<Conversation, 'lastMessageAttachment' | 'lastMessageAwaitingAttachment'>,
+  t: (key: 'chat.previewPhoto' | 'chat.previewVideo' | 'chat.previewVoice' | 'chat.previewFile' | 'chat.previewAttachment') => string,
 ): string {
   const attachment = conversation.lastMessageAttachment;
-  if (!attachment) return '';
+  // A photo or file whose upload has not finished has no kind or name yet.
+  if (!attachment) return conversation.lastMessageAwaitingAttachment ? t('chat.previewAttachment') : '';
   const kindLabel = t(attachment.kind === 'image'
     ? 'chat.previewPhoto'
     : attachment.kind === 'video'
