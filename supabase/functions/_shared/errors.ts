@@ -14,6 +14,7 @@ export type ErrorCode =
   | 'summary_no_text_sources'
   | 'summary_range_empty'
   | 'summary_range_too_long'
+  | 'summary_not_enough_conversation'
   | 'message_edit_window_closed'
   | 'message_unsend_window_closed'
   | 'idempotency_conflict'
@@ -53,6 +54,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   summary_no_text_sources: 'The selected messages have no text to summarize.',
   summary_range_empty: 'There are no messages in that range.',
   summary_range_too_long: 'That range holds too many messages to summarize. Pick a shorter one.',
+  summary_not_enough_conversation: 'There is not enough conversation in that range to summarize yet.',
   message_edit_window_closed: 'A message can be edited for 15 minutes after it is sent.',
   message_unsend_window_closed: 'A message can be unsent for 15 minutes after it is sent.',
   idempotency_conflict: 'The idempotency key was already used for another request.',
@@ -123,7 +125,8 @@ export function fromDatabaseError(error: unknown): ApiError {
       // The database names the permission cases the client has copy for: a
       // pending message request that already holds its three messages, a
       // summary range that is empty or too long to summarize, and an edit or
-      // unsend that arrived after its fifteen minutes.
+      // unsend that arrived after its fifteen minutes, and a range with too
+      // little conversation in it for a recap.
       switch (value.message) {
         case 'message_request_cap':
           return new ApiError(403, 'message_request_cap');
@@ -131,6 +134,8 @@ export function fromDatabaseError(error: unknown): ApiError {
           return new ApiError(422, 'summary_range_empty');
         case 'summary_range_too_long':
           return new ApiError(422, 'summary_range_too_long');
+        case 'summary_not_enough_conversation':
+          return new ApiError(422, 'summary_not_enough_conversation');
         case 'message_edit_window_closed':
           return new ApiError(403, 'message_edit_window_closed');
         case 'message_unsend_window_closed':
@@ -140,6 +145,7 @@ export function fromDatabaseError(error: unknown): ApiError {
       }
     case 'P0001':
       return new ApiError(429, 'rate_limited', undefined, 60);
+    case 'P0002':
     case 'PGRST116':
       return new ApiError(404, 'not_found');
     case 'PGRST202':

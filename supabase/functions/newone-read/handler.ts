@@ -91,6 +91,24 @@ export interface SummaryExportFile {
   fileName: string;
 }
 
+interface ProjectsQueryInput {
+  organizationId: string;
+  conversationId: string;
+}
+
+interface SummaryReadinessInput {
+  organizationId: string;
+  conversationId: string;
+  fromMessageId: string | null;
+  utcOffsetMinutes: number;
+}
+
+interface FindInput {
+  organizationId: string;
+  query: string;
+  limit: number;
+}
+
 interface MediaQueryInput {
   organizationId: string;
   conversationId: string;
@@ -213,6 +231,9 @@ export interface ReadDependencies {
   loadMessages(actor: AuthenticatedActor, input: MessageQueryInput): Promise<unknown>;
   loadPins(actor: AuthenticatedActor, input: PinQueryInput): Promise<unknown>;
   loadMedia(actor: AuthenticatedActor, input: MediaQueryInput): Promise<unknown>;
+  loadProjects(actor: AuthenticatedActor, input: ProjectsQueryInput): Promise<unknown>;
+  loadSummaryReadiness(actor: AuthenticatedActor, input: SummaryReadinessInput): Promise<unknown>;
+  loadFind(actor: AuthenticatedActor, input: FindInput): Promise<unknown>;
   loadSummaryExport(actor: AuthenticatedActor, input: SummaryExportInput): Promise<SummaryExportFile>;
   loadSearch(actor: AuthenticatedActor, input: SearchInput): Promise<unknown>;
   loadUserSearch(actor: AuthenticatedActor, input: UserSearchInput): Promise<unknown>;
@@ -347,6 +368,85 @@ async function loadMediaDefault(
         : null,
     })),
   };
+}
+
+/**
+ * A chat's projects and their drawers. Photos and videos in the uploads
+ * drawer get a preview signed the way the media grid signs its tiles, in one
+ * storage call; bucket and path never reach the device.
+ */
+async function loadProjectsDefault(
+  actor: AuthenticatedActor,
+  input: ProjectsQueryInput,
+): Promise<unknown> {
+  const payload = asObject(
+    camelize(
+      await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_conversation_projects', {
+        p_actor_user_id: actor.user.id,
+        p_organization_id: input.organizationId,
+        p_session_id: actor.claims.sessionId,
+        p_conversation_id: input.conversationId,
+      }),
+    ),
+  );
+  const rows = Array.isArray(payload.items) ? payload.items.map((item) => asObject(item)) : [];
+  const previewable = rows.filter((row) =>
+    (row.mediaKind === 'image' || row.mediaKind === 'video') &&
+    typeof row.bucketId === 'string' && typeof row.storagePath === 'string'
+  );
+  const signed = new Map<string, string>();
+  for (const bucket of new Set(previewable.map((row) => row.bucketId as string))) {
+    const paths = previewable
+      .filter((row) => row.bucketId === bucket)
+      .map((row) => row.storagePath as string);
+    const { data } = await actor.adminClient.storage.from(bucket).createSignedUrls(
+      paths,
+      MEDIA_PREVIEW_SECONDS,
+    );
+    for (const entry of data ?? []) {
+      if (entry.error || !entry.signedUrl || typeof entry.path !== 'string') continue;
+      signed.set(bucket + '\u001f' + entry.path, entry.signedUrl);
+    }
+  }
+  return {
+    ...payload,
+    items: rows.map(({ bucketId, storagePath, ...row }) => ({
+      ...row,
+      previewUrl: typeof bucketId === 'string' && typeof storagePath === 'string'
+        ? signed.get(bucketId + '\u001f' + storagePath) ?? null
+        : null,
+    })),
+  };
+}
+
+/** How much conversation every summary range holds for this reader. */
+async function loadSummaryReadinessDefault(
+  actor: AuthenticatedActor,
+  input: SummaryReadinessInput,
+): Promise<unknown> {
+  return camelize(
+    await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_summary_readiness', {
+      p_actor_user_id: actor.user.id,
+      p_organization_id: input.organizationId,
+      p_session_id: actor.claims.sessionId,
+      p_conversation_id: input.conversationId,
+      p_from_message_id: input.fromMessageId,
+      p_utc_offset_minutes: input.utcOffsetMinutes,
+    }),
+  );
+}
+
+/** 찾기: the chats a keyword or a project name came up in. */
+async function loadFindDefault(actor: AuthenticatedActor, input: FindInput): Promise<unknown> {
+  return camelize(
+    await invokeRpc(asRpcClient(actor.adminClient), 'bff_find_keyword', {
+      p_actor_user_id: actor.user.id,
+      p_organization_id: input.organizationId,
+      p_session_id: actor.claims.sessionId,
+      p_query: input.query,
+      p_limit: input.limit,
+    }),
+  );
 }
 
 async function loadBootstrapRpcDefault(
@@ -693,6 +793,9 @@ export function defaultReadDependencies(): ReadDependencies {
     loadMessages: loadMessagesDefault,
     loadPins: loadPinsDefault,
     loadMedia: loadMediaDefault,
+    loadProjects: loadProjectsDefault,
+    loadSummaryReadiness: loadSummaryReadinessDefault,
+    loadFind: loadFindDefault,
     loadSummaryExport: loadSummaryExportDefault,
     loadSearch: loadSearchDefault,
     loadUserSearch: loadUserSearchDefault,
@@ -769,28 +872,28 @@ export function safeTimeZone(value: unknown): string {
 }
 
 /**
- * The reader's own finished summary as a file. Only the person who asked for
- * a recap can take it out (summaries are private to their requester, owner
- * Sep 14 2026), and only a finished one; anything else is "not found" so the
- * response says nothing about other people's recaps.
+ * A finished summary as a file. Summaries are private to their requester
+ * (owner, Sep 14 2026) until one is saved into a project, which every member
+ * of the chat sees (owner, Sep 23 2026); the database decides which applies,
+ * and only a finished recap ever exports. Anything else is "not found", so
+ * the response says nothing about other people's recaps.
  */
 async function loadSummaryExportDefault(
   actor: AuthenticatedActor,
   input: SummaryExportInput,
 ): Promise<SummaryExportFile> {
-  const summaryQuery = await actor.adminClient
-    .from('conversation_summaries')
-    .select('id, primary_topic, summary_body, status, source_first_message_id, source_last_message_id, created_at')
-    .eq('organization_id', input.organizationId)
-    .eq('conversation_id', input.conversationId)
-    .eq('id', input.summaryId)
-    .eq('requested_by_user_id', actor.user.id)
-    // The row's own states: a finished recap is 'draft' (the app shows it as
-    // ready) or 'approved'; queued, processing, failed and stale never export.
-    .in('status', ['draft', 'approved'])
-    .maybeSingle();
-  if (summaryQuery.error) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
-  const summary = summaryQuery.data as {
+  const lookup = asObject(
+    await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_summary_for_export', {
+      p_actor_user_id: actor.user.id,
+      p_organization_id: input.organizationId,
+      p_session_id: actor.claims.sessionId,
+      p_conversation_id: input.conversationId,
+      p_summary_id: input.summaryId,
+    }),
+  );
+  if (lookup.schema_version !== 1) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  if (lookup.found !== true) throw new ApiError(404, 'not_found');
+  const summary = asObject(lookup.summary) as unknown as {
     id: string;
     primary_topic: string;
     summary_body: string;
@@ -798,8 +901,10 @@ async function loadSummaryExportDefault(
     source_first_message_id: string | number | null;
     source_last_message_id: string | number | null;
     created_at: string;
-  } | null;
-  if (!summary) throw new ApiError(404, 'not_found');
+  };
+  if (typeof summary.summary_body !== 'string' || typeof summary.created_at !== 'string') {
+    throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+  }
 
   const membership = await actor.adminClient
     .from('conversation_members')
@@ -857,6 +962,20 @@ function matchSummaryExport(path: string): { conversationId: string; summaryId: 
   if (!match?.[1] || !match[2]) return null;
   try {
     return { conversationId: uuid(decodeURIComponent(match[1])), summaryId: uuid(decodeURIComponent(match[2])) };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(400, 'bad_request');
+  }
+}
+
+/** A conversation id from `/v2/conversations/:id/<suffix>`, or null for another path. */
+function matchConversationRead(path: string, suffix: string): string | null {
+  const prefix = '/v2/conversations/';
+  if (!path.startsWith(prefix) || !path.endsWith(`/${suffix}`)) return null;
+  const segment = path.slice(prefix.length, path.length - suffix.length - 1);
+  if (!segment || segment.includes('/')) return null;
+  try {
+    return uuid(decodeURIComponent(segment));
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(400, 'bad_request');
@@ -1263,6 +1382,50 @@ export function createReadHandler(
           locale,
         });
         return fileResponse(meta, file.bytes, file.contentType, file.fileName);
+      }
+
+      const projectsConversationId = matchConversationRead(path, 'projects/query');
+      if (projectsConversationId) {
+        onlyKeys(parsed, ['organizationId']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        await dependencies.authorize(actor, organizationId, { operation: 'read.projects' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.projects');
+        return boundedResponse(
+          meta,
+          await dependencies.loadProjects(actor, {
+            organizationId,
+            conversationId: projectsConversationId,
+          }),
+        );
+      }
+
+      const readinessConversationId = matchConversationRead(path, 'summaries/readiness');
+      if (readinessConversationId) {
+        onlyKeys(parsed, ['organizationId', 'fromMessageId', 'utcOffsetMinutes']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        const fromMessageId = optionalMessageId(parsed.fromMessageId);
+        const utcOffsetMinutes = optionalInteger(parsed, 'utcOffsetMinutes', -900, 900) ?? 0;
+        await dependencies.authorize(actor, organizationId, { operation: 'read.summary_readiness' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.summary_readiness');
+        return boundedResponse(
+          meta,
+          await dependencies.loadSummaryReadiness(actor, {
+            organizationId,
+            conversationId: readinessConversationId,
+            fromMessageId,
+            utcOffsetMinutes,
+          }),
+        );
+      }
+
+      if (path === '/v2/find/query') {
+        onlyKeys(parsed, ['organizationId', 'query', 'limit']);
+        const organizationId = requiredUuid(parsed, 'organizationId');
+        const query = normalizedString(parsed.query, { min: 1, max: 100 }) as string;
+        const limit = optionalInteger(parsed, 'limit', 1, 50) ?? 30;
+        await dependencies.authorize(actor, organizationId, { operation: 'read.find' });
+        await dependencies.rateLimit(request, config, actor, organizationId, 'read.find');
+        return boundedResponse(meta, await dependencies.loadFind(actor, { organizationId, query, limit }));
       }
 
       const mediaConversationId = matchMedia(path);

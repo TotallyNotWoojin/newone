@@ -130,6 +130,7 @@ export type RouteKind =
   | 'translation.correction.propose'
   | 'translation.correction.review'
   | 'summary.request'
+  | 'project.command'
   | 'summary.manual.create'
   | 'ai_output.error.report'
   | 'ai_output.error_reports.self.query'
@@ -382,6 +383,12 @@ const ROUTES: Array<Omit<MatchedRoute, 'params'> & { method: string }> = [
     kind: 'summary.manual.create',
     template: '/v2/conversations/:conversationId/summaries/manual',
     status: 201,
+  },
+  {
+    method: 'POST',
+    kind: 'project.command',
+    template: '/v2/conversations/:conversationId/projects/commands',
+    status: 200,
   },
   {
     method: 'POST',
@@ -697,6 +704,15 @@ function announcementAudienceSpec(value: unknown): JsonObject {
 }
 
 // The ranges a reader can pick for a summary; the server resolves them.
+const PROJECT_ACTIONS = [
+  'create',
+  'rename',
+  'delete',
+  'select',
+  'add_item',
+  'rename_item',
+  'remove_item',
+] as const;
 const SUMMARY_RANGE_KINDS = ['unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything'] as const;
 
 function messageIdArray(value: unknown, maximum = 500): string[] {
@@ -1699,6 +1715,60 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       return {
         organizationId: organization(body),
         values: { conversationId, sourceMessageIds, languageCode },
+      };
+    }
+    case 'project.command': {
+      // One route for every change to a chat's projects; the action names
+      // which fields it needs and every other field must be absent.
+      onlyKeys(body, ['organizationId', 'action', 'projectId', 'itemId', 'name', 'target']);
+      const action = oneOf(body.action, PROJECT_ACTIONS);
+      const needsProject = action === 'rename' || action === 'delete' || action === 'add_item';
+      const needsItem = action === 'rename_item' || action === 'remove_item';
+      const needsName = action === 'create' || action === 'rename' || action === 'rename_item';
+      const projectId = action === 'select'
+        ? (optionalUuid(body, 'projectId', true) ?? null)
+        : needsProject ? requiredUuid(body, 'projectId') : null;
+      if (!needsProject && action !== 'select' && body.projectId !== undefined) {
+        throw new ApiError(400, 'bad_request');
+      }
+      if (action === 'select' && body.projectId === undefined) throw new ApiError(400, 'bad_request');
+      const itemId = needsItem ? requiredUuid(body, 'itemId') : null;
+      if (!needsItem && body.itemId !== undefined) throw new ApiError(400, 'bad_request');
+      const name = needsName
+        ? requiredString(body, 'name', { min: 1, max: action === 'rename_item' ? 120 : 60 })
+        : null;
+      if (!needsName && body.name !== undefined) throw new ApiError(400, 'bad_request');
+      let target: JsonObject | null = null;
+      if (action === 'add_item') {
+        const raw = asObject(body.target);
+        const kind = oneOf(raw.kind, ['summary', 'upload', 'link'] as const);
+        if (kind === 'summary') {
+          onlyKeys(raw, ['kind', 'summaryId']);
+          target = { kind, summaryId: requiredUuid(raw, 'summaryId') };
+        } else if (kind === 'upload') {
+          onlyKeys(raw, ['kind', 'attachmentId']);
+          target = { kind, attachmentId: requiredUuid(raw, 'attachmentId') };
+        } else {
+          onlyKeys(raw, ['kind', 'messageId', 'url']);
+          target = {
+            kind,
+            messageId: messageId(raw.messageId),
+            url: optionalString(raw, 'url', { min: 4, max: 2048, nullable: true }) ?? null,
+          };
+        }
+      } else if (body.target !== undefined) {
+        throw new ApiError(400, 'bad_request');
+      }
+      return {
+        organizationId: organization(body),
+        values: {
+          conversationId: pathUuid(route, 'conversationId'),
+          action,
+          projectId,
+          itemId,
+          name,
+          target,
+        },
       };
     }
     case 'summary.manual.create': {
@@ -4207,6 +4277,25 @@ export async function executeCommand(
         ),
       };
     }
+    case 'project.command':
+      return {
+        status: 200,
+        body: await businessRpc(
+          actor,
+          org,
+          idempotencyKey,
+          requestDigest,
+          'bff_conversation_project_command',
+          {
+            p_conversation_id: values.conversationId,
+            p_action: values.action,
+            p_project_id: values.projectId,
+            p_item_id: values.itemId,
+            p_name: values.name,
+            p_target: values.target,
+          },
+        ),
+      };
     case 'summary.manual.create':
       return {
         status: 201,
