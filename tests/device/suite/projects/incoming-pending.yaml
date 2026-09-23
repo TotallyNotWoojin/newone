@@ -1,0 +1,7 @@
+appId: com.totallynotwoojin.gist
+---
+# The friend's photo message is here but its file is still uploading. The
+# bubble says so; it used to be empty (Sep 23 2026).
+- extendedWaitUntil:
+    visible: ".*Photo or file on its way.*"
+    timeout: 30000

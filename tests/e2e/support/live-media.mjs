@@ -38,7 +38,12 @@ export async function sendText(keys, user, conversationId, label, body) {
 }
 
 export async function sendAttachment(keys, user, conversationId, { label, fileName, mimeType, bytes, caption = null }) {
-  const sha256Hex = createHash('sha256').update(bytes).digest('hex');
+  const messageId = await startAttachment(keys, user, conversationId, { label, caption });
+  return finishAttachment(keys, user, conversationId, messageId, { label, fileName, mimeType, bytes });
+}
+
+/** The attachment message alone, as the app sends it before the file goes up. */
+export async function startAttachment(keys, user, conversationId, { label, caption = null }) {
   const message = expectStatus(
     await apiPost(keys, user, `/v2/conversations/${conversationId}/messages`, `${label}-message`, {
       clientMessageId: randomUUID(),
@@ -48,11 +53,17 @@ export async function sendAttachment(keys, user, conversationId, { label, fileNa
     201,
     `${label} attachment message`,
   );
+  return String(message.messageId);
+}
+
+/** The file for a message startAttachment made: grant, bytes, completion. */
+export async function finishAttachment(keys, user, conversationId, messageId, { label, fileName, mimeType, bytes }) {
+  const sha256Hex = createHash('sha256').update(bytes).digest('hex');
   const grant = expectStatus(
     await apiPost(keys, user, '/v2/attachments/grants', `${label}-grant`, {
       action: 'upload',
       conversationId,
-      messageId: String(message.messageId),
+      messageId,
       fileName,
       mimeType,
       byteSize: bytes.length,
@@ -81,5 +92,5 @@ export async function sendAttachment(keys, user, conversationId, { label, fileNa
     202,
     `${label} completion`,
   );
-  return { messageId: String(message.messageId), attachmentId: grant.attachmentId };
+  return { messageId, attachmentId: grant.attachmentId };
 }

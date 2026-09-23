@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 
 import { makeRunId } from '../hosted/lib.mjs';
 import { PERSONAL_REALM_ID, gatewayPost, loadAccessToken, projectKeys, signupUser } from '../hosted/smoke-lib.mjs';
-import { sendAttachment } from '../e2e/support/live-media.mjs';
+import { finishAttachment, sendAttachment, startAttachment } from '../e2e/support/live-media.mjs';
 import { APP_PATH } from './lib/devices.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -294,6 +294,20 @@ if (signedIn) {
     });
   }
   maestro('close-sheet.yaml', {});
+  // The friend's next photo, the way the app sends one: the message first,
+  // the file after. In between, this side is holding a message with no text
+  // and no file.
+  const pendingId = await startAttachment(keys, friend, groupId, { label: 'device-pending' });
+  const pendingShown = await step('07c-incoming-pending', 'A photo the friend is still sending says so in its bubble', 'incoming-pending.yaml', {});
+  await finishAttachment(keys, friend, groupId, pendingId, {
+    label: 'device-pending',
+    fileName: 'arrived.jpg',
+    mimeType: 'image/jpeg',
+    bytes: readFileSync(join(HERE, '..', 'e2e', 'fixtures', 'copy-me.jpg')),
+  });
+  if (pendingShown) {
+    await step('07d-incoming-arrived', 'Once the friend\'s upload finishes, the bubble turns into the photo', 'incoming-arrived.yaml', {});
+  }
   await step('08-find', '찾기 finds the chat a word came up in and opens it there', 'find.yaml', {
     GROUP: groupName,
     WORD: 'Otay',

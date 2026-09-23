@@ -1,0 +1,7 @@
+appId: com.totallynotwoojin.gist
+---
+# The friend's upload finished: the placeholder gives way to the photo.
+- extendedWaitUntil:
+    notVisible: ".*Photo or file on its way.*"
+    timeout: 60000
+- assertVisible: "Open image full screen"
