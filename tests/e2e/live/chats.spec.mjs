@@ -249,9 +249,9 @@ test('the Pinned view opens from Chats and from a chat, and asks the read functi
   for (const url of pinReads) expect(url).toContain('/functions/v1/newone-read/');
 });
 
-test.fixme('the Pinned view lists the message that was pinned', async ({ chats, liveWorkspace }) => {
-  // Blocked on deploying newone-read (and migration 20260908050000). Until then
-  // /v2/pins/query answers 404 and the view shows its empty state instead.
+test('the Pinned view lists the message that was pinned', async ({ chats, liveWorkspace }) => {
+  // The message pinned while the workspace was made is listed, not the empty
+  // state (it waited on newone-read's pins route being deployed; live since).
   await chats.getByRole('button', { name: 'Open pinned messages' }).click();
   const sheet = chats.locator('[aria-modal="true"]').last();
   await expect(sheet.getByText(liveWorkspace.pinnedBody)).toBeVisible();
