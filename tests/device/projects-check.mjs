@@ -270,6 +270,7 @@ if (signedIn) {
       const summary = projects.items.find((item) => item.kind === 'summary');
       return { ok: summary?.summaryState === 'ready' && / #1$/.test(summary.title ?? ''), detail: summary };
     });
+    await step('06b-summary-preview', 'The saved summary opens to read in the app, without a download', 'summary-preview.yaml', {});
     maestro('close-sheet.yaml', {});
   }
   const copied = await step('07-copy-image', 'Copy the friend\'s photo from the message menu, then paste it back in the attachment sheet', 'copy-image.yaml', {});

@@ -1,0 +1,20 @@
+appId: com.totallynotwoojin.gist
+---
+# The summary saved in HDG opens to read right there, with no download
+# (owner, Sep 24 2026). The row's name is the summary's; the PDF and Word
+# buttons under it and its ⋮ carry the same name after "PDF: ", "Word: " and
+# "Options for " (Android matched the ⋮ first and opened its menu).
+- tapOn: "^(?!PDF: |Word: |Options for ).* #1 \\(20[0-9]{2}-[0-9]{2}-[0-9]{2}\\)$"
+- extendedWaitUntil:
+    visible:
+      id: "summary-preview"
+    timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: "summary-preview-line"
+    timeout: 60000
+- runFlow: close-sheet.yaml
+- extendedWaitUntil:
+    notVisible:
+      id: "summary-preview"
+    timeout: 10000
