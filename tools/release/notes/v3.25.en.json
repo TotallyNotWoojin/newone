@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Summary dates stay whole\n\nWhen a summary with a long name opens in Projects, its date is never split across two lines anymore.\n\nPlease check\n\n- Open a saved summary in a project and look at the date in its title.",
+  "whatsNewPlay": "A summary's date never splits across two lines when it opens in Projects."
+}

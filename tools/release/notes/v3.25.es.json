@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Las fechas de los resúmenes, enteras\n\nCuando un resumen con un nombre largo se abre en Proyectos, su fecha ya no se parte en dos líneas.\n\nPor favor revisa\n\n- Abre un resumen guardado en un proyecto y mira la fecha de su título.",
+  "whatsNewPlay": "La fecha de un resumen ya no se parte en dos líneas al abrirlo en Proyectos."
+}
