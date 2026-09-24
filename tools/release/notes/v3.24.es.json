@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Lee los resúmenes en Proyectos\n\nUn resumen guardado en un proyecto ahora se abre ahí mismo: tócalo para leerlo, con cuándo fue la conversación y quién participó. PDF y Word siguen a un toque, abajo.\n\nTraducciones y resúmenes más rápidos\n\nCuando el servicio de IA que usamos está ocupado, las traducciones y los resúmenes ahora pasan a otros proveedores que tampoco guardan nada, en lugar de esperar su turno. En horas ocupadas tardaban minutos.\n\nPor favor revisa\n\n- Abre un proyecto y toca un resumen guardado para leerlo.\n- Envía un mensaje en otro idioma y mira qué tan rápido aparece la traducción.",
+  "whatsNewPlay": "Toca un resumen en Proyectos para leerlo ahí mismo, con PDF y Word a un toque. Las traducciones y los resúmenes ya no esperan minutos cuando el servicio de IA está ocupado."
+}

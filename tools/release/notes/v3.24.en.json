@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Read summaries in Projects\n\nA summary saved in a project now opens right there: tap it to read it, with when the conversation happened and who was in it. PDF and Word are still one tap away at the bottom.\n\nFaster translations and summaries\n\nWhen the AI service we use is busy, translations and summaries now go to other providers that also keep nothing, instead of waiting their turn. They were taking minutes at busy times.\n\nPlease check\n\n- Open a project and tap a saved summary to read it.\n- Send a message in another language and see how fast the translation appears.",
+  "whatsNewPlay": "Tap a summary in Projects to read it right there, with PDF and Word one tap away. Translations and summaries no longer wait minutes when the AI service is busy."
+}
