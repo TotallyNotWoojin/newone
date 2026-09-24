@@ -251,6 +251,46 @@ const preflightResetHooks: Array<(clock: () => number) => void> = [];
  * Other proof caches (the route probe in openrouter.ts) register here so one
  * reset clears every cache and installs the same clock.
  */
+/**
+ * Which fallback routes the workspace's guardrails let through, by the same
+ * allowed/ignored provider rules the pinned route is held to. Excluded ones
+ * come back with the reason. Throws (fails closed) when the guardrails cannot
+ * be read; the caller then keeps to the pinned route alone.
+ */
+export async function fallbackRoutesAllowedByGuardrails(
+  controls: OpenRouterEmployeeControlPlane,
+  tags: readonly string[],
+  fetcher: ControlPlaneFetch,
+  signal: AbortSignal,
+): Promise<{ allowed: string[]; excluded: Record<string, string> }> {
+  const workspace = encodeURIComponent(controls.workspaceId);
+  const response = await fetcher(`${OPENROUTER_API}/guardrails?workspace_id=${workspace}&limit=100&offset=0`, {
+    headers: { 'Authorization': `Bearer ${controls.managementApiKey}`, 'Accept': 'application/json' },
+    signal,
+  });
+  const guardrails = page(await boundedJson(response)).data.map((entry) => asObject(entry));
+  const allowed: string[] = [];
+  const excluded: Record<string, string> = {};
+  for (const tag of tags) {
+    const base = tag.split('/')[0] ?? tag;
+    let reason: string | null = null;
+    for (const guardrail of guardrails) {
+      if (guardrail.workspace_id !== controls.workspaceId) continue;
+      const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null);
+      const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null);
+      if (allowedProviders !== null && !allowedProviders.includes(base) && !allowedProviders.includes(tag)) {
+        reason = 'not_in_guardrail_allowed_providers';
+      } else if (ignoredProviders?.includes(base) || ignoredProviders?.includes(tag)) {
+        reason = 'in_guardrail_ignored_providers';
+      }
+      if (reason) break;
+    }
+    if (reason) excluded[tag] = reason;
+    else allowed.push(tag);
+  }
+  return { allowed, excluded };
+}
+
 export function registerPreflightResetHook(hook: (clock: () => number) => void): void {
   preflightResetHooks.push(hook);
 }

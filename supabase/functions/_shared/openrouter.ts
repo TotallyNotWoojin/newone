@@ -3,6 +3,7 @@ import { ApiError } from './errors.ts';
 import {
   type ControlPlaneProofStore,
   DISABLED_OPENROUTER_PLUGINS,
+  fallbackRoutesAllowedByGuardrails,
   type OpenRouterEmployeeControlPlane,
   parseOpenRouterEmployeeControlPlane,
   verifyOpenRouterEmployeeControlPlaneCached,
@@ -153,9 +154,25 @@ export interface SummaryResult {
   completionTokens: number | null;
 }
 
+/**
+ * Another provider of the policy's model that may take a request when the
+ * pinned one is busy. The pinned Google Vertex route answered "too busy"
+ * (429, passed on by OpenRouter) to a share of translations and summaries
+ * for hours on Sep 23 2026, and with nowhere else to go they waited minutes;
+ * the owner chose Google first with zero-data-retention fallbacks.
+ */
+export interface OpenRouterFallbackProvider {
+  /** OpenRouter endpoint tag, e.g. "nebius/fp8". */
+  tag: string;
+  /** The provider name OpenRouter reports for it, e.g. "Nebius". */
+  name: string;
+}
+
 interface OpenRouterEnvironmentBase {
   apiKey: string;
   policy: OpenRouterPolicy;
+  /** Tried in order after the policy's own provider; each is checked before use. */
+  fallbackProviders?: readonly OpenRouterFallbackProvider[];
   siteUrl?: string;
   siteName?: string;
   /** Persists the control-plane proof across worker isolates (see control plane). */
@@ -274,6 +291,35 @@ export function parseOpenRouterPolicy(raw: string): OpenRouterPolicy {
   };
 }
 
+const MAX_FALLBACK_PROVIDERS = 8;
+
+/** Reads the fallback list; anything malformed leaves the pinned provider alone. */
+export function parseOpenRouterFallbackProviders(
+  raw: string | undefined,
+  policy: OpenRouterPolicy,
+): OpenRouterFallbackProvider[] {
+  if (!raw?.trim()) return [];
+  try {
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries) || entries.length > MAX_FALLBACK_PROVIDERS) return [];
+    const seen = new Set<string>([policy.providerTag]);
+    const providers: OpenRouterFallbackProvider[] = [];
+    for (const entry of entries) {
+      const value = asObject(entry);
+      onlyKeys(value, ['tag', 'name']);
+      const tag = typeof value.tag === 'string' ? value.tag.trim() : '';
+      const name = typeof value.name === 'string' ? value.name.trim() : '';
+      if (!SLUG_PATTERN.test(tag) || !/^[A-Za-z0-9][A-Za-z0-9 ._()&+-]{1,119}$/.test(name)) return [];
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      providers.push({ tag, name });
+    }
+    return providers;
+  } catch {
+    return [];
+  }
+}
+
 export function loadOpenRouterEnvironment(
   env: Pick<typeof Deno.env, 'get'> = Deno.env,
 ): OpenRouterEnvironment {
@@ -298,9 +344,14 @@ export function loadOpenRouterEnvironment(
     env.get('NEWONE_OPENROUTER_API_KEY_HASH'),
     env.get('NEWONE_OPENROUTER_WORKSPACE_ID'),
   );
+  const fallbackProviders = parseOpenRouterFallbackProviders(
+    env.get('NEWONE_OPENROUTER_FALLBACK_PROVIDERS_JSON'),
+    policy,
+  );
   return {
     apiKey,
     policy,
+    fallbackProviders,
     dataClassification: 'employee',
     employeeControlPlane,
     ...(siteUrl ? { siteUrl } : {}),
@@ -328,15 +379,26 @@ function validProviderModelReceipt(value: unknown): boolean {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(value);
 }
 
+/**
+ * Every provider that could have seen the text has to be one the policy
+ * allows. With only the pinned provider that is exactly one direct attempt;
+ * with fallbacks, earlier attempts may have been refused by an allowed
+ * provider before an allowed one answered.
+ */
 function validateRouterMetadata(
   value: unknown,
   expectedModel: string,
-  expectedProviderMetadataName: string,
+  allowedProviderNames: readonly string[],
 ): void {
   const metadata = routerObject(value);
+  const allowed = new Set(allowedProviderNames);
+  const pinnedOnly = allowed.size === 1;
   if (
-    metadata.requested !== expectedModel || metadata.strategy !== 'direct' ||
-    metadata.attempt !== 1 || metadata.is_byok !== false
+    metadata.requested !== expectedModel || metadata.is_byok !== false ||
+    (pinnedOnly
+      ? metadata.strategy !== 'direct' || metadata.attempt !== 1
+      : typeof metadata.strategy !== 'string' || !Number.isSafeInteger(metadata.attempt) ||
+        (metadata.attempt as number) < 1 || (metadata.attempt as number) > allowed.size)
   ) {
     throw new ApiError(503, 'provider_unavailable', 'provider_router_metadata_request', 5);
   }
@@ -357,29 +419,34 @@ function validateRouterMetadata(
   const endpointDrift = endpoints.available.some((entry) => {
     const endpoint = routerObject(entry);
     return !validProviderModelReceipt(endpoint.model) ||
-      endpoint.provider !== expectedProviderMetadataName ||
+      typeof endpoint.provider !== 'string' || !allowed.has(endpoint.provider) ||
       typeof endpoint.selected !== 'boolean';
   });
   const selectedEndpoint = selected.length === 1 ? routerObject(selected[0]) : null;
   if (
     endpointDrift || selectedEndpoint === null ||
     !validProviderModelReceipt(selectedEndpoint.model) ||
-    selectedEndpoint.provider !== expectedProviderMetadataName
+    typeof selectedEndpoint.provider !== 'string' || !allowed.has(selectedEndpoint.provider)
   ) {
     throw new ApiError(503, 'provider_unavailable', 'provider_router_endpoint_selection', 5);
   }
 
   if (metadata.attempts !== undefined) {
-    if (!Array.isArray(metadata.attempts) || metadata.attempts.length !== 1) {
+    if (
+      !Array.isArray(metadata.attempts) || metadata.attempts.length < 1 ||
+      metadata.attempts.length > (pinnedOnly ? 1 : allowed.size)
+    ) {
       throw new ApiError(503, 'provider_unavailable', 'provider_router_attempts', 5);
     }
-    const attempt = routerObject(metadata.attempts[0]);
-    if (
-      attempt.provider !== expectedProviderMetadataName ||
-      !validProviderModelReceipt(attempt.model) ||
-      !Number.isSafeInteger(attempt.status) || (attempt.status as number) < 200 ||
-      (attempt.status as number) > 299
-    ) throw new ApiError(503, 'provider_unavailable', 'provider_router_attempt', 5);
+    metadata.attempts.forEach((entry, index) => {
+      const attempt = routerObject(entry);
+      const last = index === (metadata.attempts as unknown[]).length - 1;
+      if (
+        typeof attempt.provider !== 'string' || !allowed.has(attempt.provider) ||
+        !validProviderModelReceipt(attempt.model) || !Number.isSafeInteger(attempt.status) ||
+        (last && ((attempt.status as number) < 200 || (attempt.status as number) > 299))
+      ) throw new ApiError(503, 'provider_unavailable', 'provider_router_attempt', 5);
+    });
   }
 
   if (metadata.pipeline === undefined) return;
@@ -988,15 +1055,19 @@ function completionHeaders(
 function completionBody(
   policy: OpenRouterPolicy,
   spec: StructuredCompletionSpec,
+  fallbacks: readonly OpenRouterFallbackProvider[] = [],
 ): Record<string, unknown> {
+  // allow_fallbacks stays false: OpenRouter tries this list in order and
+  // nothing outside it.
+  const route = [policy.providerTag, ...fallbacks.map((provider) => provider.tag)];
   return {
     model: policy.model,
     stream: false,
     temperature: 0,
     max_tokens: spec.maxTokens,
     provider: {
-      only: [policy.providerTag],
-      order: [policy.providerTag],
+      only: route,
+      order: route,
       zdr: true,
       data_collection: 'deny',
       require_parameters: true,
@@ -1026,6 +1097,23 @@ export function sourceFingerprint(sourceSha256: string): string {
   return sourceSha256.slice(0, SOURCE_FINGERPRINT_LENGTH);
 }
 
+/**
+ * Who refused a request: the provider OpenRouter routed it to, or OpenRouter
+ * itself. OpenRouter names the provider in the error's metadata when it is
+ * passing that provider's answer on. Translations and summaries were held up
+ * by 429s for hours on Sep 23 2026 and nothing recorded which of the two it
+ * was. Only this label is kept, never the error's text.
+ */
+export async function refusalSource(response: Response): Promise<'upstream' | 'openrouter'> {
+  try {
+    const text = (await response.text()).slice(0, 16384);
+    const error = asObject(asObject(JSON.parse(text)).error);
+    return typeof asObject(error.metadata).provider_name === 'string' ? 'upstream' : 'openrouter';
+  } catch {
+    return 'openrouter';
+  }
+}
+
 async function responseEnvelope(response: Response): Promise<Record<string, unknown>> {
   try {
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -1052,13 +1140,92 @@ export function resetRouteProbeCache(clock: () => number = Date.now): void {
 }
 registerPreflightResetHook(resetRouteProbeCache);
 
+// Which configured fallbacks OpenRouter lists right now as zero data
+// retention, with no implicit caching, structured output, and prices under
+// the policy's ceilings: the same bar the pinned provider has to clear. The
+// list is public; it is read at most every five minutes, and a failed read
+// leaves the pinned provider on its own.
+const FALLBACK_ELIGIBILITY_TTL_MS = 5 * 60_000;
+const OPENROUTER_ZDR_ENDPOINTS = 'https://openrouter.ai/api/v1/endpoints/zdr';
+let fallbackEligibilityCache: { key: string; at: number; providers: OpenRouterFallbackProvider[] } | null = null;
+
+/** Drops the cached fallback eligibility (tests). */
+export function resetFallbackEligibilityCache(): void {
+  fallbackEligibilityCache = null;
+}
+registerPreflightResetHook(resetFallbackEligibilityCache);
+
+async function eligibleFallbackProviders(
+  environment: OpenRouterEnvironment,
+  fetcher: FetchLike,
+  signal: AbortSignal,
+): Promise<OpenRouterFallbackProvider[]> {
+  const configured = environment.fallbackProviders ?? [];
+  if (configured.length === 0 || environment.dataClassification !== 'employee') return [];
+  const policy = environment.policy;
+  const key = JSON.stringify([policy.model, policy.priceCeilingsUsdPerMillionTokens, configured]);
+  const now = routeProbeClock();
+  if (
+    fallbackEligibilityCache?.key === key && now >= fallbackEligibilityCache.at &&
+    now - fallbackEligibilityCache.at < FALLBACK_ELIGIBILITY_TTL_MS
+  ) return fallbackEligibilityCache.providers;
+  let providers: OpenRouterFallbackProvider[] = [];
+  try {
+    const response = await fetcher(OPENROUTER_ZDR_ENDPOINTS, { headers: { 'Accept': 'application/json' }, signal });
+    if (!response.ok) return [];
+    const text = await response.text();
+    if (text.length > 16 * 1024 * 1024) return [];
+    const listed = asObject(JSON.parse(text)).data;
+    if (!Array.isArray(listed)) return [];
+    const excluded: Record<string, string> = {};
+    const zeroRetention = configured.filter((provider) => {
+      const listedHere = listed.some((entry) => {
+      const endpoint = asObject(entry);
+      const supported = Array.isArray(endpoint.supported_parameters) ? endpoint.supported_parameters : [];
+      const prompt = Number(asObject(endpoint.pricing).prompt) * 1_000_000;
+      const completion = Number(asObject(endpoint.pricing).completion) * 1_000_000;
+      return endpoint.model_id === policy.model && endpoint.tag === provider.tag &&
+        endpoint.provider_name === provider.name && endpoint.status === 0 &&
+        endpoint.supports_implicit_caching === false &&
+        supported.includes('structured_outputs') && supported.includes('response_format') &&
+        Number.isFinite(prompt) && Number.isFinite(completion) && prompt >= 0 && completion >= 0 &&
+        prompt <= policy.priceCeilingsUsdPerMillionTokens.prompt &&
+        completion <= policy.priceCeilingsUsdPerMillionTokens.completion;
+      });
+      if (!listedHere) excluded[provider.tag] = 'not_eligible_in_zdr_list';
+      return listedHere;
+    });
+    const guardrails = zeroRetention.length
+      ? await fallbackRoutesAllowedByGuardrails(
+        environment.employeeControlPlane,
+        zeroRetention.map((provider) => provider.tag),
+        fetcher,
+        signal,
+      )
+      : { allowed: [], excluded: {} };
+    Object.assign(excluded, guardrails.excluded);
+    providers = zeroRetention.filter((provider) => guardrails.allowed.includes(provider.tag));
+    console.log(JSON.stringify({
+      event: 'newone_ai_fallbacks_checked',
+      eligible: providers.map((provider) => provider.tag),
+      excluded,
+    }));
+  } catch {
+    return [];
+  }
+  fallbackEligibilityCache = { key, at: now, providers };
+  return providers;
+}
+
 async function routeProbeKey(
   environment: OpenRouterEnvironment & { dataClassification: 'employee' },
+  fallbacks: readonly OpenRouterFallbackProvider[],
 ): Promise<string> {
   const policy = environment.policy;
   const controls = environment.employeeControlPlane;
   const material = [
     'route-probe',
+    fallbacks.map((provider) => provider.tag).join(','),
     environment.apiKey,
     controls.apiKeyHash,
     controls.workspaceId,
@@ -1075,6 +1242,7 @@ async function verifyEmployeeEgressBeforeContent(
   environment: OpenRouterEnvironment & { dataClassification: 'employee' },
   fetcher: FetchLike,
   correlationId: string,
+  fallbacks: readonly OpenRouterFallbackProvider[],
 ): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), environment.policy.timeoutMilliseconds);
@@ -1090,7 +1258,7 @@ async function verifyEmployeeEgressBeforeContent(
       environment.controlPlaneProofStore,
     );
 
-    const key = await routeProbeKey(environment);
+    const key = await routeProbeKey(environment, fallbacks);
     const now = routeProbeClock();
     if (
       routeProbeCache !== null && routeProbeCache.key === key &&
@@ -1134,9 +1302,12 @@ async function verifyEmployeeEgressBeforeContent(
         ...completionHeaders(environment, correlationId),
         'X-Newone-Data-Classification': 'synthetic-control-probe',
       },
-      body: JSON.stringify(completionBody(environment.policy, probe)),
+      body: JSON.stringify(completionBody(environment.policy, probe, fallbacks)),
     });
-    if (!response.ok) throw new ApiError(503, 'provider_unavailable', `provider_probe_http_${response.status}`, 5);
+    if (!response.ok) {
+      const source = await refusalSource(response);
+      throw new ApiError(503, 'provider_unavailable', `provider_probe_http_${response.status}_${source}`, 5);
+    }
     const envelope = await responseEnvelope(response);
     if (
       envelope.model !== environment.policy.model || !Array.isArray(envelope.choices) ||
@@ -1145,7 +1316,7 @@ async function verifyEmployeeEgressBeforeContent(
     validateRouterMetadata(
       envelope.openrouter_metadata,
       environment.policy.model,
-      environment.policy.providerMetadataName,
+      [environment.policy.providerMetadataName, ...fallbacks.map((provider) => provider.name)],
     );
     const message = routerObject(routerObject(envelope.choices[0]).message);
     const output = typeof message.content === 'string'
@@ -1175,17 +1346,44 @@ async function verifyEmployeeEgressBeforeContent(
   }
 }
 
+/**
+ * Which provider answered, for the record; the stored provider column keeps
+ * the route's label. No text, only the provider's name.
+ */
+function logServedProvider(metadata: unknown, pinnedName: string, correlationId: string): void {
+  try {
+    const endpoints = asObject(asObject(metadata).endpoints);
+    const selected = Array.isArray(endpoints.available)
+      ? endpoints.available.map((entry) => asObject(entry)).find((entry) => entry.selected === true)
+      : undefined;
+    const provider = typeof selected?.provider === 'string' ? selected.provider : 'unknown';
+    if (provider === pinnedName) return;
+    console.log(JSON.stringify({ event: 'newone_ai_served_by_fallback', correlation_id: correlationId, provider }));
+  } catch {
+    // The record is best effort; validation above already passed.
+  }
+}
+
 async function structuredCompletion(
   environment: OpenRouterEnvironment,
   fetcher: FetchLike,
   spec: StructuredCompletionSpec,
 ): Promise<StructuredCompletionResult> {
   const policy = environment.policy;
+  let fallbacks: OpenRouterFallbackProvider[] = [];
   if (environment.dataClassification === 'employee') {
-    await verifyEmployeeEgressBeforeContent(environment, fetcher, spec.correlationId);
+    const eligibility = new AbortController();
+    const eligibilityTimeout = setTimeout(() => eligibility.abort(), policy.timeoutMilliseconds);
+    try {
+      fallbacks = await eligibleFallbackProviders(environment, fetcher, eligibility.signal);
+    } finally {
+      clearTimeout(eligibilityTimeout);
+    }
+    await verifyEmployeeEgressBeforeContent(environment, fetcher, spec.correlationId, fallbacks);
   } else if (environment.dataClassification !== 'synthetic') {
     throw new ApiError(503, 'ai_processing_disabled');
   }
+  const allowedProviderNames = [policy.providerMetadataName, ...fallbacks.map((provider) => provider.name)];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), policy.timeoutMilliseconds);
   let response: Response;
@@ -1194,7 +1392,7 @@ async function structuredCompletion(
       method: 'POST',
       signal: controller.signal,
       headers: completionHeaders(environment, spec.correlationId),
-      body: JSON.stringify(completionBody(policy, spec)),
+      body: JSON.stringify(completionBody(policy, spec, fallbacks)),
     });
   } catch {
     throw new ApiError(503, 'provider_unavailable', 'provider_completion_fetch', 5);
@@ -1207,7 +1405,13 @@ async function structuredCompletion(
     const retryAfter = Number.isFinite(retryHeader) && retryHeader > 0
       ? Math.min(3600, Math.ceil(retryHeader))
       : 5;
-    throw new ApiError(503, 'provider_unavailable', `provider_completion_http_${response.status}`, retryAfter);
+    const source = await refusalSource(response);
+    throw new ApiError(
+      503,
+      'provider_unavailable',
+      `provider_completion_http_${response.status}_${source}`,
+      retryAfter,
+    );
   }
 
   const envelope = await responseEnvelope(response);
@@ -1215,11 +1419,8 @@ async function structuredCompletion(
     envelope.model !== policy.model || !Array.isArray(envelope.choices) ||
     envelope.choices.length !== 1
   ) throw new ApiError(503, 'provider_unavailable', 'provider_completion_envelope', 5);
-  validateRouterMetadata(
-    envelope.openrouter_metadata,
-    policy.model,
-    policy.providerMetadataName,
-  );
+  validateRouterMetadata(envelope.openrouter_metadata, policy.model, allowedProviderNames);
+  logServedProvider(envelope.openrouter_metadata, policy.providerMetadataName, spec.correlationId);
   const choice = routerObject(envelope.choices[0]);
   const message = routerObject(choice.message);
   // A refusal is terminal (needs review), never a provider blip to retry.
