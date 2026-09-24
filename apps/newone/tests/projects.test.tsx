@@ -304,6 +304,8 @@ describe('the projects tree', () => {
     expect(screen.getByText('2. Francisco confirms it in the warehouse.')).toBeTruthy();
     expect(screen.getByText('Kyle, Ana, Luis')).toBeTruthy();
     expect(screen.getByText('Sep 23, 9:00 AM – 5:00 PM')).toBeTruthy();
+    // The date in the title never breaks across lines.
+    expect(screen.getByText(/^Acid delivery #1 \(2026\u201109\u20112\d\)$/)).toBeTruthy();
     expect(mockSaveSummaryFile).not.toHaveBeenCalled();
     const inPreview = screen.getAllByLabelText(/^Word: Acid delivery #1/);
     fireEvent.press(inPreview[inPreview.length - 1] as never);

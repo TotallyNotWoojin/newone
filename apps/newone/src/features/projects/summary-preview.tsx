@@ -59,6 +59,11 @@ export function SummaryPreview({
   };
 
   const label = projectItemLabel(item);
+  // The date is the part that must never be broken up (owner's father, Sep
+  // 23 2026); a long name wrapped the title inside it, "(2026-" over
+  // "09-24)". Non-breaking hyphens keep it whole.
+  const title = label.replace(/\((\d{4})-(\d{2})-(\d{2})\)$/, (_match, year: string, month: string, day: string) =>
+    `(${year}\u2011${month}\u2011${day})`);
   return (
     <ActionModal
       footer={(
@@ -87,7 +92,7 @@ export function SummaryPreview({
         </View>
       )}
       onClose={onClose}
-      title={label}
+      title={title}
       visible>
       <View style={styles.body} testID="summary-preview">
         {view ? (
