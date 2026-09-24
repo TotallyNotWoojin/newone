@@ -133,6 +133,19 @@ test('a summary asked for here is saved into HDG under the AI\'s name and its da
     stream.once('error', reject);
   });
   expect(head).toBe('%PDF-');
+
+  // And it reads right there, without a download (owner, Sep 24 2026): the
+  // model's own lines, in the app, with the files one tap away.
+  await summaryRow.click();
+  const preview = chats.getByTestId('summary-preview');
+  await expect(preview).toBeVisible({ timeout: 30_000 });
+  const lines = chats.getByTestId('summary-preview-line');
+  await expect(lines.first()).toBeVisible({ timeout: 30_000 });
+  expect(await lines.count()).toBeGreaterThan(0);
+  await expect(chats.getByRole('button', { name: `Word: ${label}` }).last()).toBeVisible();
+  await chats.screenshot({ path: testInfo.outputPath('projects-summary-preview.png') });
+  await chats.getByRole('button', { name: 'Close dialog' }).last().click();
+  await expect(preview).toHaveCount(0);
 });
 
 test('a summary file is renamed by hand and keeps its date', async ({ chats, liveWorkspace }) => {

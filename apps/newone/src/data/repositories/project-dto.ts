@@ -7,6 +7,7 @@ import type {
   ProjectItemKind,
   SummaryRangeReadiness,
   SummaryReadiness,
+  SummaryView,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
 import type { SummaryScopeKind } from '@/domain/types';
@@ -158,6 +159,28 @@ export function projectCommandResultFromDto(payload: unknown): ProjectCommandRes
 const RANGE_KINDS: readonly SummaryScopeKind[] = [
   'unread', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'last_90_days', 'everything',
 ];
+
+const SUMMARY_VIEW_MAX_LINES = 400;
+
+export function summaryViewFromDto(payload: unknown): SummaryView {
+  const value = record(payload, 'summary');
+  const strings = (entries: unknown, label: string) => {
+    const items = list(entries, label);
+    if (items.length > SUMMARY_VIEW_MAX_LINES) invalid(label);
+    return items.map((entry) => {
+      if (typeof entry !== 'string') invalid(label);
+      return entry;
+    });
+  };
+  if (value.covers !== null && value.covers !== undefined && typeof value.covers !== 'string') invalid('summary');
+  return {
+    title: text(value.title, 'summary title'),
+    covers: typeof value.covers === 'string' && value.covers.length > 0 ? value.covers : null,
+    participants: strings(value.participants, 'summary participants'),
+    lines: strings(value.lines, 'summary lines'),
+    createdAt: date(value.createdAt, 'summary date'),
+  };
+}
 
 export function summaryReadinessFromDto(payload: unknown, conversationId: string): SummaryReadiness {
   const body = record(payload, 'summary readiness');

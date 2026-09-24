@@ -244,6 +244,7 @@ function readDependencies(overrides: Partial<ReadDependencies> = {}): ReadDepend
     loadSummaryReadiness: unused,
     loadFind: unused,
     loadSummaryExport: unused,
+    loadSummaryView: unused,
     loadSearch: unused,
     loadUserSearch: unused,
     loadAudit: unused,
@@ -389,6 +390,50 @@ Deno.test('the projects read signs photo previews and never sends bucket or path
     null,
   ]);
   assert(result.items.every((item) => !('bucketId' in item) && !('storagePath' in item)));
+}));
+
+Deno.test('a summary asked for as json comes back to read in the app, not as a file', async () => {
+  const seen: unknown[] = [];
+  const handler = createReadHandler(() => readDependencies({
+    loadSummaryView: async (_actor, input) => {
+      seen.push(input);
+      return {
+        schemaVersion: 1,
+        title: 'Galvanizing plan',
+        covers: 'Sep 23, 9:00 AM – 5:00 PM',
+        participants: ['Kyle', 'Ana'],
+        lines: ['1. The base gets painted white.', '2. Francisco confirms the delivery.'],
+        createdAt: '2026-09-23T17:00:00.000Z',
+      };
+    },
+  }));
+  const response = await handler(request(`/v2/conversations/${conversationId}/summaries/${summaryId}/export`, {
+    organizationId,
+    format: 'json',
+    timeZone: 'America/Denver',
+    locale: 'ko',
+  }));
+  assertEquals(response.status, 200);
+  assertEquals(response.headers.get('content-type')?.startsWith('application/json'), true);
+  const body = await response.json() as { title: string; lines: string[] };
+  assertEquals(body.title, 'Galvanizing plan');
+  assertEquals(body.lines.length, 2);
+  assertEquals(seen, [{ organizationId, conversationId, summaryId, timeZone: 'America/Denver', locale: 'ko' }]);
+});
+
+Deno.test('a summary the database does not allow is not found to read either', () =>
+  withReadEnvironment(async () => {
+  const actor = readActor(() => ({ schema_version: 1, found: false }));
+  await assertRejects(
+    () => defaultReadDependencies().loadSummaryView(actor, {
+      organizationId,
+      conversationId,
+      summaryId,
+      timeZone: 'UTC',
+      locale: 'en',
+    }),
+    (error) => error instanceof ApiError && error.status === 404,
+  );
 }));
 
 Deno.test('a summary export the database does not allow is not found', () =>

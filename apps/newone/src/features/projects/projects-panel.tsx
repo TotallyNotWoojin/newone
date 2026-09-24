@@ -24,6 +24,7 @@ import {
   projectNameTaken,
   projectSummaryFileName,
 } from '@/features/projects/project-names';
+import { SummaryPreview } from '@/features/projects/summary-preview';
 import { useConversationProjects } from '@/features/projects/use-conversation-projects';
 import type { MessageKey } from '@/i18n/catalog';
 import { useI18n } from '@/i18n/provider';
@@ -99,6 +100,7 @@ export function ProjectsPanel({
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ProjectItem | null>(null);
+  const [reading, setReading] = useState<ProjectItem | null>(null);
   // The sidebar tree folds to its one header line when the reader wants the
   // list back; the sheet always shows everything.
   const [collapsed, setCollapsed] = useState(false);
@@ -158,6 +160,13 @@ export function ProjectsPanel({
   };
 
   const openItem = (item: ProjectItem) => {
+    if (item.summary) {
+      if (item.summary.state !== 'pending') {
+        workspace.clearActionError();
+        setReading(item);
+      }
+      return;
+    }
     if (item.link) {
       void Linking.openURL(item.link.url);
       return;
@@ -364,6 +373,14 @@ export function ProjectsPanel({
           visible
         />
       ) : null}
+      {reading ? (
+        <SummaryPreview
+          conversationId={conversation.id}
+          item={reading}
+          onClose={() => setReading(null)}
+          onDownload={download}
+        />
+      ) : null}
     </View>
   );
 }
@@ -507,9 +524,10 @@ function ItemRow({
   return (
     <View ref={rowRef} style={styles.itemRow} testID={`project-item-${item.kind}`}>
       <Pressable
+        accessibilityHint={item.kind === 'summary' && !pending ? t('projects.readSummary') : undefined}
         accessibilityLabel={pending ? t('projects.pendingSummary') : label}
-        accessibilityRole={item.kind === 'summary' ? 'text' : item.kind === 'link' ? 'link' : 'button'}
-        disabled={item.kind === 'summary'}
+        accessibilityRole={item.kind === 'link' ? 'link' : 'button'}
+        disabled={pending}
         onLongPress={onOptions}
         onPress={onOpen}
         style={({ pressed }) => [styles.itemMain, pressed && styles.pressed]}>
@@ -547,7 +565,6 @@ function ItemRow({
             // three lines, and the file buttons sit underneath it.
             <Text
               numberOfLines={item.kind === 'summary' ? 3 : 2}
-              selectable={item.kind === 'summary'}
               style={styles.itemName}>
               {label}
             </Text>

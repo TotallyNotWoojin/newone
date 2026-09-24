@@ -345,6 +345,16 @@ export interface SummaryRangeReadiness {
   tooLong: boolean;
 }
 
+/** A finished summary to read in the app: what its PDF and Word files carry. */
+export interface SummaryView {
+  title: string;
+  /** When the conversation it covers ran, in the reader's zone; null when unknown. */
+  covers: string | null;
+  participants: string[];
+  lines: string[];
+  createdAt: string;
+}
+
 export interface SummaryReadiness {
   conversationId: string;
   minimumMessages: number;
@@ -935,6 +945,14 @@ export interface CommandRepository {
     timeZone: string;
     locale: 'en' | 'es' | 'ko';
   }): Promise<{ bytes: Uint8Array; contentType: string }>;
+  /** The same summary as data, to read without downloading a file. */
+  viewConversationSummary(input: {
+    organizationId: string;
+    conversationId: string;
+    summaryId: string;
+    timeZone: string;
+    locale: 'en' | 'es' | 'ko';
+  }): Promise<SummaryView>;
   runProjectCommand(input: {
     organizationId: string;
     conversationId: string;

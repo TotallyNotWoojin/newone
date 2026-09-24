@@ -57,6 +57,7 @@ function dependencies(overrides: Partial<ReadDependencies> = {}): ReadDependenci
     loadSummaryReadiness: async () => ({ schemaVersion: 1, ranges: {} }),
     loadFind: async () => ({ schemaVersion: 1, results: [] }),
     loadSummaryExport: async () => ({ bytes: new Uint8Array([37, 80, 68, 70]), contentType: 'application/pdf', fileName: 'summary.pdf' }),
+    loadSummaryView: async () => ({ schemaVersion: 1, title: 'Summary', covers: null, participants: [], lines: [], createdAt: '2026-09-24T00:00:00.000Z' }),
     loadSearch: async () => ({ results: [], nextCursor: null, hasMore: false }),
     loadUserSearch: async () => ({ users: [] }),
     loadAudit: async () => ({

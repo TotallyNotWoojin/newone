@@ -22,7 +22,7 @@ import type {
   UpdateNonAcknowledgerPage,
 } from '@/data/repositories/contracts';
 import { RepositoryError } from '@/data/repositories/contracts';
-import { projectCommandResultFromDto } from '@/data/repositories/project-dto';
+import { projectCommandResultFromDto, summaryViewFromDto } from '@/data/repositories/project-dto';
 import {
   normalizeHandoffCorrectionRequest,
   parseHandoffCorrectionReceipt,
@@ -2189,6 +2189,19 @@ export class BffCommandRepository implements CommandRepository {
       contentType: response.headers.get('content-type')?.split(';')[0]?.trim()
         || (input.format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     };
+  }
+
+  async viewConversationSummary(
+    input: Parameters<CommandRepository['viewConversationSummary']>[0],
+  ) {
+    const payload = await this.request(
+      `/v2/conversations/${encodeURIComponent(input.conversationId)}/summaries/${encodeURIComponent(input.summaryId)}/export`,
+      {
+        organizationId: input.organizationId,
+        body: { format: 'json', timeZone: input.timeZone, locale: input.locale },
+      },
+    );
+    return summaryViewFromDto(dataValue(payload));
   }
 
   async runProjectCommand(input: Parameters<CommandRepository['runProjectCommand']>[0]) {

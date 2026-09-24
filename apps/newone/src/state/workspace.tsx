@@ -61,6 +61,7 @@ import type {
   ProjectCommand,
   ProjectCommandResult,
   SummaryReadiness,
+  SummaryView,
   UpdateAudiencePreview,
   UpdateAudienceSpec,
   UserSearchResult,
@@ -379,6 +380,8 @@ interface WorkspaceState {
     summaryId: string,
     format: 'pdf' | 'docx',
   ) => Promise<{ bytes: Uint8Array; contentType: string } | null>;
+  /** The same summary to read in the app, without a download; null when it could not be read. */
+  viewSummary: (conversationId: string, summaryId: string) => Promise<SummaryView | null>;
   /** Opens (web: downloads) a file from a project's uploads. */
   downloadAttachmentById: (conversationId: string, attachmentId: string) => Promise<boolean>;
   reportMessage: (
@@ -2455,6 +2458,20 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         locale: locale === 'es' || locale === 'ko' ? locale : 'en',
       }));
   }, [executeImmediate, repositories.commands, snapshot]);
+
+  const viewSummary = useCallback(async (conversationId: string, summaryId: string) => {
+    const current = snapshotRef.current;
+    if (!current) return null;
+    const locale = current.currentUser.preferredLanguage;
+    return await executeImmediate(`summary-view:${summaryId}`, () =>
+      repositories.commands.viewConversationSummary({
+        organizationId: current.organizationId,
+        conversationId,
+        summaryId,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        locale: locale === 'es' || locale === 'ko' ? locale : 'en',
+      }));
+  }, [executeImmediate, repositories.commands]);
 
   const exportConversationSummary = useCallback(
     (summary: ConversationSummary, format: 'pdf' | 'docx') =>
@@ -6562,6 +6579,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       loadSummaryReadiness,
       findKeyword,
       exportSummaryFile,
+      viewSummary,
       downloadAttachmentById,
       reportMessage,
       reportGroup,
@@ -6772,6 +6790,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       loadSummaryReadiness,
       findKeyword,
       exportSummaryFile,
+      viewSummary,
       downloadAttachmentById,
       setConversationSummaryPolicy,
       updateConversation,

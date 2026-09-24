@@ -85,6 +85,19 @@ export interface SummaryExportInput {
   locale: 'en' | 'es' | 'ko';
 }
 
+/** A summary to read in the app, with what its files carry. */
+export type SummaryViewInput = Omit<SummaryExportInput, 'format'>;
+
+export interface SummaryView {
+  schemaVersion: 1;
+  title: string;
+  /** When the conversation it covers ran, or null when that is unknown. */
+  covers: string | null;
+  participants: string[];
+  lines: string[];
+  createdAt: string;
+}
+
 export interface SummaryExportFile {
   bytes: Uint8Array;
   contentType: string;
@@ -235,6 +248,7 @@ export interface ReadDependencies {
   loadSummaryReadiness(actor: AuthenticatedActor, input: SummaryReadinessInput): Promise<unknown>;
   loadFind(actor: AuthenticatedActor, input: FindInput): Promise<unknown>;
   loadSummaryExport(actor: AuthenticatedActor, input: SummaryExportInput): Promise<SummaryExportFile>;
+  loadSummaryView(actor: AuthenticatedActor, input: SummaryViewInput): Promise<SummaryView>;
   loadSearch(actor: AuthenticatedActor, input: SearchInput): Promise<unknown>;
   loadUserSearch(actor: AuthenticatedActor, input: UserSearchInput): Promise<unknown>;
   loadAudit(actor: AuthenticatedActor, input: AuditQueryInput): Promise<unknown>;
@@ -797,6 +811,7 @@ export function defaultReadDependencies(): ReadDependencies {
     loadSummaryReadiness: loadSummaryReadinessDefault,
     loadFind: loadFindDefault,
     loadSummaryExport: loadSummaryExportDefault,
+    loadSummaryView: loadSummaryViewDefault,
     loadSearch: loadSearchDefault,
     loadUserSearch: loadUserSearchDefault,
     loadAudit: loadAuditDefault,
@@ -878,10 +893,7 @@ export function safeTimeZone(value: unknown): string {
  * and only a finished recap ever exports. Anything else is "not found", so
  * the response says nothing about other people's recaps.
  */
-async function loadSummaryExportDefault(
-  actor: AuthenticatedActor,
-  input: SummaryExportInput,
-): Promise<SummaryExportFile> {
+async function loadSummaryDocument(actor: AuthenticatedActor, input: SummaryViewInput) {
   const lookup = asObject(
     await invokeRpc(asRpcClient(actor.adminClient), 'bff_read_summary_for_export', {
       p_actor_user_id: actor.user.id,
@@ -947,13 +959,39 @@ async function loadSummaryExportDefault(
     conversationTitle,
     labels: SUMMARY_EXPORT_LABELS[input.locale],
   };
+  return { document, conversationTitle, createdAt: summary.created_at };
+}
+
+async function loadSummaryExportDefault(
+  actor: AuthenticatedActor,
+  input: SummaryExportInput,
+): Promise<SummaryExportFile> {
+  const { document, conversationTitle, createdAt } = await loadSummaryDocument(actor, input);
   const bytes = input.format === 'pdf'
     ? await renderSummaryPdf(document, await loadSummaryFonts())
     : await renderSummaryDocx(document);
   return {
     bytes,
     contentType: SUMMARY_DOCUMENT_TYPES[input.format].contentType,
-    fileName: summaryDocumentFileName(conversationTitle || document.title, new Date(summary.created_at), input.format),
+    fileName: summaryDocumentFileName(conversationTitle || document.title, new Date(createdAt), input.format),
+  };
+}
+
+/**
+ * The same summary its PDF and Word files carry, to read in the app: a
+ * summary saved in a project could only be downloaded before (owner, Sep 24
+ * 2026: "I shouldn't have to download to view the summaries"). The same
+ * lookup decides who may see it.
+ */
+async function loadSummaryViewDefault(actor: AuthenticatedActor, input: SummaryViewInput): Promise<SummaryView> {
+  const { document, createdAt } = await loadSummaryDocument(actor, input);
+  return {
+    schemaVersion: 1,
+    title: document.title,
+    covers: document.covers,
+    participants: document.participants,
+    lines: document.lines,
+    createdAt,
   };
 }
 
@@ -1366,13 +1404,22 @@ export function createReadHandler(
       if (summaryExport) {
         onlyKeys(parsed, ['organizationId', 'format', 'timeZone', 'locale']);
         const organizationId = requiredUuid(parsed, 'organizationId');
-        const format = oneOf(parsed.format, ['pdf', 'docx'] as const);
+        const format = oneOf(parsed.format, ['pdf', 'docx', 'json'] as const);
         const locale = parsed.locale === undefined || parsed.locale === null
           ? 'en'
           : oneOf(parsed.locale, ['en', 'es', 'ko'] as const);
         const timeZone = safeTimeZone(parsed.timeZone);
         await dependencies.authorize(actor, organizationId, { operation: 'read.summary_export' });
         await dependencies.rateLimit(request, config, actor, organizationId, 'read.summary_export');
+        if (format === 'json') {
+          return boundedResponse(meta, await dependencies.loadSummaryView(actor, {
+            organizationId,
+            conversationId: summaryExport.conversationId,
+            summaryId: summaryExport.summaryId,
+            timeZone,
+            locale,
+          }));
+        }
         const file = await dependencies.loadSummaryExport(actor, {
           organizationId,
           conversationId: summaryExport.conversationId,

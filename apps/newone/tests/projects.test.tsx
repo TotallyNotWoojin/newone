@@ -7,6 +7,7 @@ import {
   conversationProjectsFromDto,
   keywordFindFromDto,
   summaryReadinessFromDto,
+  summaryViewFromDto,
 } from '@/data/repositories/project-dto';
 import { copyImage } from '@/features/chat/copy-image';
 import {
@@ -115,6 +116,13 @@ function buildWorkspace() {
     loadConversationProjects: jest.fn(async () => projectsPayload()),
     runProjectCommand: jest.fn(async () => ({ projectId: 'project-3', itemId: null, selectedProjectId: 'project-3' })),
     exportSummaryFile: jest.fn(async () => ({ bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), contentType: 'application/pdf' })),
+    viewSummary: jest.fn(async () => ({
+      title: 'Acid delivery',
+      covers: 'Sep 23, 9:00 AM – 5:00 PM',
+      participants: ['Kyle', 'Ana', 'Luis'],
+      lines: ['1. The acid delivery arrives at Otay on Friday.', '2. Francisco confirms it in the warehouse.'],
+      createdAt: '2026-09-23T17:00:00.000Z',
+    })),
   };
 }
 
@@ -165,6 +173,21 @@ describe('reading projects from the service', () => {
       ...dto,
       items: [{ itemId: 'i', projectId: 'project-1', kind: 'link', url: 'http://a.com/', messageId: '1', addedByUserId: 'u', createdAt: '2026-09-23T01:00:00Z' }],
     }, 'conversation-a')).toThrow();
+  });
+
+  test('reads a summary to show in the app, and refuses a malformed one', () => {
+    expect(summaryViewFromDto({
+      schemaVersion: 1,
+      title: 'Acid delivery',
+      covers: null,
+      participants: ['Kyle'],
+      lines: ['1. Friday.'],
+      createdAt: '2026-09-23T17:00:00.000Z',
+    })).toEqual({ title: 'Acid delivery', covers: null, participants: ['Kyle'], lines: ['1. Friday.'], createdAt: '2026-09-23T17:00:00.000Z' });
+    expect(() => summaryViewFromDto({ title: 'x', covers: null, participants: [], lines: [1], createdAt: '2026-09-23T17:00:00.000Z' }))
+      .toThrow();
+    expect(() => summaryViewFromDto({ title: '', covers: null, participants: [], lines: [], createdAt: '2026-09-23T17:00:00.000Z' }))
+      .toThrow();
   });
 
   test('reads every range of summary readiness and the find results', () => {
@@ -268,6 +291,31 @@ describe('the projects tree', () => {
       .toHaveBeenCalledWith('conversation-a', 'attachment-1'));
     fireEvent.press(screen.getByLabelText('www.newoneinc.com'));
     await waitFor(() => expect(mockOpenUrl).toHaveBeenCalledWith('https://www.newoneinc.com/'));
+  });
+
+  test('a summary opens to read in the app, and its files are still one tap away', async () => {
+    // "I shouldn't have to download to view the summaries" (owner, Sep 24 2026).
+    await render(<ProjectsPanel conversation={conversation} />);
+    await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(/^Acid delivery #1 \(2026-09-2\d\)$/));
+    await waitFor(() => expect(screen.getByTestId('summary-preview')).toBeTruthy());
+    expect(mockWorkspace.viewSummary).toHaveBeenCalledWith('conversation-a', 'summary-1');
+    await waitFor(() => expect(screen.getByText('1. The acid delivery arrives at Otay on Friday.')).toBeTruthy());
+    expect(screen.getByText('2. Francisco confirms it in the warehouse.')).toBeTruthy();
+    expect(screen.getByText('Kyle, Ana, Luis')).toBeTruthy();
+    expect(screen.getByText('Sep 23, 9:00 AM – 5:00 PM')).toBeTruthy();
+    expect(mockSaveSummaryFile).not.toHaveBeenCalled();
+    const inPreview = screen.getAllByLabelText(/^Word: Acid delivery #1/);
+    fireEvent.press(inPreview[inPreview.length - 1] as never);
+    await waitFor(() => expect(mockWorkspace.exportSummaryFile).toHaveBeenCalledWith('conversation-a', 'summary-1', 'docx'));
+  });
+
+  test('a summary that cannot be read says so instead of spinning', async () => {
+    mockWorkspace.viewSummary = jest.fn(async () => null);
+    await render(<ProjectsPanel conversation={conversation} />);
+    await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(/^Acid delivery #1 \(2026-09-2\d\)$/));
+    await waitFor(() => expect(screen.getByText('projects.summaryUnavailable')).toBeTruthy());
   });
 
   test('a new project is named by the reader, and a name the chat already has is caught before sending', async () => {
