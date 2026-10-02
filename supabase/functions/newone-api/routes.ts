@@ -1946,6 +1946,7 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
       onlyKeys(body, [
         'organizationId',
         'action',
+        'purpose',
         'conversationId',
         'messageId',
         'attachmentId',
@@ -1960,7 +1961,7 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         conversationId: requiredUuid(body, 'conversationId'),
       };
       if (action === 'upload') {
-        if ('attachmentId' in body) throw new ApiError(400, 'bad_request');
+        if ('attachmentId' in body || 'purpose' in body) throw new ApiError(400, 'bad_request');
         const fileName = requiredString(body, 'fileName', { min: 1, max: 255, trim: false });
         if (fileName.includes('/') || fileName.includes('\\')) {
           throw new ApiError(400, 'bad_request');
@@ -1984,7 +1985,10 @@ export function parseCommand(route: MatchedRoute, input: unknown): ParsedCommand
         if (
           ['messageId', 'fileName', 'mimeType', 'byteSize', 'sha256Hex'].some((key) => key in body)
         ) throw new ApiError(400, 'bad_request');
-        Object.assign(base, { attachmentId: requiredUuid(body, 'attachmentId') });
+        Object.assign(base, {
+          attachmentId: requiredUuid(body, 'attachmentId'),
+          purpose: body.purpose === undefined ? 'file' : oneOf(body.purpose, ['file', 'preview'] as const),
+        });
       }
       return { organizationId: organization(body), values: base };
     }
@@ -3319,6 +3323,7 @@ function attachmentDownloadMetadata(value: unknown, expectedAttachmentId: string
   bucketId: string;
   storagePath: string;
   fileName: string;
+  mimeType: string | null;
 } {
   const row = asObject(value);
   if (row.authorized !== true) throw new ApiError(404, 'not_found');
@@ -3327,8 +3332,20 @@ function attachmentDownloadMetadata(value: unknown, expectedAttachmentId: string
     throw new ApiError(503, 'dependency_unavailable', undefined, 5);
   }
   const fileName = normalizedString(row.file_name, { min: 1, max: 255, trim: false }) as string;
-  return { ...metadata, fileName };
+  const mimeType = typeof row.mime_type === 'string' ? row.mime_type.toLowerCase() : null;
+  return { ...metadata, fileName, mimeType };
 }
+
+// What a chat shows in a bubble (owner, Oct 1 2026: "images won't even load").
+// A preview link lives for hours instead of two minutes and carries no
+// download filename, so the app can keep one link per photo instead of asking
+// for a fresh one (and downloading the photo again) every minute; still
+// photos come resized to the bubble's size, about a tenth of the original's
+// bytes. Animated GIFs and video play as sent. Taking the file out (Download,
+// Copy, the full-screen viewer) still gets the original.
+export const ATTACHMENT_PREVIEW_SECONDS = 6 * 60 * 60;
+const PREVIEW_RESIZABLE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+export const ATTACHMENT_PREVIEW_TRANSFORM = { width: 720, quality: 70 } as const;
 
 async function attachmentGrant(
   actor: AuthenticatedActor,
@@ -3384,6 +3401,29 @@ async function attachmentGrant(
     },
   );
   const metadata = attachmentDownloadMetadata(authorization, values.attachmentId as string);
+  if (values.purpose === 'preview') {
+    const resized = metadata.mimeType !== null && PREVIEW_RESIZABLE_TYPES.has(metadata.mimeType);
+    const { data: preview, error: previewError } = await actor.adminClient.storage
+      .from(metadata.bucketId)
+      .createSignedUrl(
+        metadata.storagePath,
+        ATTACHMENT_PREVIEW_SECONDS,
+        resized ? { transform: { ...ATTACHMENT_PREVIEW_TRANSFORM } } : undefined,
+      );
+    if (previewError || !preview) throw new ApiError(503, 'dependency_unavailable', undefined, 5);
+    return {
+      status: 200,
+      body: {
+        grant: {
+          action: 'preview',
+          attachmentId: metadata.attachmentId,
+          signedUrl: preview.signedUrl,
+          expiresInSeconds: ATTACHMENT_PREVIEW_SECONDS,
+          resized,
+        },
+      },
+    };
+  }
   const { data: signed, error: signError } = await actor.adminClient.storage
     .from(metadata.bucketId)
     .createSignedUrl(metadata.storagePath, 120, { download: metadata.fileName });

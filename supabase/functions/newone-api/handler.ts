@@ -1,5 +1,5 @@
 import {
-  authenticate,
+  authenticateByClaims,
   type AuthenticatedActor,
   type ClientEnvironment,
   createAdminClient,
@@ -105,7 +105,7 @@ export function defaultDependencies(): ApiDependencies {
       }).from('organizations').select('id').limit(1);
       if (error) throw fromDatabaseError(error);
     },
-    authenticateActor: authenticate,
+    authenticateActor: authenticateByClaims,
     authorize: authorizeRequest,
     rateLimit: enforceRateLimit,
     execute: executeCommand,

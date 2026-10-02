@@ -151,6 +151,44 @@ function validatedClaims(payload: Record<string, unknown>, userId: string): JwtC
   return { sub, sessionId, aal, issuedAt, expiresAt };
 }
 
+/**
+ * Who is calling, from the token alone: its signature against the project's
+ * published keys (cached for ten minutes per warm instance), its expiry, its
+ * issuer and audience. `authenticate` asks the Auth service instead, one more
+ * network hop on every request; it took 5.3 s on average and up to 31.8 s
+ * while the database stalled on Oct 1 2026 and timed photos out. Whether the
+ * session is still live (signed out, revoked, unbound from its install, the
+ * user banned) is not the token's to say: every route of newone-api and
+ * newone-read asks `bff_authorize_request`, which checks exactly that in the
+ * database, before it reads or writes anything. Only `user.id` is filled in.
+ */
+export async function authenticateByClaims(
+  environment: ClientEnvironment,
+  token: string,
+  fetcher: typeof fetch = fetch,
+): Promise<AuthenticatedActor> {
+  const userClient = createUserClient(environment, token, fetcher);
+  const { data, error } = await userClient.auth.getClaims(token).catch(() => ({ data: null, error: true }));
+  if (error || !data?.claims) throw new ApiError(401, 'unauthorized');
+  const payload = data.claims as unknown as Record<string, unknown>;
+  const audience = payload.aud;
+  if (
+    payload.role !== 'authenticated' ||
+    payload.iss !== `${environment.url.replace(/\/+$/, '')}/auth/v1` ||
+    !(audience === 'authenticated' || (Array.isArray(audience) && audience.includes('authenticated')))
+  ) {
+    throw new ApiError(401, 'unauthorized');
+  }
+  const claims = validatedClaims(payload, typeof payload.sub === 'string' ? payload.sub : '');
+  return {
+    user: { id: claims.sub } as User,
+    token,
+    claims,
+    userClient,
+    adminClient: createAdminClient(environment),
+  };
+}
+
 export async function authenticate(
   environment: ClientEnvironment,
   token: string,

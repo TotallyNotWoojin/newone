@@ -1240,3 +1240,92 @@ Deno.test('conversation departure requires explicit confirmation and maps only r
   assertEquals(calls[0]?.args.p_conversation_id, conversationId);
   assertEquals(calls[0]?.args.p_replacement_owner_user_id, replacementId);
 });
+
+Deno.test('a preview grant lasts hours, carries no download name, and resizes still photos only', async () => {
+  // Owner, Oct 1 2026: "images won't even load". Bubbles used the two-minute
+  // download link and fetched the whole photo again each minute.
+  const attachmentId = '00000000-0000-4000-8000-000000000061';
+  const conversationId = '00000000-0000-4000-8000-000000000030';
+  const route = matchRoute('POST', '/v2/attachments/grants');
+  assert(route);
+  const signed: { seconds: number; options: unknown }[] = [];
+  const grantFor = async (mimeType: string) => {
+    const adminClient = {
+      storage: {
+        from(bucket: string) {
+          assertEquals(bucket, 'message-attachments');
+          return {
+            createSignedUrl: (_path: string, seconds: number, options?: unknown) => {
+              signed.push({ seconds, options });
+              return Promise.resolve({
+                data: { signedUrl: `https://example.supabase.co/storage/v1/render/image/sign/x?token=t` },
+                error: null,
+              });
+            },
+          };
+        },
+      },
+      rpc(name: string) {
+        assertEquals(name, 'bff_authorize_attachment_download');
+        return Promise.resolve({
+          data: {
+            authorized: true,
+            attachment_id: attachmentId,
+            bucket_id: 'message-attachments',
+            storage_path: `${organizationId}/${conversationId}/${actor.user.id}/${attachmentId}/upload`,
+            file_name: 'photo.jpg',
+            mime_type: mimeType,
+            byte_size: 518080,
+          },
+          error: null,
+        });
+      },
+    };
+    const command = parseCommand(route, {
+      organizationId,
+      action: 'download',
+      purpose: 'preview',
+      conversationId,
+      attachmentId,
+    });
+    return await executeCommand(
+      route,
+      command,
+      { ...actor, adminClient } as unknown as AuthenticatedActor,
+      'attachment-preview-0001',
+      'e'.repeat(64),
+    );
+  };
+  const photo = await grantFor('image/jpeg');
+  const grant = (photo.body as { grant: Record<string, unknown> }).grant;
+  assertEquals(grant.action, 'preview');
+  assertEquals(grant.expiresInSeconds, 6 * 60 * 60);
+  assertEquals(grant.resized, true);
+  assertEquals(signed[0], { seconds: 6 * 60 * 60, options: { transform: { width: 720, quality: 70 } } });
+  // An animated GIF plays as sent, and nothing carries a download name.
+  await grantFor('image/gif');
+  assertEquals(signed[1], { seconds: 6 * 60 * 60, options: undefined });
+  // Purpose belongs to downloads only.
+  await assertRejects(() =>
+    Promise.resolve(parseCommand(route, {
+      organizationId,
+      action: 'upload',
+      purpose: 'preview',
+      conversationId,
+      messageId: '101',
+      fileName: 'a.jpg',
+      mimeType: 'image/jpeg',
+      byteSize: 10,
+      sha256Hex: 'a'.repeat(64),
+    }))
+  );
+  await assertRejects(() =>
+    Promise.resolve(parseCommand(route, {
+      organizationId,
+      action: 'download',
+      purpose: 'thumbnail',
+      conversationId,
+      attachmentId,
+    }))
+  );
+});

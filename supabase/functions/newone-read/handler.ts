@@ -1,5 +1,5 @@
 import {
-  authenticate,
+  authenticateByClaims,
   type AuthenticatedActor,
   type ClientEnvironment,
   createAdminClient,
@@ -798,7 +798,7 @@ export function defaultReadDependencies(): ReadDependencies {
   return {
     runtimeConfig: loadRuntimeConfig(),
     clientEnvironment: loadClientEnvironment(),
-    authenticateActor: authenticate,
+    authenticateActor: authenticateByClaims,
     resolveOrganization: resolveOrganizationDefault,
     authorize: authorizeRequest,
     rateLimit: enforceRateLimit,

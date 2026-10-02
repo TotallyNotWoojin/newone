@@ -38,6 +38,10 @@ const workerId = '80000000-0000-4000-8000-000000000008';
 const sha = 'a'.repeat(64);
 const accessToken = `eyJhbGciOiJub25lIn0.${
   btoa(JSON.stringify({
+    // The claims every real access token carries, checked since Oct 2 2026.
+    iss: 'https://project.supabase.co/auth/v1',
+    aud: 'authenticated',
+    role: 'authenticated',
     sub: actorUserId,
     session_id: sessionId,
     aal: 'aal2',

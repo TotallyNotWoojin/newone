@@ -226,7 +226,10 @@ export function buildRequestMeta(request: Request, config: RuntimeConfig): Reque
       'apikey, authorization, content-type, idempotency-key, x-correlation-id, x-csrf-token, ' +
       'x-newone-client-platform, x-newone-installation-id',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Max-Age': '600',
+    // Every authenticated call from the web app is preceded by a preflight,
+    // a whole extra round trip to the function. Browsers keep the answer per
+    // URL for this long; Chrome caps it at two hours (was ten minutes).
+    'Access-Control-Max-Age': '7200',
     'Vary': 'Origin',
   });
   if (origin) {
