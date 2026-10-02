@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Attachment, Message } from '@/domain/types';
 import { copyImage } from '@/features/chat/copy-image';
@@ -17,6 +18,11 @@ const VIDEO_RATIO = 16 / 9;
 /** Uploaded and clean: the file can be opened or downloaded. */
 export function attachmentReady(attachment: Attachment) {
   return attachment.status === 'clean' && (!attachment.transfer || attachment.transfer.state === 'uploaded');
+}
+
+/** A link to the stored file, as opposed to the local file still uploading. */
+function remoteSource(attachment: Attachment, uri: string | undefined) {
+  return Boolean(uri) && uri !== attachment.localUri && /^https?:/i.test(uri ?? '');
 }
 
 export function isVideoAttachment(attachment: Attachment) {
@@ -90,12 +96,26 @@ export function ImageAttachment({
   const { t } = useI18n();
   const attachment = message.attachment;
   const { uri, ready, retry } = useAttachmentSource(message);
+  const workspace = useWorkspace();
   // The natural size arrives with the same request that paints the photo
   // (onLoad), so the frame settles on the true aspect ratio without a second
   // fetch; until then the default 4:3 frame holds the place.
   const [ratio, setRatio] = useState<number | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
+  // The bubble shows a preview resized to it; the viewer shows the original,
+  // over the preview until it arrives.
+  const [original, setOriginal] = useState<string | null>(null);
+  const openViewer = () => {
+    setViewerOpen(true);
+    if (!original && message.attachment) {
+      void workspace.attachmentUrlForCopy?.(message).then((url) => {
+        if (url) setOriginal(url);
+      });
+    }
+  };
   if (!attachment) return null;
+  // Cached by the photo, not by the link: a new link never downloads it again.
+  const cacheKey = ready && remoteSource(attachment, uri) ? `preview:${attachment.id}` : undefined;
   const frame = mediaFrame(ratio, maxWidth);
   const transfer = attachment.transfer;
   const transferring = transfer?.state === 'preparing' || transfer?.state === 'uploading';
@@ -111,17 +131,18 @@ export function ImageAttachment({
             accessibilityRole={ready ? 'imagebutton' : 'image'}
             disabled={!ready}
             onLongPress={onLongPress}
-            onPress={() => setViewerOpen(true)}
+            onPress={openViewer}
             style={styles.fill}>
-            <Image
-              accessibilityIgnoresInvertColors
+            <CachedImage
+              cachePolicy="memory-disk"
+              contentFit="contain"
               onError={retry}
               onLoad={(event) => {
-                const source = event.nativeEvent?.source;
+                const source = event.source;
                 if (source && source.width > 0 && source.height > 0) setRatio(source.width / source.height);
               }}
-              resizeMode="contain"
-              source={{ uri }}
+              recyclingKey={attachment.id}
+              source={{ uri, cacheKey }}
               style={[styles.fill, (transferring || interrupted) && styles.dimmed]}
             />
           </Pressable>
@@ -150,7 +171,9 @@ export function ImageAttachment({
           onClose={() => setViewerOpen(false)}
           onCopy={ready ? () => copyImage(async () => uri) : undefined}
           onDownload={ready ? onDownload : undefined}
-          uri={uri}
+          placeholder={cacheKey ? { uri, cacheKey } : undefined}
+          uri={original ?? uri}
+          cacheKey={original ? `original:${attachment.id}` : cacheKey}
           visible
         />
       ) : null}
@@ -254,11 +277,22 @@ export function ProgressRing({
 /** How long a photo or file may take to arrive before its bubble says it was not sent. */
 export const ATTACHMENT_ARRIVAL_WINDOW_MS = 30 * 60_000;
 
-/** Whether a message sent at `createdAt` is past that window, as of when it was drawn. */
+/**
+ * Whether a message sent at `createdAt` is past that window. The answer used
+ * to be fixed when the bubble was first drawn, so a chat left open kept
+ * saying "on its way" long after the window had closed (Oct 1 2026); the
+ * bubble now turns over by itself when it does.
+ */
 export function useArrivalWindowPassed(createdAt?: string) {
-  const [shownAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const sentAt = Date.parse(createdAt ?? '');
-  return Number.isFinite(sentAt) && shownAt - sentAt > ATTACHMENT_ARRIVAL_WINDOW_MS;
+  const remaining = Number.isFinite(sentAt) ? sentAt + ATTACHMENT_ARRIVAL_WINDOW_MS - now : Number.POSITIVE_INFINITY;
+  useEffect(() => {
+    if (!Number.isFinite(remaining) || remaining < 0) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), remaining + 1);
+    return () => clearTimeout(timer);
+  }, [remaining]);
+  return remaining < 0;
 }
 
 /**

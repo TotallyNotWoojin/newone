@@ -5,6 +5,7 @@ import { AppState, Linking, Text, type AppStateStatus } from 'react-native';
 
 import {
   RepositoryError,
+  RequestTimeoutError,
   type UpdateAudienceSpec,
   type WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
@@ -17,7 +18,9 @@ import type {
   ConversationSummary,
   Message,
 } from '@/domain/types';
-import { WorkspaceProvider, useWorkspace } from '@/state/workspace';
+import {
+  INVALIDATION_BATCH_MS, PROJECT_RELOAD_GAP_MS, WorkspaceProvider, useWorkspace,
+} from '@/state/workspace';
 
 const mockLoadWorkspace = jest.fn();
 const mockLoadMessages = jest.fn();
@@ -49,6 +52,13 @@ let controlledOutbox: OutboxCommand[];
 let mockRealtimeOptions: Record<string, unknown> | null;
 
 const mockSaveAttachment = jest.fn(async (..._args: unknown[]) => 'opened' as unknown);
+let mockSavedPreviewLinks: Record<string, Record<string, { url: string; expiresAt: number }>> = {};
+jest.mock('@/data/preview-link-store', () => ({
+  loadPreviewLinks: async (userId: string) => ({ ...(mockSavedPreviewLinks[userId] ?? {}) }),
+  savePreviewLinks: async (userId: string, links: Record<string, { url: string; expiresAt: number }>) => {
+    mockSavedPreviewLinks[userId] = links;
+  },
+}));
 jest.mock('@/features/chat/attachment-save', () => ({
   saveAttachment: (...args: unknown[]) => mockSaveAttachment(...args),
 }));
@@ -2443,6 +2453,55 @@ describe('authoritative workspace provider', () => {
     await view.unmount();
   });
 
+  test('a photo gets one preview link for hours, kept across a restart, instead of a new download every minute', async () => {
+    // Owner, Oct 1 2026: "images won't even load"; the phone downloaded five
+    // photos 39 times in twenty minutes, one new two-minute link at a time.
+    mockSavedPreviewLinks = {};
+    const snapshot = richWorkspaceSnapshot();
+    const userId = snapshot.currentUser.id;
+    const photo = {
+      ...snapshot.messages['conversation-a'][0],
+      attachment: {
+        id: 'attachment-photo', kind: 'image' as const, name: 'IMG_0005.jpg', mimeType: 'image/jpeg',
+        byteSize: 518080, status: 'clean' as const,
+      },
+    };
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    const previewUrl = 'https://storage.invalid/render/image/sign/photo?token=a';
+    mockCommand.mockImplementation(async (method: string, input: unknown) => (method === 'createAttachmentPreviewGrant'
+      ? { action: 'preview', attachmentId: 'attachment-photo', signedUrl: previewUrl, expiresInSeconds: 21600, resized: true }
+      : controlledCommandResponse(method, input)));
+    const first = await render(<WorkspaceProvider><WorkspaceProbe /></WorkspaceProvider>);
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+    await act(async () => {
+      await currentWorkspace().loadAttachmentPreview(photo);
+      await currentWorkspace().loadAttachmentPreview(photo);
+      await currentWorkspace().loadAttachmentPreview(photo);
+    });
+    const asked = () => mockCommand.mock.calls.filter(([method]) => method === 'createAttachmentPreviewGrant');
+    expect(asked()).toHaveLength(1);
+    expect(asked()[0]?.[1]).toMatchObject({ conversationId: 'conversation-a', attachmentId: 'attachment-photo' });
+    expect(currentWorkspace().attachmentPreviewUrls['attachment-photo']).toBe(previewUrl);
+    // Saved a moment later, with when it lapses.
+    await waitFor(() => expect(mockSavedPreviewLinks[userId]?.['attachment-photo']?.url).toBe(previewUrl), { timeout: 3000 });
+    expect(mockSavedPreviewLinks[userId]?.['attachment-photo']?.expiresAt).toBeGreaterThan(Date.now() + 5 * 3_600_000);
+    await first.unmount();
+
+    // Opened again: the saved link paints at once and nothing is asked for.
+    mockCommand.mockClear();
+    await render(<WorkspaceProvider><WorkspaceProbe /></WorkspaceProvider>);
+    await waitFor(() => expect(currentWorkspace().attachmentPreviewUrls['attachment-photo']).toBe(previewUrl));
+    await act(async () => {
+      await currentWorkspace().loadAttachmentPreview(photo);
+    });
+    expect(asked()).toHaveLength(0);
+    // A photo that failed to load still asks past the hold.
+    await act(async () => {
+      await currentWorkspace().loadAttachmentPreview(photo, { force: true });
+    });
+    expect(asked()).toHaveLength(1);
+  });
+
   test('orchestrates secure messaging, membership, moderation, and incident operations', async () => {
     const snapshot = richWorkspaceSnapshot();
     mockLoadWorkspace.mockImplementation(async () => snapshot);
@@ -2978,6 +3037,64 @@ describe('authoritative workspace provider', () => {
     });
     expect(existingFound).toBe(true);
     expect(missingFound).toBe(false);
+    await view.unmount();
+  });
+
+  test('a photo whose message the service left unanswered is asked for again under the same key, and the app stays online', async () => {
+    // A backend stall timed the message out at fifteen seconds; the server had
+    // saved it, the upload never started, and Kyle's photo read "on its way"
+    // on both sides for good. The app also called itself offline (Oct 1 2026).
+    const snapshot = richWorkspaceSnapshot();
+    mockLoadWorkspace.mockImplementation(async () => snapshot);
+    const sends: Array<{ idempotencyKey?: string }> = [];
+    let stalls = 1;
+    mockCommand.mockImplementation(async (method: string, input: unknown) => {
+      if (method === 'sendMessage' && (input as { kind?: string }).kind === 'attachment') {
+        sends.push(input as { idempotencyKey?: string });
+        if (stalls > 0) {
+          stalls -= 1;
+          throw new RequestTimeoutError('The command service did not answer in time.');
+        }
+      }
+      return controlledCommandResponse(method, input);
+    });
+    mockUploadAttachment.mockClear();
+    const view = await render(
+      <WorkspaceProvider>
+        <WorkspaceProbe />
+      </WorkspaceProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('ready:Controlled Company:3')).toBeTruthy());
+
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://stall.jpg', name: 'stall.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        '',
+      )).toBe(true);
+    });
+    expect(sends).toHaveLength(2);
+    expect(sends[1]?.idempotencyKey).toBe(sends[0]?.idempotencyKey);
+    await waitFor(() => expect(mockUploadAttachment).toHaveBeenCalledTimes(1));
+    expect(currentWorkspace().connectivity).not.toBe('offline');
+
+    // A refusal is not asked again.
+    sends.length = 0;
+    mockCommand.mockImplementation(async (method: string, input: unknown) => {
+      if (method === 'sendMessage' && (input as { kind?: string }).kind === 'attachment') {
+        sends.push(input as { idempotencyKey?: string });
+        throw new RepositoryError('Not allowed', 'forbidden', false, undefined, 403);
+      }
+      return controlledCommandResponse(method, input);
+    });
+    await act(async () => {
+      expect(await currentWorkspace().sendAttachment(
+        'conversation-a',
+        { uri: 'file://refused.jpg', name: 'refused.jpg', mimeType: 'image/jpeg', size: 2_048 },
+        '',
+      )).toBe(false);
+    });
+    expect(sends).toHaveLength(1);
     await view.unmount();
   });
 
@@ -4722,18 +4839,13 @@ describe('reconciliation safety net', () => {
     await view.unmount();
   });
 
-  test('follows a message event with quick reconciles until the preview arrives translated, never for own texts', async () => {
+  test('a burst of hints about one message reads the thread, the list and the projects once, and a repeated event id not at all', async () => {
+    // One text is an insert, its detected language, a translation, delivery
+    // and read receipts, and every outbox hint arrives twice with the same
+    // event id. Each used to reload the thread, the list and the projects on
+    // its own, then a 3/6/12 s ladder of full refreshes followed (Oct 2 2026).
     jest.useFakeTimers();
     try {
-      const withPreview = (overrides: Record<string, unknown>) => {
-        const snapshot = workspaceSnapshot();
-        snapshot.conversations[0] = { ...snapshot.conversations[0]!, ...overrides };
-        return snapshot;
-      };
-      const original = withPreview({ lastMessage: 'Hola', lastMessageSenderId: otherUserId, lastMessageTranslated: false });
-      const translated = withPreview({ lastMessage: 'Hello', lastMessageSenderId: otherUserId, lastMessageTranslated: true });
-      const own = withPreview({ lastMessage: 'Mine', lastMessageSenderId: userId, lastMessageTranslated: false });
-      mockLoadWorkspace.mockImplementation(async () => original);
       const view = await render(
         <WorkspaceProvider>
           <WorkspaceProbe />
@@ -4741,35 +4853,69 @@ describe('reconciliation safety net', () => {
       );
       await act(async () => { await jest.advanceTimersByTimeAsync(0); });
       expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy();
-      mockLoadWorkspace.mockClear();
       const invalidate = mockRealtimeOptions?.onInvalidate as (event?: unknown) => void;
-
-      // A message event: one reconcile now; the preview is still the original, so a follow-up comes 3s later.
-      await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
-      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
-      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
-      expect(currentWorkspace().conversations[0]?.lastMessage).toBe('Hola');
-      await act(async () => { await jest.advanceTimersByTimeAsync(2_999); });
-      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
-      mockLoadWorkspace.mockImplementation(async () => translated);
-      await act(async () => { await jest.advanceTimersByTimeAsync(1); });
-      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
-      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2);
-      expect(currentWorkspace().conversations[0]?.lastMessage).toBe('Hello');
-      // Translated: the ladder stops (the next rung would have been 6s later).
-      await act(async () => { await jest.advanceTimersByTimeAsync(7_000); });
-      expect(mockLoadWorkspace).toHaveBeenCalledTimes(2);
-
-      // An own text needs no translation: one reconcile, no follow-up.
-      mockLoadWorkspace.mockImplementation(async () => own);
+      const hint = (eventId: string, entityType: string, reason: string) => ({
+        eventId, conversationId: 'conversation-a', entityType, reason,
+      });
+      const listReads = () => mockLoadWorkspace.mock.calls
+        .filter((call) => (call[2] as { timelineLimit?: number } | undefined)?.timelineLimit === 1).length;
       mockLoadWorkspace.mockClear();
-      await act(async () => { invalidate({ conversationId: 'conversation-a', entityType: 'message' }); });
+      mockLoadMessages.mockClear();
+      const revisionBefore = currentWorkspace().projectRevisions['conversation-a'] ?? 0;
+
+      await act(async () => {
+        invalidate(hint('event-insert-0001', 'message', 'message_changed'));
+        invalidate(hint('event-language-01', 'message', 'language_detected'));
+        invalidate(hint('event-language-01', 'message', 'language_detected'));
+        invalidate(hint('event-receipt-001', 'receipt', 'receipt_changed'));
+        invalidate(hint('event-translate-1', 'translation', 'translation_completed'));
+      });
+      // Nothing yet: the burst gathers first.
+      expect(mockLoadMessages).not.toHaveBeenCalled();
+      expect(listReads()).toBe(0);
+      await act(async () => { await jest.advanceTimersByTimeAsync(INVALIDATION_BATCH_MS); });
       await act(async () => { await jest.advanceTimersByTimeAsync(0); });
-      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
-      await act(async () => { await jest.advanceTimersByTimeAsync(3_500); });
+      expect(mockLoadMessages).toHaveBeenCalledTimes(1);
+      expect(listReads()).toBe(1);
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(revisionBefore + 1);
+
+      // The outbox worker's copies come seconds later with the same ids: dropped.
+      await act(async () => {
+        invalidate(hint('event-insert-0001', 'message', 'message_changed'));
+        invalidate(hint('event-translate-1', 'translation', 'translation_completed'));
+      });
+      await act(async () => { await jest.advanceTimersByTimeAsync(20_000); });
+      expect(mockLoadMessages).toHaveBeenCalledTimes(1);
+      // No ladder of full refreshes follows a message any more.
       expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
 
-      // An event without a conversation reconciles once, as before.
+      // A detected language alone reads the open thread, not the list or the projects.
+      mockLoadWorkspace.mockClear();
+      await act(async () => { invalidate(hint('event-language-02', 'message', 'language_detected')); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(INVALIDATION_BATCH_MS); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(mockLoadMessages).toHaveBeenCalledTimes(2);
+      expect(listReads()).toBe(0);
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(revisionBefore + 1);
+
+      // Projects move at most once every few seconds while messages keep coming:
+      // a quiet chat's first message bumps at once, the next bump waits for
+      // the gap, and the ones in between fold into it.
+      const bumpedAt = currentWorkspace().projectRevisions['conversation-a'] ?? 0;
+      await act(async () => { invalidate(hint('event-insert-0002', 'message', 'message_changed')); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(INVALIDATION_BATCH_MS); });
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(bumpedAt + 1);
+      await act(async () => { invalidate(hint('event-insert-0003', 'attachment', 'attachment_uploaded')); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(INVALIDATION_BATCH_MS); });
+      await act(async () => { invalidate(hint('event-insert-0004', 'message', 'message_changed')); });
+      await act(async () => { await jest.advanceTimersByTimeAsync(INVALIDATION_BATCH_MS); });
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(bumpedAt + 1);
+      await act(async () => { await jest.advanceTimersByTimeAsync(PROJECT_RELOAD_GAP_MS); });
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(bumpedAt + 2);
+      await act(async () => { await jest.advanceTimersByTimeAsync(PROJECT_RELOAD_GAP_MS * 2); });
+      expect(currentWorkspace().projectRevisions['conversation-a']).toBe(bumpedAt + 2);
+
+      // An event without a conversation reconciles once, at once, as before.
       mockLoadWorkspace.mockClear();
       await act(async () => { invalidate(); });
       await act(async () => { await jest.advanceTimersByTimeAsync(0); });
@@ -4778,6 +4924,33 @@ describe('reconciliation safety net', () => {
       expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
       await view.unmount();
     } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('polls half as often while the realtime socket is subscribed', async () => {
+    const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    jest.useFakeTimers();
+    try {
+      const view = await render(
+        <WorkspaceProvider>
+          <WorkspaceProbe />
+        </WorkspaceProvider>,
+      );
+      await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText('ready:Controlled Company:1')).toBeTruthy();
+      await act(async () => {
+        (mockRealtimeOptions?.onStateChange as (state: string) => void)('subscribed');
+      });
+      mockLoadWorkspace.mockClear();
+      await act(async () => { await jest.advanceTimersByTimeAsync(59_999); });
+      expect(mockLoadWorkspace).not.toHaveBeenCalled();
+      await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+      expect(mockLoadWorkspace).toHaveBeenCalledTimes(1);
+      await view.unmount();
+    } finally {
+      randomSpy.mockRestore();
+      jest.clearAllTimers();
       jest.useRealTimers();
     }
   });

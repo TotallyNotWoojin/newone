@@ -129,3 +129,10 @@ declare module '@/features/chat/attachment-save' {
   export type AttachmentSaveOutcome = 'photos' | 'shared' | 'opened' | 'denied';
   export function saveAttachment(input: AttachmentSaveInput): Promise<AttachmentSaveOutcome>;
 }
+
+declare module '@/data/preview-link-store' {
+  /** Signed preview links per attachment, with when each stops working (ms since epoch). */
+  export type PreviewLinks = Record<string, { url: string; expiresAt: number }>;
+  export function loadPreviewLinks(userId: string): Promise<PreviewLinks>;
+  export function savePreviewLinks(userId: string, links: PreviewLinks): Promise<void>;
+}

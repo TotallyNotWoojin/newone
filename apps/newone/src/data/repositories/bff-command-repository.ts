@@ -4,6 +4,7 @@ import { resolveStorageSignedUrl } from '@/config/api-routing.mjs';
 import { apiUrlFor, nativeEdgeRequestHeaders, publicRuntimeConfig } from '@/config/runtime';
 import type {
   AttachmentDownloadGrant,
+  AttachmentPreviewGrant,
   AttachmentScanState,
   AttachmentUploadGrant,
   CommandRepository,
@@ -21,7 +22,7 @@ import type {
   UpdateNonAcknowledger,
   UpdateNonAcknowledgerPage,
 } from '@/data/repositories/contracts';
-import { RepositoryError } from '@/data/repositories/contracts';
+import { RepositoryError, RequestTimeoutError } from '@/data/repositories/contracts';
 import { projectCommandResultFromDto, summaryViewFromDto } from '@/data/repositories/project-dto';
 import {
   normalizeHandoffCorrectionRequest,
@@ -773,7 +774,7 @@ function parseManagedUpdate(value: unknown): ManagedUpdate {
   return parsed;
 }
 
-function requiredStorageSignedUrl(value: unknown, action: 'upload' | 'download') {
+function requiredStorageSignedUrl(value: unknown, action: 'upload' | 'download' | 'preview') {
   const signedUrl = resolveStorageSignedUrl({
     signedUrl: value,
     supabaseUrl: publicRuntimeConfig.supabase?.url ?? null,
@@ -1040,6 +1041,9 @@ export class BffCommandRepository implements CommandRepository {
       });
     } catch (requestError) {
       if (requestError instanceof RepositoryError) throw requestError;
+      if (controller.signal.aborted) {
+        throw new RequestTimeoutError('The command service did not answer in time. Your action remains queued.');
+      }
       throw new RepositoryError(
         'Gist cannot reach the command service. Your action remains queued.',
         'network_unavailable',
@@ -1106,6 +1110,9 @@ export class BffCommandRepository implements CommandRepository {
       });
     } catch (requestError) {
       if (requestError instanceof RepositoryError) throw requestError;
+      if (controller.signal.aborted) {
+        throw new RequestTimeoutError('The command service did not answer in time. Your action remains queued.');
+      }
       throw new RepositoryError(
         'Gist cannot reach the command service. Your action remains queued.',
         'network_unavailable',
@@ -2722,6 +2729,32 @@ export class BffCommandRepository implements CommandRepository {
       attachmentId: requiredString(grant.attachmentId, 'attachment grant'),
       signedUrl: requiredStorageSignedUrl(grant.signedUrl, 'download'),
       expiresInSeconds: Number(grant.expiresInSeconds) || 120,
+    };
+  }
+
+  async createAttachmentPreviewGrant(
+    input: Parameters<CommandRepository['createAttachmentPreviewGrant']>[0],
+  ): Promise<AttachmentPreviewGrant> {
+    const payload = await this.request('/v2/attachments/grants', {
+      organizationId: input.organizationId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        action: 'download',
+        purpose: 'preview',
+        conversationId: input.conversationId,
+        attachmentId: input.attachmentId,
+      },
+    });
+    const grant = objectValue(dataValue(payload).grant);
+    if (grant.action !== 'preview') {
+      throw new RepositoryError('The service returned an invalid preview grant.', 'invalid_response', true);
+    }
+    return {
+      action: 'preview',
+      attachmentId: requiredString(grant.attachmentId, 'attachment grant'),
+      signedUrl: requiredStorageSignedUrl(grant.signedUrl, 'preview'),
+      expiresInSeconds: Number(grant.expiresInSeconds) || 120,
+      resized: grant.resized === true,
     };
   }
 

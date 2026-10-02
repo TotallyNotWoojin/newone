@@ -1,5 +1,7 @@
 export function edgeFunctionForPath(path: string): 'newone-auth' | 'newone-read' | 'newone-api' | null;
 
+export const FUNCTION_REGION: string;
+
 export function resolveApiUrl(input: {
   path: string;
   platform: string;
@@ -14,7 +16,7 @@ export function supabaseProjectOrigin(value: unknown): string | null;
 export function resolveStorageSignedUrl(input: {
   signedUrl: unknown;
   supabaseUrl: unknown;
-  action: 'upload' | 'download';
+  action: 'upload' | 'download' | 'preview';
 }): string | null;
 
 export function directEdgeRequestHeaders(input: {

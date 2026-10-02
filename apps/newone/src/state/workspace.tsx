@@ -66,7 +66,7 @@ import type {
   UserSearchResult,
   WorkspaceSnapshot,
 } from '@/data/repositories/contracts';
-import { isOfflineError, RepositoryError } from '@/data/repositories/contracts';
+import { isOfflineError, isUnreachableError, RepositoryError, RequestTimeoutError } from '@/data/repositories/contracts';
 import type {
   DeviceNotificationPreferencePatch,
   DeviceNotificationPreferences,
@@ -133,6 +133,9 @@ import { activeMutedUntil, isConversationMuted } from '@/data/notification-prefe
 import { getSupabaseClient } from '@/lib/supabase';
 import type { MessageKey } from '@/i18n/catalog';
 import { errorIdentifier, errorMessageKey } from '@/i18n/errors';
+// Metro selects the platform store (localStorage in a browser, a cache file on a phone).
+// eslint-disable-next-line import/no-unresolved
+import { loadPreviewLinks, savePreviewLinks, type PreviewLinks } from '@/data/preview-link-store';
 // Metro selects the platform adapter (the photo library on a phone, a download on the web).
 // eslint-disable-next-line import/no-unresolved
 import { saveAttachment, type AttachmentSaveOutcome } from '@/features/chat/attachment-save';
@@ -152,7 +155,6 @@ import {
   requestDeviceRegistration,
 } from '@/device/push-registration'; // eslint-disable-line import/no-unresolved
 import { useAuth } from '@/state/auth';
-import { currentDevicePreferences as readDevicePreferences } from '@/state/device-preferences';
 
 /** Group creation found the group instead of making one. */
 export interface ExistingGroupOutcome {
@@ -750,25 +752,62 @@ function waitFor(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
-// A translation lands seconds after its message, but the server emits no
-// event for it: the recipient would show the original until the next poll.
-// After a conversation-scoped invalidation (a message arrived), reconcile
-// again on this short ladder until the preview arrives translated.
-export const TRANSLATION_FOLLOW_UP_DELAYS_MS = [3_000, 6_000, 12_000];
+// Realtime hints come in bursts. One text is an insert and the row updates
+// after it, its detected language, a translation per reader, a delivery and a
+// read receipt, and every outbox hint is sent twice: at once, and again by the
+// outbox worker with the same event id for a device that was briefly away.
+// Each hint used to reload the open thread, the chat list and the chat's
+// projects on its own, and a 3/6/12 s ladder of full refreshes followed every
+// one of them waiting for a translation that has its own hint (Oct 2 2026).
+// Hints now gather for a moment and run once; a repeated event id is dropped.
+export const INVALIDATION_BATCH_MS = 250;
+// A photo's message is asked for again after these pauses when the service
+// stalls or fails; the same idempotency key makes a repeat harmless.
+export const ATTACHMENT_MESSAGE_RETRY_DELAYS_MS = [1_000, 3_000];
+const SEEN_INVALIDATIONS_KEPT = 512;
+// A chat's projects reload at most this often while hints keep coming.
+export const PROJECT_RELOAD_GAP_MS = 3_000;
+
+interface InvalidationEffect {
+  list: boolean;
+  projects: boolean;
+}
+
+/** What a hint can change on screen besides the open thread itself. */
+export function invalidationEffect(event: InboxInvalidation): InvalidationEffect {
+  // A detected language only changes how the thread shows the message; the
+  // translation it starts sends its own hint.
+  if (event.reason === 'language_detected') return { list: false, projects: false };
+  switch (event.entityType) {
+    case 'message':
+    case 'attachment':
+    case 'summary':
+    case 'conversation':
+      return { list: true, projects: true };
+    case undefined:
+      return { list: true, projects: true };
+    default:
+      // Receipts, translations, reactions, pins: the list's preview, ticks and
+      // unread counts, never what a project holds.
+      return { list: true, projects: false };
+  }
+}
 
 // Reconciliation safety net: while active and online, poll the inbox
 // snapshot on a jittered cadence so both sides of a conversation converge
-// even if a realtime invalidation was dropped. The window shrinks while
-// Realtime is degraded, and the poll is skipped whenever a refresh is
-// already in flight or a realtime event landed recently enough to make an
-// extra fetch redundant.
+// even if a realtime invalidation was dropped. While the socket is
+// subscribed the hints carry the news and the poll only backs them up, so it
+// runs half as often; the window shrinks while Realtime is degraded, and the
+// poll is skipped whenever a refresh is already in flight or a realtime event
+// landed recently enough to make an extra fetch redundant.
 const RECONCILE_POLL_BASE_MS = 30_000;
+const RECONCILE_POLL_SUBSCRIBED_MS = 60_000;
 const RECONCILE_POLL_JITTER_MS = 5_000;
 const RECONCILE_POLL_DEGRADED_MS = 10_000;
 const REALTIME_EVENT_FRESH_MS = 15_000;
 
-function jitteredReconcilePollDelay() {
-  return RECONCILE_POLL_BASE_MS + (Math.random() * 2 - 1) * RECONCILE_POLL_JITTER_MS;
+function jitteredReconcilePollDelay(base: number) {
+  return base + (Math.random() * 2 - 1) * RECONCILE_POLL_JITTER_MS * (base / RECONCILE_POLL_BASE_MS);
 }
 
 interface AttachmentUploadOperation {
@@ -901,6 +940,10 @@ function rememberedConversationKey(userId: string) {
   return `selected-conversation.${userId}`;
 }
 
+
+/** A preview link is asked for again this long before it lapses. */
+const PREVIEW_RENEW_MS = 10 * 60_000;
+const NO_PREVIEWS: Record<string, string> = {};
 export function WorkspaceProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const { locale, t } = useI18n();
@@ -944,6 +987,27 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const bumpProjectRevision = useCallback((conversationId: string) => {
     setProjectRevisions((current) => ({ ...current, [conversationId]: (current[conversationId] ?? 0) + 1 }));
   }, []);
+  // Hints bump a chat's projects at most once per gap: the first at once, and
+  // one more when the gap ends if anything came in meanwhile.
+  const projectBumpsRef = useRef(new Map<string, { at: number; timer: ReturnType<typeof setTimeout> | null }>());
+  const bumpProjectRevisionSoon = useCallback((conversationId: string) => {
+    const bumps = projectBumpsRef.current;
+    const last = bumps.get(conversationId);
+    if (last?.timer) return;
+    const wait = last ? last.at + PROJECT_RELOAD_GAP_MS - Date.now() : 0;
+    if (wait <= 0) {
+      bumps.set(conversationId, { at: Date.now(), timer: null });
+      bumpProjectRevision(conversationId);
+      return;
+    }
+    bumps.set(conversationId, {
+      at: last!.at,
+      timer: setTimeout(() => {
+        bumps.set(conversationId, { at: Date.now(), timer: null });
+        bumpProjectRevision(conversationId);
+      }, wait),
+    });
+  }, [bumpProjectRevision]);
   const [selectedConversationId, setSelectedConversationId] = useState('');
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>('all');
   const [inboxSearch, setInboxSearch] = useState('');
@@ -983,7 +1047,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     async () => false,
   );
   const lastRealtimeEventAtRef = useRef(0);
-  const translationFollowUpRef = useRef<{ conversationId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const seenInvalidationsRef = useRef(new Set<string>());
+  const invalidationBatchRef = useRef<{
+    timelines: Set<string>;
+    projects: Set<string>;
+    list: boolean;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const endAccessRef = useRef(auth.endAccess);
   const refreshSessionRef = useRef(auth.refreshSession);
   // One forced refresh per failing load: a token can lapse in flight or run
@@ -1080,7 +1150,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         const localized = t(errorMessageKey(commandError));
         const identifier = errorIdentifier(commandError);
         setActionError(identifier ? `${localized} (${identifier})` : localized);
-        if (isOfflineError(commandError)) setConnectivity('offline');
+        if (isUnreachableError(commandError)) setConnectivity('offline');
         return null;
       } finally {
         setActionBusy((current) => (current === action ? null : current));
@@ -1543,7 +1613,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
       if (!snapshotRef.current) setStatus('error');
       setError(t(errorMessageKey(loadError)));
-      if (isOfflineError(loadError)) setConnectivity('offline');
+      if (isUnreachableError(loadError)) setConnectivity('offline');
     }
   }, [auth.mode, auth.user?.id, hydrateOutbox, loadConversationAvatarUrl, repositories.reads, setSnapshot, t]);
 
@@ -1636,15 +1706,18 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     const attachmentScanTimers = attachmentScanTimersRef.current;
     const conversationAvatarTimers = conversationAvatarTimersRef.current;
     const conversationAvatarCache = conversationAvatarCacheRef.current;
-    const translationFollowUp = translationFollowUpRef;
+    const invalidationBatch = invalidationBatchRef;
+    const projectBumps = projectBumpsRef.current;
     const runner = createCoalescedRunner(() => loadWorkspaceOnceRef.current());
     reconciliationRunnerRef.current = runner;
     return () => {
       mountedRef.current = false;
-      if (translationFollowUp.current) {
-        clearTimeout(translationFollowUp.current.timer);
-        translationFollowUp.current = null;
+      if (invalidationBatch.current) {
+        clearTimeout(invalidationBatch.current.timer);
+        invalidationBatch.current = null;
       }
+      for (const bump of projectBumps.values()) if (bump.timer) clearTimeout(bump.timer);
+      projectBumps.clear();
       for (const operation of attachmentUploads.values()) {
         operation.controller?.abort();
         void cleanupPreparedAttachment(operation.prepared);
@@ -1754,7 +1827,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } catch (pageError) {
       // A chat that cannot load its page is not a failed action: the reconcile
       // that follows is the one that reports trouble.
-      if (isOfflineError(pageError)) setConnectivity('offline');
+      if (isUnreachableError(pageError)) setConnectivity('offline');
       return false;
     } finally {
       loadingOlderRef.current.delete(conversationId);
@@ -1791,10 +1864,13 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   // mergeMessages() already reconciles by clientMessageId/serverId, so a
   // plain refresh is safe here.
   const reconcileConversationAfterSend = useCallback((conversationId: string) => {
-    if (conversationId && conversationId === selectedConversationIdRef.current) {
+    if (!conversationId) return;
+    // Whatever this reader sends may have been filed under a project.
+    bumpProjectRevisionSoon(conversationId);
+    if (conversationId === selectedConversationIdRef.current) {
       void loadConversationTimeline(conversationId);
     }
-  }, [loadConversationTimeline]);
+  }, [bumpProjectRevisionSoon, loadConversationTimeline]);
 
   const handleAccessEnded = useCallback(() => {
     void endAccessRef.current();
@@ -1805,58 +1881,48 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
   const markRealtimeEventFresh = useCallback(() => {
     lastRealtimeEventAtRef.current = Date.now();
   }, []);
-  // The preview of a conversation still shows the original after a message
-  // event while its translation is in flight (no event marks completion), so
-  // a few quick reconciles follow until the server preview arrives translated.
-  // Own texts, previews already translated, and a loaded tail that needs no
-  // translation stop the ladder at once.
-  const followUpTranslation = useCallback((conversationId: string, attempt: number) => {
-    const pending = translationFollowUpRef.current;
-    if (pending) {
-      clearTimeout(pending.timer);
-      translationFollowUpRef.current = null;
-    }
-    if (!mountedRef.current || attempt >= TRANSLATION_FOLLOW_UP_DELAYS_MS.length) return;
-    const snapshot = snapshotRef.current;
-    const conversation = snapshot?.conversations.find((item) => item.id === conversationId);
-    if (
-      !snapshot
-      || !conversation
-      || conversation.translationMode === 'off'
-      || !conversation.lastMessage
-      || conversation.lastMessageTranslated
-      || (conversation.lastMessageSenderId === snapshot.currentUser.id
-        // A sender normally has nothing to wait for: their own preview is
-        // never translated. With "show my translations" on they do.
-        && !readDevicePreferences().showOwnTranslations)
-    ) return;
-    const tail = snapshot.messages[conversationId]?.at(-1);
-    if (tail?.serverId && tail.translationState !== 'queued' && tail.translationState !== 'translating') return;
-    const timer = setTimeout(() => {
-      translationFollowUpRef.current = null;
-      if (!mountedRef.current) return;
-      void refresh().then(() => followUpTranslation(conversationId, attempt + 1));
-    }, TRANSLATION_FOLLOW_UP_DELAYS_MS[attempt]);
-    translationFollowUpRef.current = { conversationId, timer };
-  }, [refresh]);
   const handleRealtimeInvalidate = useCallback((event?: InboxInvalidation) => {
     markRealtimeEventFresh();
     const conversationId = event?.conversationId;
-    if (!conversationId) {
+    if (!event || !conversationId) {
       reconcileWorkspace();
       return;
     }
-    bumpProjectRevision(conversationId);
-    // The bootstrap only ever carries a timeline for the conversation that is
-    // open, so a message arriving anywhere else made it ship one nobody asked
-    // about. The open thread takes its own page instead, and the reconcile is
-    // left to do what it is actually needed for here: the list.
-    if (conversationId === selectedConversationIdRef.current) {
-      void loadConversationTimeline(conversationId);
+    if (event.eventId) {
+      const seen = seenInvalidationsRef.current;
+      if (seen.has(event.eventId)) return;
+      seen.add(event.eventId);
+      if (seen.size > SEEN_INVALIDATIONS_KEPT) seen.delete(seen.values().next().value as string);
     }
-    void refreshConversationList().then(() => followUpTranslation(conversationId, 0));
+    const effect = invalidationEffect(event);
+    let batch = invalidationBatchRef.current;
+    if (!batch) {
+      batch = {
+        timelines: new Set(),
+        projects: new Set(),
+        list: false,
+        timer: setTimeout(() => {
+          const ready = invalidationBatchRef.current;
+          invalidationBatchRef.current = null;
+          if (!ready || !mountedRef.current) return;
+          for (const id of ready.projects) bumpProjectRevisionSoon(id);
+          // The bootstrap only ever carries a timeline for the conversation
+          // that is open, so a message arriving anywhere else made it ship one
+          // nobody asked about. The open thread takes its own page instead,
+          // and the reconcile is left to do what it is actually needed for
+          // here: the list.
+          const open = selectedConversationIdRef.current;
+          if (open && ready.timelines.has(open)) void loadConversationTimeline(open);
+          if (ready.list) void refreshConversationList();
+        }, INVALIDATION_BATCH_MS),
+      };
+      invalidationBatchRef.current = batch;
+    }
+    batch.timelines.add(conversationId);
+    if (effect.projects) batch.projects.add(conversationId);
+    if (effect.list) batch.list = true;
   }, [
-    bumpProjectRevision, followUpTranslation, loadConversationTimeline, markRealtimeEventFresh,
+    bumpProjectRevisionSoon, loadConversationTimeline, markRealtimeEventFresh,
     reconcileWorkspace, refreshConversationList,
   ]);
   const handleRealtimeReconcile = useCallback(() => {
@@ -2093,7 +2159,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             if (command.kind !== 'message_receipt') {
               setActionError(t(errorMessageKey(commandError)));
             }
-            if (isOfflineError(commandError)) setConnectivity('offline');
+            if (isUnreachableError(commandError)) setConnectivity('offline');
             if (retryable) break;
           }
         }
@@ -2140,7 +2206,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       } catch (directError) {
         if (previous) receiptProgressRef.current.set(key, previous);
         else receiptProgressRef.current.delete(key);
-        if (isOfflineError(directError)) setConnectivity('offline');
+        if (isUnreachableError(directError)) setConnectivity('offline');
         throw directError;
       }
     }
@@ -2334,7 +2400,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return page.items.length > 0;
     } catch (pageError) {
       setActionError(t(errorMessageKey(pageError)));
-      if (isOfflineError(pageError)) setConnectivity('offline');
+      if (isUnreachableError(pageError)) setConnectivity('offline');
       return false;
     } finally {
       loadingOlderRef.current.delete(conversationId);
@@ -2793,7 +2859,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (cancelled) return;
       const delay = realtimeState === 'degraded'
         ? RECONCILE_POLL_DEGRADED_MS
-        : jitteredReconcilePollDelay();
+        : jitteredReconcilePollDelay(
+          realtimeState === 'subscribed' ? RECONCILE_POLL_SUBSCRIBED_MS : RECONCILE_POLL_BASE_MS,
+        );
       timer = setTimeout(runPoll, delay);
     };
 
@@ -2938,7 +3006,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return conversation.id;
       } catch (directError) {
         setActionError(t(errorMessageKey(directError)));
-        if (isOfflineError(directError)) setConnectivity('offline');
+        if (isUnreachableError(directError)) setConnectivity('offline');
         return null;
       }
     },
@@ -2958,7 +3026,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return result.candidates;
     } catch (candidateError) {
       setActionError(t(errorMessageKey(candidateError)));
-      if (isOfflineError(candidateError)) setConnectivity('offline');
+      if (isUnreachableError(candidateError)) setConnectivity('offline');
       return null;
     }
   }, [repositories.commands, snapshot, t]);
@@ -2989,7 +3057,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       return result;
     } catch (candidateError) {
       setActionError(t(errorMessageKey(candidateError)));
-      if (isOfflineError(candidateError)) setConnectivity('offline');
+      if (isUnreachableError(candidateError)) setConnectivity('offline');
       return null;
     }
   }, [repositories.commands, snapshot, t]);
@@ -3107,7 +3175,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return conversation.id;
       } catch (createError) {
         setActionError(t(errorMessageKey(createError)));
-        if (isOfflineError(createError)) setConnectivity('offline');
+        if (isUnreachableError(createError)) setConnectivity('offline');
         return null;
       } finally {
         setActionBusy((current) => current === 'create-group' ? null : current);
@@ -3355,7 +3423,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             failureReason: failure,
           });
           setActionError(failure);
-          if (isOfflineError(commandError)) setConnectivity('offline');
+          if (isUnreachableError(commandError)) setConnectivity('offline');
         } finally {
           setActionBusy((current) => current === 'message-send-online' ? null : current);
         }
@@ -3404,7 +3472,9 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             }
             return;
           }
-          setConnectivity('offline');
+          // A stalled service is not a lost connection: the queue below
+          // replays the send under the same key either way.
+          if (isUnreachableError(commandError)) setConnectivity('offline');
         }
       }
       // The encrypted local queue exists so a message survives going offline;
@@ -3437,7 +3507,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         const failure = t(errorMessageKey(commandError));
         markMessage(clientMessageId, { deliveryState: 'failed', failureReason: failure });
         setActionError(failure);
-        if (isOfflineError(commandError)) setConnectivity('offline');
+        if (isUnreachableError(commandError)) setConnectivity('offline');
       }
     },
     [connectivity, flushOutbox, locale, markMessage, reconcileConversationAfterSend, repositories.commands, setSnapshot, snapshot, t],
@@ -3626,6 +3696,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         transfer: { state: 'uploaded', progress: 1 },
       });
       markMessage(operation.clientMessageId, { failureReason: undefined });
+      bumpProjectRevisionSoon(operation.conversationId);
       attachmentUploadsRef.current.delete(operation.clientMessageId);
       attachmentCancellationsRef.current.delete(operation.clientMessageId);
       await cleanupPreparedAttachment(operation.prepared);
@@ -3691,7 +3762,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     } finally {
       if (operation.controller === controller) operation.controller = null;
     }
-  }, [markMessage, patchLocalAttachment, repositories.commands]);
+  }, [bumpProjectRevisionSoon, markMessage, patchLocalAttachment, repositories.commands]);
 
   // One upload at a time, in the order the files were sent. Two pictures sent
   // together used to upload side by side, and on iOS one of the two native
@@ -3793,19 +3864,34 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         const prepared = await prepareAttachment(uploadSelection);
         const clientMessageId = createClientId();
         let receipt;
-        try {
-          receipt = await repositories.commands.sendMessage({
-            organizationId: snapshot.organizationId,
-            conversationId,
-            clientMessageId,
-            body: caption.trim() || null,
-            kind: 'attachment',
-            languageCode: snapshot.currentUser.preferredLanguage,
-            idempotencyKey: clientMessageId,
-          });
-        } catch (messageError) {
-          await cleanupPreparedAttachment(prepared);
-          throw messageError;
+        // A stalled service left a photo's message unanswered for fifteen
+        // seconds. The server had saved it, the upload never started, and
+        // both sides showed "on its way" for good (Kyle, Oct 1 2026). The
+        // same key replays the same message, so asking again is safe, and
+        // the upload goes on from the answer.
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            receipt = await repositories.commands.sendMessage({
+              organizationId: snapshot.organizationId,
+              conversationId,
+              clientMessageId,
+              body: caption.trim() || null,
+              kind: 'attachment',
+              languageCode: snapshot.currentUser.preferredLanguage,
+              idempotencyKey: clientMessageId,
+            });
+            break;
+          } catch (messageError) {
+            const again = attempt < ATTACHMENT_MESSAGE_RETRY_DELAYS_MS.length && (
+              messageError instanceof RequestTimeoutError
+              || (messageError instanceof RepositoryError && (messageError.status ?? 0) >= 500)
+            );
+            if (!again) {
+              await cleanupPreparedAttachment(prepared);
+              throw messageError;
+            }
+            await waitFor(ATTACHMENT_MESSAGE_RETRY_DELAYS_MS[attempt] as number);
+          }
         }
         const localAttachment: Attachment = {
           id: `pending-${clientMessageId}`,
@@ -4473,13 +4559,69 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     return true;
   }, [executeImmediate, repositories.commands, setSnapshot, snapshot]);
 
-  const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({});
-  // A download grant is a signed URL with an expiry. This used to remember only
-  // that a preview had been asked for, so once the URL went stale the picture
-  // stopped loading and nothing ever asked again — an older photo simply showed
-  // nothing (owner, Sep 8 2026). Now the expiry is remembered too, and a
-  // request goes out again a minute before it lapses.
+  // A preview is a signed link that lasts hours (owner, Oct 1 2026: "images
+  // won't even load"). Each photo used to get a two-minute link, asked for
+  // again about every minute, and since the app caches by address every new
+  // link downloaded the whole photo again: 11 MB in twenty minutes for five
+  // photos. Now one link is kept for its life, saved across launches (and,
+  // in a browser, shared by its tabs), and asked for again ten minutes
+  // before it lapses; the photo itself is cached by its id, so even a new
+  // link does not download it twice.
+  const previewLinksRef = useRef<PreviewLinks>({});
   const previewRequestsRef = useRef<Map<string, number>>(new Map());
+  const previewSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewUserId = snapshot?.currentUser?.id ?? null;
+  // Tagged with whose links they are, so another account never sees them.
+  const [previewState, setPreviewState] = useState<{ userId: string | null; urls: Record<string, string> }>(
+    { userId: null, urls: {} },
+  );
+  const attachmentPreviewUrls = previewState.userId === previewUserId ? previewState.urls : NO_PREVIEWS;
+  useEffect(() => {
+    previewLinksRef.current = {};
+    previewRequestsRef.current = new Map();
+    if (!previewUserId) return undefined;
+    let cancelled = false;
+    void loadPreviewLinks(previewUserId).then((saved) => {
+      if (cancelled) return;
+      const now = Date.now();
+      const kept: PreviewLinks = {};
+      for (const [attachmentId, link] of Object.entries(saved)) {
+        // A lapsed link still names the photo in the image cache; it is kept
+        // for a day so a cached photo paints at once, and replaced on use.
+        if (!link?.url || link.expiresAt < now - 24 * 3_600_000) continue;
+        kept[attachmentId] = link;
+        if (link.expiresAt - now > PREVIEW_RENEW_MS) {
+          previewRequestsRef.current.set(attachmentId, link.expiresAt - PREVIEW_RENEW_MS);
+        }
+      }
+      previewLinksRef.current = kept;
+      setPreviewState((current) => ({
+        userId: previewUserId,
+        urls: {
+          ...Object.fromEntries(Object.entries(kept).map(([id, link]) => [id, link.url])),
+          ...(current.userId === previewUserId ? current.urls : {}),
+        },
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewUserId]);
+  useEffect(() => () => {
+    if (previewSaveTimerRef.current) clearTimeout(previewSaveTimerRef.current);
+  }, []);
+  const rememberPreviewLink = useCallback((attachmentId: string, url: string, expiresAt: number) => {
+    previewLinksRef.current = { ...previewLinksRef.current, [attachmentId]: { url, expiresAt } };
+    if (!previewUserId) return;
+    if (previewSaveTimerRef.current) clearTimeout(previewSaveTimerRef.current);
+    previewSaveTimerRef.current = setTimeout(() => {
+      // The newest 800 are plenty for every chat a person scrolls through.
+      const entries = Object.entries(previewLinksRef.current)
+        .sort((a, b) => b[1].expiresAt - a[1].expiresAt)
+        .slice(0, 800);
+      void savePreviewLinks(previewUserId, Object.fromEntries(entries));
+    }, 1000);
+  }, [previewUserId]);
   const loadAttachmentPreview = useCallback(
     async (message: Message, options?: { force?: boolean }) => {
       const attachment = message.attachment;
@@ -4496,34 +4638,38 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       if (!options?.force && heldUntil !== undefined && Date.now() < heldUntil) return;
       previewRequestsRef.current.set(attachment.id, Date.now() + 30_000);
       try {
-        const grant = await repositories.commands.createAttachmentDownloadGrant({
+        const grant = await repositories.commands.createAttachmentPreviewGrant({
           organizationId: snapshot.organizationId,
           conversationId: message.conversationId,
           attachmentId: attachment.id,
           idempotencyKey: createClientId(),
         });
+        const expiresAt = Date.now() + grant.expiresInSeconds * 1000;
         previewRequestsRef.current.set(
           attachment.id,
-          Date.now() + Math.max(30, grant.expiresInSeconds - 60) * 1000,
+          Math.max(Date.now() + 30_000, expiresAt - PREVIEW_RENEW_MS),
         );
-        setAttachmentPreviewUrls((current) => ({ ...current, [attachment.id]: grant.signedUrl }));
+        rememberPreviewLink(attachment.id, grant.signedUrl, expiresAt);
+        setPreviewState((current) => ({
+          userId: previewUserId,
+          urls: { ...(current.userId === previewUserId ? current.urls : {}), [attachment.id]: grant.signedUrl },
+        }));
       } catch {
         // A preview is a convenience; the file stays reachable through the card.
         previewRequestsRef.current.delete(attachment.id);
       }
     },
-    [repositories.commands, snapshot],
+    [previewUserId, rememberPreviewLink, repositories.commands, snapshot],
   );
 
+  // The original file, for copying and for the full-screen viewer. A preview
+  // is resized to the bubble, so neither can use it; a link is kept while it
+  // has time left, so opening the same photo twice asks once.
+  const originalLinksRef = useRef<Map<string, { url: string; expiresAt: number }>>(new Map());
   const attachmentUrlForCopy = useCallback(async (message: Message) => {
     if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return null;
-    // The photo on screen already holds a signed link for the same file; while
-    // it has time left, copying reuses it instead of asking the server again
-    // (a chat full of photos had spent the grant budget on its thumbnails, and
-    // the copy's own request was refused: web suite, Sep 23 2026).
-    const shown = attachmentPreviewUrls[message.attachment.id];
-    const heldUntil = previewRequestsRef.current.get(message.attachment.id) ?? 0;
-    if (shown && heldUntil - Date.now() > 15_000) return shown;
+    const known = originalLinksRef.current.get(message.attachment.id);
+    if (known && known.expiresAt - Date.now() > 15_000) return known.url;
     try {
       const grant = await repositories.commands.createAttachmentDownloadGrant({
         organizationId: snapshot.organizationId,
@@ -4531,12 +4677,16 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         attachmentId: message.attachment.id,
         idempotencyKey: createClientId(),
       });
+      originalLinksRef.current.set(message.attachment.id, {
+        url: grant.signedUrl,
+        expiresAt: Date.now() + grant.expiresInSeconds * 1000,
+      });
       return grant.signedUrl;
     } catch (error) {
-      console.warn('copy image link refused', errorIdentifier(error) ?? error);
-      return shown ?? null;
+      console.warn('original image link refused', errorIdentifier(error) ?? error);
+      return null;
     }
-  }, [attachmentPreviewUrls, repositories.commands, snapshot]);
+  }, [repositories.commands, snapshot]);
 
   // A download used to open the signed link, which on a phone left a photo
   // in Files (owner, Oct 1 2026: "downloaded photos should go into the camera
@@ -5257,7 +5407,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
             ? t('errors.guestOnlineRequired')
             : t(errorMessageKey(commandError));
           setActionError(failure);
-          if (isOfflineError(commandError)) setConnectivity('offline');
+          if (isUnreachableError(commandError)) setConnectivity('offline');
         }
         return;
       }
@@ -5602,7 +5752,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return true;
       } catch (connectionError) {
         setActionError(t(errorMessageKey(connectionError)));
-        if (isOfflineError(connectionError)) setConnectivity('offline');
+        if (isUnreachableError(connectionError)) setConnectivity('offline');
         return false;
       }
     },
@@ -5625,7 +5775,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         return users;
       } catch (searchError) {
         setActionError(t(errorMessageKey(searchError)));
-        if (isOfflineError(searchError)) setConnectivity('offline');
+        if (isUnreachableError(searchError)) setConnectivity('offline');
         return null;
       }
     },
@@ -6206,7 +6356,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       }
     } catch (settingsError) {
       setActionError(t(errorMessageKey(settingsError)));
-      if (isOfflineError(settingsError)) setConnectivity('offline');
+      if (isUnreachableError(settingsError)) setConnectivity('offline');
     } finally {
       setActionBusy((current) => current === 'account-settings-load' ? null : current);
     }
@@ -6463,7 +6613,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const localized = t(errorMessageKey(registrationError));
       const identifier = errorIdentifier(registrationError);
       setActionError(identifier ? `${localized} (${identifier})` : localized);
-      if (isOfflineError(registrationError)) setConnectivity('offline');
+      if (isUnreachableError(registrationError)) setConnectivity('offline');
       return false;
     } finally {
       setActionBusy((current) => (current === 'device-register' ? null : current));

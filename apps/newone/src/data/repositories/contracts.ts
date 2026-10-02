@@ -607,6 +607,15 @@ export interface AttachmentDownloadGrant {
   expiresInSeconds: number;
 }
 
+/** What a bubble shows: a link that lasts hours, a still photo resized to the bubble. */
+export interface AttachmentPreviewGrant {
+  action: 'preview';
+  attachmentId: string;
+  signedUrl: string;
+  expiresInSeconds: number;
+  resized: boolean;
+}
+
 export interface AttachmentScanState {
   attachmentId: string;
   scanStatus: 'pending' | 'clean' | 'blocked' | 'failed';
@@ -1169,6 +1178,12 @@ export interface CommandRepository {
     attachmentId: string;
     idempotencyKey: string;
   }): Promise<AttachmentDownloadGrant>;
+  createAttachmentPreviewGrant(input: {
+    organizationId: string;
+    conversationId: string;
+    attachmentId: string;
+    idempotencyKey: string;
+  }): Promise<AttachmentPreviewGrant>;
   publishUpdate(input: {
     organizationId: string;
     conversationId: string;
@@ -1442,4 +1457,22 @@ export class RepositoryError extends Error {
 
 export function isOfflineError(error: unknown) {
   return error instanceof RepositoryError && error.code === 'network_unavailable';
+}
+
+/**
+ * A request the service did not answer in time. Anything that queues or
+ * retries still treats it as a network failure, but it is no proof the device
+ * is offline: a backend stall left requests unanswered for fifteen seconds,
+ * the app declared itself offline, and photos were refused (Oct 1 2026).
+ */
+export class RequestTimeoutError extends RepositoryError {
+  constructor(message: string, correlationId?: string) {
+    super(message, 'network_unavailable', true, correlationId);
+    this.name = 'RequestTimeoutError';
+  }
+}
+
+/** A network failure that does mean this device cannot reach the service. */
+export function isUnreachableError(error: unknown) {
+  return isOfflineError(error) && !(error instanceof RequestTimeoutError);
 }

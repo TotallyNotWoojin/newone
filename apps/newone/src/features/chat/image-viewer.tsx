@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Image as CachedImage } from 'expo-image';
 import {
-  Image,
   Modal,
   Platform,
   Pressable,
@@ -44,6 +44,8 @@ export function ImageViewerModal({
   name,
   onClose,
   onDownload,
+  cacheKey,
+  placeholder,
   onCopy,
   onNext,
   onPrevious,
@@ -54,6 +56,10 @@ export function ImageViewerModal({
   onClose: () => void;
   /** Saving the photo; a phone's answer of 'photos' is said over the photo. */
   onDownload?: () => unknown;
+  /** The photo's cache key, so an image already on the device is not downloaded again. */
+  cacheKey?: string;
+  /** Shown until the photo arrives: the bubble's preview, already on the device. */
+  placeholder?: { uri: string | undefined; cacheKey?: string };
   /**
    * Puts the photo on the clipboard. Called straight from the click (or
    * Ctrl/Cmd+C on the web), so a browser still counts it as the reader's own
@@ -233,12 +239,15 @@ export function ImageViewerModal({
         <Animated.View pointerEvents="none" style={[styles.backdrop, backdropStyle]} />
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.stage, imageStyle]}>
-            <Image
-              accessibilityIgnoresInvertColors
+            <CachedImage
               accessibilityLabel={name ?? t('chat.imageViewerImage')}
               accessibilityRole="image"
-              resizeMode="contain"
-              source={{ uri }}
+              accessible
+              cachePolicy="memory-disk"
+              contentFit="contain"
+              placeholder={placeholder?.uri ? placeholder : undefined}
+              placeholderContentFit="contain"
+              source={{ uri, cacheKey }}
               style={{ width, height }}
             />
           </Animated.View>

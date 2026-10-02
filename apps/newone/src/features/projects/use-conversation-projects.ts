@@ -6,12 +6,13 @@ import { useWorkspace } from '@/state/workspace';
 /**
  * One copy of each chat's projects, shared by every place that shows them:
  * the sidebar tree, the Projects sheet, the "Saving to" bar and the summary
- * sheet. A chat reloads when its version changes: a realtime hint about the
- * chat or a project command from this device (the workspace's revision), or
- * the newest message settling here (a send confirmed, a photo finished
- * uploading), since whatever this reader sends may have been filed. Four
- * components mounting together make one request, and an older answer never
- * overwrites a newer one.
+ * sheet. A chat reloads when the workspace's revision for it moves: a realtime
+ * hint about the chat, a project command, a send confirmed or a photo finished
+ * uploading here, since whatever this reader sends may have been filed. The
+ * workspace spaces those out; the newest message is no longer part of the key,
+ * which made every arriving message, and every step of a photo's upload, one
+ * more read (Oct 2 2026). Four components mounting together make one request,
+ * and an older answer never overwrites a newer one.
  */
 const store = new Map<string, ConversationProjects>();
 const loadedVersion = new Map<string, string>();
@@ -67,9 +68,7 @@ export function useConversationProjects(conversationId: string | null | undefine
   const workspace = useWorkspace();
   const userId = workspace.currentUser?.id ?? '';
   const key = conversationId && userId ? `${userId}:${conversationId}` : '';
-  const revision = conversationId ? workspace.projectRevisions?.[conversationId] ?? 0 : 0;
-  const tail = conversationId ? workspace.messages?.[conversationId]?.at(-1) : undefined;
-  const version = `${revision}|${tail?.serverId ?? ''}|${tail?.attachment?.status ?? ''}`;
+  const version = String(conversationId ? workspace.projectRevisions?.[conversationId] ?? 0 : 0);
   const projects = useSyncExternalStore(
     subscribe,
     () => (key ? store.get(key) ?? null : null),

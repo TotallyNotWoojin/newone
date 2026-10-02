@@ -90,7 +90,7 @@ export function resolveStorageSignedUrl({ signedUrl, supabaseUrl, action }) {
     || signedUrl.length > 8192
     || /[\s\\\r\n]/.test(signedUrl)
     || /%(?:00|0a|0d|2e|2f|5c|25(?:00|0a|0d|2e|2f|5c))/i.test(signedUrl)
-    || !['upload', 'download'].includes(action)
+    || !['upload', 'download', 'preview'].includes(action)
   ) return null;
 
   const projectOrigin = supabaseProjectOrigin(supabaseUrl);
@@ -98,9 +98,13 @@ export function resolveStorageSignedUrl({ signedUrl, supabaseUrl, action }) {
 
   try {
     const parsed = new URL(signedUrl);
-    const prefix = action === 'upload'
-      ? '/storage/v1/object/upload/sign/'
-      : '/storage/v1/object/sign/';
+    // A preview of a still photo is served resized, from the render path.
+    const prefixes = action === 'upload'
+      ? ['/storage/v1/object/upload/sign/']
+      : action === 'preview'
+        ? ['/storage/v1/object/sign/', '/storage/v1/render/image/sign/']
+        : ['/storage/v1/object/sign/'];
+    const prefix = prefixes.find((candidate) => parsed.pathname.startsWith(candidate));
     if (
       parsed.origin !== projectOrigin
       || parsed.protocol !== 'https:'
@@ -108,7 +112,7 @@ export function resolveStorageSignedUrl({ signedUrl, supabaseUrl, action }) {
       || parsed.password
       || parsed.port
       || parsed.hash
-      || !parsed.pathname.startsWith(prefix)
+      || !prefix
       || parsed.pathname.length > 4096
     ) return null;
 
@@ -130,7 +134,7 @@ export function resolveStorageSignedUrl({ signedUrl, supabaseUrl, action }) {
       ) return null;
     }
 
-    const allowedQuery = action === 'upload' ? new Set(['token']) : new Set(['token', 'download']);
+    const allowedQuery = action === 'download' ? new Set(['token', 'download']) : new Set(['token']);
     if ([...parsed.searchParams.keys()].some((key) => !allowedQuery.has(key))) return null;
     const tokens = parsed.searchParams.getAll('token');
     if (
@@ -196,6 +200,17 @@ export function edgeFunctionForPath(path) {
  * gateway) is routed exactly like native: straight to the project's Edge
  * Functions.
  */
+/**
+ * The region the project's database lives in. A function runs in the edge
+ * region nearest the caller unless told otherwise, and every request makes
+ * several database round trips from there: from Mexico (us-west-1) a call's
+ * median was 513 ms against 259 ms beside the database, and a signed-in read
+ * from a London-routed client fell from 1.44 s to 0.98 s once pinned, the
+ * longer trip to Oregon included (Oct 2 2026). A query parameter, not the
+ * `x-region` header, so the web app's preflight is unchanged.
+ */
+export const FUNCTION_REGION = 'us-west-2';
+
 export function resolveApiUrl({ path, platform, apiBase, supabaseUrl, webDirect = false }) {
   const functionName = edgeFunctionForPath(path);
   if (!functionName || typeof apiBase !== 'string') return null;
@@ -213,7 +228,9 @@ export function resolveApiUrl({ path, platform, apiBase, supabaseUrl, webDirect 
   } else {
     functionsBase = projectFunctionsBase(apiBase, projectOrigin);
   }
-  return functionsBase ? `${functionsBase}/${functionName}${path}` : null;
+  return functionsBase
+    ? `${functionsBase}/${functionName}${path}?forceFunctionRegion=${FUNCTION_REGION}`
+    : null;
 }
 
 export function directEdgeRequestHeaders({ platform, publishableKey, accessToken, webDirect = false }) {

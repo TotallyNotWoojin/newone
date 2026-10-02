@@ -98,10 +98,10 @@ describe('validated public runtime configuration', () => {
     expect(runtime.isNativeSupabaseConfigured).toBe(false);
     expect(runtime.isDirectEdgeConfigured).toBe(true);
     expect(runtime.apiUrlFor('/v2/auth/native/otp/verify')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-auth/v2/auth/native/otp/verify',
+      'https://coverage-project.supabase.co/functions/v1/newone-auth/v2/auth/native/otp/verify?forceFunctionRegion=us-west-2',
     );
     expect(runtime.apiUrlFor('/v2/bootstrap')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap',
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap?forceFunctionRegion=us-west-2',
     );
     expect(runtime.nativeEdgeRequestHeaders('controlled-access-token')).toEqual({
       apikey: 'sb_publishable_controlled_key_123456789',
@@ -116,7 +116,7 @@ describe('validated public runtime configuration', () => {
     });
     expect(explicitFunctionsBase.runtimeMode).toBe('web');
     expect(explicitFunctionsBase.apiUrlFor('/v2/search')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/search',
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/search?forceFunctionRegion=us-west-2',
     );
   });
 
@@ -167,13 +167,13 @@ describe('validated public runtime configuration', () => {
       url: 'tel:+1 (303) 555-0100',
     });
     expect(runtime.apiUrlFor('/v2/bootstrap')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap',
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/bootstrap?forceFunctionRegion=us-west-2',
     );
     expect(runtime.apiUrlFor('/v2/users/search')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/users/search',
+      'https://coverage-project.supabase.co/functions/v1/newone-read/v2/users/search?forceFunctionRegion=us-west-2',
     );
     expect(runtime.apiUrlFor('/v2/contacts/message-requests')).toBe(
-      'https://coverage-project.supabase.co/functions/v1/newone-api/v2/contacts/message-requests',
+      'https://coverage-project.supabase.co/functions/v1/newone-api/v2/contacts/message-requests?forceFunctionRegion=us-west-2',
     );
     expect(runtime.nativeEdgeRequestHeaders('controlled-access-token')).toEqual({
       apikey: 'sb_publishable_controlled_key_123456789',

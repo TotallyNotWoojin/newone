@@ -212,10 +212,12 @@ test('hovering a message reveals its Reply, and right-clicking opens the actions
  * open and that the app asks the right function; a second, deliberately failing
  * test records what is still missing.
  */
+// Matched on the path: every call carries ?forceFunctionRegion= since the
+// functions were pinned beside the database (Oct 2 2026).
 function readRequests(page, pattern) {
   const seen = [];
   page.on('request', (request) => {
-    if (pattern.test(request.url())) seen.push(request.url());
+    if (pattern.test(new URL(request.url()).pathname)) seen.push(request.url());
   });
   return seen;
 }

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
 // Metro selects the platform file (a card beside the ⋯ on the web, nothing on a phone).
@@ -441,6 +442,7 @@ export function ProjectsPanel({
           name={projectItemLabel(viewing)}
           onClose={() => setViewing(null)}
           onCopy={() => copyImage(async () => viewing.upload?.previewUrl)}
+          cacheKey={`original:${viewing.upload.attachmentId}`}
           onDownload={() => (viewing.upload
             ? workspace.downloadAttachmentById(conversation.id, viewing.upload.attachmentId, {
               fileName: viewing.upload.fileName,
@@ -712,10 +714,12 @@ function ItemRow({
         onPress={onOpen}
         style={({ pressed }) => [styles.itemMain, pressed && styles.pressed]}>
         {item.upload?.mediaKind === 'image' && item.upload.previewUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            resizeMode="cover"
-            source={{ uri: item.upload.previewUrl }}
+          // Every projects read signs a new link; the photo is cached by its
+          // id, so the drawer never downloads it twice.
+          <CachedImage
+            cachePolicy="memory-disk"
+            contentFit="cover"
+            source={{ uri: item.upload.previewUrl, cacheKey: `original:${item.upload.attachmentId}` }}
             style={styles.thumb}
           />
         ) : (

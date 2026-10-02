@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ActionModal } from '@/components/ui/action-modal';
 import type { SharedMediaItem, SharedMediaPage } from '@/data/repositories/contracts';
@@ -64,10 +65,16 @@ function Thumbnail({ item, onPress }: { item: SharedMediaItem; onPress: () => vo
       onPress={onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
       testID="shared-media-tile">
-      <Image
-        accessibilityIgnoresInvertColors
-        resizeMode="cover"
-        source={{ uri: item.previewUrl as string }}
+      {/* The read signs a new link each time; the photo is cached by its id
+          (the original file, as the full-screen viewer has it). */}
+      <CachedImage
+        cachePolicy="memory-disk"
+        contentFit="cover"
+        recyclingKey={item.attachmentId}
+        source={{
+          uri: item.previewUrl as string,
+          cacheKey: item.kind === 'image' ? `original:${item.attachmentId}` : undefined,
+        }}
         style={styles.tileImage}
       />
       {item.kind === 'video' ? (
@@ -203,6 +210,7 @@ export function SharedMediaModal({
           onCopy={shown.kind === 'image' ? () => copyImage(async () => shown.previewUrl) : undefined}
           onNext={viewingIndex < viewable.length - 1 ? () => step(1) : undefined}
           onPrevious={viewingIndex > 0 ? () => step(-1) : undefined}
+          cacheKey={shown.kind === 'image' ? `original:${shown.attachmentId}` : undefined}
           uri={shown.previewUrl}
           visible
         />

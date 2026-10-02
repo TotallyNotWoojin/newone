@@ -2577,6 +2577,26 @@ describe('compact timeline, translated-only mode, and composer behaviour', () =>
     expect(screen.queryByText('chat.attachmentOnItsWay')).toBeNull();
   });
 
+  test('a chat left open turns "on its way" into "not sent" by itself when the window closes', async () => {
+    // The answer was fixed when the bubble was first drawn, so Kyle's photo
+    // still read "on its way" in a chat that had stayed open (Oct 1 2026).
+    jest.useFakeTimers();
+    try {
+      const stranded = incomingMessage({
+        id: 'stranded-photo', serverId: 'stranded-photo', originalText: '', attachment: undefined,
+        awaitingAttachment: true, createdAt: new Date(Date.now() - 29 * 60_000).toISOString(),
+      });
+      const view = await render(<ConversationPane conversation={conversation()} messages={[stranded]} onSend={noopSend} />);
+      expect(screen.getByText('chat.attachmentOnItsWay')).toBeTruthy();
+      await act(async () => { await jest.advanceTimersByTimeAsync(61_000); });
+      expect(screen.getByText('chat.attachmentNotSent')).toBeTruthy();
+      expect(screen.queryByText('chat.attachmentOnItsWay')).toBeNull();
+      await view.unmount();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('a file whose upload was abandoned reads "not sent" once the window has passed, not "Uploading" forever', async () => {
     // Reloading mid-upload left the file pending on the server for good.
     const file = (minutesAgo: number) => incomingMessage({

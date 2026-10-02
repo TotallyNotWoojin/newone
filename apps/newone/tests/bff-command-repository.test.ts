@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { Platform } from 'react-native';
 
 import { BffCommandRepository } from '@/data/repositories/bff-command-repository';
-import { RepositoryError } from '@/data/repositories/contracts';
+import { RepositoryError, RequestTimeoutError, isUnreachableError } from '@/data/repositories/contracts';
 
 const mockFetch = jest.fn();
 let mockApiBase: string | null = 'https://api.newone.test';
@@ -538,8 +538,28 @@ describe('BFF command transport security and parsing', () => {
     mockFetch.mockImplementationOnce(async () => {
       throw new TypeError('controlled network loss');
     });
-    await expect(repository().createDirectConversation({ organizationId, targetMembershipId: membershipId, idempotencyKey }))
-      .rejects.toMatchObject({ code: 'network_unavailable', retryable: true });
+    const lost = await repository().createDirectConversation({ organizationId, targetMembershipId: membershipId, idempotencyKey })
+      .catch((error: unknown) => error);
+    expect(lost).toMatchObject({ code: 'network_unavailable', retryable: true });
+    expect(isUnreachableError(lost)).toBe(true);
+
+    // A service that does not answer within the window is a timeout: still a
+    // retryable network failure, but no proof the device is offline.
+    jest.useFakeTimers();
+    try {
+      mockFetch.mockImplementationOnce(async (_url: unknown, init?: unknown) => new Promise((_resolve, reject) => {
+        (init as RequestInit).signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }));
+      const stalled = repository().createDirectConversation({ organizationId, targetMembershipId: membershipId, idempotencyKey })
+        .catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(15_000);
+      const timedOut = await stalled;
+      expect(timedOut).toBeInstanceOf(RequestTimeoutError);
+      expect(timedOut).toMatchObject({ code: 'network_unavailable', retryable: true });
+      expect(isUnreachableError(timedOut)).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
 
     mockFetch.mockImplementationOnce(async () => response({ data: {} }, 200, { 'content-length': '2000001' }));
     await expect(repository().createDirectConversation({ organizationId, targetMembershipId: membershipId, idempotencyKey }))
@@ -1374,6 +1394,42 @@ describe('BFF command transport security and parsing', () => {
     await expect(repo.createAttachmentDownloadGrant({
       ...base, conversationId, attachmentId,
     })).resolves.toMatchObject({ action: 'download', attachmentId });
+
+    // A bubble's preview: asked for as such, and served resized from the
+    // render path for hours (owner, Oct 1 2026: photos would not load).
+    mockFetch.mockImplementationOnce(async () => response({ data: { grant: {
+      action: 'preview',
+      attachmentId,
+      signedUrl: 'https://project.supabase.co/storage/v1/render/image/sign/message-attachments/path?token=controlled-token-123456',
+      expiresInSeconds: 21600,
+      resized: true,
+    } } }));
+    await expect(repo.createAttachmentPreviewGrant({
+      ...base, conversationId, attachmentId,
+    })).resolves.toEqual({
+      action: 'preview',
+      attachmentId,
+      signedUrl: 'https://project.supabase.co/storage/v1/render/image/sign/message-attachments/path?token=controlled-token-123456',
+      expiresInSeconds: 21600,
+      resized: true,
+    });
+    const previewRequest = JSON.parse(String((mockFetch.mock.calls.at(-1)?.[1] as { body?: string })?.body ?? '{}'));
+    expect(previewRequest).toMatchObject({ action: 'download', purpose: 'preview', attachmentId });
+    // A download answer is not a preview, and a preview never names a download.
+    mockFetch.mockImplementationOnce(async () => response({ data: { grant: {
+      action: 'download',
+      attachmentId,
+      signedUrl: 'https://project.supabase.co/storage/v1/object/sign/message-attachments/path?token=controlled-token-123456',
+      expiresInSeconds: 120,
+    } } }));
+    await expect(repo.createAttachmentPreviewGrant({ ...base, conversationId, attachmentId })).rejects.toThrow();
+    mockFetch.mockImplementationOnce(async () => response({ data: { grant: {
+      action: 'preview',
+      attachmentId,
+      signedUrl: 'https://project.supabase.co/storage/v1/object/sign/message-attachments/path?token=controlled-token-123456&download=x.jpg',
+      expiresInSeconds: 21600,
+    } } }));
+    await expect(repo.createAttachmentPreviewGrant({ ...base, conversationId, attachmentId })).rejects.toThrow();
 
     for (const [targetType, call] of [
       ['message', () => repo.reportMessage({

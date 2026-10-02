@@ -46,13 +46,14 @@ test('native Edge routing inserts the exact function for auth, read, and command
   ];
   for (const [path, functionName] of cases) {
     assert.equal(edgeFunctionForPath(path), functionName);
+    // Pinned beside the database: a function runs nearest the caller otherwise.
     assert.equal(
       resolveApiUrl({ path, platform: 'ios', apiBase: functionsBase, supabaseUrl: projectUrl }),
-      `${functionsBase}/${functionName}${path}`,
+      `${functionsBase}/${functionName}${path}?forceFunctionRegion=us-west-2`,
     );
     assert.equal(
       resolveApiUrl({ path, platform: 'android', apiBase: '/api', supabaseUrl: projectUrl }),
-      `${functionsBase}/${functionName}${path}`,
+      `${functionsBase}/${functionName}${path}?forceFunctionRegion=us-west-2`,
     );
   }
 });
@@ -82,10 +83,10 @@ test('routing fails closed on arbitrary native API origins and non-api web bases
   // A direct (bearer) web build is routed like native: to the project's Edge Functions only.
   assert.equal(resolveApiUrl({
     path: '/v2/bootstrap', platform: 'web', apiBase: '/api', supabaseUrl: projectUrl, webDirect: true,
-  }), `${functionsBase}/newone-read/v2/bootstrap`);
+  }), `${functionsBase}/newone-read/v2/bootstrap?forceFunctionRegion=us-west-2`);
   assert.equal(resolveApiUrl({
     path: '/v2/auth/native/otp/verify', platform: 'web', apiBase: functionsBase, supabaseUrl: projectUrl, webDirect: true,
-  }), `${functionsBase}/newone-auth/v2/auth/native/otp/verify`);
+  }), `${functionsBase}/newone-auth/v2/auth/native/otp/verify?forceFunctionRegion=us-west-2`);
   assert.equal(resolveApiUrl({
     path: '/v2/bootstrap', platform: 'web', apiBase: 'https://api.example.test', supabaseUrl: projectUrl, webDirect: true,
   }), null);
@@ -138,6 +139,24 @@ test('native Edge headers never use the publishable key as a bearer credential',
   assert.equal(directEdgeRequestHeaders({
     platform: 'ios', publishableKey: ['sb', 'secret', 'forbidden', 'credential'].join('_'), accessToken: userJwt,
   }), null);
+});
+
+test('a preview may come resized from the render path, but nowhere else and never with a download name', () => {
+  const token = 'synthetic.storage.token_1234567890';
+  const resized = `${projectUrl}/storage/v1/render/image/sign/message-attachments/org/file?token=${token}`;
+  const plain = `${projectUrl}/storage/v1/object/sign/message-attachments/org/file?token=${token}`;
+  assert.equal(resolveStorageSignedUrl({ signedUrl: resized, supabaseUrl: projectUrl, action: 'preview' }), resized);
+  assert.equal(resolveStorageSignedUrl({ signedUrl: plain, supabaseUrl: projectUrl, action: 'preview' }), plain);
+  // A download is the original file only.
+  assert.equal(resolveStorageSignedUrl({ signedUrl: resized, supabaseUrl: projectUrl, action: 'download' }), null);
+  for (const signedUrl of [
+    `${plain}&download=photo.jpg`,
+    `https://evil.example/storage/v1/render/image/sign/message-attachments/file?token=${token}`,
+    `${projectUrl}/storage/v1/render/image/public/message-attachments/file?token=${token}`,
+    `${projectUrl}/storage/v1/render/image/sign/message-attachments/%2e%2e/file?token=${token}`,
+  ]) {
+    assert.equal(resolveStorageSignedUrl({ signedUrl, supabaseUrl: projectUrl, action: 'preview' }), null);
+  }
 });
 
 test('attachment grants are constrained to signed Storage routes on the configured project', () => {
