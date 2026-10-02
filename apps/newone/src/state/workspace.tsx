@@ -1,6 +1,5 @@
 import {
   AppState,
-  Linking,
   Platform,
 } from 'react-native';
 import {
@@ -134,6 +133,9 @@ import { activeMutedUntil, isConversationMuted } from '@/data/notification-prefe
 import { getSupabaseClient } from '@/lib/supabase';
 import type { MessageKey } from '@/i18n/catalog';
 import { errorIdentifier, errorMessageKey } from '@/i18n/errors';
+// Metro selects the platform adapter (the photo library on a phone, a download on the web).
+// eslint-disable-next-line import/no-unresolved
+import { saveAttachment, type AttachmentSaveOutcome } from '@/features/chat/attachment-save';
 import { useI18n } from '@/i18n/provider';
 import { isValidMentionSelection } from '@/features/chat/mention-controls.mjs';
 import { mentionCopy } from '@/features/chat/mention-copy';
@@ -383,7 +385,12 @@ interface WorkspaceState {
   /** The same summary to read in the app, without a download; null when it could not be read. */
   viewSummary: (conversationId: string, summaryId: string) => Promise<SummaryView | null>;
   /** Opens (web: downloads) a file from a project's uploads. */
-  downloadAttachmentById: (conversationId: string, attachmentId: string) => Promise<boolean>;
+  /** Photos and videos go to the photo library on a phone; anything else to the share sheet; the browser downloads. */
+  downloadAttachmentById: (
+    conversationId: string,
+    attachmentId: string,
+    file?: { fileName: string; mimeType: string },
+  ) => Promise<AttachmentSaveOutcome | null>;
   reportMessage: (
     message: Message,
     category: Parameters<CommandRepository['reportMessage']>[0]['category'],
@@ -420,7 +427,7 @@ interface WorkspaceState {
     status: 'in_progress' | 'completed' | 'cancelled',
     note?: string,
   ) => Promise<boolean>;
-  downloadAttachment: (message: Message) => Promise<boolean>;
+  downloadAttachment: (message: Message) => Promise<AttachmentSaveOutcome | null>;
   attachmentPreviewUrls: Record<string, string>;
   loadAttachmentPreview: (message: Message, options?: { force?: boolean }) => Promise<void>;
   /** A fresh signed URL for an attachment, for copying its bytes. */
@@ -4531,9 +4538,28 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [attachmentPreviewUrls, repositories.commands, snapshot]);
 
+  // A download used to open the signed link, which on a phone left a photo
+  // in Files (owner, Oct 1 2026: "downloaded photos should go into the camera
+  // roll, not files"). Photos and videos now go to the photo library.
+  const saveDownloaded = useCallback(
+    async (signedUrl: string, fileName: string, mimeType: string) => {
+      try {
+        const outcome = await saveAttachment({ url: signedUrl, fileName, mimeType });
+        if (outcome === 'denied') setActionError(t('errors.photosDenied'));
+        return outcome;
+      } catch (error) {
+        // The stage and code only, never the signed link.
+        console.warn('attachment save failed', errorIdentifier(error) ?? (error instanceof Error ? error.message : error));
+        setActionError(t('errors.downloadOpen'));
+        return null;
+      }
+    },
+    [t],
+  );
+
   const downloadAttachmentById = useCallback(
-    async (conversationId: string, attachmentId: string) => {
-      if (!snapshot) return false;
+    async (conversationId: string, attachmentId: string, file?: { fileName: string; mimeType: string }) => {
+      if (!snapshot) return null;
       const result = await executeImmediate('attachment-download', () =>
         repositories.commands.createAttachmentDownloadGrant({
           organizationId: snapshot.organizationId,
@@ -4542,21 +4568,15 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           idempotencyKey: createClientId(),
         }),
       );
-      if (!result) return false;
-      try {
-        await Linking.openURL(result.signedUrl);
-        return true;
-      } catch {
-        setActionError(t('errors.downloadOpen'));
-        return false;
-      }
+      if (!result) return null;
+      return saveDownloaded(result.signedUrl, file?.fileName ?? '', file?.mimeType ?? 'application/octet-stream');
     },
-    [executeImmediate, repositories.commands, snapshot, t],
+    [executeImmediate, repositories.commands, saveDownloaded, snapshot],
   );
 
   const downloadAttachment = useCallback(
     async (message: Message) => {
-      if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return false;
+      if (!snapshot || !message.attachment || message.attachment.status !== 'clean') return null;
       const result = await executeImmediate('attachment-download', () =>
         repositories.commands.createAttachmentDownloadGrant({
           organizationId: snapshot.organizationId,
@@ -4565,16 +4585,12 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
           idempotencyKey: createClientId(),
         }),
       );
-      if (!result) return false;
-      try {
-        await Linking.openURL(result.signedUrl);
-        return true;
-      } catch {
-        setActionError(t('errors.downloadOpen'));
-        return false;
-      }
+      if (!result) return null;
+      const mimeType = message.attachment.mimeType
+        ?? (message.attachment.kind === 'image' ? 'image/jpeg' : 'application/octet-stream');
+      return saveDownloaded(result.signedUrl, message.attachment.name, mimeType);
     },
-    [executeImmediate, repositories.commands, snapshot, t],
+    [executeImmediate, repositories.commands, saveDownloaded, snapshot],
   );
 
   const updateConversation = useCallback(

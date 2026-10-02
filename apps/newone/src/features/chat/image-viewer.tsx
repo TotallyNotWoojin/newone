@@ -52,7 +52,8 @@ export function ImageViewerModal({
   uri: string | null | undefined;
   name?: string | null;
   onClose: () => void;
-  onDownload?: () => void;
+  /** Saving the photo; a phone's answer of 'photos' is said over the photo. */
+  onDownload?: () => unknown;
   /**
    * Puts the photo on the clipboard. Called straight from the click (or
    * Ctrl/Cmd+C on the web), so a browser still counts it as the reader's own
@@ -73,7 +74,14 @@ export function ImageViewerModal({
   const insets = useContext(SafeAreaInsetsContext ?? NoInsetsContext);
   const topInset = insets?.top ?? 0;
   const [chromeVisible, setChromeVisible] = useState(true);
-  const [copyNotice, setCopyNotice] = useState<'copied' | 'failed' | null>(null);
+  const [copyNotice, setCopyNotice] = useState<'copied' | 'failed' | 'photos' | 'notSaved' | null>(null);
+  const download = onDownload ? () => {
+    void Promise.resolve(onDownload()).then((outcome) => {
+      if (outcome === 'photos') setCopyNotice('photos');
+      // Nothing came back at all: the save failed (a refusal says why in the chat).
+      else if (outcome === null) setCopyNotice('notSaved');
+    });
+  } : undefined;
   const copyNow = useCallback(() => {
     void onCopy?.().then((outcome) => setCopyNotice(outcome === 'copied' ? 'copied' : 'failed'));
   }, [onCopy]);
@@ -278,12 +286,12 @@ export function ImageViewerModal({
                   <Ionicons name="copy-outline" size={21} color={colors.white} />
                 </Pressable>
               ) : null}
-              {onDownload ? (
+              {download ? (
                 <Pressable
                   accessibilityLabel={t('chat.imageViewerDownload')}
                   accessibilityRole="button"
                   hitSlop={12}
-                  onPress={onDownload}
+                  onPress={download}
                   style={({ pressed }) => [styles.barButton, pressed && styles.pressed]}>
                   <Ionicons name="download-outline" size={22} color={colors.white} />
                 </Pressable>
@@ -296,7 +304,11 @@ export function ImageViewerModal({
         {copyNotice ? (
           <View accessibilityLiveRegion="polite" pointerEvents="none" style={styles.noticeWrap}>
             <Text style={styles.notice}>
-              {t(copyNotice === 'copied' ? 'chat.imageCopied' : 'chat.imageCopyFailed')}
+              {t(copyNotice === 'copied'
+                ? 'chat.imageCopied'
+                : copyNotice === 'photos'
+                  ? 'chat.savedToPhotos'
+                  : copyNotice === 'notSaved' ? 'errors.downloadOpen' : 'chat.imageCopyFailed')}
             </Text>
           </View>
         ) : null}

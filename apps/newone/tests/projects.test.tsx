@@ -35,6 +35,15 @@ jest.mock('@/state/workspace', () => ({
 jest.mock('@/features/chat/summary-export', () => ({
   saveSummaryFile: (...args: unknown[]) => mockSaveSummaryFile(...args),
 }));
+const mockShow = jest.fn();
+// The panel and the bar call a recording showProject; the real one stays
+// reachable (one module instance) to put a view in place.
+jest.mock('@/features/projects/project-view', () => {
+  const actual = jest.requireActual('@/features/projects/project-view') as Record<string, unknown>;
+  return { ...actual, realShowProject: actual.showProject, showProject: (...args: unknown[]) => mockShow(...args) };
+});
+const realView = jest.requireMock('@/features/projects/project-view') as
+  typeof import('@/features/projects/project-view') & { realShowProject: (conversationId: string, projectId: string | null) => void };
 
 const conversation = {
   id: 'conversation-a',
@@ -49,8 +58,8 @@ function projectsPayload(): ConversationProjects {
     conversationId: 'conversation-a',
     selectedProjectId: 'project-1',
     projects: [
-      { id: 'project-1', name: 'HDG', createdByUserId: 'user-self', createdAt: '2026-09-23T01:00:00.000Z' },
-      { id: 'project-2', name: 'Maintenance', createdByUserId: 'user-other', createdAt: '2026-09-23T01:01:00.000Z' },
+      { id: 'project-1', name: 'HDG', createdByUserId: 'user-self', createdAt: '2026-09-23T01:00:00.000Z', messageIds: ['42', '41'] },
+      { id: 'project-2', name: 'Maintenance', createdByUserId: 'user-other', createdAt: '2026-09-23T01:01:00.000Z', messageIds: [] },
     ],
     items: [
       {
@@ -132,7 +141,15 @@ beforeEach(() => {
   mockWorkspace = buildWorkspace();
   mockSaveSummaryFile.mockClear();
   mockOpenUrl.mockClear();
+  mockShow.mockClear();
+  realView.resetProjectViews();
 });
+
+/** The drawers live behind each project's ⋯ (owner's father, Oct 1 2026). */
+async function openDetails(projectName = 'HDG') {
+  fireEvent.press(screen.getByLabelText(`projects.options: ${projectName}`));
+  await waitFor(() => expect(screen.getByText('projects.drawerSummaries (1)')).toBeTruthy());
+}
 
 describe('reading projects from the service', () => {
   const dto = {
@@ -165,6 +182,46 @@ describe('reading projects from the service', () => {
     expect(parsed.items.map((item) => item.id)).toEqual(['i1', 'i2']);
     expect(parsed.items[0]?.summary?.state).toBe('pending');
     expect(parsed.items[1]?.upload?.previewUrl).toBeNull();
+    // Nothing said under it yet.
+    expect(parsed.projects[0]?.messageIds).toEqual([]);
+  });
+
+  test('reads which messages make up each project\'s conversation', () => {
+    const parsed = conversationProjectsFromDto({
+      ...dto,
+      projects: [
+        { ...dto.projects[0], messageIds: ['1234', '1200'] },
+        { projectId: 'project-2', name: 'Zinc', createdByUserId: 'u1', createdAt: '2026-09-24T01:00:00Z', messageIds: [99] },
+      ],
+    }, 'conversation-a');
+    expect(parsed.projects.map((project) => project.messageIds)).toEqual([['1234', '1200'], ['99']]);
+    expect(() => conversationProjectsFromDto({
+      ...dto,
+      projects: [{ ...dto.projects[0], messageIds: 'nope' }],
+    }, 'conversation-a')).toThrow();
+  });
+
+  test('a project\'s conversation is its listed messages, the reader\'s own since opening it, and answers to either', () => {
+    const message = (id: string, extra: Record<string, unknown> = {}) => ({
+      id, serverId: id, isOwn: false, createdAt: '2026-10-01T18:00:00.000Z', ...extra,
+    }) as never;
+    const opened = Date.parse('2026-10-01T18:30:00.000Z');
+    const shown = realView.projectConversation([
+      message('1'),
+      message('2', { isOwn: true }),
+      message('3', { replyTo: { messageId: '1', senderName: 'Kyle', preview: 'x' } }),
+      message('4', { replyTo: { messageId: '3', senderName: 'Marisol', preview: 'y' } }),
+      message('5', { replyTo: { messageId: '2', senderName: 'Kyle', preview: 'z' } }),
+      message('6', { isOwn: true, createdAt: '2026-10-01T18:31:00.000Z' }),
+      message('pending', { isOwn: true, serverId: undefined, createdAt: undefined }),
+    ], ['1'], opened);
+    expect(shown.map((entry: { id: string }) => entry.id)).toEqual(['1', '3', '4', '6', 'pending']);
+    // Sent a moment before switching here, and filed by the server under the
+    // project it was sent from: not this one's.
+    const justBefore = realView.projectConversation([
+      message('7', { isOwn: true, createdAt: '2026-10-01T18:29:58.000Z' }),
+    ], [], opened, new Set(['7']));
+    expect(justBefore).toEqual([]);
   });
 
   test('refuses an answer about another chat or a link without https', () => {
@@ -263,22 +320,63 @@ describe('names and dates in the drawers', () => {
 });
 
 describe('the projects tree', () => {
-  test('numbers the projects, marks the one being saved into, and opens its three drawers with their contents', async () => {
+  test('shows only the numbered names and which one is being saved into, and the ⋯ opens the three drawers', async () => {
     await render(<ProjectsPanel conversation={conversation} />);
     await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
     expect(screen.getByText('2. Maintenance')).toBeTruthy();
     expect(screen.getByText('projects.current')).toBeTruthy();
-    expect(screen.getByText('projects.drawerSummaries (1)')).toBeTruthy();
+    // "I can't even see their names anymore since too much content is pushed
+    // down below": nothing under the names until the ⋯ is pressed.
+    expect(screen.queryByText(/^projects\.drawer/)).toBeNull();
+    expect(screen.queryByText('HT contract.pdf')).toBeNull();
+    await openDetails();
+    expect(screen.getByLabelText('projects.options: HDG').props.accessibilityState).toMatchObject({ expanded: true });
     expect(screen.getByText('projects.drawerUploads (1)')).toBeTruthy();
     expect(screen.getByText('projects.drawerLinks (1)')).toBeTruthy();
     expect(screen.getByText(/^Acid delivery #1 \(2026-09-2\d\)$/)).toBeTruthy();
     expect(screen.getByText('HT contract.pdf')).toBeTruthy();
     expect(screen.getByText('www.newoneinc.com')).toBeTruthy();
+    expect(screen.getByLabelText('projects.rename: HDG')).toBeTruthy();
+    expect(screen.getByLabelText('projects.delete: HDG')).toBeTruthy();
+    // Pressed again, it folds back to the name.
+    fireEvent.press(screen.getByLabelText('projects.options: HDG'));
+    await waitFor(() => expect(screen.queryByText('projects.drawerSummaries (1)')).toBeNull());
+  });
+
+  test('a name saves into its project and shows that project\'s conversation on its own', async () => {
+    const onOpened = jest.fn();
+    await render(<ProjectsPanel conversation={conversation} onProjectOpened={onOpened} />);
+    await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    // HDG is already being saved into: no command, straight to its conversation.
+    fireEvent.press(screen.getByText('1. HDG'));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('conversation-a', 'project-1'));
+    expect(mockWorkspace.runProjectCommand).not.toHaveBeenCalled();
+    expect(onOpened).toHaveBeenCalledTimes(1);
+    // Maintenance: saved into first, then shown.
+    fireEvent.press(screen.getByText('2. Maintenance'));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledTimes(2));
+    expect(mockWorkspace.runProjectCommand)
+      .toHaveBeenCalledWith('conversation-a', { action: 'select', projectId: 'project-2' });
+    expect(mockShow).toHaveBeenLastCalledWith('conversation-a', 'project-2');
+    expect(onOpened).toHaveBeenCalledTimes(2);
+  });
+
+  test('a name that could not be saved into stays put and says why', async () => {
+    mockWorkspace.runProjectCommand = jest.fn(async () => null);
+    mockWorkspace.actionError = 'The service is unavailable.';
+    const onOpened = jest.fn();
+    await render(<ProjectsPanel conversation={conversation} onProjectOpened={onOpened} />);
+    await waitFor(() => expect(screen.getByText('2. Maintenance')).toBeTruthy());
+    fireEvent.press(screen.getByText('2. Maintenance'));
+    await waitFor(() => expect(screen.getByText('The service is unavailable.')).toBeTruthy());
+    expect(mockShow).not.toHaveBeenCalled();
+    expect(onOpened).not.toHaveBeenCalled();
   });
 
   test('a summary downloads as a dated file, a file opens, and a link opens', async () => {
     await render(<ProjectsPanel conversation={conversation} />);
     await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    await openDetails();
     fireEvent.press(screen.getByLabelText(/^PDF: Acid delivery #1/));
     await waitFor(() => expect(mockSaveSummaryFile).toHaveBeenCalled());
     // The button shows PDF again once the file is out.
@@ -287,8 +385,9 @@ describe('the projects tree', () => {
     expect((mockSaveSummaryFile.mock.calls[0]?.[0] as { fileName: string }).fileName)
       .toMatch(/^Acid delivery #1 \(2026-09-2\d\)\.pdf$/);
     fireEvent.press(screen.getByLabelText('HT contract.pdf'));
+    // The file's name and type go along, so a photo would land in the photo library.
     await waitFor(() => expect(mockWorkspace.downloadAttachmentById)
-      .toHaveBeenCalledWith('conversation-a', 'attachment-1'));
+      .toHaveBeenCalledWith('conversation-a', 'attachment-1', { fileName: 'HT contract.pdf', mimeType: 'application/pdf' }));
     fireEvent.press(screen.getByLabelText('www.newoneinc.com'));
     await waitFor(() => expect(mockOpenUrl).toHaveBeenCalledWith('https://www.newoneinc.com/'));
   });
@@ -297,6 +396,7 @@ describe('the projects tree', () => {
     // "I shouldn't have to download to view the summaries" (owner, Sep 24 2026).
     await render(<ProjectsPanel conversation={conversation} />);
     await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    await openDetails();
     fireEvent.press(screen.getByLabelText(/^Acid delivery #1 \(2026-09-2\d\)$/));
     await waitFor(() => expect(screen.getByTestId('summary-preview')).toBeTruthy());
     expect(mockWorkspace.viewSummary).toHaveBeenCalledWith('conversation-a', 'summary-1');
@@ -316,6 +416,7 @@ describe('the projects tree', () => {
     mockWorkspace.viewSummary = jest.fn(async () => null);
     await render(<ProjectsPanel conversation={conversation} />);
     await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+    await openDetails();
     fireEvent.press(screen.getByLabelText(/^Acid delivery #1 \(2026-09-2\d\)$/));
     await waitFor(() => expect(screen.getByText('projects.summaryUnavailable')).toBeTruthy());
   });
@@ -338,13 +439,21 @@ describe('the projects tree', () => {
       .toHaveBeenCalledWith('conversation-a', { action: 'create', name: 'Salary' }));
   });
 
-  test('saving into another project, and renaming a summary file, go to the server as commands', async () => {
+  test('saving into another project, stopping, and renaming a summary file go to the server as commands', async () => {
     await render(<ProjectsPanel conversation={conversation} />);
     await waitFor(() => expect(screen.getByText('2. Maintenance')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('projects.use: Maintenance'));
     await waitFor(() => expect(mockWorkspace.runProjectCommand)
       .toHaveBeenCalledWith('conversation-a', { action: 'select', projectId: 'project-2' }));
+    // The button opens the project the way the name does.
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('conversation-a', 'project-2'));
+    // The one being saved into stops, and the whole chat shows again.
+    fireEvent.press(screen.getByLabelText('projects.stopUsing: HDG'));
+    await waitFor(() => expect(mockWorkspace.runProjectCommand)
+      .toHaveBeenCalledWith('conversation-a', { action: 'select', projectId: null }));
+    await waitFor(() => expect(mockShow).toHaveBeenLastCalledWith('conversation-a', null));
     // The summary's menu: rename it; the date is not part of what is typed.
+    await openDetails();
     fireEvent.press(screen.getAllByLabelText('projects.itemOptions')[0]!);
     await waitFor(() => expect(screen.getByLabelText('projects.renameFile')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('projects.renameFile'));
@@ -357,15 +466,31 @@ describe('the projects tree', () => {
       .toHaveBeenCalledWith('conversation-a', { action: 'rename_item', itemId: 'item-summary', name: 'Acid for Luis' }));
   });
 
-  test('the bar over the composer names the project being saved into and can stop it', async () => {
+  test('the bar over the composer names the project being saved into and offers it on its own', async () => {
     const onOpen = jest.fn();
     await render(<ActiveProjectBar conversation={conversation} onOpenProjects={onOpen} />);
     await waitFor(() => expect(screen.getByText('projects.activeBar')).toBeTruthy());
-    fireEvent.press(screen.getByLabelText('projects.stopUsing'));
-    await waitFor(() => expect(mockWorkspace.runProjectCommand)
-      .toHaveBeenCalledWith('conversation-a', { action: 'select', projectId: null }));
     fireEvent.press(screen.getByLabelText('projects.activeBar'));
     await waitFor(() => expect(onOpen).toHaveBeenCalled());
+    fireEvent.press(screen.getByLabelText('projects.showOnly'));
+    expect(mockShow).toHaveBeenLastCalledWith('conversation-a', 'project-1');
+  });
+
+  test('the bar\'s ✕ stops saving and shows the whole chat again', async () => {
+    await render(<ActiveProjectBar conversation={conversation} onOpenProjects={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('projects.activeBar')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('projects.stopUsing'));
+    await waitFor(() => expect(mockShow).toHaveBeenLastCalledWith('conversation-a', null));
+    expect(mockWorkspace.runProjectCommand)
+      .toHaveBeenCalledWith('conversation-a', { action: 'select', projectId: null });
+  });
+
+  test('while the chat shows only that project, the bar says so and offers the whole chat', async () => {
+    realView.realShowProject('conversation-a', 'project-1');
+    await render(<ActiveProjectBar conversation={conversation} onOpenProjects={() => undefined} />);
+    await waitFor(() => expect(screen.getByText('projects.viewing')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('projects.showAll'));
+    expect(mockShow).toHaveBeenLastCalledWith('conversation-a', null);
   });
 });
 

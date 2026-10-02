@@ -93,3 +93,39 @@ declare module '@/features/chat/summary-export' {
   /** Browser: straight into downloads. Phones: the share sheet, where Files and Drive save it. */
   export function saveSummaryFile(input: SummaryFileInput): Promise<SummaryShareOutcome>;
 }
+
+declare module '@/components/ui/anchored-popover' {
+  import type { ReactNode, RefObject } from 'react';
+  import type { View } from 'react-native';
+  export interface AnchoredPopoverProps {
+    /** The control the card belongs to; it opens beside it. */
+    anchor: RefObject<View | null>;
+    visible: boolean;
+    width: number;
+    onClose: () => void;
+    onPointerEnter?: () => void;
+    onPointerLeave?: () => void;
+    accessibilityLabel?: string;
+    testID?: string;
+    children: ReactNode;
+  }
+  /** A card beside its control on the web; nothing on a phone, which uses a sheet. */
+  export function AnchoredPopover(props: AnchoredPopoverProps): ReactNode;
+}
+
+declare module 'react-dom' {
+  import type { ReactNode, ReactPortal } from 'react';
+  export function createPortal(children: ReactNode, container: Element | DocumentFragment): ReactPortal;
+}
+
+declare module '@/features/chat/attachment-save' {
+  export interface AttachmentSaveInput {
+    /** A signed link to the file. */
+    url: string;
+    fileName: string;
+    mimeType: string;
+  }
+  /** photos: in the photo library; shared: handed to the share sheet; opened: the browser has it; denied: no permission to add photos. */
+  export type AttachmentSaveOutcome = 'photos' | 'shared' | 'opened' | 'denied';
+  export function saveAttachment(input: AttachmentSaveInput): Promise<AttachmentSaveOutcome>;
+}

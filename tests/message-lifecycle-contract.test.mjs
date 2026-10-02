@@ -138,7 +138,7 @@ test('history paging rejects stale cursors and the UI preserves position without
   assert.match(pane, /if \(nearBottomRef\.current\) \{/);
   assert.match(
     pane,
-    /setNewMessageCount\(\(count\) => count \+ appendedMessageCount\(messages, previousTailRef\.current\)\)/,
+    /setNewMessageCount\(\(count\) => count \+ appendedMessageCount\(shownMessages, previousTailRef\.current\)\)/,
   );
   assert.match(pane, /styles\.newMessageJump/);
 });

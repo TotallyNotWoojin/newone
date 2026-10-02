@@ -268,6 +268,12 @@ export interface ConversationProject {
   name: string;
   createdByUserId: string;
   createdAt: string;
+  /**
+   * The project's conversation, newest first: the messages sent under it,
+   * answering one of its messages, or carrying a file or link in its drawers
+   * (at most 1000, within this reader's history).
+   */
+  messageIds: string[];
 }
 
 export type ProjectItemKind = 'summary' | 'upload' | 'link';

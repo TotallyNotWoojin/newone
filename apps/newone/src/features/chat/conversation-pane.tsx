@@ -72,6 +72,8 @@ import { SharedMediaModal } from '@/features/chat/shared-media';
 import { SummarySheet } from '@/features/chat/summary-sheet';
 import { copyImage } from '@/features/chat/copy-image';
 import { ActiveProjectBar, ProjectsSheet, SaveToProjectSheet } from '@/features/projects/project-sheets';
+import { projectConversation, showProject, useProjectView } from '@/features/projects/project-view';
+import { useConversationProjects } from '@/features/projects/use-conversation-projects';
 import { SwipeToReply } from '@/features/chat/swipe-reply-gesture';
 import { swipeReplyAvailable } from '@/features/chat/swipe-to-reply';
 import {
@@ -148,7 +150,9 @@ export function ConversationPane({
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
     if (!flash) return undefined;
-    const timer = setTimeout(() => setFlash(null), 2600);
+    // Long enough to read: "Copied" goes in 2.6 s, a sentence about where a
+    // project's conversation is stays up to 6 s.
+    const timer = setTimeout(() => setFlash(null), Math.min(6000, Math.max(2600, flash.length * 60)));
     return () => clearTimeout(timer);
   }, [flash]);
   const [reportingSummaryId, setReportingSummaryId] = useState<string | null>(null);
@@ -193,13 +197,42 @@ export function ConversationPane({
         conversation.unreadCount,
       )
     : null;
-  const tail = messages.at(-1);
+  // A project opened on its own shows only its conversation (owner's father,
+  // Oct 1 2026: "since multiple project conversations happen on the same
+  // screen, it's very inconvenient to follow the discussions"). The view holds
+  // while that project is the one being saved into; stopping, or choosing
+  // another, shows the whole chat again.
+  const projectView = useProjectView(conversationId);
+  const { projects: chatProjects, selectedProject } = useConversationProjects(conversationId || null);
+  const selectedProjectIndex = selectedProject ? chatProjects?.projects.indexOf(selectedProject) : undefined;
+  const viewedProject = projectView && selectedProject?.id === projectView.projectId ? selectedProject : null;
+  const shownMessages = useMemo(() => {
+    if (!viewedProject || !projectView) return messages;
+    const elsewhere = new Set((chatProjects?.projects ?? [])
+      .filter((project) => project.id !== viewedProject.id)
+      .flatMap((project) => project.messageIds));
+    return projectConversation(messages, viewedProject.messageIds, projectView.since, elsewhere);
+  }, [chatProjects, messages, projectView, viewedProject]);
+  // Reading one project is not reading the chat: the whole chat counts as
+  // read only when its newest message is on screen.
+  const newestShown = !(projectView && !chatProjects) && shownMessages.at(-1) === messages.at(-1);
+  const markRead = useCallback((id: string) => {
+    if (newestShown) void markConversationRead(id);
+  }, [markConversationRead, newestShown]);
+  // Older pages are fetched only as far back as the project's own oldest
+  // message; the rest of the chat's history has nothing for this view.
+  const oldestProjectMessage = viewedProject?.messageIds.at(-1);
+  const oldestLoaded = messages.find((message) => message.serverId)?.serverId;
+  const canLoadOlder = pagination.hasMore && (!viewedProject || Boolean(
+    oldestProjectMessage && (!oldestLoaded || Number(oldestProjectMessage) < Number(oldestLoaded)),
+  ));
+  const tail = shownMessages.at(-1);
   const tailKey = tail ? messageKey(tail) : null;
   const currentUserId = workspace.currentUser?.id ?? null;
   const groupConversation = conversation?.kind !== 'direct';
   const rows = useMemo(
-    () => buildTimelineRows(messages, { unreadDividerId, groupConversation }),
-    [groupConversation, messages, unreadDividerId],
+    () => buildTimelineRows(shownMessages, { unreadDividerId, groupConversation }),
+    [groupConversation, shownMessages, unreadDividerId],
   );
   // Nothing loaded while the server still holds history: show a spinner, never
   // an empty list that fills in and jumps (owner report, Z Flip).
@@ -243,6 +276,22 @@ export function ConversationPane({
     if (workspace.organizationId) void loadMyAiOutputErrorReports();
   }, [loadMyAiOutputErrorReports, workspace.organizationId]);
 
+  // Opening a project, or the whole chat again, starts at the newest message
+  // shown: where that conversation ended.
+  const viewKey = viewedProject?.id ?? '';
+  useEffect(() => {
+    nearBottomRef.current = true;
+    followTailRef.current = true;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [viewKey]);
+  // A project with little said in the part of the chat in memory reaches
+  // back a page at a time, as far as its own oldest message.
+  useEffect(() => {
+    if (!viewedProject || !conversationId || !canLoadOlder || pagination.loading) return;
+    if (rows.length >= 20) return;
+    void loadOlderMessages(conversationId);
+  }, [canLoadOlder, conversationId, loadOlderMessages, pagination.loading, rows.length, viewedProject]);
+
   useEffect(() => {
     if (previousConversationRef.current !== conversationId) {
       previousConversationRef.current = conversationId;
@@ -254,7 +303,7 @@ export function ConversationPane({
       setShowMentionPicker(false);
       setNewMessageCount(0);
       // The list opens at its newest message, so what is on screen is read.
-      if (conversationId && tailKey) void markConversationRead(conversationId);
+      if (conversationId && tailKey) markRead(conversationId);
       return;
     }
     if (tailKey && tailKey !== previousTailRef.current) {
@@ -276,13 +325,13 @@ export function ConversationPane({
         // translation line arriving under the text. Following the list means
         // staying at the bottom until it has finished changing shape.
         followTailRef.current = true;
-        if (conversationId) void markConversationRead(conversationId);
+        if (conversationId) markRead(conversationId);
       } else {
-        setNewMessageCount((count) => count + appendedMessageCount(messages, previousTailRef.current));
+        setNewMessageCount((count) => count + appendedMessageCount(shownMessages, previousTailRef.current));
       }
     }
     previousTailRef.current = tailKey;
-  }, [conversationId, markConversationRead, messages, tail?.isOwn, tailKey]);
+  }, [conversationId, markRead, shownMessages, tail?.isOwn, tailKey]);
 
   useEffect(() => {
     if (!conversationId || !awaitingFirstPage || pagination.loading) return;
@@ -306,12 +355,12 @@ export function ConversationPane({
     if (!nearBottom) followTailRef.current = false;
     if (nearBottom) {
       setNewMessageCount(0);
-      if (conversationId) void markConversationRead(conversationId);
+      if (conversationId) markRead(conversationId);
     }
   };
 
   const loadOlder = () => {
-    if (!conversationId || pagination.loading || !pagination.hasMore) return;
+    if (!conversationId || pagination.loading || !canLoadOlder) return;
     void loadOlderMessages(conversationId);
   };
 
@@ -320,7 +369,7 @@ export function ConversationPane({
     followTailRef.current = true;
     setNewMessageCount(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    if (conversationId) void markConversationRead(conversationId);
+    if (conversationId) markRead(conversationId);
   };
 
   const scrollToRow = useCallback((messageId: string) => {
@@ -335,13 +384,16 @@ export function ConversationPane({
   const scrollToSourceMessage = useCallback(async (messageId: string) => {
     if (scrollToRow(messageId)) return true;
     pendingSourceRef.current = messageId;
+    // A quote or a search result outside the project on screen: show the
+    // whole chat, then go there once it is drawn.
+    if (viewedProject) showProject(conversationId, null);
     const loaded = await ensureMessageLoaded(conversationId, messageId);
     if (!loaded) {
       pendingSourceRef.current = null;
       return false;
     }
     return true;
-  }, [conversationId, ensureMessageLoaded, scrollToRow]);
+  }, [conversationId, ensureMessageLoaded, scrollToRow, viewedProject]);
 
   useEffect(() => {
     const pending = pendingSourceRef.current;
@@ -380,9 +432,13 @@ export function ConversationPane({
     setEditDraft(message.originalText);
     setSelectedMessage(message);
   }, [clearActionError]);
-  const downloadMessageAttachment = useCallback((message: Message) => {
-    void downloadAttachment(message);
-  }, [downloadAttachment]);
+  // A photo saved to the phone's library says so; the viewer, when open,
+  // shows the same answer over the photo.
+  const savedToPhotos = t('chat.savedToPhotos');
+  const downloadMessageAttachment = useCallback((message: Message) => downloadAttachment(message).then((outcome) => {
+    if (outcome === 'photos') setFlash(savedToPhotos);
+    return outcome;
+  }), [downloadAttachment, savedToPhotos]);
   // The swipe and the sheet's Reply land in the same place.
   const replyToMessage = useCallback((message: Message) => {
     setSelectedMessage(null);
@@ -402,11 +458,15 @@ export function ConversationPane({
   }, []);
   const jumpToQuoted = useCallback((messageId: string) => {
     setSelectedMessage(null);
-    void scrollToSourceRef.current(messageId).then((found) => {
-      if (!found) return;
+    // Going somewhere else is the reader leaving the bottom: a row measured
+    // on the way must not pull the list back down to the newest message.
+    followTailRef.current = false;
+    return scrollToSourceRef.current(messageId).then((found) => {
+      if (!found) return false;
       setHighlightedMessageId(messageId);
       if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
       highlightTimerRef.current = setTimeout(() => setHighlightedMessageId(null), 1600);
+      return true;
     });
   }, []);
   const translatedOnly = preferences.translatedOnly;
@@ -634,10 +694,25 @@ export function ConversationPane({
         }}
       />
 
-      <View style={styles.timeline}>
+      <View style={styles.timeline} testID="conversation-timeline">
         {awaitingFirstPage ? (
           <View accessibilityLabel={t('chat.loadingMessages')} accessibilityRole="progressbar" style={styles.timelineLoading}>
             <ActivityIndicator color={colors.mintDark} />
+          </View>
+        ) : viewedProject && !rows.length ? (
+          <View style={styles.timelineEmpty} testID="project-conversation-empty">
+            {canLoadOlder ? (
+              <ActivityIndicator accessibilityLabel={t('chat.loadingMessages')} color={colors.mintDark} />
+            ) : (
+              <EmptyState
+                body={t('projects.nothingSaidYet').replace(
+                  '{name}',
+                  `${(selectedProjectIndex ?? 0) + 1}. ${viewedProject.name}`,
+                )}
+                icon="folder-open-outline"
+                title={viewedProject.name}
+              />
+            )}
           </View>
         ) : rows.length ? (
           <FlatList
@@ -651,7 +726,7 @@ export function ConversationPane({
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             keyExtractor={rowKey}
-            ListFooterComponent={pagination.hasMore ? (
+            ListFooterComponent={canLoadOlder ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={pagination.loading}

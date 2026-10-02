@@ -67,6 +67,7 @@ function projectFromDto(value: unknown): ConversationProject {
     name: text(row.name, 'project name'),
     createdByUserId: text(row.createdByUserId, 'project creator'),
     createdAt: date(row.createdAt, 'project time'),
+    messageIds: list(row.messageIds ?? [], 'project messages').slice(0, 1000).map((id) => text(id, 'project message')),
   };
 }
 

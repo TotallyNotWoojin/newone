@@ -42,7 +42,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/gist-adaptive-foreground.png",
         "backgroundColor": "#102E27"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+      ]
     },
     "web": {
       "output": "static",
@@ -77,6 +83,15 @@
           "photosPermission": "Gist accesses only the photos and videos you choose to share in a conversation.",
           "cameraPermission": "Gist uses the camera only when you choose to take a photo or video to share in a conversation.",
           "microphonePermission": "Gist uses the microphone only when you record a voice message or a video to share."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Gist accesses only the photos and videos you choose to share in a conversation.",
+          "savePhotosPermission": "Gist saves the photos and videos you download into your photo library.",
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": []
         }
       ],
       "expo-asset",

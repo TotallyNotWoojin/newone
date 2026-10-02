@@ -6,6 +6,8 @@ import type { Message } from '@/domain/types';
 import { ConversationDetails } from '@/features/chat/conversation-details';
 import { attachmentPreviewLine, ConversationList } from '@/features/chat/conversation-list';
 import { ConversationPane, TRANSLATION_DELAYED_AFTER_MS } from '@/features/chat/conversation-pane';
+import { resetProjectViews, showProject } from '@/features/projects/project-view';
+import { resetConversationProjectsStore } from '@/features/projects/use-conversation-projects';
 import { projectWorkspaceFields } from './fixtures/project-workspace';
 
 const mockPush = jest.fn<(_href: unknown) => void>();
@@ -1609,6 +1611,109 @@ describe('conversation UI against controlled authorized workspace inputs', () =>
     await waitFor(() => expect(scrollToIndex).toHaveBeenCalledWith(
       expect.objectContaining({ animated: true, viewPosition: 0.5 }),
     ));
+  });
+
+  test('a chat moving up the list keeps its projects tree as it was, the unfolded project included', async () => {
+    // The rows used to be positional, so another chat's message reordering the
+    // list rebuilt the tree and closed an open ⋯ (live web suite, Oct 1 2026).
+    resetConversationProjectsStore();
+    resetProjectViews();
+    mockWorkspace.loadConversationProjects = jest.fn(async () => ({
+      conversationId: 'conversation-main',
+      selectedProjectId: null,
+      projects: [{
+        id: 'project-1', name: 'HDG', createdByUserId: self.id,
+        createdAt: '2026-10-01T00:00:00.000Z', messageIds: [],
+      }],
+      items: [],
+    }));
+    const other = conversation({ id: 'conversation-other', title: 'Kept thread' });
+    const listProps = {
+      desktop: true,
+      onCompose: jest.fn(),
+      onFilterChange: jest.fn(),
+      onSearchChange: jest.fn(),
+      onSelect: jest.fn(),
+      organizationName: 'Controlled Company',
+      search: '',
+      selectedId: 'conversation-main',
+      filter: 'all' as const,
+    };
+    const view = await render(<ConversationList {...listProps} conversations={[other, conversation()]} />);
+    await waitFor(() => expect(screen.getByLabelText('projects.options: HDG')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('projects.options: HDG'));
+    await waitFor(() => expect(screen.getByTestId('project-details-1')).toBeTruthy());
+    // Another chat's message would put this one first.
+    await view.rerender(<ConversationList {...listProps} conversations={[conversation(), other]} />);
+    expect(screen.getByTestId('project-details-1')).toBeTruthy();
+  });
+
+  test('a project opened on its own shows only its conversation, answers included, until Show all', async () => {
+    // Owner's father, Oct 1 2026: "Since multiple project conversations happen
+    // on the same screen, it's very inconvenient to follow the discussions."
+    resetConversationProjectsStore();
+    resetProjectViews();
+    mockWorkspace.loadConversationProjects = jest.fn(async () => ({
+      conversationId: 'conversation-main',
+      selectedProjectId: 'project-3',
+      projects: [{
+        id: 'project-3', name: 'Transportation', createdByUserId: self.id,
+        createdAt: '2026-10-01T00:00:00.000Z', messageIds: ['m-kyle'],
+      }],
+      items: [],
+    }));
+    const salary = translatedMessage({ id: 'm-salary', serverId: 'm-salary', originalText: 'The weekend bonus applies from January.', createdAt: '2026-10-01T21:08:00.000Z' });
+    const kyle = translatedMessage({ id: 'm-kyle', serverId: 'm-kyle', originalText: 'Any update from Juan Salvador?', createdAt: '2026-10-01T20:57:00.000Z' });
+    const answer = translatedMessage({
+      id: 'm-answer', serverId: 'm-answer', senderId: colleague.id, senderName: colleague.displayName, isOwn: false,
+      originalText: 'The IMSS reactivation takes a month.',
+      replyTo: { messageId: 'm-kyle', senderName: self.displayName, preview: 'Any update from Juan Salvador?' },
+    });
+    const lunch = translatedMessage({ id: 'm-lunch', serverId: 'm-lunch', senderId: colleague.id, isOwn: false, originalText: 'Lunch at noon?' });
+    showProject('conversation-main', 'project-3');
+    await render(
+      <ConversationPane conversation={conversation()} messages={[salary, kyle, answer, lunch]} onSend={noopSend} />,
+    );
+    await waitFor(() => expect(screen.queryByText('Lunch at noon?')).toBeNull());
+    expect(screen.getAllByText('Any update from Juan Salvador?').length).toBeGreaterThan(0);
+    // Marisol answered without choosing a project: the answer joins it.
+    expect(screen.getByText('The IMSS reactivation takes a month.')).toBeTruthy();
+    expect(screen.queryByText('The weekend bonus applies from January.')).toBeNull();
+    // Reading one project is not reading the chat.
+    expect(mockWorkspace.markConversationRead).not.toHaveBeenCalled();
+
+    await act(async () => {
+      showProject('conversation-main', null);
+    });
+    expect(screen.getByText('The weekend bonus applies from January.')).toBeTruthy();
+    expect(screen.getByText('Lunch at noon?')).toBeTruthy();
+    resetProjectViews();
+  });
+
+  test('a project with nothing said under it yet says so instead of showing the chat', async () => {
+    resetConversationProjectsStore();
+    resetProjectViews();
+    mockWorkspace.loadConversationProjects = jest.fn(async () => ({
+      conversationId: 'conversation-main',
+      selectedProjectId: 'project-4',
+      projects: [{
+        id: 'project-4', name: 'New Salary', createdByUserId: self.id,
+        createdAt: '2026-10-01T00:00:00.000Z', messageIds: [],
+      }],
+      items: [],
+    }));
+    showProject('conversation-main', 'project-4');
+    await render(
+      <ConversationPane
+        conversation={conversation()}
+        messages={[translatedMessage({ id: 'm-old', serverId: 'm-old', originalText: 'Old news.', createdAt: '2026-09-30T10:00:00.000Z' })]}
+        onSend={noopSend}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('project-conversation-empty')).toBeTruthy());
+    expect(screen.getByText('projects.nothingSaidYet')).toBeTruthy();
+    expect(screen.queryByText('Old news.')).toBeNull();
+    resetProjectViews();
   });
 
   test('a quote whose message has scrolled out of memory asks for the older page', async () => {

@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type ComponentProps, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionError, ActionModal, FormField } from '@/components/ui/action-modal';
+// Metro selects the platform file (a card beside the ⋯ on the web, nothing on a phone).
+// eslint-disable-next-line import/no-unresolved
+import { AnchoredPopover } from '@/components/ui/anchored-popover';
 import { IconButton, PrimaryButton } from '@/components/ui/primitives';
 import type {
   ConversationProject,
@@ -24,6 +27,7 @@ import {
   projectNameTaken,
   projectSummaryFileName,
 } from '@/features/projects/project-names';
+import { showProject } from '@/features/projects/project-view';
 import { SummaryPreview } from '@/features/projects/summary-preview';
 import { useConversationProjects } from '@/features/projects/use-conversation-projects';
 import type { MessageKey } from '@/i18n/catalog';
@@ -68,27 +72,40 @@ function useContextMenu(open: (() => void) | undefined) {
 type Dialog =
   | { kind: 'create' }
   | { kind: 'rename'; project: ConversationProject }
-  | { kind: 'options'; project: ConversationProject }
   | { kind: 'delete'; project: ConversationProject }
   | { kind: 'item'; item: ProjectItem }
   | { kind: 'renameItem'; item: ProjectItem }
   | null;
 
+/** How a project's drawers are showing: beside its ⋯ on the web, or under its row. */
+type Details = { projectId: string; pinned: boolean };
+
+const CARD_WIDTH = 340;
+const HOVER_OPEN_MS = 120;
+const HOVER_CLOSE_MS = 280;
+
 /**
- * A chat's projects as the owner's father drew them (Sep 23 2026): numbered
- * projects, each with three drawers (the summaries saved into it, the files
- * and photos people sent, and the links they shared), everything in them
- * ready to take out again. Everyone in the chat sees the same projects; the
- * one marked "Saving here" is where this reader's own files, links and
+ * A chat's projects as the owner's father drew them (Sep 23 2026), folded to
+ * their names (Oct 1 2026: "I can't even see their names anymore since too
+ * much content is pushed down below"). Tapping a name saves into that project
+ * and takes the chat to where its conversation got to; the ⋯ beside it holds
+ * the three drawers (the summaries saved into it, the files and photos people
+ * sent, the links they shared) and the project's own options. On the web's
+ * sidebar the ⋯ opens a card on a hover or a click; in a sheet it unfolds the
+ * project in place. Everyone in the chat sees the same projects; the one
+ * marked "Saving here" is where this reader's own messages, files, links and
  * summaries go.
  */
 export function ProjectsPanel({
   conversation,
   variant = 'sheet',
+  onProjectOpened,
 }: {
   conversation: Conversation;
   /** The sidebar hangs the tree under the open chat's row; the sheet is the phone's (and the header button's) view. */
   variant?: 'sheet' | 'sidebar';
+  /** A project was tapped and the chat is on its way there: the sheet steps aside. */
+  onProjectOpened?: () => void;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
@@ -101,15 +118,56 @@ export function ProjectsPanel({
   const [nameError, setNameError] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ProjectItem | null>(null);
   const [reading, setReading] = useState<ProjectItem | null>(null);
+  const [details, setDetails] = useState<Details | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [openFailed, setOpenFailed] = useState(false);
   // The sidebar tree folds to its one header line when the reader wants the
   // list back; the sheet always shows everything.
   const [collapsed, setCollapsed] = useState(false);
   const sidebar = variant === 'sidebar';
+  // A card beside the ⋯ needs a pointer and room beside the list: the web's
+  // sidebar. A sheet unfolds the project under its row instead.
+  const floating = sidebar && Platform.OS === 'web';
   const headerRef = useContextMenu(() => openCreate());
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isOpen = (key: string, fallback: boolean) => expanded[key] ?? fallback;
   const toggle = (key: string, fallback: boolean) =>
     setExpanded((current) => ({ ...current, [key]: !(current[key] ?? fallback) }));
+
+  const stopHover = () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = null;
+  };
+  useEffect(() => stopHover, []);
+  // Whatever the card opens (a menu, a summary, a photo) takes its place.
+  const stepAside = () => {
+    if (floating) setDetails(null);
+  };
+
+  // The pointer resting on a ⋯ opens its card; leaving both the ⋯ and the
+  // card puts it away, unless a click pinned it open.
+  const hoverDetails = (projectId: string) => {
+    stopHover();
+    hoverTimer.current = setTimeout(() => {
+      setDetails((current) => (current?.projectId === projectId ? current : { projectId, pinned: false }));
+    }, HOVER_OPEN_MS);
+  };
+  const keepDetails = () => stopHover();
+  const leaveDetails = () => {
+    stopHover();
+    hoverTimer.current = setTimeout(() => {
+      setDetails((current) => (current && !current.pinned ? null : current));
+    }, HOVER_CLOSE_MS);
+  };
+  const pressDetails = (projectId: string) => {
+    stopHover();
+    workspace.clearActionError();
+    setOpenFailed(false);
+    setDetails((current) => (current?.projectId === projectId && (current.pinned || !floating)
+      ? null
+      : { projectId, pinned: true }));
+  };
 
   function openCreate() {
     workspace.clearActionError();
@@ -124,6 +182,38 @@ export function ProjectsPanel({
     setNameError(null);
   };
 
+  const list = projects?.projects ?? [];
+  const labelOf = (project: ConversationProject) => `${list.indexOf(project) + 1}. ${project.name}`;
+
+  // "Pressing the project name should also start and save" (owner's father,
+  // Oct 1 2026): a name saves into its project, like the Save here button,
+  // and the chat shows that project's conversation on its own, from where it
+  // ended (owner's decision the same day).
+  const openProject = async (project: ConversationProject) => {
+    if (opening) return;
+    workspace.clearActionError();
+    setOpenFailed(false);
+    if (projects?.selectedProjectId !== project.id) {
+      setOpening(project.id);
+      const result = await run({ action: 'select', projectId: project.id });
+      setOpening(null);
+      if (!result) {
+        setOpenFailed(true);
+        return;
+      }
+    }
+    setDetails(null);
+    showProject(conversation.id, project.id);
+    onProjectOpened?.();
+  };
+
+  const stopSaving = async () => {
+    workspace.clearActionError();
+    setOpenFailed(false);
+    if (await run({ action: 'select', projectId: null })) showProject(conversation.id, null);
+    else setOpenFailed(true);
+  };
+
   const submitName = async () => {
     if (!dialog) return;
     const trimmed = name.replace(/\s+/g, ' ').trim();
@@ -136,10 +226,7 @@ export function ProjectsPanel({
       const result = dialog.kind === 'create'
         ? await run({ action: 'create', name: trimmed })
         : await run({ action: 'rename', projectId: dialog.project.id, name: trimmed });
-      if (result) {
-        if (result.projectId) setExpanded((current) => ({ ...current, [result.projectId as string]: true }));
-        close();
-      }
+      if (result) close();
       return;
     }
     if (dialog.kind === 'renameItem') {
@@ -163,6 +250,7 @@ export function ProjectsPanel({
     if (item.summary) {
       if (item.summary.state !== 'pending') {
         workspace.clearActionError();
+        stepAside();
         setReading(item);
       }
       return;
@@ -172,18 +260,49 @@ export function ProjectsPanel({
       return;
     }
     if (item.upload?.mediaKind === 'image' && item.upload.previewUrl) {
+      stepAside();
       setViewing(item);
       return;
     }
-    if (item.upload) void workspace.downloadAttachmentById(conversation.id, item.upload.attachmentId);
+    if (item.upload) {
+      void workspace.downloadAttachmentById(conversation.id, item.upload.attachmentId, {
+        fileName: item.upload.fileName,
+        mimeType: item.upload.mimeType,
+      });
+    }
   };
 
-  const list = projects?.projects ?? [];
-  // The tree opens the way it was drawn (owner's father, Sep 23 2026): the
-  // project being saved into, and in a chat with a few projects every one
-  // that holds something; a longer list stays folded to its names.
-  const openByDefault = (projectId: string) => projectId === projects?.selectedProjectId
-    || (list.length <= 3 && Boolean(projects?.items.some((item) => item.projectId === projectId)));
+  const renderDetails = (project: ConversationProject) => (
+    <ProjectDetails
+      drawersOpen={(kind) => isOpen(`${project.id}:${kind}`, projectItems(projects, project.id, kind).length > 0)}
+      floating={floating}
+      label={labelOf(project)}
+      onDelete={() => {
+        workspace.clearActionError();
+        stepAside();
+        setDialog({ kind: 'delete', project });
+      }}
+      onDownload={download}
+      onItemOptions={(item) => {
+        workspace.clearActionError();
+        stepAside();
+        setDialog({ kind: 'item', item });
+      }}
+      onOpenItem={openItem}
+      onRename={() => {
+        workspace.clearActionError();
+        stepAside();
+        setName(project.name);
+        setNameError(null);
+        setDialog({ kind: 'rename', project });
+      }}
+      onToggleDrawer={(kind) =>
+        toggle(`${project.id}:${kind}`, projectItems(projects, project.id, kind).length > 0)}
+      project={project}
+      projects={projects as ConversationProjects}
+    />
+  );
+
   return (
     <View style={[styles.panel, variant === 'sidebar' && styles.panelSidebar]} testID="projects-panel">
       <View ref={headerRef} style={styles.headerRow}>
@@ -213,33 +332,26 @@ export function ProjectsPanel({
       ) : (
         list.map((project, index) => (
           <ProjectBranch
-            drawersOpen={(kind) => isOpen(`${project.id}:${kind}`, projectItems(projects, project.id, kind).length > 0)}
+            details={details?.projectId === project.id ? renderDetails(project) : null}
+            detailsOpen={details?.projectId === project.id}
+            floating={floating}
             index={index}
             key={project.id}
-            onDownload={download}
-            onItemOptions={(item) => {
-              workspace.clearActionError();
-              setDialog({ kind: 'item', item });
-            }}
-            onOpenItem={openItem}
-            onOptions={() => {
-              workspace.clearActionError();
-              setDialog({ kind: 'options', project });
-            }}
-            onSelect={() => void run({
-              action: 'select',
-              projectId: projects.selectedProjectId === project.id ? null : project.id,
-            })}
-            onToggle={() => toggle(project.id, openByDefault(project.id))}
-            onToggleDrawer={(kind) =>
-              toggle(`${project.id}:${kind}`, projectItems(projects, project.id, kind).length > 0)}
-            open={isOpen(project.id, openByDefault(project.id))}
+            onCloseDetails={() => setDetails(null)}
+            onDetailsHover={(inside) => (inside ? hoverDetails(project.id) : leaveDetails())}
+            onDetailsKeep={keepDetails}
+            onDetailsPress={() => pressDetails(project.id)}
+            onOpen={() => void openProject(project)}
+            onToggleSaving={() => (project.id === projects.selectedProjectId
+              ? void stopSaving()
+              : void openProject(project))}
+            opening={opening === project.id}
             project={project}
-            projects={projects}
             selected={project.id === projects.selectedProjectId}
           />
         ))
       )}
+      {openFailed ? <ActionError message={workspace.actionError} /> : null}
 
       <ActionModal
         onClose={close}
@@ -272,43 +384,6 @@ export function ProjectsPanel({
           testID="project-name-save"
           tone="dark"
         />
-      </ActionModal>
-
-      <ActionModal
-        onClose={close}
-        title={dialog?.kind === 'options' ? `${list.indexOf(dialog.project) + 1}. ${dialog.project.name}` : ''}
-        visible={dialog?.kind === 'options'}>
-        {dialog?.kind === 'options' ? (
-          <View style={styles.menu}>
-            <PrimaryButton
-              icon={projects?.selectedProjectId === dialog.project.id ? 'close-circle-outline' : 'checkmark-circle-outline'}
-              label={projects?.selectedProjectId === dialog.project.id ? t('projects.stopUsing') : t('projects.use')}
-              loading={workspace.actionBusy === 'project:select'}
-              onPress={async () => {
-                const next = projects?.selectedProjectId === dialog.project.id ? null : dialog.project.id;
-                if (await run({ action: 'select', projectId: next })) close();
-              }}
-              tone="light"
-            />
-            <PrimaryButton
-              icon="create-outline"
-              label={t('projects.rename')}
-              onPress={() => {
-                setName(dialog.project.name);
-                setNameError(null);
-                setDialog({ kind: 'rename', project: dialog.project });
-              }}
-              tone="light"
-            />
-            <PrimaryButton
-              icon="trash-outline"
-              label={t('projects.delete')}
-              onPress={() => setDialog({ kind: 'delete', project: dialog.project })}
-              tone="danger"
-            />
-            <ActionError message={workspace.actionError} />
-          </View>
-        ) : null}
       </ActionModal>
 
       <ActionModal
@@ -366,9 +441,12 @@ export function ProjectsPanel({
           name={projectItemLabel(viewing)}
           onClose={() => setViewing(null)}
           onCopy={() => copyImage(async () => viewing.upload?.previewUrl)}
-          onDownload={() => {
-            if (viewing.upload) void workspace.downloadAttachmentById(conversation.id, viewing.upload.attachmentId);
-          }}
+          onDownload={() => (viewing.upload
+            ? workspace.downloadAttachmentById(conversation.id, viewing.upload.attachmentId, {
+              fileName: viewing.upload.fileName,
+              mimeType: viewing.upload.mimeType,
+            })
+            : undefined)}
           uri={viewing.upload.previewUrl}
           visible
         />
@@ -387,105 +465,207 @@ export function ProjectsPanel({
 
 function ProjectBranch({
   project,
-  projects,
   index,
-  open,
   selected,
-  drawersOpen,
-  onToggle,
-  onToggleDrawer,
-  onSelect,
-  onOptions,
-  onOpenItem,
-  onItemOptions,
-  onDownload,
+  opening,
+  floating,
+  detailsOpen,
+  details,
+  onOpen,
+  onToggleSaving,
+  onDetailsPress,
+  onDetailsHover,
+  onDetailsKeep,
+  onCloseDetails,
 }: {
   project: ConversationProject;
-  projects: ConversationProjects;
   index: number;
-  open: boolean;
   selected: boolean;
-  drawersOpen: (kind: ProjectItemKind) => boolean;
-  onToggle: () => void;
-  onToggleDrawer: (kind: ProjectItemKind) => void;
-  onSelect: () => void;
-  onOptions: () => void;
-  onOpenItem: (item: ProjectItem) => void;
-  onItemOptions: (item: ProjectItem) => void;
-  onDownload: (item: ProjectItem, format: 'pdf' | 'docx') => Promise<void>;
+  opening: boolean;
+  floating: boolean;
+  detailsOpen: boolean;
+  details: ReactNode;
+  onOpen: () => void;
+  onToggleSaving: () => void;
+  onDetailsPress: () => void;
+  onDetailsHover: (inside: boolean) => void;
+  onDetailsKeep: () => void;
+  onCloseDetails: () => void;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(buildStyles);
   const { t } = useI18n();
-  const rowRef = useContextMenu(onOptions);
+  const rowRef = useContextMenu(onDetailsPress);
+  const moreRef = useRef<View>(null);
   const label = `${index + 1}. ${project.name}`;
   return (
     <View style={styles.branch}>
       <View ref={rowRef} style={[styles.projectRow, selected && styles.projectRowSelected]}>
         <Pressable
+          accessibilityHint={t('projects.openHint')}
           accessibilityLabel={label}
           accessibilityRole="button"
-          accessibilityState={{ expanded: open, selected }}
-          onLongPress={onOptions}
-          onPress={onToggle}
-          style={({ pressed }) => [styles.projectToggle, pressed && styles.pressed]}
+          accessibilityState={{ selected, busy: opening }}
+          onLongPress={onDetailsPress}
+          onPress={onOpen}
+          style={({ pressed }) => [styles.projectName, pressed && styles.pressed]}
           testID={`project-row-${index + 1}`}>
-          <Ionicons color={colors.inkMuted} name={open ? 'chevron-down' : 'chevron-forward'} size={15} />
-          <Text numberOfLines={1} style={styles.projectName}>{label}</Text>
+          <Ionicons
+            color={selected ? colors.mintDark : colors.inkMuted}
+            name={selected ? 'folder-open' : 'folder-outline'}
+            size={15}
+          />
+          <Text numberOfLines={1} style={styles.projectNameText}>{label}</Text>
         </Pressable>
         <Pressable
           accessibilityLabel={selected ? `${t('projects.stopUsing')}: ${project.name}` : `${t('projects.use')}: ${project.name}`}
           accessibilityRole="button"
-          accessibilityState={{ selected }}
-          onPress={onSelect}
+          accessibilityState={{ selected, busy: opening }}
+          disabled={opening}
+          onPress={onToggleSaving}
           style={({ pressed }) => [styles.useButton, selected && styles.useButtonSelected, pressed && styles.pressed]}>
-          <Ionicons
-            color={selected ? colors.white : colors.mintDark}
-            name={selected ? 'checkmark-circle' : 'ellipse-outline'}
-            size={13}
-          />
+          {opening ? (
+            <ActivityIndicator color={colors.mintDark} size="small" style={styles.useSpinner} />
+          ) : (
+            <Ionicons
+              color={selected ? colors.white : colors.mintDark}
+              name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+              size={13}
+            />
+          )}
           <Text style={[styles.useText, selected && styles.useTextSelected]}>
             {selected ? t('projects.current') : t('projects.use')}
           </Text>
         </Pressable>
-        <IconButton
-          accessibilityLabel={`${t('projects.options')}: ${project.name}`}
-          label={t('projects.options')}
-          name="ellipsis-horizontal"
-          onPress={onOptions}
-          size={28}
-        />
+        <View
+          onPointerEnter={floating ? () => onDetailsHover(true) : undefined}
+          onPointerLeave={floating ? () => onDetailsHover(false) : undefined}
+          ref={moreRef}>
+          <Pressable
+            accessibilityLabel={`${t('projects.options')}: ${project.name}`}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: detailsOpen }}
+            hitSlop={6}
+            onPress={onDetailsPress}
+            style={({ pressed }) => [styles.more, detailsOpen && styles.moreOpen, pressed && styles.pressed]}
+            testID={`project-more-${index + 1}`}>
+            <Ionicons color={colors.ink} name="ellipsis-horizontal" size={15} />
+          </Pressable>
+        </View>
       </View>
-      {open ? DRAWERS.map((drawer) => {
-        const items = projectItems(projects, project.id, drawer.kind);
-        const drawerOpen = drawersOpen(drawer.kind);
-        const drawerLabel = `${t(drawer.labelKey)} (${items.length})`;
-        return (
-          <View key={drawer.kind} style={styles.drawer}>
-            <Pressable
-              accessibilityLabel={`${project.name} · ${drawerLabel}`}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: drawerOpen }}
-              onPress={() => onToggleDrawer(drawer.kind)}
-              style={({ pressed }) => [styles.drawerRow, pressed && styles.pressed]}>
-              <Ionicons color={colors.inkSubtle} name={drawerOpen ? 'chevron-down' : 'chevron-forward'} size={13} />
-              <Ionicons color={colors.plum} name={drawer.icon} size={15} />
-              <Text style={styles.drawerLabel}>{drawerLabel}</Text>
-            </Pressable>
-            {drawerOpen ? (
-              items.length ? items.map((item) => (
-                <ItemRow
-                  item={item}
-                  key={item.id}
-                  onDownload={onDownload}
-                  onOpen={() => onOpenItem(item)}
-                  onOptions={() => onItemOptions(item)}
-                />
-              )) : <Text style={styles.drawerEmpty}>{t('projects.drawerEmpty')}</Text>
-            ) : null}
-          </View>
-        );
-      }) : null}
+      {floating && detailsOpen ? (
+        <AnchoredPopover
+          accessibilityLabel={label}
+          anchor={moreRef}
+          onClose={onCloseDetails}
+          onPointerEnter={onDetailsKeep}
+          onPointerLeave={() => onDetailsHover(false)}
+          testID={`project-details-${index + 1}`}
+          visible={detailsOpen}
+          width={CARD_WIDTH}>
+          {details}
+        </AnchoredPopover>
+      ) : detailsOpen && !floating ? (
+        <View style={styles.unfolded} testID={`project-details-${index + 1}`}>{details}</View>
+      ) : null}
+    </View>
+  );
+}
+
+/** What the ⋯ holds: the three drawers, then renaming or deleting the project. */
+function ProjectDetails({
+  project,
+  projects,
+  label,
+  floating,
+  drawersOpen,
+  onToggleDrawer,
+  onOpenItem,
+  onItemOptions,
+  onDownload,
+  onRename,
+  onDelete,
+}: {
+  project: ConversationProject;
+  projects: ConversationProjects;
+  label: string;
+  floating: boolean;
+  drawersOpen: (kind: ProjectItemKind) => boolean;
+  onToggleDrawer: (kind: ProjectItemKind) => void;
+  onOpenItem: (item: ProjectItem) => void;
+  onItemOptions: (item: ProjectItem) => void;
+  onDownload: (item: ProjectItem, format: 'pdf' | 'docx') => Promise<void>;
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(buildStyles);
+  const { t } = useI18n();
+  const drawers = DRAWERS.map((drawer) => {
+    const items = projectItems(projects, project.id, drawer.kind);
+    const drawerOpen = drawersOpen(drawer.kind);
+    const drawerLabel = `${t(drawer.labelKey)} (${items.length})`;
+    return (
+      <View key={drawer.kind} style={[styles.drawer, floating && styles.drawerFloating]}>
+        <Pressable
+          accessibilityLabel={`${project.name} · ${drawerLabel}`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: drawerOpen }}
+          onPress={() => onToggleDrawer(drawer.kind)}
+          style={({ pressed }) => [styles.drawerRow, pressed && styles.pressed]}>
+          <Ionicons color={colors.inkSubtle} name={drawerOpen ? 'chevron-down' : 'chevron-forward'} size={13} />
+          <Ionicons color={colors.plum} name={drawer.icon} size={15} />
+          <Text style={styles.drawerLabel}>{drawerLabel}</Text>
+        </Pressable>
+        {drawerOpen ? (
+          items.length ? items.map((item) => (
+            <ItemRow
+              item={item}
+              key={item.id}
+              onDownload={onDownload}
+              onOpen={() => onOpenItem(item)}
+              onOptions={() => onItemOptions(item)}
+            />
+          )) : <Text style={styles.drawerEmpty}>{t('projects.drawerEmpty')}</Text>
+        ) : null}
+      </View>
+    );
+  });
+  const actions = (
+    <View style={[styles.detailActions, floating && styles.detailActionsFloating]}>
+      <Pressable
+        accessibilityLabel={`${t('projects.rename')}: ${project.name}`}
+        accessibilityRole="button"
+        onPress={onRename}
+        style={({ pressed }) => [styles.detailAction, pressed && styles.pressed]}>
+        <Ionicons color={colors.inkMuted} name="create-outline" size={14} />
+        <Text style={styles.detailActionText}>{t('projects.rename')}</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel={`${t('projects.delete')}: ${project.name}`}
+        accessibilityRole="button"
+        onPress={onDelete}
+        style={({ pressed }) => [styles.detailAction, pressed && styles.pressed]}>
+        <Ionicons color={colors.red} name="trash-outline" size={14} />
+        <Text style={[styles.detailActionText, styles.detailActionDanger]}>{t('projects.delete')}</Text>
+      </Pressable>
+    </View>
+  );
+  if (!floating) {
+    return (
+      <View>
+        {drawers}
+        {actions}
+      </View>
+    );
+  }
+  return (
+    <View style={styles.cardColumn}>
+      <Text numberOfLines={2} style={styles.cardTitle}>{label}</Text>
+      <ScrollView contentContainerStyle={styles.cardDrawers} style={styles.cardScroll}>
+        {drawers}
+      </ScrollView>
+      {actions}
     </View>
   );
 }
@@ -631,8 +811,8 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.sm,
   },
   projectRowSelected: { backgroundColor: colors.mintSoft },
-  projectToggle: { flex: 1, minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 2 },
-  projectName: { flexShrink: 1, color: colors.ink, fontSize: 14, fontWeight: '800' },
+  projectName: { flex: 1, minWidth: 0, minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 4 },
+  projectNameText: { flexShrink: 1, color: colors.ink, fontSize: 14, fontWeight: '800' },
   useButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -646,7 +826,54 @@ const buildStyles = (colors: ThemeColors) => StyleSheet.create({
   useButtonSelected: { backgroundColor: colors.mintDark, borderColor: colors.mintDark },
   useText: { color: colors.mintDark, fontSize: 11, fontWeight: '800' },
   useTextSelected: { color: colors.white },
+  useSpinner: { width: 13, height: 13, transform: [{ scale: 0.6 }] },
+  more: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+    backgroundColor: colors.paperMuted,
+  },
+  moreOpen: { backgroundColor: colors.mintSoft, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.mintDark },
+  unfolded: {
+    marginLeft: 6,
+    marginBottom: 4,
+    paddingLeft: 6,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.mintSoft,
+  },
+  cardColumn: { flexShrink: 1, minHeight: 0, paddingTop: spacing.sm },
+  cardTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  cardScroll: { flexShrink: 1 },
+  cardDrawers: { paddingHorizontal: spacing.xs, paddingBottom: 4 },
+  detailActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingLeft: 20, paddingTop: 2, paddingBottom: 6 },
+  detailActionsFloating: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  detailAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 30,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    backgroundColor: colors.paperMuted,
+  },
+  detailActionText: { color: colors.ink, fontSize: 12, fontWeight: '700' },
+  detailActionDanger: { color: colors.red },
   drawer: { paddingLeft: 20 },
+  drawerFloating: { paddingLeft: 4 },
   drawerRow: { minHeight: 34, flexDirection: 'row', alignItems: 'center', gap: 6 },
   drawerLabel: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   drawerEmpty: { color: colors.inkSubtle, fontSize: 11, paddingLeft: 36, paddingBottom: 4 },

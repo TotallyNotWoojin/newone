@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -421,26 +421,30 @@ export function ConversationList({
           </View>
         ) : null}
         {visible.length ? (
-          visible.map((conversation, index) => [
-            <ConversationRow
-              actionsOpen={openRowId === conversation.id}
-              conversation={conversation}
-              key={conversation.id}
-              markedUnread={markedUnreadIds.includes(conversation.id)}
-              onAction={onRowAction}
-              onPress={() => onSelect(conversation.id)}
-              onToggleActions={(open) => setOpenRowId(open ? conversation.id : null)}
-              selected={desktop && selectedId === conversation.id}
-              showPinnedDivider={
-                index > 0 && !conversation.pinned && visible[index - 1]?.pinned === true
-              }
-            />,
-            // The open chat's projects hang under its row on a wide screen,
-            // as the owner's father drew them (Sep 23 2026).
-            desktop && selectedId === conversation.id && !conversation.managementOnly ? (
-              <ProjectsPanel conversation={conversation} key={`${conversation.id}:projects`} variant="sidebar" />
-            ) : null,
-          ])
+          // Keyed by the chat, so a chat moving up the list keeps its row and
+          // its projects tree (an open ⋯ card closed whenever another chat
+          // got a message and the order changed, Oct 1 2026).
+          visible.map((conversation, index) => (
+            <Fragment key={conversation.id}>
+              <ConversationRow
+                actionsOpen={openRowId === conversation.id}
+                conversation={conversation}
+                markedUnread={markedUnreadIds.includes(conversation.id)}
+                onAction={onRowAction}
+                onPress={() => onSelect(conversation.id)}
+                onToggleActions={(open) => setOpenRowId(open ? conversation.id : null)}
+                selected={desktop && selectedId === conversation.id}
+                showPinnedDivider={
+                  index > 0 && !conversation.pinned && visible[index - 1]?.pinned === true
+                }
+              />
+              {/* The open chat's projects hang under its row on a wide screen,
+                  as the owner's father drew them (Sep 23 2026). */}
+              {desktop && selectedId === conversation.id && !conversation.managementOnly ? (
+                <ProjectsPanel conversation={conversation} variant="sidebar" />
+              ) : null}
+            </Fragment>
+          ))
         ) : (
           <View style={styles.noResults}>
             <View style={styles.noResultsIcon}>

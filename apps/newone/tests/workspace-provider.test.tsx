@@ -48,6 +48,10 @@ let mockAuth: Record<string, unknown>;
 let controlledOutbox: OutboxCommand[];
 let mockRealtimeOptions: Record<string, unknown> | null;
 
+const mockSaveAttachment = jest.fn(async (..._args: unknown[]) => 'opened' as unknown);
+jest.mock('@/features/chat/attachment-save', () => ({
+  saveAttachment: (...args: unknown[]) => mockSaveAttachment(...args),
+}));
 jest.mock('@/config/runtime', () => ({
   get publicRuntimeConfig() {
     return { offlineCacheEnabled: mockOfflineCacheEnabled };
@@ -2422,7 +2426,9 @@ describe('authoritative workspace provider', () => {
       ));
     });
 
-    expect(results).toEqual(Array.from({ length: results.length }, () => true));
+    // The download reports where the file went; on this platform adapter, the browser.
+    expect((results as unknown[]).map((result) => (result === 'opened' ? true : result)))
+      .toEqual(Array.from({ length: results.length }, () => true));
     expect(mockCommand).toHaveBeenCalledWith('requestTranslation', expect.objectContaining({
       messageId: message.serverId,
       targetLanguage: 'en',
@@ -2443,7 +2449,7 @@ describe('authoritative workspace provider', () => {
     mockCommand.mockImplementation(async (method: string, input: unknown) =>
       controlledCommandResponse(method, input)
     );
-    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     const view = await render(
       <WorkspaceProvider>
         <WorkspaceProbe />
@@ -2623,7 +2629,9 @@ describe('authoritative workspace provider', () => {
     ]));
     expect(memberCandidates).toEqual(expect.objectContaining({ nextCursor: null }));
     expect(joinRequests).toHaveLength(1);
-    expect(openUrl).toHaveBeenCalledWith('https://storage.invalid/controlled-download');
+    expect(mockSaveAttachment).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://storage.invalid/controlled-download',
+    }));
     expect(mockCommand).toHaveBeenCalledWith('sendMessage', expect.objectContaining({
       body: 'Confirming the inspection',
       mentionUserIds: [otherUserId],
