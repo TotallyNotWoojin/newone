@@ -1,5 +1,5 @@
 begin;
-select plan(40);
+select plan(48);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 -- Fixtures: the personal realm with four accounts. Alice, Bob and Carol share
@@ -441,7 +441,84 @@ select is(
   'someone outside the chat finds nothing in it'
 );
 
--- 36-37: deleting a project empties its drawers and anyone's selection of it,
+-- 36-42: what each person says while a project is selected is recorded
+-- against it, and an answer from someone with no project selected joins the
+-- project of what it answers, so a project's conversation can be shown on its
+-- own (owner's father, Oct 1 2026).
+create function pg_temp.message_id(p_nonce text) returns bigint language sql as $$
+  select id from public.messages
+  where client_nonce = ('e1400000-0000-4000-8000-0000000000' || p_nonce)::uuid
+$$;
+create function pg_temp.conversation_of(p_actor text, p_project text) returns text[] language sql as $$
+  select array(
+    select jsonb_array_elements_text(project -> 'message_ids')
+    from jsonb_array_elements(pg_temp.projects(p_actor) -> 'projects') project
+    where project ->> 'project_id' = pg_temp.id(p_project)::text
+  )
+$$;
+create function pg_temp.reply(p_actor text, p_nonce text, p_body text, p_to bigint) returns bigint language plpgsql as $$
+declare v_id bigint;
+begin
+  perform pg_temp.act_as(p_actor);
+  perform set_config('app.bff_service_context', 'on', true);
+  insert into public.messages (
+    organization_id, conversation_id, sender_user_id, client_nonce, kind, body, language_code,
+    reply_to_message_id
+  ) values (
+    '11111111-1111-4111-8111-111111111111', 'e1300000-0000-4000-8000-000000000001',
+    ('e1000000-0000-4000-8000-00000000000' || p_actor)::uuid,
+    ('e1400000-0000-4000-8000-0000000000' || p_nonce)::uuid, 'text', p_body, 'en', p_to
+  ) returning id into v_id;
+  perform set_config('app.bff_service_context', 'off', true);
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  return v_id;
+end $$;
+select is(
+  (select array_agg(message_id order by message_id) from public.conversation_project_messages
+   where project_id = pg_temp.id('hdg')),
+  array[pg_temp.message_id('01'), pg_temp.message_id('03'), pg_temp.message_id('05'), pg_temp.message_id('07')],
+  'Alice''s words, link and file sent under HDG are recorded against it, and the chat photo is not'
+);
+select is(
+  (select array_agg(message_id order by message_id) from public.conversation_project_messages
+   where project_id = pg_temp.id('maintenance')),
+  array[pg_temp.message_id('02'), pg_temp.message_id('06')],
+  'Bob''s messages are recorded against the project he had selected'
+);
+select is(
+  pg_temp.conversation_of('2', 'hdg'),
+  array[pg_temp.message_id('07'), pg_temp.message_id('05'), pg_temp.message_id('03'), pg_temp.message_id('01')]::text[],
+  'Bob reads HDG''s conversation newest first, each message once'
+);
+select is(
+  pg_temp.conversation_of('3', 'hdg'),
+  array[]::text[],
+  'Carol, whose history starts later, reads none of it'
+);
+select pg_temp.command('2', 'select', null, null, null, null, 'bob-stops');
+select pg_temp.reply('2', '20', 'Francisco confirmed the acid is in the warehouse.', pg_temp.message_id('07'));
+select pg_temp.reply('3', '21', 'Great, thanks.', pg_temp.message_id('20'));
+select is(
+  (pg_temp.conversation_of('1', 'hdg'))[1:2],
+  array[pg_temp.message_id('21'), pg_temp.message_id('20')]::text[],
+  'an answer from someone with no project selected joins HDG, and so does the answer to it'
+);
+select pg_temp.command('2', 'select', pg_temp.id('maintenance'), null, null, null, 'bob-maintenance-again');
+select pg_temp.reply('2', '22', 'The base is painted.', pg_temp.message_id('07'));
+select is(
+  (select project_id from public.conversation_project_messages where message_id = pg_temp.message_id('22')),
+  pg_temp.id('maintenance'),
+  'an answer from someone saving into another project goes where they are saving'
+);
+select pg_temp.command('1', 'select', null, null, null, null, 'alice-stops');
+select pg_temp.send('1', '08', 'Lunch is at noon.');
+select is(
+  (select count(*)::integer from public.conversation_project_messages where message_id = pg_temp.message_id('08')),
+  0,
+  'once Alice stops using HDG, what she sends on its own goes into no project'
+);
+
+-- 43-45: deleting a project empties its drawers and anyone's selection of it,
 -- and never the files or messages themselves.
 select pg_temp.command('2', 'delete', pg_temp.id('hdg'), null, null, null, 'delete-hdg');
 select is(
@@ -451,12 +528,18 @@ select is(
   'a deleted project takes its drawers and selections with it'
 );
 select is(
-  (select count(*)::integer from public.message_attachments where id = 'e1500000-0000-4000-8000-000000000001'),
-  1,
-  'the file itself stays in the chat'
+  (select count(*)::integer from public.conversation_project_messages where project_id = pg_temp.id('hdg')),
+  0,
+  'a deleted project forgets which messages were sent under it'
+);
+select is(
+  (select count(*)::integer from public.message_attachments where id = 'e1500000-0000-4000-8000-000000000001')
+  + (select count(*)::integer from public.messages where id = pg_temp.message_id('07')),
+  2,
+  'the file and the messages themselves stay in the chat'
 );
 
--- 38-40: a summary needs enough conversation, and asking again after a
+-- 46-48: a summary needs enough conversation, and asking again after a
 -- failed one no longer collides with it.
 select is(
   (public.bff_read_summary_readiness(
