@@ -9,8 +9,10 @@ import type {
 import {
   type AiWorkerDependencies,
   createAiWorkerHandler,
+  retryDelay,
   summaryPersistence,
   type SummarySourceResolution,
+  terminal,
 } from '../newone-ai-worker/handler.ts';
 import { type BootstrapDependencies, createBootstrapHandler } from '../newone-bootstrap/handler.ts';
 import {
@@ -541,30 +543,55 @@ Deno.test('AI worker covers method, browser-context, and terminal-attempt guards
     assertEquals(response.status, headers.Origin || headers.Cookie ? 403 : 401);
   }
 
-  const terminal: string[] = [];
-  const response = await createAiWorkerHandler(() =>
-    aiDependencies({
-      claim: async () => ({
-        jobs: [{
-          id: '1',
-          organization_id: organizationId,
-          topic: 'language_detection',
-          payload: {},
-          attempts: 10,
-        }],
-      }),
-      processorFactory: () => ({
-        detectLanguage: async () => {
-          throw new ApiError(503, 'provider_unavailable');
+  // An outage keeps a detection retrying past its tenth attempt (Oct 1 2026)
+  // and ends it at the fortieth; any other failure still ends at the tenth.
+  for (
+    const [attempts, error, expected] of [
+      [10, new ApiError(503, 'provider_unavailable'), 'retry'],
+      [39, new ApiError(503, 'provider_unavailable', 'provider_preflight_zdr_route'), 'retry'],
+      [40, new ApiError(503, 'provider_unavailable'), 'terminal'],
+      [10, new ApiError(503, 'dependency_unavailable'), 'terminal'],
+    ] as const
+  ) {
+    const terminal: string[] = [];
+    const retried: string[] = [];
+    const response = await createAiWorkerHandler(() =>
+      aiDependencies({
+        claim: async () => ({
+          jobs: [{
+            id: '1',
+            organization_id: organizationId,
+            topic: 'language_detection',
+            payload: {},
+            attempts,
+          }],
+        }),
+        processorFactory: () => ({
+          detectLanguage: async () => {
+            throw error;
+          },
+        } as unknown as OpenRouterLanguageProcessor),
+        terminalFailure: async (_worker, _job, _hash, code) => {
+          terminal.push(code);
         },
-      } as unknown as OpenRouterLanguageProcessor),
-      terminalFailure: async (_worker, _job, _hash, code) => {
-        terminal.push(code);
-      },
-    })
-  )(aiRequest());
-  assertEquals(response.status, 200);
-  assertEquals(terminal, ['provider_unavailable']);
+        retryFailure: async (_worker, _job, code) => {
+          retried.push(code);
+        },
+      })
+    )(aiRequest());
+    assertEquals(response.status, 200);
+    if (expected === 'terminal') {
+      assertEquals([terminal, retried], [[error.code], []], `attempt ${attempts} of ${error.code}`);
+    } else {
+      assertEquals(terminal, [], `attempt ${attempts} of ${error.code}`);
+      // The check's label rides along with the code into the queue.
+      assertEquals(retried, [
+        error.message === 'provider_preflight_zdr_route'
+          ? 'provider_unavailable:provider_preflight_zdr_route'
+          : 'provider_unavailable',
+      ]);
+    }
+  }
 });
 
 Deno.test('summary persistence rejects unbound and oversized evidence payloads', async () => {
@@ -642,4 +669,131 @@ Deno.test('summary persistence rejects unbound and oversized evidence payloads',
       ),
     (error) => error instanceof ApiError && error.code === 'ai_output_needs_review',
   );
+});
+
+Deno.test('a provider blip is retried within a minute for the first quarter hour, then every five minutes', () => {
+  const outage = new ApiError(503, 'provider_unavailable');
+  const delays = [1, 2, 3, 4, 14, 15, 30, 39].map((attempts) =>
+    retryDelay({ id: '1', organizationId, topic: 'translation', attempts }, outage)
+  );
+  assertEquals(delays, [15, 30, 60, 60, 60, 300, 300, 300]);
+  // A provider's own longer hint still wins.
+  assertEquals(
+    retryDelay({ id: '1', organizationId, topic: 'translation', attempts: 2 }, new ApiError(429, 'rate_limited', undefined, 120)),
+    120,
+  );
+  // A summary is not held for the outage rule.
+  assertEquals(terminal(outage, { attempts: 10, topic: 'summary' }), true);
+  assertEquals(terminal(outage, { attempts: 10, topic: 'translation' }), false);
+});
+
+Deno.test('the jobs claimed in one round run side by side, so a second language does not wait for the first', async () => {
+  // Oct 1 2026: one translation job per language, run one after the other,
+  // put the second language 3 s behind at the median and 10 s at p90.
+  let running = 0;
+  let overlapped = false;
+  let release: () => void = () => {};
+  const bothStarted = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let claims = 0;
+  const completed: string[] = [];
+  const response = await createAiWorkerHandler(() =>
+    aiDependencies({
+      claim: async () => {
+        claims += 1;
+        return claims > 1 ? { jobs: [] } : {
+          jobs: ['1', '2'].map((id) => ({
+            id,
+            organization_id: organizationId,
+            topic: 'language_detection',
+            payload: {},
+            attempts: 1,
+          })),
+        };
+      },
+      processorFactory: () => ({
+        detectLanguage: async () => {
+          running += 1;
+          if (running === 2) {
+            overlapped = true;
+            release();
+          }
+          // Neither job finishes until both have started; run in turn, this
+          // would wait out the timer below instead.
+          await Promise.race([bothStarted, new Promise((resolve) => setTimeout(resolve, 500))]);
+          running -= 1;
+          return {
+            detectedSourceLanguage: 'es',
+            confidence: 0.99,
+            ambiguous: false,
+            sourceSha256: 'a'.repeat(64),
+            method: 'deterministic:script-v1',
+            model: null,
+            providerRoute: null,
+            policyVersion: openRouterEnvironment.policy.policyVersion,
+            generationId: null,
+          };
+        },
+      } as unknown as OpenRouterLanguageProcessor),
+      completeDetection: async (_worker, job) => {
+        completed.push(job.id);
+      },
+    })
+  )(aiRequest());
+  assertEquals(response.status, 200);
+  assertEquals(overlapped, true);
+  assertEquals(completed.sort(), ['1', '2']);
+});
+
+Deno.test('a detection claimed with a translation for the same message finishes before the translation starts', async () => {
+  // A retried message (the reader's Retry, or the outage repair) has its
+  // translation job revived next to a new detection job; started together,
+  // the translation found no source language and was blocked (hosted
+  // translation-retry smoke, Oct 1 2026).
+  const order: string[] = [];
+  let claims = 0;
+  const response = await createAiWorkerHandler(() =>
+    aiDependencies({
+      workloads: ['language_detection', 'translation'],
+      claim: async (_worker, workload) => {
+        claims += 1;
+        return claims > 2 ? { jobs: [] } : {
+          jobs: [{
+            id: workload === 'language_detection' ? '1' : '2',
+            organization_id: organizationId,
+            topic: workload,
+            payload: {},
+            attempts: 1,
+          }],
+        };
+      },
+      resolveTranslation: async () => {
+        order.push('translation started');
+        return { authorized: false };
+      },
+      processorFactory: () => ({
+        detectLanguage: async () => {
+          order.push('detection started');
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return {
+            detectedSourceLanguage: 'es',
+            confidence: 0.99,
+            ambiguous: false,
+            sourceSha256: 'a'.repeat(64),
+            method: 'deterministic:script-v1',
+            model: null,
+            providerRoute: null,
+            policyVersion: openRouterEnvironment.policy.policyVersion,
+            generationId: null,
+          };
+        },
+      } as unknown as OpenRouterLanguageProcessor),
+      completeDetection: async () => {
+        order.push('detection completed');
+      },
+    })
+  )(aiRequest());
+  assertEquals(response.status, 200);
+  assertEquals(order, ['detection started', 'detection completed', 'translation started']);
 });

@@ -1178,23 +1178,33 @@ async function eligibleFallbackProviders(
     const listed = asObject(JSON.parse(text)).data;
     if (!Array.isArray(listed)) return [];
     const excluded: Record<string, string> = {};
+    // A listed endpoint's `status` is OpenRouter's recent-uptime grade (0
+    // healthy, below 0 degraded), not a retention property: a degraded
+    // fallback still qualifies, and goes after the healthy ones. Requiring 0
+    // left a busy hour with fewer places to go (Oct 1 2026).
+    const health: Record<string, number> = {};
     const zeroRetention = configured.filter((provider) => {
-      const listedHere = listed.some((entry) => {
+      const listing = listed.find((entry) => {
       const endpoint = asObject(entry);
       const supported = Array.isArray(endpoint.supported_parameters) ? endpoint.supported_parameters : [];
       const prompt = Number(asObject(endpoint.pricing).prompt) * 1_000_000;
       const completion = Number(asObject(endpoint.pricing).completion) * 1_000_000;
       return endpoint.model_id === policy.model && endpoint.tag === provider.tag &&
-        endpoint.provider_name === provider.name && endpoint.status === 0 &&
+        endpoint.provider_name === provider.name &&
         endpoint.supports_implicit_caching === false &&
         supported.includes('structured_outputs') && supported.includes('response_format') &&
         Number.isFinite(prompt) && Number.isFinite(completion) && prompt >= 0 && completion >= 0 &&
         prompt <= policy.priceCeilingsUsdPerMillionTokens.prompt &&
         completion <= policy.priceCeilingsUsdPerMillionTokens.completion;
       });
-      if (!listedHere) excluded[provider.tag] = 'not_eligible_in_zdr_list';
-      return listedHere;
-    });
+      if (!listing) {
+        excluded[provider.tag] = 'not_eligible_in_zdr_list';
+        return false;
+      }
+      const status = Number(asObject(listing).status);
+      health[provider.tag] = Number.isFinite(status) ? Math.min(0, status) : -100;
+      return true;
+    }).sort((left, right) => (health[right.tag] ?? -100) - (health[left.tag] ?? -100));
     const guardrails = zeroRetention.length
       ? await fallbackRoutesAllowedByGuardrails(
         environment.employeeControlPlane,
@@ -1208,6 +1218,7 @@ async function eligibleFallbackProviders(
     console.log(JSON.stringify({
       event: 'newone_ai_fallbacks_checked',
       eligible: providers.map((provider) => provider.tag),
+      degraded: providers.filter((provider) => (health[provider.tag] ?? 0) < 0).map((provider) => provider.tag),
       excluded,
     }));
   } catch {

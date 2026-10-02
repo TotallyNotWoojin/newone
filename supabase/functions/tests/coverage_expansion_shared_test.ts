@@ -318,7 +318,37 @@ Deno.test('OpenRouter control-plane response parsing rejects malformed pages and
 
   await fails({ ...base, zdr: { data: 'invalid' } });
   await fails({ ...base, zdr: { data: Array(20001).fill(endpoint) } });
-  await fails({ ...base, zdr: { data: [{ ...endpoint, status: 1 }] } });
+  // The uptime grade is not a retention property: a degraded Google endpoint
+  // still passes, so its zero-retention fallbacks get their turn (Oct 1 2026).
+  await verifyOpenRouterEmployeeControlPlane(
+    controls,
+    policy,
+    fetcher({ ...base, zdr: { data: [{ ...endpoint, status: -2 }] } }),
+  );
+  await verifyOpenRouterEmployeeControlPlane(
+    controls,
+    policy,
+    fetcher({ ...base, zdr: { data: [{ ...endpoint, status: -5 }] } }),
+  );
+  // Every refusal names the check that made it.
+  await assertRejects(
+    () =>
+      verifyOpenRouterEmployeeControlPlane(
+        controls,
+        policy,
+        fetcher({ ...base, zdr: { data: [{ ...endpoint, supports_implicit_caching: true }] } }),
+      ),
+    (error) => error instanceof ApiError && error.message === 'provider_preflight_zdr_route',
+  );
+  await assertRejects(
+    () =>
+      verifyOpenRouterEmployeeControlPlane(
+        controls,
+        policy,
+        fetcher({ ...base, key: { data: { ...base.key.data, disabled: true } } }),
+      ),
+    (error) => error instanceof ApiError && error.message === 'provider_preflight_key',
+  );
 
   const nonOk = async (input: string | URL | Request): Promise<Response> => {
     if (String(input).includes('/guardrails?')) return new Response('no', { status: 503 });

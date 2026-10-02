@@ -37,7 +37,7 @@ import {
 export const AI_WORKLOADS = ['language_detection', 'translation', 'summary'] as const;
 export type AiWorkload = typeof AI_WORKLOADS[number];
 
-interface AiJob {
+export interface AiJob {
   id: string;
   organizationId: string;
   topic: AiWorkload;
@@ -384,28 +384,39 @@ export function parseSummaryResolution(
   };
 }
 
-// A provider blip must heal on its own: retries back off from 15s to 5min
-// so ten attempts span about half an hour instead of the ~1 minute the
-// provider's 5-second hint produced (a two-minute outage then failed every
-// message in it for good). Each job retries independently, so one message's
-// failure never delays the next.
+// A provider blip must heal on its own. Retries back off from 15 s and, for
+// the first quarter hour, never wait more than a minute, so a message notices
+// a recovered provider within a minute (Oct 1 2026: a message sat out a
+// five-minute wait after the outage had already ended); after that they
+// settle to every five minutes. Each job retries independently, so one
+// message's failure never delays the next.
 const PROVIDER_RETRY_FLOOR_SECONDS = 15;
+const PROVIDER_RETRY_EARLY_CEILING_SECONDS = 60;
+const PROVIDER_RETRY_EARLY_ATTEMPTS = 15;
 const PROVIDER_RETRY_CEILING_SECONDS = 300;
+// An outage is not the message's fault. Language detection and translation
+// keep retrying an unavailable provider for 40 attempts (about two hours and
+// twenty minutes) before the message is marked failed, not 10 (half an hour:
+// a 42-minute outage on Oct 1 2026 failed a message for good). The queue's
+// own limit agrees (private.bff_fail_outbox_job_impl).
+const OUTAGE_ATTEMPTS = 40;
+const ATTEMPTS = 10;
 // Mirrors private.personal_realm_organization_id() (consumer realm).
 const PERSONAL_REALM_ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-function retryDelay(job: AiJob, error: ApiError): number {
-  const backoff = Math.min(
-    PROVIDER_RETRY_CEILING_SECONDS,
-    PROVIDER_RETRY_FLOOR_SECONDS * 2 ** Math.max(0, job.attempts - 1),
-  );
+export function retryDelay(job: AiJob, error: ApiError): number {
+  const ceiling = job.attempts < PROVIDER_RETRY_EARLY_ATTEMPTS
+    ? PROVIDER_RETRY_EARLY_CEILING_SECONDS
+    : PROVIDER_RETRY_CEILING_SECONDS;
+  const backoff = Math.min(ceiling, PROVIDER_RETRY_FLOOR_SECONDS * 2 ** Math.max(0, job.attempts - 1));
   const hinted = error.retryAfterSeconds ?? 0;
   return Math.max(5, Math.min(3600, Math.max(backoff, hinted)));
 }
 
-function terminal(error: ApiError, attempts: number): boolean {
-  return attempts >= 10 || error.code === 'ai_output_needs_review' || error.status === 400 ||
-    error.status === 422;
+export function terminal(error: ApiError, job: Pick<AiJob, 'attempts' | 'topic'>): boolean {
+  const outage = error.code === 'provider_unavailable' && job.topic !== 'summary';
+  return job.attempts >= (outage ? OUTAGE_ATTEMPTS : ATTEMPTS) || error.code === 'ai_output_needs_review' ||
+    error.status === 400 || error.status === 422;
 }
 
 function failureCode(error: unknown): string {
@@ -732,7 +743,7 @@ async function processJob(
     try {
       // A summary can be failed without a source hash (the fail RPC keys on
       // the job); detection and translation need the hash to name the source.
-      if (terminal(safe, job.attempts) && (sourceHash || job.topic === 'summary')) {
+      if (terminal(safe, job) && (sourceHash || job.topic === 'summary')) {
         // A summary keeps the worker's own rule label when it names the
         // reader's remedy (summary_range_too_long, provider_refused), so the
         // sheet can tell "pick a shorter range" from an outage.
@@ -846,8 +857,21 @@ export function createAiWorkerHandler(
         if (jobs.length === 0) break;
         for (const job of jobs) seen.add(job.id);
         claimed += jobs.length;
-        for (const job of jobs) {
-          results.push(await processJob(dependencies, processor, workerId, meta.requestId, job));
+        // Jobs of one kind run side by side: a message bound for English and
+        // Spanish has one translation job per language, and run one after the
+        // other the second language landed 3 s later at the median and 10 s
+        // at p90 (Oct 1 2026). The kinds still go in order, detection before
+        // translation: a retried message has its translation jobs revived
+        // next to its new detection job, and a translation that starts before
+        // the detection has finished finds no source language and is blocked.
+        // Each job keeps its own lease and failure handling; a round is at
+        // most `limit` (10) jobs.
+        const ready = dependencies;
+        for (const workload of ready.workloads) {
+          const batch = jobs.filter((job) => job.topic === workload);
+          results.push(...await Promise.all(
+            batch.map((job) => processJob(ready, processor, workerId, meta.requestId, job)),
+          ));
         }
       }
       return jsonResponse(meta, 200, {

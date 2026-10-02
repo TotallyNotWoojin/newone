@@ -35,38 +35,49 @@ export type ControlPlaneFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-function unavailable(): never {
-  throw new ApiError(503, 'provider_unavailable', undefined, 5);
+// Every refusal names the check that made it. On Oct 1 2026 every AI job
+// failed here for 42 minutes with nothing in the log to say which check it
+// was; the worker records this label next to the code (never any content).
+type PreflightCheck =
+  | 'provider_preflight_route'
+  | 'provider_preflight_unreachable'
+  | 'provider_preflight_key'
+  | 'provider_preflight_byok'
+  | 'provider_preflight_guardrails'
+  | 'provider_preflight_zdr_route';
+
+function unavailable(check: PreflightCheck): never {
+  throw new ApiError(503, 'provider_unavailable', check, 5);
 }
 
-function page(value: unknown): { data: unknown[]; totalCount: number } {
+function page(value: unknown, check: PreflightCheck): { data: unknown[]; totalCount: number } {
   const envelope = asObject(value);
   if (
     !Array.isArray(envelope.data) || envelope.data.length > 100 ||
     !Number.isSafeInteger(envelope.total_count) || (envelope.total_count as number) < 0 ||
     envelope.total_count !== envelope.data.length
-  ) unavailable();
+  ) unavailable(check);
   return { data: envelope.data, totalCount: envelope.total_count as number };
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
-  if (!response.ok) unavailable();
+async function boundedJson(response: Response, check: PreflightCheck): Promise<unknown> {
+  if (!response.ok) unavailable(check);
   try {
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength < 2 || bytes.byteLength > MAX_MANAGEMENT_RESPONSE_BYTES) unavailable();
+    if (bytes.byteLength < 2 || bytes.byteLength > MAX_MANAGEMENT_RESPONSE_BYTES) unavailable(check);
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    unavailable();
+    unavailable(check);
   }
 }
 
-function stringArrayOrNull(value: unknown): string[] | null {
+function stringArrayOrNull(value: unknown, check: PreflightCheck): string[] | null {
   if (value === null) return null;
   if (
     !Array.isArray(value) || value.length > 200 ||
     value.some((entry) => typeof entry !== 'string' || entry.length < 1 || entry.length > 200)
-  ) unavailable();
+  ) unavailable(check);
   return value as string[];
 }
 
@@ -95,7 +106,7 @@ export async function verifyOpenRouterEmployeeControlPlane(
   signal?: AbortSignal,
 ): Promise<void> {
   const baseProvider = policy.providerTag.split('/')[0];
-  if (!baseProvider) unavailable();
+  if (!baseProvider) unavailable('provider_preflight_route');
   const managementHeaders = {
     'Authorization': `Bearer ${controls.managementApiKey}`,
     'Accept': 'application/json',
@@ -119,13 +130,13 @@ export async function verifyOpenRouterEmployeeControlPlane(
       headers: { 'Accept': 'application/json' },
       signal,
     }),
-  ]).catch(() => unavailable());
+  ]).catch(() => unavailable('provider_preflight_unreachable'));
 
   const [keyPayload, byokPayload, guardrailPayload, zdrPayload] = await Promise.all([
-    boundedJson(keyResponse),
-    boundedJson(byokResponse),
-    boundedJson(guardrailResponse),
-    boundedJson(zdrResponse),
+    boundedJson(keyResponse, 'provider_preflight_key'),
+    boundedJson(byokResponse, 'provider_preflight_byok'),
+    boundedJson(guardrailResponse, 'provider_preflight_guardrails'),
+    boundedJson(zdrResponse, 'provider_preflight_zdr_route'),
   ]);
 
   const key = asObject(asObject(keyPayload).data);
@@ -137,36 +148,36 @@ export async function verifyOpenRouterEmployeeControlPlane(
     (key.limit_remaining !== null &&
       (typeof key.limit_remaining !== 'number' || !Number.isFinite(key.limit_remaining) ||
         key.limit_remaining <= 0))
-  ) unavailable();
+  ) unavailable('provider_preflight_key');
 
-  const byok = page(byokPayload);
-  if (byok.totalCount > 100) unavailable();
+  const byok = page(byokPayload, 'provider_preflight_byok');
+  if (byok.totalCount > 100) unavailable('provider_preflight_byok');
   for (const entry of byok.data) {
     const credential = asObject(entry);
     if (
       credential.workspace_id !== controls.workspaceId || credential.provider !== baseProvider ||
       credential.disabled !== true
-    ) unavailable();
+    ) unavailable('provider_preflight_byok');
   }
 
-  const guardrails = page(guardrailPayload);
-  if (guardrails.totalCount < 1 || guardrails.totalCount > 100) unavailable();
+  const guardrails = page(guardrailPayload, 'provider_preflight_guardrails');
+  if (guardrails.totalCount < 1 || guardrails.totalCount > 100) unavailable('provider_preflight_guardrails');
   let workspaceDefaultCount = 0;
   for (const entry of guardrails.data) {
     const guardrail = asObject(entry);
-    if (guardrail.workspace_id !== controls.workspaceId) unavailable();
+    if (guardrail.workspace_id !== controls.workspaceId) unavailable('provider_preflight_guardrails');
     if (guardrail.name === `Workspace ${controls.workspaceId} Default`) {
       workspaceDefaultCount += 1;
-      if (guardrail.enforce_zdr_google !== true) unavailable();
+      if (guardrail.enforce_zdr_google !== true) unavailable('provider_preflight_guardrails');
     }
     if (
       !noContentFilters(guardrail.content_filter_builtins ?? null) ||
       !noContentFilters(guardrail.content_filters ?? null)
-    ) unavailable();
-    const allowedModels = stringArrayOrNull(guardrail.allowed_models ?? null);
-    const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null);
-    const ignoredModels = stringArrayOrNull(guardrail.ignored_models ?? null);
-    const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null);
+    ) unavailable('provider_preflight_guardrails');
+    const allowedModels = stringArrayOrNull(guardrail.allowed_models ?? null, 'provider_preflight_guardrails');
+    const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null, 'provider_preflight_guardrails');
+    const ignoredModels = stringArrayOrNull(guardrail.ignored_models ?? null, 'provider_preflight_guardrails');
+    const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null, 'provider_preflight_guardrails');
     if (
       (allowedModels !== null && !allowedModels.includes(policy.model)) ||
       (allowedProviders !== null &&
@@ -174,12 +185,20 @@ export async function verifyOpenRouterEmployeeControlPlane(
         !allowedProviders.includes(policy.providerTag)) ||
       ignoredModels?.includes(policy.model) ||
       ignoredProviders?.includes(baseProvider) || ignoredProviders?.includes(policy.providerTag)
-    ) unavailable();
+    ) unavailable('provider_preflight_guardrails');
   }
-  if (workspaceDefaultCount !== 1) unavailable();
+  if (workspaceDefaultCount !== 1) unavailable('provider_preflight_guardrails');
 
   const zdrEnvelope = asObject(zdrPayload);
-  if (!Array.isArray(zdrEnvelope.data) || zdrEnvelope.data.length > 20_000) unavailable();
+  if (!Array.isArray(zdrEnvelope.data) || zdrEnvelope.data.length > 20_000) {
+    unavailable('provider_preflight_zdr_route');
+  }
+  // The pinned route has to be listed as zero data retention, with no
+  // implicit caching, structured output and prices under the ceilings. Its
+  // `status` is not one of those: it is OpenRouter's recent-uptime grade (0
+  // healthy, -2 and -5 degraded). Requiring 0 refused every request while
+  // Google was busy (Oct 1 2026, 42 minutes), which is the moment the
+  // zero-retention fallbacks exist for; OpenRouter tries Google and moves on.
   const eligible = zdrEnvelope.data.filter((entry) => {
     const endpoint = asObject(entry);
     const supported = Array.isArray(endpoint.supported_parameters)
@@ -188,14 +207,14 @@ export async function verifyOpenRouterEmployeeControlPlane(
     const prompt = Number(asObject(endpoint.pricing).prompt) * 1_000_000;
     const completion = Number(asObject(endpoint.pricing).completion) * 1_000_000;
     return endpoint.model_id === policy.model && endpoint.tag === policy.providerTag &&
-      endpoint.provider_name === policy.providerMetadataName && endpoint.status === 0 &&
+      endpoint.provider_name === policy.providerMetadataName &&
       endpoint.supports_implicit_caching === false &&
       supported.includes('structured_outputs') && supported.includes('response_format') &&
       Number.isFinite(prompt) && Number.isFinite(completion) && prompt >= 0 && completion >= 0 &&
       prompt <= policy.priceCeilingsUsdPerMillionTokens.prompt &&
       completion <= policy.priceCeilingsUsdPerMillionTokens.completion;
   });
-  if (eligible.length < 1) unavailable();
+  if (eligible.length < 1) unavailable('provider_preflight_zdr_route');
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +287,8 @@ export async function fallbackRoutesAllowedByGuardrails(
     headers: { 'Authorization': `Bearer ${controls.managementApiKey}`, 'Accept': 'application/json' },
     signal,
   });
-  const guardrails = page(await boundedJson(response)).data.map((entry) => asObject(entry));
+  const guardrails = page(await boundedJson(response, 'provider_preflight_guardrails'), 'provider_preflight_guardrails')
+    .data.map((entry) => asObject(entry));
   const allowed: string[] = [];
   const excluded: Record<string, string> = {};
   for (const tag of tags) {
@@ -276,8 +296,8 @@ export async function fallbackRoutesAllowedByGuardrails(
     let reason: string | null = null;
     for (const guardrail of guardrails) {
       if (guardrail.workspace_id !== controls.workspaceId) continue;
-      const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null);
-      const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null);
+      const allowedProviders = stringArrayOrNull(guardrail.allowed_providers ?? null, 'provider_preflight_guardrails');
+      const ignoredProviders = stringArrayOrNull(guardrail.ignored_providers ?? null, 'provider_preflight_guardrails');
       if (allowedProviders !== null && !allowedProviders.includes(base) && !allowedProviders.includes(tag)) {
         reason = 'not_in_guardrail_allowed_providers';
       } else if (ignoredProviders?.includes(base) || ignoredProviders?.includes(tag)) {

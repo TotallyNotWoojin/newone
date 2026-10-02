@@ -73,9 +73,28 @@ if (!done) fail('detection or translation did not recover after the retry', { st
 console.log(`recovered in ≤${done.seconds}s:`, JSON.stringify(done.s), JSON.stringify(done.t));
 
 // Spam guard: every further forced failure can be retried up to the per-message
-// limit (3 per hour); the fourth is refused with 429.
+// limit (3 per hour); the fourth is refused with 429. Each retry is let finish
+// before the next failure is forced: a detection still running when the
+// failure is forced completes over it, and the next request then takes the
+// ordinary path, which this limit does not cover (Oct 1 2026, once the worker
+// got fast enough to land in that gap).
+const settled = async () => {
+  for (let i = 0; i < 30; i += 1) {
+    const pending = await rows(`select count(*)::int as n from private.outbox_jobs
+      where topic in ('language_detection', 'translation') and status in ('pending', 'processing', 'failed')
+        and (payload ->> 'message_id')::bigint = ${messageId}`);
+    if ((await stateOf())?.state === 'completed' && pending[0]?.n === 0) return;
+    await sleep(1000);
+  }
+  fail('a retry never settled', { state: await stateOf(), translations: await translationsOf() });
+};
 const statuses = [];
-for (let n = 2; n <= 4; n += 1) { await forceFailure(); const r = await retry(n); statuses.push(r.status); }
+for (let n = 2; n <= 4; n += 1) {
+  await settled();
+  await forceFailure();
+  const r = await retry(n);
+  statuses.push(r.status);
+}
 console.log('retries 2-4 →', statuses.join(', '));
 if (statuses[0] !== 202 || statuses[1] !== 202 || statuses[2] !== 429) fail('rate limit did not behave (expected 202, 202, 429)', statuses);
 console.log('PASS: translation retry after failed detection (accepted, recovered, rate-limited on the 4th)');

@@ -12,7 +12,7 @@ import {
   resetFallbackEligibilityCache,
   resetRouteProbeCache,
 } from '../_shared/openrouter.ts';
-import { assertEquals, assertRejects } from './assert.ts';
+import { assert, assertEquals, assertRejects } from './assert.ts';
 
 // Google Vertex, the only provider the policy pinned, answered "too busy"
 // (a 429 OpenRouter passed on from upstream) to a share of translations and
@@ -86,6 +86,8 @@ interface FakeOptions {
   deepInfraCaches?: boolean;
   /** The metadata the completion answers with. */
   metadata: (route: string[]) => Record<string, unknown>;
+  /** OpenRouter's uptime grade per listed tag (0 healthy, below 0 degraded). */
+  statuses?: Record<string, number>;
 }
 
 function fakeOpenRouter(options: FakeOptions) {
@@ -116,10 +118,13 @@ function fakeOpenRouter(options: FakeOptions) {
     if (url.endsWith('/endpoints/zdr')) {
       return Response.json({
         data: [
-          zdrEndpoint(policyValue.providerTag, 'Google'),
-          zdrEndpoint('nebius/fp8', 'Nebius'),
-          zdrEndpoint('parasail/fp8', 'Parasail'),
-          zdrEndpoint('deepinfra/fp8', 'DeepInfra', { supports_implicit_caching: options.deepInfraCaches ?? true }),
+          zdrEndpoint(policyValue.providerTag, 'Google', { status: options.statuses?.[policyValue.providerTag] ?? 0 }),
+          zdrEndpoint('nebius/fp8', 'Nebius', { status: options.statuses?.['nebius/fp8'] ?? 0 }),
+          zdrEndpoint('parasail/fp8', 'Parasail', { status: options.statuses?.['parasail/fp8'] ?? 0 }),
+          zdrEndpoint('deepinfra/fp8', 'DeepInfra', {
+            supports_implicit_caching: options.deepInfraCaches ?? true,
+            status: options.statuses?.['deepinfra/fp8'] ?? 0,
+          }),
         ],
       });
     }
@@ -226,6 +231,25 @@ Deno.test('only zero-retention fallbacks without prompt caching that the guardra
   assertEquals(result.translatedText, 'Mantenga la línea.');
   // Parasail is not in the guardrail's allowed providers; DeepInfra caches.
   for (const route of fake.routes) assertEquals(route, [policyValue.providerTag, 'nebius/fp8']);
+});
+
+Deno.test('a busy Google still goes first and its fallbacks get their turn, the healthy ones before the degraded', async () => {
+  // Oct 1 2026: for 42 minutes every request was refused before it left,
+  // because the check wanted Google's uptime grade at 0 just when Google was
+  // busy, which is what the fallbacks are for.
+  reset();
+  const fake = fakeOpenRouter({
+    allowedProviders: null,
+    deepInfraCaches: false,
+    statuses: { [policyValue.providerTag]: -5, 'nebius/fp8': -2 },
+    metadata: servedByFallback('Parasail'),
+  });
+  const result = await translate(fake.fetch);
+  assertEquals(result.translatedText, 'Mantenga la línea.');
+  assert(fake.routes.length > 0);
+  for (const route of fake.routes) {
+    assertEquals(route, [policyValue.providerTag, 'parasail/fp8', 'deepinfra/fp8', 'nebius/fp8']);
+  }
 });
 
 Deno.test('a guardrail that allows only Google keeps the pinned route alone, as before', async () => {
