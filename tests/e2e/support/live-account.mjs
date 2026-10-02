@@ -74,7 +74,7 @@ export async function createLiveWorkspace() {
   };
 
   const conversationId = await connect(friend, 'friend', `Hello from the web suite ${runId}`);
-  await connect(third, 'third', `Hello again from the web suite ${runId}`);
+  const thirdConversationId = await connect(third, 'third', `Hello again from the web suite ${runId}`);
 
   const send = async (user, label, body) => {
     const response = await post(keys, user, `/v2/conversations/${conversationId}/messages`, label, {
@@ -129,6 +129,7 @@ export async function createLiveWorkspace() {
     friend: { displayName: 'Smoke friend', username: friend.username, userId: friend.userId, email: friend.email, password },
     third: { displayName: 'Smoke third', username: third.username, userId: third.userId },
     conversationId,
+    thirdConversationId,
     pinnedBody,
     hoverBody,
   };

@@ -1,12 +1,17 @@
 appId: com.totallynotwoojin.gist
 ---
-# The Projects sheet shows the link in HDG's Links drawer, filed by itself.
+# The Projects sheet shows only the names (owner's father, Oct 1 2026: "let
+# me see only the project names"); HDG's ⋯ unfolds its drawers, and the link
+# is in its Links drawer, filed by itself.
 - tapOn: "Projects"
 - extendedWaitUntil:
     visible: "1. HDG"
     timeout: 20000
+- assertNotVisible: ".*Links \\(.*"
+- tapOn: ".*Files and options: HDG.*"
 - extendedWaitUntil:
     visible: ".*Links \\(1\\).*"
     timeout: 30000
 - assertVisible: "www.newoneinc.com"
+- assertVisible: ".*Rename: HDG.*"
 - runFlow: close-sheet.yaml

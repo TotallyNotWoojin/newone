@@ -2,12 +2,29 @@ appId: com.totallynotwoojin.gist
 ---
 # Copy a photo someone sent (long press → Copy image), then paste it back in
 # the attachment sheet: the clipboard really holds the picture.
-- scrollUntilVisible:
-    element:
-      text: "Open image full screen"
-    direction: UP
-    timeout: 20000
-    optional: true
+# iOS: centred, so the press never lands behind the keyboard the earlier
+# steps leave up. Android cannot centre the photo there and finds it as is.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Open image full screen"
+          direction: UP
+          timeout: 45000
+          visibilityPercentage: 80
+          centerElement: true
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Open image full screen"
+          direction: UP
+          timeout: 20000
+          optional: true
 - longPressOn: "Open image full screen"
 - extendedWaitUntil:
     visible: "Copy image"

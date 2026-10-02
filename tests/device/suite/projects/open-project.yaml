@@ -1,0 +1,50 @@
+appId: com.totallynotwoojin.gist
+---
+# Tapping a project's name saves into it and shows only that project's
+# conversation (owner's father, Oct 1 2026: "since multiple project
+# conversations happen on the same screen, it's very inconvenient to follow
+# the discussions"). The friend answered HDG's link without choosing a
+# project, so the answer is part of HDG; the lunch talk is not. A second
+# project takes over the saving first; HDG's name brings HDG back, on its
+# own, and Show all brings the whole chat back.
+- extendedWaitUntil:
+    visible: ".*Lunch at noon.*"
+    timeout: 30000
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "New project"
+    timeout: 20000
+- tapOn: "New project"
+- extendedWaitUntil:
+    visible:
+      id: "project-name-input"
+    timeout: 15000
+- tapOn:
+    id: "project-name-input"
+- inputText: "Maintenance"
+- hideKeyboard:
+    optional: true
+- tapOn:
+    id: "project-name-save"
+- extendedWaitUntil:
+    visible: "2. Maintenance"
+    timeout: 30000
+- assertNotVisible: ".*Links \\(.*"
+# The name, not the Save here button: the sheet steps aside for the chat.
+- tapOn: "1. HDG"
+- extendedWaitUntil:
+    notVisible: "New project"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*Only 1. HDG.*"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*Got the plans.*"
+    timeout: 15000
+- assertVisible: ".*Plans are at.*"
+- assertNotVisible: ".*Lunch at noon.*"
+- tapOn: "Show all"
+- extendedWaitUntil:
+    visible: ".*Lunch at noon.*"
+    timeout: 15000
+- assertVisible: "Saving to 1. HDG"

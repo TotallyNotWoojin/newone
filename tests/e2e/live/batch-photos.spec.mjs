@@ -11,8 +11,10 @@ const BATCH = 20;
 
 test('twenty photos dropped and sent together all arrive', async ({ chats, liveWorkspace }) => {
   test.setTimeout(300_000);
-  const { keys, sessions, conversationId, friend } = liveWorkspace;
-  await chats.getByRole('button', { name: new RegExp(`^${friend.displayName}:`) }).click();
+  // The third person's chat: twenty photos in the friend's chat left the
+  // message the Chats specs hover out of the list's reach (Oct 1 2026).
+  const { keys, sessions, thirdConversationId, third } = liveWorkspace;
+  await chats.getByRole('button', { name: new RegExp(`^${third.displayName}:`) }).click();
   await expect(chats.getByTestId('composer-input')).toBeVisible();
 
   const stamp = Date.now();
@@ -42,11 +44,11 @@ test('twenty photos dropped and sent together all arrive', async ({ chats, liveW
   await expect(chats.getByText('Too many requests were made. Wait a moment and try again.')).toHaveCount(0);
   await expect(chats.getByRole('button', { name: 'Retry upload' })).toHaveCount(0);
 
-  // The friend's side of the server holds all twenty, clean.
+  // The other side of the server holds all twenty, clean.
   const arrived = async () => {
-    const response = await gatewayPost('newone-read', `/v2/conversations/${conversationId}/messages/query`, keys, {
-      installationId: sessions.friend.installationId,
-      accessToken: sessions.friend.accessToken,
+    const response = await gatewayPost('newone-read', `/v2/conversations/${thirdConversationId}/messages/query`, keys, {
+      installationId: sessions.third.installationId,
+      accessToken: sessions.third.accessToken,
       body: { organizationId: PERSONAL_REALM_ID, limit: 100 },
     });
     const messages = (response.payload?.data ?? response.payload)?.messages ?? [];

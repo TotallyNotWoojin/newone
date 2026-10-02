@@ -23,6 +23,10 @@ appId: com.totallynotwoojin.gist
 - runFlow: close-sheet.yaml
 - tapOn: "Projects"
 - extendedWaitUntil:
+    visible: "1. HDG"
+    timeout: 20000
+- tapOn: ".*Files and options: HDG.*"
+- extendedWaitUntil:
     visible: ".* #1 \\(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\\)"
     timeout: 60000
 - assertVisible: ".*Summaries \\(1\\).*"

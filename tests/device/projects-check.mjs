@@ -264,7 +264,7 @@ if (signedIn) {
       }
       return { ok: false, detail: 'the link never reached HDG' };
     });
-    await step('05-drawers', 'The Projects sheet shows the link in HDG\'s Links drawer', 'check-drawers.yaml', {});
+    await step('05-drawers', 'The Projects sheet shows only the names; HDG\'s ⋯ unfolds the link in its Links drawer', 'check-drawers.yaml', {});
     await step('06-summary', 'A summary asked for here is saved into HDG under the AI\'s name and the date', 'summary.yaml', {}, async () => {
       const projects = await projectsOf();
       const summary = projects.items.find((item) => item.kind === 'summary');
@@ -274,8 +274,9 @@ if (signedIn) {
     maestro('close-sheet.yaml', {});
   }
   const copied = await step('07-copy-image', 'Copy the friend\'s photo from the message menu, then paste it back in the attachment sheet', 'copy-image.yaml', {});
+  let pasted = false;
   if (copied) {
-    await step('07b-send-pasted', 'Send the pasted photo into the group; it stays in its bubble through the upload and lands clean', 'send-pasted.yaml', {}, async () => {
+    pasted = await step('07b-send-pasted', 'Send the pasted photo into the group; it stays in its bubble through the upload and lands clean', 'send-pasted.yaml', {}, async () => {
       // The server holds it as the owner's photo, clean, and it was filed
       // into the project selected while it was sent.
       for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -308,6 +309,51 @@ if (signedIn) {
   });
   if (pendingShown) {
     await step('07d-incoming-arrived', 'Once the friend\'s upload finishes, the bubble turns into the photo', 'incoming-arrived.yaml', {});
+  }
+  // How many photos the phone's own library holds: Android's media store,
+  // or the simulator's Photos database.
+  const libraryCount = () => {
+    if (PLATFORM === 'android') {
+      const rows = sh(ADB, ['-s', device, 'shell', 'content', 'query', '--uri', 'content://media/external/images/media',
+        '--projection', '_id']);
+      return rows.split('\n').filter((line) => line.startsWith('Row:')).length;
+    }
+    const db = join(process.env.HOME, 'Library/Developer/CoreSimulator/Devices', device,
+      'data/Media/PhotoData/Photos.sqlite');
+    try {
+      return Number(sh('sqlite3', [db, 'select count(*) from ZASSET where ZTRASHEDSTATE = 0']).trim());
+    } catch {
+      return 0;
+    }
+  };
+  const photosBefore = libraryCount();
+  if (pasted) await step('07e-save-photo', 'Downloading a photo saves it to the phone\'s photo library (the camera roll), not to Files', 'save-photo.yaml', {}, async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const after = libraryCount();
+      if (after > photosBefore) return { ok: true, detail: { before: photosBefore, after } };
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    return { ok: false, detail: { before: photosBefore, after: libraryCount() } };
+  });
+  // After the photo steps, so the extra messages never push the photos out of reach.
+  if (created) {
+    // The friend answers HDG's link without choosing a project of their own;
+    // the third talks about something else.
+    const linkId = (await projectsOf()).projects.find((project) => project.name === 'HDG')?.messageIds?.[0];
+    await post(friend, 'newone-api', `/v2/conversations/${groupId}/messages`, {
+      clientMessageId: randomUUID(), kind: 'text', body: 'Got the plans, thanks.', replyToMessageId: linkId,
+    });
+    await say(third, groupId, 'Lunch at noon? The parking lot is full again.');
+    await step('07f-open-project', 'A project\'s name saves into it, closes the sheet and shows only that project\'s conversation; Show all brings the chat back', 'open-project.yaml', {}, async () => {
+      const projects = await projectsOf();
+      const hdg = projects.projects.find((project) => project.name === 'HDG');
+      const maintenance = projects.projects.find((project) => project.name === 'Maintenance');
+      return {
+        ok: Boolean(hdg && maintenance) && projects.selectedProjectId === hdg.projectId
+          && (hdg.messageIds?.length ?? 0) >= 2,
+        detail: { selected: projects.selectedProjectId, hdg: hdg?.messageIds },
+      };
+    });
   }
   await step('08-find', '찾기 finds the chat a word came up in and opens it there', 'find.yaml', {
     GROUP: groupName,

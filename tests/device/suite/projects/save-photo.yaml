@@ -1,0 +1,35 @@
+appId: com.totallynotwoojin.gist
+---
+# Downloading a photo puts it in the phone's own photo library, where the
+# camera roll is (owner, Oct 1 2026: "downloaded photos should go into the
+# camera roll, not files"). Taken from HDG's Uploads drawer, where the pasted
+# photo was filed (07b): the project's viewer saves through the same path as
+# the chat's, and the drawer names the photo, which the chat's list does not.
+# iOS asks once to add to Photos; Android 13+ asks nothing.
+- tapOn: "Projects"
+- extendedWaitUntil:
+    visible: "1. HDG"
+    timeout: 20000
+- tapOn: ".*Files and options: HDG.*"
+- extendedWaitUntil:
+    visible: "paste-[0-9]+\\.png"
+    timeout: 30000
+- tapOn: "paste-[0-9]+\\.png"
+- extendedWaitUntil:
+    visible: "Download image"
+    timeout: 15000
+- tapOn: "Download image"
+# Whichever comes first: the answer, or iOS asking (only the first time).
+- extendedWaitUntil:
+    visible: "(Saved to Photos|Allow)"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Allow"
+    commands:
+      - tapOn: "Allow"
+      - extendedWaitUntil:
+          visible: "Saved to Photos"
+          timeout: 30000
+- tapOn: "Close image"
+- runFlow: close-sheet.yaml
