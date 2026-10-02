@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "en-US",
+    "play": "en-US"
+  },
+  "whatsNew": "Lighter on your connection, and Projects made simpler\n\nPhotos in a chat load as small previews, so chats open faster and use far less data. Opening, copying or saving a photo still gives you the full picture.\nA slow connection no longer makes Gist say it is offline, and a photo whose sending stalls is tried again by itself.\nProjects show just their names; each one's files are behind its ⋯. Tapping a project's name saves into it and shows only that project's conversation; Show all brings the whole chat back. A reply joins the project of the message it answers.\nDownloaded photos go to your photo library.\n\nPlease check\n\n- Scroll back through a chat with photos: they should appear quickly.\n- Tap a project's name, then Show all.\n- Download a photo and find it in Photos.",
+  "whatsNewPlay": "Photos load as small previews: chats open faster and use far less data. A slow connection no longer shows Offline, and a stalled photo send retries itself. Projects show only their names, with files behind ⋯; tapping a name shows that project's conversation, and Show all brings the chat back. Downloaded photos go to your photo library."
+}

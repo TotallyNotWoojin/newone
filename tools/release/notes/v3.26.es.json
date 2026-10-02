@@ -1,0 +1,8 @@
+{
+  "locale": {
+    "asc": "es-ES",
+    "play": "es-ES"
+  },
+  "whatsNew": "Más ligera con tu conexión, y Proyectos más simples\n\nLas fotos de un chat se cargan como vistas previas pequeñas: los chats se abren antes y usan mucho menos datos. Al abrir, copiar o guardar una foto sigues teniendo la imagen completa.\nUna conexión lenta ya no hace que Gist diga que está sin conexión, y una foto que se queda atascada al enviarse se vuelve a intentar sola.\nLos proyectos muestran solo su nombre; los archivos de cada uno están tras su ⋯. Al tocar el nombre de un proyecto se guarda en él y se ve solo la conversación de ese proyecto; Ver todo devuelve el chat completo. Una respuesta se une al proyecto del mensaje que responde.\nLas fotos descargadas van a tu fototeca.\n\nPor favor revisa\n\n- Desplázate hacia atrás en un chat con fotos: deberían aparecer rápido.\n- Toca el nombre de un proyecto y luego Ver todo.\n- Descarga una foto y búscala en Fotos.",
+  "whatsNewPlay": "Las fotos se cargan como vistas previas pequeñas: los chats se abren antes y gastan muchos menos datos. Una conexión lenta ya no muestra Sin conexión, y una foto atascada se reenvía sola. Los proyectos muestran solo su nombre, con los archivos tras ⋯; al tocar un nombre se ve la conversación de ese proyecto, y Ver todo devuelve el chat. Las fotos descargadas van a tu fototeca."
+}
