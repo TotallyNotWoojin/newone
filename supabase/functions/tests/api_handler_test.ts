@@ -1301,7 +1301,7 @@ Deno.test('a preview grant lasts hours, carries no download name, and resizes st
   assertEquals(grant.action, 'preview');
   assertEquals(grant.expiresInSeconds, 6 * 60 * 60);
   assertEquals(grant.resized, true);
-  assertEquals(signed[0], { seconds: 6 * 60 * 60, options: { transform: { width: 720, quality: 70 } } });
+  assertEquals(signed[0], { seconds: 6 * 60 * 60, options: { transform: { width: 720, height: 1440, resize: 'contain', quality: 70 } } });
   // An animated GIF plays as sent, and nothing carries a download name.
   await grantFor('image/gif');
   assertEquals(signed[1], { seconds: 6 * 60 * 60, options: undefined });

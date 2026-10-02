@@ -159,10 +159,15 @@ expect(previewResponse.ok, `the preview should load (${previewResponse.status})`
 const previewBytes = new Uint8Array(await previewResponse.arrayBuffer());
 const previewPath = join(work, 'preview.img');
 writeFileSync(previewPath, previewBytes);
-const width = Number(/pixelWidth: (\d+)/.exec(execFileSync('sips', ['-g', 'pixelWidth', previewPath], { encoding: 'utf8' }))?.[1]);
+const size = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', previewPath], { encoding: 'utf8' });
+const width = Number(/pixelWidth: (\d+)/.exec(size)?.[1]);
+const height = Number(/pixelHeight: (\d+)/.exec(size)?.[1]);
 expect(width > 0 && width <= 720, 'the preview should be at most 720 px wide', { width });
+// The shape must survive: a width alone once kept the full height and the
+// photo came back 720 x 3024, squashed into a strip (Oct 2 2026).
+expect(Math.abs(width / height - 4032 / 3024) < 0.02, 'the preview should keep the photo\'s shape', { width, height });
 expect(previewBytes.length * 4 < photo.length, 'the preview should be a fraction of the photo', { preview: previewBytes.length, photo: photo.length });
-pass('preview_is_small', `${width} px, ${previewBytes.length} bytes (${Math.round((previewBytes.length / photo.length) * 100)}% of the photo), ${previewResponse.headers.get('content-type')}`);
+pass('preview_is_small', `${width} x ${height} px, ${previewBytes.length} bytes (${Math.round((previewBytes.length / photo.length) * 100)}% of the photo), ${previewResponse.headers.get('content-type')}`);
 
 // A PDF is never resized; its preview is the file itself.
 const pdfPreview = await grantFor(reader, pdf.attachmentId, 'preview');

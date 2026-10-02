@@ -115,7 +115,8 @@ export function ImageAttachment({
   };
   if (!attachment) return null;
   // Cached by the photo, not by the link: a new link never downloads it again.
-  const cacheKey = ready && remoteSource(attachment, uri) ? `preview:${attachment.id}` : undefined;
+  // "v2": a preview cached before Oct 2 2026 05:36Z may be the squashed one.
+  const cacheKey = ready && remoteSource(attachment, uri) ? `preview-v2:${attachment.id}` : undefined;
   const frame = mediaFrame(ratio, maxWidth);
   const transfer = attachment.transfer;
   const transferring = transfer?.state === 'preparing' || transfer?.state === 'uploading';

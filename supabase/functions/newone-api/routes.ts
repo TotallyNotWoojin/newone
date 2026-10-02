@@ -3345,7 +3345,11 @@ function attachmentDownloadMetadata(value: unknown, expectedAttachmentId: string
 // Copy, the full-screen viewer) still gets the original.
 export const ATTACHMENT_PREVIEW_SECONDS = 6 * 60 * 60;
 const PREVIEW_RESIZABLE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-export const ATTACHMENT_PREVIEW_TRANSFORM = { width: 720, quality: 70 } as const;
+// Fit inside 720 x 1440, keeping the photo's shape. A width alone kept the
+// original height: a 4032 x 3024 photo came back 720 x 3024, squashed into a
+// strip on the published web app (Oct 2 2026). "contain" never crops, and a
+// tall screenshot still gets up to 1440 px of height.
+export const ATTACHMENT_PREVIEW_TRANSFORM = { width: 720, height: 1440, resize: 'contain', quality: 70 } as const;
 
 async function attachmentGrant(
   actor: AuthenticatedActor,
