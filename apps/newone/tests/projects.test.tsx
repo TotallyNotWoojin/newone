@@ -343,6 +343,27 @@ describe('the projects tree', () => {
     await waitFor(() => expect(screen.queryByText('projects.drawerSummaries (1)')).toBeNull());
   });
 
+  test('the sidebar draws nothing while a chat\'s projects load, and a first answer is kept while a newer ask is out', async () => {
+    // A spinner there was taller than the nothing a chat without projects
+    // shows, so the chats below jumped up when the answer came and a hovered
+    // row slid out from under the mouse; a newer ask also threw the first
+    // answer away and kept the spinner up longer (live web suite, Oct 2 2026).
+    let answerFirst: (value: ConversationProjects) => void = () => {};
+    mockWorkspace.loadConversationProjects = jest.fn()
+      .mockImplementationOnce(() => new Promise<ConversationProjects>((resolve) => { answerFirst = resolve; }))
+      .mockImplementationOnce(() => new Promise<ConversationProjects>(() => {}));
+    const view = await render(<ProjectsPanel conversation={conversation} variant="sidebar" />);
+    expect(screen.getByTestId('projects-header')).toBeTruthy();
+    expect(screen.queryByLabelText('projects.title')).toBeNull();
+
+    // A hint moves the chat's revision while the first read is still out.
+    mockWorkspace = { ...mockWorkspace, projectRevisions: { 'conversation-a': 1 } };
+    await view.rerender(<ProjectsPanel conversation={conversation} variant="sidebar" />);
+    await waitFor(() => expect(mockWorkspace.loadConversationProjects).toHaveBeenCalledTimes(2));
+    answerFirst(projectsPayload() as ConversationProjects);
+    await waitFor(() => expect(screen.getByText('1. HDG')).toBeTruthy());
+  });
+
   test('a name saves into its project and shows that project\'s conversation on its own', async () => {
     const onOpened = jest.fn();
     await render(<ProjectsPanel conversation={conversation} onProjectOpened={onOpened} />);

@@ -327,7 +327,13 @@ export function ProjectsPanel({
       </View>
 
       {sidebar && collapsed ? null : !projects ? (
-        <ActivityIndicator accessibilityLabel={t('projects.title')} color={colors.mintDark} style={styles.loading} />
+        // The sidebar shows nothing for a chat without projects, so a spinner
+        // there only made the chats below jump up when the answer came: a row
+        // being hovered slid out from under the mouse and its actions closed
+        // (live web suite, Oct 2 2026).
+        sidebar ? null : (
+          <ActivityIndicator accessibilityLabel={t('projects.title')} color={colors.mintDark} style={styles.loading} />
+        )
       ) : list.length === 0 ? (
         sidebar ? null : <Text style={styles.empty}>{t('projects.empty')}</Text>
       ) : (

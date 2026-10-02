@@ -55,7 +55,17 @@ function load(
   issued.set(key, ticket);
   const request = reader(conversationId).then((projects) => {
     inflight.delete(requestKey);
-    if (!projects || issued.get(key) !== ticket) return;
+    if (!projects) return;
+    // A newer ask is out: its answer wins, but a chat with nothing to show
+    // yet keeps this one meanwhile. Dropping it left the sidebar's spinner up
+    // until the newer one landed, and the rows below jumped when it went
+    // (live web suite, Oct 2 2026).
+    if (issued.get(key) !== ticket) {
+      if (store.has(key)) return;
+      store.set(key, projects);
+      emit();
+      return;
+    }
     loadedVersion.set(key, version);
     store.set(key, projects);
     emit();
